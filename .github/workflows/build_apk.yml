@@ -23,29 +23,42 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21 (Required for AGP 9.x & Gradle 9.x)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: wrapper
 
-      - name: Ensure Gradle Wrapper Executable
+      - name: Prepare Keystore & Build Environment
         run: |
+          # 1. Ensure .env exists for Secrets Gradle plugin
+          if [ ! -f ".env" ]; then
+            cp .env.example .env 2>/dev/null || touch .env
+          fi
+
+          # 2. Restore debug.keystore from debug.keystore.base64
+          if [ -f "debug.keystore.base64" ]; then
+            echo "Restoring debug.keystore from base64..."
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
+
+          # If debug.keystore still doesn't exist, generate standard debug keystore
+          if [ ! -f "debug.keystore" ]; then
+            echo "Generating fallback debug.keystore..."
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          # 3. Ensure Gradle wrapper is executable
           if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-          else
-            gradle wrapper --gradle-version 8.9
             chmod +x ./gradlew
           fi
 
       - name: Build APK with Gradle
         run: |
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Locate Generated APK
         id: find_apk

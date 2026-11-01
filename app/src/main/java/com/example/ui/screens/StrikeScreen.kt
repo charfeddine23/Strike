@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +73,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
@@ -607,6 +609,9 @@ fun StrikeScreen(
 
 @Composable
 fun StrikeEventCard(event: StrikeEvent) {
+    val isDark = isSystemInDarkTheme()
+    // 10% transparency = 90% opacity (0xE6)
+    val cardBg = if (isDark) Color(0xE60D1527) else Color(0xF2FFFFFF)
     val typeColor = when (event.strikeType) {
         "Power" -> NeonAmber
         "Precision" -> NeonCyan
@@ -614,11 +619,14 @@ fun StrikeEventCard(event: StrikeEvent) {
         else -> NeonViolet
     }
 
-    LiquidGlassCard(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        shape = RoundedCornerShape(14.dp)
+            .padding(vertical = 4.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(cardBg)
+            .border(1.dp, typeColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+            .padding(14.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -721,13 +729,27 @@ fun LogStrikeModalDialog(
 
     val selectedIndividual = allIndividuals.find { it.id == selectedId } ?: allIndividuals.firstOrNull()
 
-    Dialog(onDismissRequest = onDismiss) {
-        LiquidGlassCard(
+    val isDark = isSystemInDarkTheme()
+    // 10% transparency = 90% opacity (0xE6)
+    val dialogBg = if (isDark) Color(0xE60A1020) else Color(0xF2FFFFFF)
+    val dialogBorder = if (isDark) {
+        Brush.linearGradient(listOf(NeonAmber.copy(alpha = 0.85f), NeonCyan.copy(alpha = 0.7f)))
+    } else {
+        Brush.linearGradient(listOf(Color(0xFFF59E0B), Color(0xFF0284C7)))
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(4.dp)
-                .testTag("log_strike_dialog"),
-            shape = RoundedCornerShape(24.dp)
+                .fillMaxWidth(0.92f)
+                .clip(RoundedCornerShape(24.dp))
+                .background(dialogBg)
+                .border(1.5.dp, dialogBorder, RoundedCornerShape(24.dp))
+                .padding(20.dp)
+                .testTag("log_strike_dialog")
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
