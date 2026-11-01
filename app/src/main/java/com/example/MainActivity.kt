@@ -38,10 +38,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -73,7 +72,9 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.components.FullscreenPatternUnlockScreen
 import com.example.ui.components.LiquidGlassBackground
+import com.example.ui.components.SettingsDialog
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.DataEntryScreen
@@ -85,7 +86,6 @@ import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.StrikePulseTheme
 import com.example.ui.viewmodel.IndividualViewModel
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import java.util.Locale
 
 enum class AppScreen {
@@ -105,11 +105,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            val isDarkOverride by viewModel.isDarkThemeOverride.collectAsStateWithLifecycle()
-            val systemDark = isSystemInDarkTheme()
-            val effectiveDark = isDarkOverride ?: systemDark
-
+            // Theme automatically follows system theme
+            val isDarkTheme = isSystemInDarkTheme()
             val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+            val isAppUnlocked by viewModel.isAppUnlocked.collectAsStateWithLifecycle()
 
             val locale = when (currentLang) {
                 "ar" -> Locale("ar")
@@ -130,14 +129,24 @@ class MainActivity : ComponentActivity() {
                 LocalContext provides localizedContext,
                 LocalLayoutDirection provides layoutDirection
             ) {
-                StrikePulseTheme(darkTheme = effectiveDark) {
-                    LiquidGlassApp(
-                        viewModel = viewModel,
-                        effectiveDark = effectiveDark,
-                        currentLang = currentLang,
-                        onToggleTheme = { viewModel.toggleTheme() },
-                        onSelectLanguage = { viewModel.setLanguage(it) }
-                    )
+                StrikePulseTheme(darkTheme = isDarkTheme) {
+                    LiquidGlassBackground(darkTheme = isDarkTheme) {
+                        if (!isAppUnlocked) {
+                            FullscreenPatternUnlockScreen(
+                                onUnlockSuccess = { /* state handled in viewmodel */ },
+                                onVerifyPattern = { pattern ->
+                                    viewModel.verifyAndUnlock(pattern)
+                                }
+                            )
+                        } else {
+                            LiquidGlassApp(
+                                viewModel = viewModel,
+                                isDarkTheme = isDarkTheme,
+                                currentLang = currentLang,
+                                onSelectLanguage = { viewModel.setLanguage(it) }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -147,15 +156,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun LiquidGlassApp(
     viewModel: IndividualViewModel,
-    effectiveDark: Boolean,
+    isDarkTheme: Boolean,
     currentLang: String,
-    onToggleTheme: () -> Unit,
     onSelectLanguage: (String) -> Unit
 ) {
     var currentScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
 
     // Listen to ViewModel events (e.g. Strike +1, record saved)
     LaunchedEffect(Unit) {
@@ -169,81 +177,87 @@ fun LiquidGlassApp(
         currentScreen = AppScreen.DASHBOARD
     }
 
-    LiquidGlassBackground(darkTheme = effectiveDark) {
-        Scaffold(
-            containerColor = Color.Transparent,
-            topBar = {
-                LiquidGlassTopBar(
-                    currentScreen = currentScreen,
-                    effectiveDark = effectiveDark,
-                    currentLang = currentLang,
-                    onToggleTheme = onToggleTheme,
-                    onOpenLanguageDialog = { showLanguageDialog = true }
-                )
-            },
-            bottomBar = {
-                LiquidGlassBottomBar(
-                    currentScreen = currentScreen,
-                    onScreenSelected = { screen ->
-                        if (screen == AppScreen.DATA_ENTRY && currentScreen != AppScreen.DATA_ENTRY) {
-                            viewModel.initFormForNew()
-                        }
-                        currentScreen = screen
+    Scaffold(
+        containerColor = Color.Transparent,
+        topBar = {
+            LiquidGlassTopBar(
+                currentScreen = currentScreen,
+                currentLang = currentLang,
+                onOpenLanguageDialog = { showLanguageDialog = true },
+                onOpenSettings = { showSettingsDialog = true }
+            )
+        },
+        bottomBar = {
+            LiquidGlassBottomBar(
+                currentScreen = currentScreen,
+                onScreenSelected = { screen ->
+                    if (screen == AppScreen.DATA_ENTRY && currentScreen != AppScreen.DATA_ENTRY) {
+                        viewModel.initFormForNew()
                     }
-                )
-            },
-            snackbarHost = {
-                SnackbarHost(
-                    hostState = snackbarHostState,
-                    modifier = Modifier
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(bottom = 68.dp)
-                )
-            }
-        ) { innerPadding ->
-            Box(
+                    currentScreen = screen
+                }
+            )
+        },
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                AnimatedContent(
-                    targetState = currentScreen,
-                    transitionSpec = {
-                        (fadeIn() + slideInHorizontally { width -> if (targetState.ordinal > initialState.ordinal) width / 4 else -width / 4 })
-                            .togetherWith(fadeOut() + slideOutHorizontally { width -> if (targetState.ordinal > initialState.ordinal) -width / 4 else width / 4 })
-                    },
-                    label = "screen_transition"
-                ) { screen ->
-                    when (screen) {
-                        AppScreen.DASHBOARD -> DashboardScreen(
-                            viewModel = viewModel,
-                            onNavigateToEntry = { currentScreen = AppScreen.DATA_ENTRY },
-                            onNavigateToStrike = { id ->
-                                viewModel.selectStrikeIndividual(id)
-                                currentScreen = AppScreen.STRIKE
-                            },
-                            onNavigateToCompare = { id ->
-                                viewModel.selectPersonA(id)
-                                currentScreen = AppScreen.COMPARISON
-                            }
-                        )
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(bottom = 68.dp)
+            )
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            AnimatedContent(
+                targetState = currentScreen,
+                transitionSpec = {
+                    (fadeIn() + slideInHorizontally { width -> if (targetState.ordinal > initialState.ordinal) width / 4 else -width / 4 })
+                        .togetherWith(fadeOut() + slideOutHorizontally { width -> if (targetState.ordinal > initialState.ordinal) -width / 4 else width / 4 })
+                },
+                label = "screen_transition"
+            ) { screen ->
+                when (screen) {
+                    AppScreen.DASHBOARD -> DashboardScreen(
+                        viewModel = viewModel,
+                        onNavigateToEntry = { currentScreen = AppScreen.DATA_ENTRY },
+                        onNavigateToStrike = { id ->
+                            viewModel.selectStrikeIndividual(id)
+                            currentScreen = AppScreen.STRIKE
+                        },
+                        onNavigateToCompare = { id ->
+                            viewModel.selectPersonA(id)
+                            currentScreen = AppScreen.COMPARISON
+                        }
+                    )
 
-                        AppScreen.DATA_ENTRY -> DataEntryScreen(
-                            viewModel = viewModel,
-                            onFinished = { currentScreen = AppScreen.DASHBOARD }
-                        )
+                    AppScreen.DATA_ENTRY -> DataEntryScreen(
+                        viewModel = viewModel,
+                        onFinished = { currentScreen = AppScreen.DASHBOARD }
+                    )
 
-                        AppScreen.STRIKE -> StrikeScreen(
-                            viewModel = viewModel
-                        )
+                    AppScreen.STRIKE -> StrikeScreen(
+                        viewModel = viewModel
+                    )
 
-                        AppScreen.COMPARISON -> ComparisonScreen(
-                            viewModel = viewModel
-                        )
-                    }
+                    AppScreen.COMPARISON -> ComparisonScreen(
+                        viewModel = viewModel
+                    )
                 }
             }
         }
+    }
+
+    // Settings Dialog
+    if (showSettingsDialog) {
+        SettingsDialog(
+            viewModel = viewModel,
+            onDismiss = { showSettingsDialog = false },
+            onLockAppNow = { viewModel.lockApp() }
+        )
     }
 
     // Language Selector Dialog
@@ -302,10 +316,9 @@ fun LiquidGlassApp(
 @Composable
 fun LiquidGlassTopBar(
     currentScreen: AppScreen,
-    effectiveDark: Boolean,
     currentLang: String,
-    onToggleTheme: () -> Unit,
-    onOpenLanguageDialog: () -> Unit
+    onOpenLanguageDialog: () -> Unit,
+    onOpenSettings: () -> Unit
 ) {
     val title = when (currentScreen) {
         AppScreen.DASHBOARD -> stringResource(R.string.nav_dashboard)
@@ -387,20 +400,20 @@ fun LiquidGlassTopBar(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Dark / Light Theme Toggle
+            // Settings button (Replaced Dark/Light Theme button)
             IconButton(
-                onClick = onToggleTheme,
+                onClick = onOpenSettings,
                 modifier = Modifier
                     .size(38.dp)
                     .clip(CircleShape)
                     .background(Color(0x221E293B))
                     .border(1.dp, Color(0x3538BDF8), CircleShape)
-                    .testTag("theme_toggle_btn")
+                    .testTag("settings_btn")
             ) {
                 Icon(
-                    imageVector = if (effectiveDark) Icons.Default.LightMode else Icons.Default.DarkMode,
-                    contentDescription = stringResource(R.string.theme_toggle),
-                    tint = if (effectiveDark) NeonAmber else NeonViolet,
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = stringResource(R.string.settings),
+                    tint = NeonCyan,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -461,7 +474,7 @@ fun LiquidGlassBottomBar(
                 label = stringResource(R.string.nav_compare),
                 isSelected = currentScreen == AppScreen.COMPARISON,
                 activeColor = NeonViolet,
-                testTag = "nav_tab_comparison",
+                testTag = "nav_tab_compare",
                 onClick = { onScreenSelected(AppScreen.COMPARISON) }
             )
         }
@@ -469,7 +482,7 @@ fun LiquidGlassBottomBar(
 }
 
 @Composable
-fun BottomNavItem(
+private fun BottomNavItem(
     icon: ImageVector,
     label: String,
     isSelected: Boolean,
@@ -479,32 +492,35 @@ fun BottomNavItem(
 ) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (isSelected) activeColor.copy(alpha = 0.22f) else Color.Transparent)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (isSelected) activeColor.copy(alpha = 0.2f) else Color.Transparent)
             .border(
-                if (isSelected) 1.dp else 0.dp,
-                if (isSelected) activeColor.copy(alpha = 0.6f) else Color.Transparent,
-                RoundedCornerShape(16.dp)
+                1.dp,
+                if (isSelected) activeColor.copy(alpha = 0.8f) else Color.Transparent,
+                RoundedCornerShape(14.dp)
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
             .testTag(testTag),
         contentAlignment = Alignment.Center
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isSelected) activeColor else Color(0xFF94A3B8),
+                tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)
             )
             if (isSelected) {
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = label,
-                    fontSize = 12.sp,
+                    color = activeColor,
                     fontWeight = FontWeight.Bold,
-                    color = activeColor
+                    fontSize = 12.sp
                 )
             }
         }

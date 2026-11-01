@@ -5,6 +5,9 @@ import com.example.data.local.StrikeEventDao
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 import kotlinx.coroutines.flow.Flow
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 class IndividualRepository(
     private val dao: IndividualDao,
@@ -42,12 +45,69 @@ class IndividualRepository(
         strikeEventDao.deleteEventsForIndividual(individual.id)
     }
 
+    /**
+     * Increments the individual's strike count and AUTOMATICALLY creates an audit StrikeEvent record
+     * with the current date, time, year, and individual details.
+     */
     suspend fun incrementStrike(id: Long, delta: Int = 1) {
-        dao.incrementStrike(id, delta)
+        val countDelta = delta.coerceAtLeast(1)
+        dao.incrementStrike(id, countDelta)
+
+        val individual = dao.getIndividualById(id)
+        val now = Calendar.getInstance()
+        val year = now.get(Calendar.YEAR)
+        val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now.time)
+        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(now.time)
+
+        val typeLabel = when (countDelta) {
+            1 -> "Strike +1"
+            5 -> "Quick +5"
+            10 -> "Burst +10"
+            else -> "Batch +$countDelta"
+        }
+
+        val event = StrikeEvent(
+            individualId = id,
+            individualName = individual?.fullName ?: "Target #$id",
+            year = year,
+            date = dateStr,
+            time = timeStr,
+            count = countDelta,
+            strikeType = typeLabel,
+            performanceValue = individual?.boost ?: 0.0,
+            notes = "Auto-recorded strike event",
+            timestamp = System.currentTimeMillis()
+        )
+        strikeEventDao.insertEvent(event)
     }
 
     suspend fun setStrikeCount(id: Long, count: Int) {
         dao.setStrikeCount(id, count.coerceAtLeast(0))
+    }
+
+    /**
+     * Stores past/historical strikes per year for an individual.
+     */
+    suspend fun recordHistoricalStrikes(individualId: Long, historicalEntries: List<Pair<Int, Int>>) {
+        val individual = dao.getIndividualById(individualId)
+        val name = individual?.fullName ?: "Target #$individualId"
+        val events = historicalEntries.filter { it.second > 0 }.map { (year, count) ->
+            StrikeEvent(
+                individualId = individualId,
+                individualName = name,
+                year = year,
+                date = "$year-06-15",
+                time = "12:00:00",
+                count = count,
+                strikeType = "Historical Entry",
+                performanceValue = individual?.boost ?: 0.0,
+                notes = "سجلات سابقة لسنة $year ($count ضربة)",
+                timestamp = System.currentTimeMillis() - ((Calendar.getInstance().get(Calendar.YEAR) - year).coerceAtLeast(0) * 31536000000L)
+            )
+        }
+        if (events.isNotEmpty()) {
+            strikeEventDao.insertAll(events)
+        }
     }
 
     suspend fun logStrikeEvent(
@@ -60,14 +120,19 @@ class IndividualRepository(
         val individual = dao.getIndividualById(individualId)
         val individualName = individual?.fullName ?: "Unknown"
 
-        // Increment individual strike count
         dao.incrementStrike(individualId, 1)
 
-        // Record strike event
+        val now = Calendar.getInstance()
+        val year = date.take(4).toIntOrNull() ?: now.get(Calendar.YEAR)
+        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(now.time)
+
         val event = StrikeEvent(
             individualId = individualId,
             individualName = individualName,
+            year = year,
             date = date,
+            time = timeStr,
+            count = 1,
             strikeType = strikeType,
             performanceValue = performanceValue,
             notes = notes,
@@ -93,30 +158,98 @@ class IndividualRepository(
         )
         dao.insertAll(samples)
 
-        // Seed some initial strike events
-        val currentDate = StrikeEvent.currentDateString()
-        val allCurrent = dao.getIndividualById(1)
-        if (allCurrent != null) {
-            val sampleEvents = listOf(
-                StrikeEvent(
-                    individualId = 1,
-                    individualName = "Tariq Al-Mansoor",
-                    date = currentDate,
-                    strikeType = "Power",
-                    performanceValue = 94.5,
-                    notes = "High-velocity impact test"
-                ),
-                StrikeEvent(
-                    individualId = 3,
-                    individualName = "Fatima Zahra",
-                    date = currentDate,
-                    strikeType = "Precision",
-                    performanceValue = 88.0,
-                    notes = "Rapid succession strike"
-                )
+        // Seed realistic multi-year strike events for the Yearly Dashboard
+        val sampleEvents = listOf(
+            StrikeEvent(
+                individualId = 1,
+                individualName = "Tariq Al-Mansoor",
+                year = 2026,
+                date = "2026-10-15",
+                time = "14:22:10",
+                count = 18,
+                strikeType = "Auto-Recorded",
+                performanceValue = 94.5,
+                notes = "Current season strikes"
+            ),
+            StrikeEvent(
+                individualId = 1,
+                individualName = "Tariq Al-Mansoor",
+                year = 2025,
+                date = "2025-08-20",
+                time = "11:15:30",
+                count = 14,
+                strikeType = "Historical Entry",
+                performanceValue = 90.0,
+                notes = "2025 tournament strikes"
+            ),
+            StrikeEvent(
+                individualId = 1,
+                individualName = "Tariq Al-Mansoor",
+                year = 2024,
+                date = "2024-05-12",
+                time = "16:45:00",
+                count = 10,
+                strikeType = "Historical Entry",
+                performanceValue = 88.0,
+                notes = "2024 qualification strikes"
+            ),
+            StrikeEvent(
+                individualId = 3,
+                individualName = "Fatima Zahra",
+                year = 2026,
+                date = "2026-09-10",
+                time = "09:30:15",
+                count = 25,
+                strikeType = "Auto-Recorded",
+                performanceValue = 91.0,
+                notes = "Championship strikes"
+            ),
+            StrikeEvent(
+                individualId = 3,
+                individualName = "Fatima Zahra",
+                year = 2025,
+                date = "2025-11-04",
+                time = "17:10:00",
+                count = 20,
+                strikeType = "Historical Entry",
+                performanceValue = 87.5,
+                notes = "2025 league strikes"
+            ),
+            StrikeEvent(
+                individualId = 3,
+                individualName = "Fatima Zahra",
+                year = 2024,
+                date = "2024-07-22",
+                time = "13:20:45",
+                count = 10,
+                strikeType = "Historical Entry",
+                performanceValue = 82.5,
+                notes = "2024 debut strikes"
+            ),
+            StrikeEvent(
+                individualId = 2,
+                individualName = "Alexandre Moreau",
+                year = 2026,
+                date = "2026-06-18",
+                time = "15:00:20",
+                count = 22,
+                strikeType = "Auto-Recorded",
+                performanceValue = 89.5,
+                notes = "Power strikes"
+            ),
+            StrikeEvent(
+                individualId = 2,
+                individualName = "Alexandre Moreau",
+                year = 2025,
+                date = "2025-04-10",
+                time = "10:14:00",
+                count = 16,
+                strikeType = "Historical Entry",
+                performanceValue = 85.0,
+                notes = "Mid-season strikes"
             )
-            strikeEventDao.insertAll(sampleEvents)
-        }
+        )
+        strikeEventDao.insertAll(sampleEvents)
     }
 
     private fun createSample(

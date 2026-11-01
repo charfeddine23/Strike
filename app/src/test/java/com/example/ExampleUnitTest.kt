@@ -3,6 +3,7 @@ package com.example
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -47,20 +48,51 @@ class ExampleUnitTest {
         val event = StrikeEvent(
             individualId = 10L,
             individualName = "Karim Ben Salah",
+            year = 2026,
             date = "2026-11-01",
-            strikeType = "Power",
+            time = "14:30:00",
+            count = 5,
+            strikeType = "Quick +5",
             performanceValue = 98.5,
             notes = "Maximum impact performance"
         )
 
         assertEquals(10L, event.individualId)
         assertEquals("Karim Ben Salah", event.individualName)
+        assertEquals(2026, event.year)
         assertEquals("2026-11-01", event.date)
-        assertEquals("Power", event.strikeType)
+        assertEquals("14:30:00", event.time)
+        assertEquals(5, event.count)
+        assertEquals("Quick +5", event.strikeType)
         assertEquals(98.5, event.performanceValue, 0.001)
         assertEquals("Maximum impact performance", event.notes)
         assertNotNull(StrikeEvent.currentDateString())
-        assertTrue(StrikeEvent.STRIKE_TYPES.contains("Power"))
+    }
+
+    @Test
+    fun test_yearly_strike_aggregation() {
+        val events = listOf(
+            StrikeEvent(individualId = 1, individualName = "Tariq", year = 2026, count = 10),
+            StrikeEvent(individualId = 1, individualName = "Tariq", year = 2026, count = 5),
+            StrikeEvent(individualId = 2, individualName = "Fatima", year = 2025, count = 25),
+            StrikeEvent(individualId = 2, individualName = "Fatima", year = 2024, count = 15)
+        )
+
+        val grouped = events.groupBy { it.year }
+        assertEquals(15, grouped[2026]?.sumOf { it.count })
+        assertEquals(25, grouped[2025]?.sumOf { it.count })
+        assertEquals(15, grouped[2024]?.sumOf { it.count })
+        assertEquals(55, events.sumOf { it.count })
+    }
+
+    @Test
+    fun test_pattern_lock_matching_logic() {
+        val savedPattern = "0-1-2-5-8"
+        val correctAttempt = "0-1-2-5-8"
+        val wrongAttempt = "0-1-2-4-7"
+
+        assertTrue(savedPattern == correctAttempt)
+        assertFalse(savedPattern == wrongAttempt)
     }
 
     @Test

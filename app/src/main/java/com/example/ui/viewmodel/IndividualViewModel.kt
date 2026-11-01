@@ -1,11 +1,13 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
+import com.example.data.local.SecurityPreferences
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 import com.example.data.repository.IndividualRepository
@@ -17,75 +19,130 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 enum class SortOrder {
-    SCORE_DESC,
-    BOOST_DESC,
+    NAME_ASC,
     STRIKES_DESC,
+    BOOST_DESC,
     SIZE_DESC,
-    NAME_ASC
+    SCORE_DESC // BOOST * strikes
 }
+
+data class YearlyStrikeStat(
+    val year: Int,
+    val totalStrikes: Int,
+    val eventCount: Int,
+    val topIndividualName: String,
+    val topIndividualStrikes: Int,
+    val percentageOfAllTime: Float
+)
 
 class IndividualViewModel(
     application: Application,
-    private val repository: IndividualRepository = run {
-        val db = AppDatabase.getDatabase(application)
-        IndividualRepository(db.individualDao(), db.strikeEventDao())
-    }
+    private val repository: IndividualRepository
 ) : AndroidViewModel(application) {
 
-    val allIndividuals: StateFlow<List<Individual>> = repository.allIndividuals
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    private val securityPrefs = SecurityPreferences(application)
 
-    val allStrikeEvents: StateFlow<List<StrikeEvent>> = repository.allStrikeEvents
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    // Security & Pattern Lock
+    val isPatternLockEnabled = mutableStateOf(securityPrefs.isPatternLockEnabled)
+    private val _isAppUnlocked = MutableStateFlow(!securityPrefs.isPatternLockEnabled)
+    val isAppUnlocked: StateFlow<Boolean> = _isAppUnlocked.asStateFlow()
 
-    // Search, Filter & Sort
+    // Events flow for snackbars/toasts
+    private val _eventFlow = MutableSharedFlow<String>()
+    val eventFlow: SharedFlow<String> = _eventFlow.asSharedFlow()
+
+    // Strike button animation trigger
+    private val _strikeAnimCount = MutableStateFlow(0)
+    val strikeAnimCount: StateFlow<Int> = _strikeAnimCount.asStateFlow()
+
+    // Individuals stream
+    val allIndividuals: StateFlow<List<Individual>> = repository.allIndividuals.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    // Strike events stream
+    val allStrikeEvents: StateFlow<List<StrikeEvent>> = repository.allStrikeEvents.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    // Yearly Strike Dashboard Analytics
+    val yearlyStrikeStats: StateFlow<List<YearlyStrikeStat>> = allStrikeEvents.map { events ->
+        if (events.isEmpty()) return@map emptyList()
+
+        val allTimeTotal = events.sumOf { it.count }.coerceAtLeast(1)
+        val groupedByYear = events.groupBy { it.year }
+
+        groupedByYear.map { (year, yearEvents) ->
+            val yearTotal = yearEvents.sumOf { it.count }
+            val topPersonEntry = yearEvents.groupBy { it.individualName }
+                .mapValues { entry -> entry.value.sumOf { it.count } }
+                .maxByOrNull { it.value }
+
+            YearlyStrikeStat(
+                year = year,
+                totalStrikes = yearTotal,
+                eventCount = yearEvents.size,
+                topIndividualName = topPersonEntry?.key ?: "—",
+                topIndividualStrikes = topPersonEntry?.value ?: 0,
+                percentageOfAllTime = (yearTotal.toFloat() / allTimeTotal.toFloat()).coerceIn(0f, 1f)
+            )
+        }.sortedByDescending { it.year }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val allTimeStrikesCount: StateFlow<Int> = allStrikeEvents.map { events ->
+        events.sumOf { it.count }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    // Search & Filter State
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     private val _filterType = MutableStateFlow("ALL")
     val filterType: StateFlow<String> = _filterType.asStateFlow()
 
-    private val _sortOrder = MutableStateFlow(SortOrder.BOOST_DESC)
+    private val _sortOrder = MutableStateFlow(SortOrder.SCORE_DESC)
     val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
 
-    // Filtered and Sorted list
     val filteredIndividuals: StateFlow<List<Individual>> = combine(
         allIndividuals,
         _searchQuery,
         _filterType,
         _sortOrder
-    ) { list, query, type, sort ->
-        var result = list
+    ) { list, query, filter, sort ->
+        val trimmedQuery = query.trim().lowercase()
 
-        if (type != "ALL") {
-            result = result.filter { it.type.equals(type, ignoreCase = true) }
-        }
-
-        if (query.isNotBlank()) {
-            val q = query.trim().lowercase()
-            result = result.filter {
-                it.fullName.lowercase().contains(q) || it.type.lowercase().contains(q)
+        list.filter { item ->
+            val matchesFilter = (filter == "ALL" || item.type.equals(filter, ignoreCase = true))
+            val matchesSearch = trimmedQuery.isEmpty() ||
+                item.fullName.lowercase().contains(trimmedQuery) ||
+                item.type.lowercase().contains(trimmedQuery)
+            matchesFilter && matchesSearch
+        }.let { filtered ->
+            when (sort) {
+                SortOrder.NAME_ASC -> filtered.sortedBy { it.fullName.lowercase() }
+                SortOrder.STRIKES_DESC -> filtered.sortedByDescending { it.strikeCount }
+                SortOrder.BOOST_DESC -> filtered.sortedByDescending { it.boost }
+                SortOrder.SIZE_DESC -> filtered.sortedByDescending { it.size }
+                SortOrder.SCORE_DESC -> filtered.sortedByDescending { it.totalScore }
             }
-        }
-
-        when (sort) {
-            SortOrder.SCORE_DESC -> result.sortedByDescending { it.totalScore }
-            SortOrder.BOOST_DESC -> result.sortedByDescending { it.boost }
-            SortOrder.STRIKES_DESC -> result.sortedByDescending { it.strikeCount }
-            SortOrder.SIZE_DESC -> result.sortedByDescending { it.size }
-            SortOrder.NAME_ASC -> result.sortedBy { it.fullName.lowercase() }
         }
     }.stateIn(
         scope = viewModelScope,
@@ -157,14 +214,14 @@ class IndividualViewModel(
     val formCScore = MutableStateFlow("90.0")
     val formError = MutableStateFlow<String?>(null)
 
+    // Historical strikes per year entries for the individual: (Year, StrikesCount)
+    val formHistoricalEntries = MutableStateFlow<List<Pair<Int, Int>>>(emptyList())
+
     // Live Auto-Calculations
-    val liveCalculatedSize: StateFlow<Double> = combine(
-        formLength,
-        formWidth
-    ) { lStr, wStr ->
-        val l = lStr.toDoubleOrNull() ?: 0.0
-        val w = wStr.toDoubleOrNull() ?: 0.0
-        Individual.calculateSize(l, w)
+    val liveCalculatedSize: StateFlow<Double> = combine(formLength, formWidth) { l, w ->
+        val lengthVal = l.toDoubleOrNull() ?: 0.0
+        val widthVal = w.toDoubleOrNull() ?: 0.0
+        Individual.calculateSize(lengthVal, widthVal)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -176,36 +233,58 @@ class IndividualViewModel(
         formFScore,
         formCScore,
         liveCalculatedSize
-    ) { sStr, fStr, cStr, sz ->
-        val s = sStr.toDoubleOrNull() ?: 0.0
-        val f = fStr.toDoubleOrNull() ?: 0.0
-        val c = cStr.toDoubleOrNull() ?: 0.0
-        Individual.calculateBoost(s, f, c, sz)
+    ) { s, f, c, sizeVal ->
+        val sVal = s.toDoubleOrNull() ?: 0.0
+        val fVal = f.toDoubleOrNull() ?: 0.0
+        val cVal = c.toDoubleOrNull() ?: 0.0
+        Individual.calculateBoost(sVal, fVal, cVal, sizeVal)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 257.0
     )
 
-    // Events
-    private val _eventFlow = MutableSharedFlow<String>()
-    val eventFlow: SharedFlow<String> = _eventFlow.asSharedFlow()
-
-    // Strike trigger animation counter
-    private val _strikeAnimCount = MutableStateFlow(0)
-    val strikeAnimCount: StateFlow<Int> = _strikeAnimCount.asStateFlow()
-
-    // Language setting ("en", "ar", "fr")
-    private val _currentLanguage = MutableStateFlow("en")
+    // Language state
+    private val _currentLanguage = MutableStateFlow(securityPrefs.selectedLanguage)
     val currentLanguage: StateFlow<String> = _currentLanguage.asStateFlow()
-
-    // Theme mode (null: system, true: dark, false: light)
-    private val _isDarkThemeOverride = MutableStateFlow<Boolean?>(null)
-    val isDarkThemeOverride: StateFlow<Boolean?> = _isDarkThemeOverride.asStateFlow()
 
     init {
         viewModelScope.launch {
             repository.seedSampleDataIfEmpty()
+        }
+    }
+
+    // Security & Pattern Lock Operations
+    fun verifyAndUnlock(pattern: String): Boolean {
+        val matches = securityPrefs.verifyPattern(pattern)
+        if (matches) {
+            _isAppUnlocked.value = true
+        }
+        return matches
+    }
+
+    fun setPatternLock(newPattern: String) {
+        securityPrefs.savedPattern = newPattern
+        securityPrefs.isPatternLockEnabled = true
+        isPatternLockEnabled.value = true
+        _isAppUnlocked.value = true
+        viewModelScope.launch {
+            _eventFlow.emit("تم تفعيل قفل النقش بنجاح")
+        }
+    }
+
+    fun disablePatternLock() {
+        securityPrefs.clearPattern()
+        isPatternLockEnabled.value = false
+        _isAppUnlocked.value = true
+        viewModelScope.launch {
+            _eventFlow.emit("تم إلغاء قفل النقش")
+        }
+    }
+
+    fun lockApp() {
+        if (isPatternLockEnabled.value) {
+            _isAppUnlocked.value = false
         }
     }
 
@@ -249,12 +328,15 @@ class IndividualViewModel(
         _personBId.value = a
     }
 
+    /**
+     * Increment strike count - AUTOMATICALLY stores to database with current date, time, year!
+     */
     fun triggerStrike(delta: Int = 1) {
         viewModelScope.launch {
             val target = currentStrikeIndividual.value ?: return@launch
             repository.incrementStrike(target.id, delta)
             _strikeAnimCount.value += 1
-            _eventFlow.emit("Strike +$delta (${target.fullName})")
+            _eventFlow.emit("تم تسجيل ضربة +$delta (${target.fullName})")
         }
     }
 
@@ -273,19 +355,24 @@ class IndividualViewModel(
         }
     }
 
-    fun logManualStrike(
-        individualId: Long,
-        date: String,
-        strikeType: String,
-        performanceValue: Double,
-        notes: String = "",
-        onSuccess: () -> Unit
-    ) {
-        viewModelScope.launch {
-            repository.logStrikeEvent(individualId, date, strikeType, performanceValue, notes)
-            _strikeAnimCount.value += 1
-            _eventFlow.emit("Logged $strikeType strike event ($performanceValue)")
-            onSuccess()
+    fun addHistoricalYearEntry(year: Int, count: Int) {
+        if (count <= 0) return
+        val current = formHistoricalEntries.value.toMutableList()
+        val existingIndex = current.indexOfFirst { it.first == year }
+        if (existingIndex >= 0) {
+            val updated = current[existingIndex].second + count
+            current[existingIndex] = Pair(year, updated)
+        } else {
+            current.add(Pair(year, count))
+        }
+        formHistoricalEntries.value = current.sortedByDescending { it.first }
+    }
+
+    fun removeHistoricalYearEntry(index: Int) {
+        val current = formHistoricalEntries.value.toMutableList()
+        if (index in current.indices) {
+            current.removeAt(index)
+            formHistoricalEntries.value = current
         }
     }
 
@@ -299,6 +386,7 @@ class IndividualViewModel(
         formFScore.value = "80.0"
         formCScore.value = "90.0"
         formError.value = null
+        formHistoricalEntries.value = emptyList()
     }
 
     fun initFormForEdit(individual: Individual) {
@@ -311,12 +399,13 @@ class IndividualViewModel(
         formFScore.value = individual.fScore.toString()
         formCScore.value = individual.cScore.toString()
         formError.value = null
+        formHistoricalEntries.value = emptyList()
     }
 
     fun saveCurrentForm(onSuccess: () -> Unit) {
         val name = formName.value.trim()
         if (name.isEmpty()) {
-            formError.value = "Full name is required."
+            formError.value = "الاسم واللقب حقل إلزامي."
             return
         }
 
@@ -327,38 +416,45 @@ class IndividualViewModel(
         val c = formCScore.value.toDoubleOrNull()
 
         if (length == null || length <= 0 || width == null || width <= 0) {
-            formError.value = "Length and Width must be valid positive numbers."
+            formError.value = "يجب إدخال أبعاد موجبة صحيحة."
+            return
+        }
+        if (s == null || f == null || c == null) {
+            formError.value = "يرجى إدخال قيم صحيحة للدرجات (S, F, C)."
             return
         }
 
-        if (s == null || f == null || c == null) {
-            formError.value = "Scores must be valid numbers."
-            return
-        }
+        formError.value = null
+
+        val historicalStrikesTotal = formHistoricalEntries.value.sumOf { it.second }
+
+        val individualToSave = Individual(
+            id = editingId ?: 0,
+            fullName = name,
+            type = formType.value,
+            length = length,
+            width = width,
+            size = Individual.calculateSize(length, width),
+            sScore = s,
+            fScore = f,
+            cScore = c,
+            boost = Individual.calculateBoost(s, f, c, Individual.calculateSize(length, width)),
+            strikeCount = if (editingId != null && historicalStrikesTotal == 0) {
+                allIndividuals.value.find { it.id == editingId }?.strikeCount ?: 0
+            } else {
+                historicalStrikesTotal
+            }
+        )
 
         viewModelScope.launch {
-            val currentExisting = if (editingId != null) {
-                repository.getIndividualById(editingId!!)
-            } else null
+            val savedId = repository.save(individualToSave)
+            val effectiveId = if (editingId != null && editingId != 0L) editingId!! else savedId
 
-            val strikes = currentExisting?.strikeCount ?: 0
+            if (formHistoricalEntries.value.isNotEmpty()) {
+                repository.recordHistoricalStrikes(effectiveId, formHistoricalEntries.value)
+            }
 
-            val individual = Individual(
-                id = editingId ?: 0,
-                fullName = name,
-                type = formType.value,
-                length = length,
-                width = width,
-                size = Individual.calculateSize(length, width),
-                sScore = s,
-                fScore = f,
-                cScore = c,
-                boost = Individual.calculateBoost(s, f, c, Individual.calculateSize(length, width)),
-                strikeCount = strikes
-            )
-
-            repository.save(individual)
-            _eventFlow.emit(if (editingId != null) "Record updated" else "Record created")
+            _eventFlow.emit("تم حفظ السجل بنجاح")
             onSuccess()
         }
     }
@@ -366,35 +462,35 @@ class IndividualViewModel(
     fun deleteIndividual(individual: Individual) {
         viewModelScope.launch {
             repository.delete(individual)
-            _eventFlow.emit("Record deleted")
-        }
-    }
-
-    fun seedSampleData() {
-        viewModelScope.launch {
-            repository.seedSampleData()
-            _eventFlow.emit("Sample data loaded")
+            _eventFlow.emit("تم حذف السجل")
         }
     }
 
     fun setLanguage(lang: String) {
         _currentLanguage.value = lang
-    }
-
-    fun toggleTheme() {
-        _isDarkThemeOverride.value = when (_isDarkThemeOverride.value) {
-            null -> true
-            true -> false
-            false -> true
+        securityPrefs.selectedLanguage = lang
+        viewModelScope.launch {
+            _eventFlow.emit("اللغة: ${lang.uppercase()}")
         }
     }
+
+    fun reloadSampleData() {
+        viewModelScope.launch {
+            repository.seedSampleData()
+            _eventFlow.emit("تم إعادة تحميل البيانات النموذجية بنجاح")
+        }
+    }
+
+    fun seedSampleData() = reloadSampleData()
 
     companion object {
         fun provideFactory(application: Application): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                    return IndividualViewModel(application) as T
+                    val db = AppDatabase.getDatabase(application)
+                    val repository = IndividualRepository(db.individualDao(), db.strikeEventDao())
+                    return IndividualViewModel(application, repository) as T
                 }
             }
     }

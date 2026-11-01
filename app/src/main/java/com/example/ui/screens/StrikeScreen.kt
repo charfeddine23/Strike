@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,35 +28,26 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableDoubleStateOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -69,11 +59,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
@@ -87,6 +74,7 @@ import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonViolet
 import com.example.ui.viewmodel.IndividualViewModel
+import com.example.ui.viewmodel.YearlyStrikeStat
 
 @Composable
 fun StrikeScreen(
@@ -97,9 +85,11 @@ fun StrikeScreen(
     val currentTarget by viewModel.currentStrikeIndividual.collectAsStateWithLifecycle()
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
-    val strikeAnimCount by viewModel.strikeAnimCount.collectAsStateWithLifecycle()
+    val yearlyStats by viewModel.yearlyStrikeStats.collectAsStateWithLifecycle()
+    val allTimeStrikes by viewModel.allTimeStrikesCount.collectAsStateWithLifecycle()
 
-    var showLogModal by remember { mutableStateOf(false) }
+    // Screen Sub-tab: 0 = Arena, 1 = Yearly Dashboard
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     fun triggerHapticFeedback() {
         try {
@@ -131,71 +121,145 @@ fun StrikeScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Individual Selector Carousel
+            // Tab Switcher: Arena vs Yearly Dashboard
             item {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = stringResource(R.string.select_person),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    if (allList.isEmpty()) {
-                        LiquidGlassCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0x221E293B))
+                        .border(1.dp, Color(0x3538BDF8), RoundedCornerShape(16.dp))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (selectedTab == 0) NeonCyan.copy(alpha = 0.25f) else Color.Transparent)
+                            .border(
+                                1.dp,
+                                if (selectedTab == 0) NeonCyan else Color.Transparent,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .clickable { selectedTab = 0 }
+                            .padding(vertical = 10.dp)
+                            .testTag("tab_strike_arena"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = if (selectedTab == 0) NeonCyan else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = stringResource(R.string.empty_records_desc),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                text = stringResource(R.string.strike_arena),
+                                fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedTab == 0) NeonCyan else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 13.sp
                             )
                         }
-                    } else {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            items(allList, key = { it.id }) { item ->
-                                val isSelected = currentTarget?.id == item.id
-                                val borderCol = if (isSelected) NeonCyan else Color(0x3338BDF8)
-                                val bgCol = if (isSelected) NeonCyan.copy(alpha = 0.22f) else Color(0x181E293B)
+                    }
 
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(bgCol)
-                                        .border(1.5.dp, borderCol, RoundedCornerShape(14.dp))
-                                        .clickable { viewModel.selectStrikeIndividual(item.id) }
-                                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                                        .testTag("strike_select_${item.id}"),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        GlassTypeBadge(type = item.type)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Column {
-                                            Text(
-                                                text = item.fullName,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                fontSize = 13.sp,
-                                                color = if (isSelected) NeonCyan else MaterialTheme.colorScheme.onSurface
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (selectedTab == 1) NeonEmerald.copy(alpha = 0.25f) else Color.Transparent)
+                            .border(
+                                1.dp,
+                                if (selectedTab == 1) NeonEmerald else Color.Transparent,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .clickable { selectedTab = 1 }
+                            .padding(vertical = 10.dp)
+                            .testTag("tab_yearly_dashboard"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Leaderboard,
+                                contentDescription = null,
+                                tint = if (selectedTab == 1) NeonEmerald else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.yearly_analytics),
+                                fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selectedTab == 1) NeonEmerald else MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (selectedTab == 0) {
+                // ==========================================
+                // TAB 0: STRIKE ARENA
+                // ==========================================
+
+                // Individual Selector Carousel
+                item {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = stringResource(R.string.select_person),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        if (allList.isEmpty()) {
+                            LiquidGlassCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.empty_records_desc),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        } else {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(allList) { individual ->
+                                    val isSelected = currentTarget?.id == individual.id
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(
+                                                if (isSelected) NeonCyan.copy(alpha = 0.2f) else Color(0x181E293B)
                                             )
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Bolt,
-                                                    contentDescription = null,
-                                                    tint = NeonAmber,
-                                                    modifier = Modifier.size(12.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(2.dp))
+                                            .border(
+                                                1.5.dp,
+                                                if (isSelected) NeonCyan else Color(0x2838BDF8),
+                                                RoundedCornerShape(16.dp)
+                                            )
+                                            .clickable { viewModel.selectStrikeIndividual(individual.id) }
+                                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            GlassTypeBadge(type = individual.type)
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column {
                                                 Text(
-                                                    text = "${item.strikeCount} strikes",
-                                                    fontSize = 10.sp,
-                                                    color = NeonAmber,
-                                                    fontWeight = FontWeight.SemiBold
+                                                    text = individual.fullName,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (isSelected) NeonCyan else MaterialTheme.colorScheme.onSurface,
+                                                    fontSize = 13.sp
+                                                )
+                                                Text(
+                                                    text = "${individual.strikeCount} strikes",
+                                                    fontSize = 11.sp,
+                                                    color = if (isSelected) NeonAmber else MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
                                         }
@@ -205,12 +269,273 @@ fun StrikeScreen(
                         }
                     }
                 }
-            }
 
-            // Active Target Profile Card
-            item {
-                if (currentTarget != null) {
-                    val target = currentTarget!!
+                // Active Target Profile Card
+                item {
+                    if (currentTarget != null) {
+                        val target = currentTarget!!
+                        LiquidGlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp)
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(CircleShape)
+                                                .background(NeonCyan.copy(alpha = 0.2f))
+                                                .border(1.5.dp, NeonCyan, CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Bolt,
+                                                contentDescription = null,
+                                                tint = NeonCyan,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column {
+                                            Text(
+                                                text = target.fullName,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Type ${target.type} • Size: ${target.size}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(NeonEmerald.copy(alpha = 0.2f))
+                                            .border(1.dp, NeonEmerald, RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Speed,
+                                                contentDescription = null,
+                                                tint = NeonEmerald,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "BOOST ${target.boost}",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = NeonEmerald
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Live Calculated Score (BOOST * strikes)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0x20F59E0B))
+                                        .border(1.dp, NeonAmber.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "SCORE: ",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "${target.boost} × ${target.strikeCount}",
+                                            fontSize = 11.sp,
+                                            color = NeonAmber,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                    Text(
+                                        text = "= ${target.totalScore}",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = NeonAmber
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Hero Tactile STRIKE Button (Auto-saves to database with date, time, year!)
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CosmicStrikeButton(
+                            onClick = {
+                                triggerHapticFeedback()
+                                viewModel.triggerStrike(1)
+                            },
+                            strikeCount = currentTarget?.strikeCount ?: 0,
+                            subtitle = stringResource(R.string.strike_action)
+                        )
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Automatic Persistence Notice
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0x2006B6D4))
+                                .border(1.dp, Color(0x3506B6D4), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = NeonCyan,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.auto_logged_notice),
+                                fontSize = 11.sp,
+                                color = NeonCyan,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Quick Increment Bar (+1, +5, +10, Reset)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            listOf(1, 5, 10).forEach { delta ->
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 6.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color(0x221E293B))
+                                        .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                                        .clickable {
+                                            triggerHapticFeedback()
+                                            viewModel.triggerStrike(delta)
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                                        .testTag("quick_strike_$delta")
+                                ) {
+                                    Text(
+                                        text = "+$delta",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 15.sp,
+                                        color = NeonCyan
+                                    )
+                                }
+                            }
+
+                            // Reset button
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 6.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color(0x221E293B))
+                                    .border(1.dp, NeonRose.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                                    .clickable {
+                                        currentTarget?.let { viewModel.resetStrikes(it.id) }
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    .testTag("reset_strikes_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.RestartAlt,
+                                    contentDescription = "Reset",
+                                    tint = NeonRose,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Recent Auto-Logged Strikes Activity Feed (Last 5)
+                item {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.History,
+                                    contentDescription = null,
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = stringResource(R.string.recent_activity),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Text(
+                                text = "Auto-Logged (${allStrikeEvents.size})",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        if (allStrikeEvents.isEmpty()) {
+                            LiquidGlassCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Text(
+                                    text = "اضغط على زر Strike لتسجيل أول ضربة تلقائياً بالتاريخ والوقت.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                allStrikeEvents.take(5).forEach { event ->
+                                    StrikeLogItem(event = event)
+                                }
+                            }
+                        }
+                    }
+                }
+
+            } else {
+                // ==========================================
+                // TAB 1: YEARLY STRIKES DASHBOARD
+                // ==========================================
+                item {
                     LiquidGlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(20.dp)
@@ -224,908 +549,279 @@ fun StrikeScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
                                         modifier = Modifier
-                                            .size(44.dp)
-                                            .clip(CircleShape)
-                                            .background(NeonCyan.copy(alpha = 0.2f))
-                                            .border(1.5.dp, NeonCyan, CircleShape),
+                                            .size(42.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(NeonEmerald.copy(alpha = 0.2f))
+                                            .border(1.dp, NeonEmerald, RoundedCornerShape(12.dp)),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Bolt,
+                                            imageVector = Icons.Default.CalendarMonth,
                                             contentDescription = null,
-                                            tint = NeonCyan,
+                                            tint = NeonEmerald,
                                             modifier = Modifier.size(24.dp)
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column {
                                         Text(
-                                            text = target.fullName,
+                                            text = stringResource(R.string.yearly_dashboard_title),
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.ExtraBold,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = "Type ${target.type} • Size: ${target.size}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(NeonEmerald.copy(alpha = 0.2f))
-                                        .border(1.dp, NeonEmerald, RoundedCornerShape(10.dp))
-                                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.Speed,
-                                            contentDescription = null,
-                                            tint = NeonEmerald,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "BOOST ${target.boost}",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
+                                            text = "إحصائيات الضربات مجمعة حسب كل سنة",
+                                            fontSize = 11.sp,
                                             color = NeonEmerald
                                         )
                                     }
                                 }
-                            }
 
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // Live Calculated Score (BOOST * strikes)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(Color(0x20F59E0B))
-                                    .border(1.dp, NeonAmber.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        text = "SCORE: ",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
+                                        text = "$allTimeStrikes",
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = NeonEmerald
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.all_time_strikes),
+                                        fontSize = 10.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    Text(
-                                        text = "${target.boost} × ${target.strikeCount}",
-                                        fontSize = 11.sp,
-                                        color = NeonAmber,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
                                 }
-                                Text(
-                                    text = "= ${target.totalScore}",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = NeonAmber
-                                )
                             }
                         }
                     }
                 }
-            }
 
-            // Hero Tactile STRIKE Button
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    CosmicStrikeButton(
-                        onClick = {
-                            triggerHapticFeedback()
-                            viewModel.triggerStrike(1)
-                        },
-                        strikeCount = currentTarget?.strikeCount ?: 0,
-                        subtitle = stringResource(R.string.strike_action)
-                    )
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    // Quick Increment Bar (+1, +5, +10, Reset)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        listOf(1, 5, 10).forEach { delta ->
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 6.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(Color(0x221E293B))
-                                    .border(1.dp, NeonAmber.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                                    .clickable {
-                                        triggerHapticFeedback()
-                                        viewModel.triggerStrike(delta)
-                                    }
-                                    .padding(horizontal = 18.dp, vertical = 10.dp)
-                                    .testTag("strike_increment_$delta"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "+$delta",
-                                    color = NeonAmber,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 15.sp
-                                )
-                            }
-                        }
-
-                        // Reset option
-                        if (currentTarget != null) {
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 6.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(Color(0x181E293B))
-                                    .border(1.dp, Color(0x30F43F5E), RoundedCornerShape(14.dp))
-                                    .clickable {
-                                        triggerHapticFeedback()
-                                        viewModel.resetStrikes(currentTarget!!.id)
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp)
-                                    .testTag("strike_reset_btn"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.RestartAlt,
-                                    contentDescription = "Reset",
-                                    tint = NeonRose.copy(alpha = 0.8f),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Recent Strike Events Log Section
-            item {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.History,
-                                contentDescription = null,
-                                tint = NeonCyan,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "STRIKE EVENT LOGS",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Text(
-                            text = "${allStrikeEvents.size} LOGGED",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    if (allStrikeEvents.isEmpty()) {
+                // Yearly Breakdown Cards
+                if (yearlyStats.isEmpty()) {
+                    item {
                         LiquidGlassCard(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = RoundedCornerShape(16.dp)
                         ) {
                             Text(
-                                text = "No manual strike events logged yet. Tap '+ Log Strike' below to record a dated performance strike.",
+                                text = "لا توجد ضربات مسجلة بعد في قاعدة البيانات.",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp
+                                fontSize = 13.sp
                             )
                         }
-                    } else {
-                        allStrikeEvents.take(6).forEach { ev ->
-                            StrikeEventCard(event = ev)
-                        }
+                    }
+                } else {
+                    items(yearlyStats) { stat ->
+                        YearlyStatCard(stat = stat)
                     }
                 }
-            }
 
-            // Strike Leaderboard
-            item {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.EmojiEvents,
-                                contentDescription = null,
-                                tint = NeonAmber,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "STRIKE LEADERBOARD",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Text(
-                            text = "RANKED BY STRIKES",
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
+                // Full Historical Strike Log List
+                item {
                     Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "سجل الضربات التاريخي المفصل",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
 
-                    val sortedByStrikes = allList.sortedByDescending { it.strikeCount }
-                    sortedByStrikes.take(5).forEachIndexed { index, person ->
-                        val rankColor = when (index) {
-                            0 -> NeonAmber
-                            1 -> Color(0xFFCBD5E1)
-                            2 -> Color(0xFFCD7F32)
-                            else -> NeonCyan.copy(alpha = 0.6f)
-                        }
-
-                        LiquidGlassCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            onClick = { viewModel.selectStrikeIndividual(person.id) }
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(CircleShape)
-                                            .background(rankColor.copy(alpha = 0.2f))
-                                            .border(1.dp, rankColor, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "#${index + 1}",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = rankColor
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    GlassTypeBadge(type = person.type)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = person.fullName,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.Bolt,
-                                        contentDescription = null,
-                                        tint = NeonAmber,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "${person.strikeCount}",
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 16.sp,
-                                        color = NeonAmber
-                                    )
-                                }
-                            }
-                        }
-                    }
+                items(allStrikeEvents) { event ->
+                    StrikeLogItem(event = event)
                 }
             }
 
             item {
-                Spacer(modifier = Modifier.height(84.dp))
+                Spacer(modifier = Modifier.height(64.dp))
             }
         }
-
-        // Floating Action Button to manually log new strike event
-        FloatingActionButton(
-            onClick = { showLogModal = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(20.dp)
-                .testTag("log_strike_fab"),
-            containerColor = NeonAmber,
-            contentColor = Color(0xFF261300),
-            shape = RoundedCornerShape(18.dp)
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Log Strike",
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Log Strike",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-            }
-        }
-    }
-
-    // Modal Dialog to log strike event
-    if (showLogModal) {
-        LogStrikeModalDialog(
-            allIndividuals = allList,
-            initialIndividualId = currentTarget?.id ?: allList.firstOrNull()?.id ?: 0L,
-            onDismiss = { showLogModal = false },
-            onSubmit = { indId, date, type, perfVal, notes ->
-                triggerHapticFeedback()
-                viewModel.logManualStrike(
-                    individualId = indId,
-                    date = date,
-                    strikeType = type,
-                    performanceValue = perfVal,
-                    notes = notes
-                ) {
-                    showLogModal = false
-                }
-            }
-        )
     }
 }
 
 @Composable
-fun StrikeEventCard(event: StrikeEvent) {
-    val isDark = isSystemInDarkTheme()
-    // 10% transparency = 90% opacity (0xE6)
-    val cardBg = if (isDark) Color(0xE60D1527) else Color(0xF2FFFFFF)
-    val typeColor = when (event.strikeType) {
-        "Power" -> NeonAmber
-        "Precision" -> NeonCyan
-        "Boost" -> NeonEmerald
-        else -> NeonViolet
-    }
+fun YearlyStatCard(stat: YearlyStrikeStat) {
+    LiquidGlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF0F2537))
+                            .border(1.5.dp, NeonCyan, RoundedCornerShape(10.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "${stat.year}",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 16.sp,
+                            color = NeonCyan
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "${stat.totalStrikes} ضربة",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "${stat.eventCount} عملية تسجيل في السنة",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(NeonAmber.copy(alpha = 0.2f))
+                        .border(1.dp, NeonAmber, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.EmojiEvents,
+                            contentDescription = null,
+                            tint = NeonAmber,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = stat.topIndividualName,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = NeonAmber
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Glowing Progress Bar for the year proportion
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x331E293B))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(stat.percentageOfAllTime)
+                        .height(8.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(NeonCyan, NeonEmerald)
+                            )
+                        )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "الحصة من الإجمالي: ${(stat.percentageOfAllTime * 100).toInt()}%",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "المتصدر: ${stat.topIndividualStrikes} ضربة",
+                    fontSize = 10.sp,
+                    color = NeonEmerald,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun StrikeLogItem(event: StrikeEvent) {
+    // 10% transparency (90% opaque background) as previously requested
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(cardBg)
-            .border(1.dp, typeColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-            .padding(14.dp)
+            .background(Color(0xE60D1527))
+            .border(1.dp, Color(0x3538BDF8), RoundedCornerShape(14.dp))
+            .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(typeColor.copy(alpha = 0.2f))
-                            .border(1.dp, typeColor.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = event.strikeType.uppercase(),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = typeColor
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(NeonCyan.copy(alpha = 0.2f))
+                        .border(1.dp, NeonCyan, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bolt,
+                        contentDescription = null,
+                        tint = NeonCyan,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
                     Text(
                         text = event.individualName,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                }
-
-                Spacer(modifier = Modifier.height(3.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarToday,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(11.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = event.date,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (event.notes.isNotBlank()) {
-                        Text(
-                            text = " • ${event.notes}",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            maxLines = 1
-                        )
-                    }
-                }
-            }
-
-            // Performance Value Badge
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(NeonCyan.copy(alpha = 0.15f))
-                    .border(1.dp, NeonCyan.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.TrendingUp,
-                        contentDescription = null,
-                        tint = NeonCyan,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "${event.performanceValue}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Black,
-                        color = NeonCyan
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun LogStrikeModalDialog(
-    allIndividuals: List<Individual>,
-    initialIndividualId: Long,
-    onDismiss: () -> Unit,
-    onSubmit: (individualId: Long, date: String, strikeType: String, performanceValue: Double, notes: String) -> Unit
-) {
-    var selectedId by remember { mutableStateOf(initialIndividualId) }
-    var dateString by remember { mutableStateOf(StrikeEvent.currentDateString()) }
-    var selectedType by remember { mutableStateOf("Power") }
-    var perfValueInput by remember { mutableStateOf("95.0") }
-    var notesInput by remember { mutableStateOf("") }
-    var expandedDropdown by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    val selectedIndividual = allIndividuals.find { it.id == selectedId } ?: allIndividuals.firstOrNull()
-
-    val isDark = isSystemInDarkTheme()
-    // 10% transparency = 90% opacity (0xE6)
-    val dialogBg = if (isDark) Color(0xE60A1020) else Color(0xF2FFFFFF)
-    val dialogBorder = if (isDark) {
-        Brush.linearGradient(listOf(NeonAmber.copy(alpha = 0.85f), NeonCyan.copy(alpha = 0.7f)))
-    } else {
-        Brush.linearGradient(listOf(Color(0xFFF59E0B), Color(0xFF0284C7)))
-    }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .clip(RoundedCornerShape(24.dp))
-                .background(dialogBg)
-                .border(1.5.dp, dialogBorder, RoundedCornerShape(24.dp))
-                .padding(20.dp)
-                .testTag("log_strike_dialog")
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                // Dialog Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(NeonAmber.copy(alpha = 0.2f))
-                                .border(1.dp, NeonAmber, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = NeonAmber,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "Log Strike Event",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Record performance & strike telemetry",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = NeonAmber,
-                                fontSize = 10.sp
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                // Error message banner
-                if (errorMessage != null) {
-                    Text(
-                        text = errorMessage!!,
-                        color = NeonRose,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // 1. Target Individual Selector
-                Column {
-                    Text(
-                        text = "TARGET INDIVIDUAL",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        letterSpacing = 0.5.sp
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0x181E293B))
-                                .border(1.dp, Color(0x3538BDF8), RoundedCornerShape(12.dp))
-                                .clickable { expandedDropdown = true }
-                                .padding(horizontal = 14.dp, vertical = 10.dp)
-                                .testTag("select_individual_dropdown"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            if (selectedIndividual != null) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    GlassTypeBadge(type = selectedIndividual.type)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = selectedIndividual.fullName,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    text = "Select individual",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowDown,
-                                contentDescription = null,
-                                tint = NeonCyan
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = expandedDropdown,
-                            onDismissRequest = { expandedDropdown = false }
-                        ) {
-                            allIndividuals.forEach { ind ->
-                                DropdownMenuItem(
-                                    text = { Text("${ind.fullName} (${ind.type}) - ${ind.strikeCount} strikes") },
-                                    onClick = {
-                                        selectedId = ind.id
-                                        expandedDropdown = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // 2. Date Input
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
                         Text(
-                            text = "EVENT DATE (YYYY-MM-DD)",
+                            text = "${event.date} • ${event.time}",
                             fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            letterSpacing = 0.5.sp
-                        )
-
-                        Text(
-                            text = "Today",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = NeonCyan,
-                            modifier = Modifier
-                                .clickable { dateString = StrikeEvent.currentDateString() }
-                                .padding(2.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    OutlinedTextField(
-                        value = dateString,
-                        onValueChange = { dateString = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("strike_date_input"),
-                        singleLine = true,
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.CalendarToday,
-                                contentDescription = null,
-                                tint = NeonCyan,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = Color(0x3538BDF8)
-                        )
-                    )
-                }
-
-                // 3. Strike Type Chips
-                Column {
-                    Text(
-                        text = "STRIKE TYPE",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        letterSpacing = 0.5.sp
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        StrikeEvent.STRIKE_TYPES.forEach { t ->
-                            val isSelected = selectedType == t
-                            val col = when (t) {
-                                "Power" -> NeonAmber
-                                "Precision" -> NeonCyan
-                                "Boost" -> NeonEmerald
-                                else -> NeonViolet
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isSelected) col.copy(alpha = 0.25f) else Color(0x12FFFFFF))
-                                    .border(1.dp, if (isSelected) col else Color(0x2538BDF8), RoundedCornerShape(10.dp))
-                                    .clickable { selectedType = t }
-                                    .padding(vertical = 7.dp)
-                                    .testTag("strike_type_chip_$t"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = t,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
-                                    color = if (isSelected) col else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // 4. Associated Performance Value
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "ASSOCIATED PERFORMANCE VALUE",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            letterSpacing = 0.5.sp
-                        )
-
-                        // Quick presets
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            listOf(50.0, 75.0, 100.0).forEach { p ->
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color(0x181E293B))
-                                        .clickable { perfValueInput = "$p" }
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "${p.toInt()}",
-                                        fontSize = 10.sp,
-                                        color = NeonCyan,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    OutlinedTextField(
-                        value = perfValueInput,
-                        onValueChange = { perfValueInput = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("strike_perf_input"),
-                        singleLine = true,
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.TrendingUp,
-                                contentDescription = null,
-                                tint = NeonAmber,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonAmber,
-                            unfocusedBorderColor = Color(0x3538BDF8)
-                        )
-                    )
-                }
-
-                // 5. Notes / Remarks
-                Column {
-                    Text(
-                        text = "NOTES (OPTIONAL)",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        letterSpacing = 0.5.sp
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    OutlinedTextField(
-                        value = notesInput,
-                        onValueChange = { notesInput = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("strike_notes_input"),
-                        placeholder = { Text("e.g. Field test strike, dynamic boost round", fontSize = 12.sp) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = Color(0x2538BDF8)
-                        )
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Actions: Cancel & Submit
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Cancel")
-                    }
-
-                    Button(
-                        onClick = {
-                            val targetId = selectedIndividual?.id ?: selectedId
-                            if (targetId == 0L) {
-                                errorMessage = "Please select a valid individual."
-                                return@Button
-                            }
-                            val perfVal = perfValueInput.toDoubleOrNull()
-                            if (perfVal == null) {
-                                errorMessage = "Please enter a valid performance number."
-                                return@Button
-                            }
-                            if (dateString.isBlank()) {
-                                errorMessage = "Please enter a date."
-                                return@Button
-                            }
-
-                            errorMessage = null
-                            onSubmit(targetId, dateString.trim(), selectedType, perfVal, notesInput.trim())
-                        },
-                        modifier = Modifier
-                            .weight(1.5f)
-                            .testTag("submit_log_strike_btn"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = NeonAmber,
-                            contentColor = Color(0xFF261300)
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Log Strike",
+                            text = "[${event.year}]",
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
+                            color = NeonAmber
                         )
                     }
                 }
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(NeonEmerald.copy(alpha = 0.2f))
+                    .border(1.dp, NeonEmerald.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "+${event.count}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Black,
+                    color = NeonEmerald
+                )
             }
         }
     }

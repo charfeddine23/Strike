@@ -56,4 +56,30 @@
     <string name="recent_activity">Recent Strikes</string>
     <string name="analytics_overview">Overview &amp; Telemetry</string>
     <string name="theme_toggle">Toggle Theme</string>
+
+    <!-- New Features: Yearly Dashboard, Pattern Lock, Settings, Historical Strikes -->
+    <string name="settings">Settings</string>
+    <string name="strike_arena">Strike Arena</string>
+    <string name="yearly_analytics">Yearly Analytics</string>
+    <string name="yearly_dashboard_title">Yearly Strikes Dashboard</string>
+    <string name="year">Year</string>
+    <string name="total_strikes_in_year">Strikes this Year</string>
+    <string name="all_time_strikes">All-Time Strikes</string>
+    <string name="historical_strikes_title">Historical Strikes by Year</string>
+    <string name="historical_strikes_desc">Add past strikes with the year to include them in the yearly dashboard.</string>
+    <string name="add_year_entry">Add Year</string>
+    <string name="strikes_amount">Strikes Count</string>
+    <string name="pattern_lock">Pattern Lock (Schéma)</string>
+    <string name="pattern_lock_desc">Secure the application with a gesture pattern lock.</string>
+    <string name="draw_pattern_to_unlock">Draw Pattern to Unlock</string>
+    <string name="pattern_incorrect">Incorrect pattern. Try again.</string>
+    <string name="pattern_unlocked">App Unlocked</string>
+    <string name="set_pattern_title">Configure Pattern Lock</string>
+    <string name="draw_new_pattern">Draw your new pattern (at least 4 dots)</string>
+    <string name="confirm_pattern">Redraw pattern to confirm</string>
+    <string name="pattern_mismatch">Patterns do not match. Try again.</string>
+    <string name="pattern_saved">Pattern lock enabled successfully!</string>
+    <string name="lock_now">Lock App Now</string>
+    <string name="system_theme_active">Theme follows system automatically (Light / Dark)</string>
+    <string name="auto_logged_notice">Strikes are automatically saved with date, time &amp; year.</string>
 </resources>

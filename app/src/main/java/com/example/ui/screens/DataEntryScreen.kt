@@ -17,17 +17,24 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -35,6 +42,10 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,6 +67,7 @@ import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonViolet
 import com.example.ui.viewmodel.IndividualViewModel
+import java.util.Calendar
 
 @Composable
 fun DataEntryScreen(
@@ -71,11 +83,19 @@ fun DataEntryScreen(
     val fScore by viewModel.formFScore.collectAsStateWithLifecycle()
     val cScore by viewModel.formCScore.collectAsStateWithLifecycle()
     val error by viewModel.formError.collectAsStateWithLifecycle()
+    val historicalEntries by viewModel.formHistoricalEntries.collectAsStateWithLifecycle()
 
     val calculatedSize by viewModel.liveCalculatedSize.collectAsStateWithLifecycle()
     val calculatedBoost by viewModel.liveCalculatedBoost.collectAsStateWithLifecycle()
 
     val isEditing = viewModel.editingId != null
+
+    // Local state for adding a historical strike entry
+    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+    var inputYear by remember { mutableStateOf((currentYear - 1).toString()) }
+    var inputStrikeCount by remember { mutableStateOf("15") }
+
+    val totalHistoricalStrikes = historicalEntries.sumOf { it.second }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -125,36 +145,37 @@ fun DataEntryScreen(
             }
         }
 
-        // Error message banner if any
+        // Error message banner
         if (error != null) {
             item {
-                Row(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .background(NeonRose.copy(alpha = 0.15f))
-                        .border(1.dp, NeonRose.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .border(1.dp, NeonRose, RoundedCornerShape(12.dp))
+                        .padding(12.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.ErrorOutline,
-                        contentDescription = null,
-                        tint = NeonRose,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = error!!,
-                        color = NeonRose,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.ErrorOutline,
+                            contentDescription = null,
+                            tint = NeonRose,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = error ?: "",
+                            color = NeonRose,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
 
-        // Section 1: Identity & Type
+        // Section 1: Individual Profile & Type
         item {
             LiquidGlassCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -168,6 +189,7 @@ fun DataEntryScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedTextField(
                         value = name,
                         onValueChange = { viewModel.formName.value = it },
@@ -179,13 +201,11 @@ fun DataEntryScreen(
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = Color(0x3338BDF8),
-                            focusedContainerColor = Color(0x151E293B),
-                            unfocusedContainerColor = Color(0x0C1E293B)
+                            unfocusedBorderColor = Color(0x3338BDF8)
                         )
                     )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
                         text = stringResource(R.string.type),
@@ -195,39 +215,33 @@ fun DataEntryScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Type Selector Buttons ("M", "G", "TS", "FG")
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Individual.VALID_TYPES.forEach { opt ->
-                            val isSelected = type == opt
-                            val activeBg = when (opt) {
-                                "M" -> NeonCyan
-                                "G" -> NeonViolet
-                                "TS" -> NeonEmerald
-                                else -> NeonAmber
-                            }
-
+                        Individual.VALID_TYPES.forEach { t ->
+                            val isSelected = type == t
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) activeBg.copy(alpha = 0.25f) else Color(0x12FFFFFF))
+                                    .background(
+                                        if (isSelected) NeonCyan.copy(alpha = 0.25f) else Color(0x15FFFFFF)
+                                    )
                                     .border(
                                         1.5.dp,
-                                        if (isSelected) activeBg else Color(0x2538BDF8),
+                                        if (isSelected) NeonCyan else Color(0x25FFFFFF),
                                         RoundedCornerShape(12.dp)
                                     )
-                                    .clickable { viewModel.formType.value = opt }
+                                    .clickable { viewModel.formType.value = t }
                                     .padding(vertical = 10.dp)
-                                    .testTag("type_selector_$opt"),
+                                    .testTag("type_chip_$t"),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = opt,
-                                    color = if (isSelected) activeBg else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontWeight = FontWeight.ExtraBold,
+                                    text = t,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                    color = if (isSelected) NeonCyan else MaterialTheme.colorScheme.onSurface,
                                     fontSize = 14.sp
                                 )
                             }
@@ -237,7 +251,7 @@ fun DataEntryScreen(
             }
         }
 
-        // Section 2: Dimensions & Live Size Calculation
+        // Section 2: Physical Dimensions & Live SIZE Calculation
         item {
             LiquidGlassCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -250,14 +264,14 @@ fun DataEntryScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "DIMENSIONS & SIZE",
+                            text = "الأبعاد الفيزيائية (Physical Dimensions)",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = stringResource(R.string.formula_size),
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -266,7 +280,7 @@ fun DataEntryScreen(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         OutlinedTextField(
                             value = length,
@@ -277,7 +291,7 @@ fun DataEntryScreen(
                             label = { Text(stringResource(R.string.length)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = NeonCyan,
                                 unfocusedBorderColor = Color(0x3338BDF8)
@@ -293,7 +307,7 @@ fun DataEntryScreen(
                             label = { Text(stringResource(R.string.width)) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = NeonCyan,
                                 unfocusedBorderColor = Color(0x3338BDF8)
@@ -303,46 +317,36 @@ fun DataEntryScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Live Calculated Size Preview Box
+                    // Live Calculated SIZE Preview Box
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(NeonCyan.copy(alpha = 0.15f), Color(0x1038BDF8))
-                                )
-                            )
-                            .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x2038BDF8))
+                            .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = Icons.Default.Calculate,
                                 contentDescription = null,
                                 tint = NeonCyan,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(20.dp)
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.size),
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = "$length × $width",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "CALCULATED SIZE (L × W)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
 
                         Text(
-                            text = "= $calculatedSize",
-                            fontSize = 20.sp,
+                            text = "$calculatedSize",
+                            fontSize = 18.sp,
                             fontWeight = FontWeight.Black,
                             color = NeonCyan,
                             modifier = Modifier.testTag("preview_live_size")
@@ -434,7 +438,7 @@ fun DataEntryScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Live Calculated BOOST Preview Box with Formula Breakdown
+                    // Live Calculated BOOST Preview Box
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -479,7 +483,6 @@ fun DataEntryScreen(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        // Breakdown tags
                         val s = sScore.toDoubleOrNull() ?: 0.0
                         val f = fScore.toDoubleOrNull() ?: 0.0
                         val c = cScore.toDoubleOrNull() ?: 0.0
@@ -491,6 +494,196 @@ fun DataEntryScreen(
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+            }
+        }
+
+        // Section 4: Historical Strikes Entry per Year ("السترايكات السابقة مع اختيار سنة الادخال و كم من سترايك في السنة")
+        item {
+            LiquidGlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.History,
+                                contentDescription = null,
+                                tint = NeonAmber,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.historical_strikes_title),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        if (totalHistoricalStrikes > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(NeonAmber.copy(alpha = 0.2f))
+                                    .border(1.dp, NeonAmber, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "إجمالي: $totalHistoricalStrikes",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = NeonAmber
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = stringResource(R.string.historical_strikes_desc),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Input controls: Year & Strike count
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = inputYear,
+                            onValueChange = { inputYear = it },
+                            label = { Text(stringResource(R.string.year)) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("input_historical_year"),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = NeonCyan,
+                                unfocusedBorderColor = Color(0x3338BDF8)
+                            )
+                        )
+
+                        OutlinedTextField(
+                            value = inputStrikeCount,
+                            onValueChange = { inputStrikeCount = it },
+                            label = { Text(stringResource(R.string.strikes_amount)) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("input_historical_count"),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = NeonEmerald,
+                                unfocusedBorderColor = Color(0x3310B981)
+                            )
+                        )
+
+                        Button(
+                            onClick = {
+                                val y = inputYear.toIntOrNull()
+                                val c = inputStrikeCount.toIntOrNull()
+                                if (y != null && y in 2000..2050 && c != null && c > 0) {
+                                    viewModel.addHistoricalYearEntry(y, c)
+                                    inputYear = (y - 1).toString()
+                                    inputStrikeCount = "10"
+                                }
+                            },
+                            modifier = Modifier
+                                .height(56.dp)
+                                .testTag("add_historical_entry_btn"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = Color(0xFF021B26))
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(stringResource(R.string.add_year_entry), fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // Quick Year Chips
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(currentYear, currentYear - 1, currentYear - 2, currentYear - 3).forEach { yr ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0x18FFFFFF))
+                                    .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(8.dp))
+                                    .clickable { inputYear = yr.toString() }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "$yr",
+                                    fontSize = 11.sp,
+                                    color = NeonCyan,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    // Display added historical year entries
+                    if (historicalEntries.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            historicalEntries.forEachIndexed { index, (yr, cnt) ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0x250F172A))
+                                        .border(1.dp, NeonEmerald.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "سنة $yr : ",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = NeonCyan
+                                        )
+                                        Text(
+                                            text = "$cnt ضربة",
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 13.sp,
+                                            color = NeonEmerald
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = { viewModel.removeHistoricalYearEntry(index) },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Remove",
+                                            tint = NeonRose,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

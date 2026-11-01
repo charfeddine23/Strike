@@ -16,6 +16,9 @@ interface StrikeEventDao {
     @Query("SELECT * FROM strike_events WHERE individualId = :id ORDER BY timestamp DESC")
     fun getEventsForIndividual(id: Long): Flow<List<StrikeEvent>>
 
+    @Query("SELECT * FROM strike_events WHERE year = :year ORDER BY timestamp DESC")
+    fun getEventsForYear(year: Int): Flow<List<StrikeEvent>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertEvent(event: StrikeEvent): Long
 
@@ -30,4 +33,7 @@ interface StrikeEventDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(events: List<StrikeEvent>)
+
+    @Query("DELETE FROM strike_events")
+    suspend fun clearAll()
 }

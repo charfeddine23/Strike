@@ -56,4 +56,30 @@
     <string name="recent_activity">Derniers Strikes</string>
     <string name="analytics_overview">Vue d\'ensemble &amp; Télémétrie</string>
     <string name="theme_toggle">Changer le Thème</string>
+
+    <!-- New Features: Yearly Dashboard, Pattern Lock, Settings, Historical Strikes -->
+    <string name="settings">Paramètres</string>
+    <string name="strike_arena">Arène de Frappe</string>
+    <string name="yearly_analytics">Statistiques Annuelles</string>
+    <string name="yearly_dashboard_title">Tableau de Bord Annuel des Strikes</string>
+    <string name="year">Année</string>
+    <string name="total_strikes_in_year">Strikes cette Année</string>
+    <string name="all_time_strikes">Total Historique des Strikes</string>
+    <string name="historical_strikes_title">Strikes Précédents (par Année)</string>
+    <string name="historical_strikes_desc">Enregistrez les strikes des années précédentes pour le tableau de bord annuel.</string>
+    <string name="add_year_entry">Ajouter Année</string>
+    <string name="strikes_amount">Nombre de Strikes</string>
+    <string name="pattern_lock">Verrouillage par Schéma</string>
+    <string name="pattern_lock_desc">Sécuriser l\'application avec un schéma tactile au démarrage.</string>
+    <string name="draw_pattern_to_unlock">Dessinez le schéma pour déverrouiller</string>
+    <string name="pattern_incorrect">Schéma incorrect. Réessayez.</string>
+    <string name="pattern_unlocked">Application déverrouillée</string>
+    <string name="set_pattern_title">Configurer le Schéma</string>
+    <string name="draw_new_pattern">Dessinez un nouveau schéma (au moins 4 points)</string>
+    <string name="confirm_pattern">Redessinez pour confirmer</string>
+    <string name="pattern_mismatch">Les schémas ne correspondent pas. Réessayez.</string>
+    <string name="pattern_saved">Verrouillage par schéma activé avec succès !</string>
+    <string name="lock_now">Verrouiller maintenant</string>
+    <string name="system_theme_active">Le thème suit le système automatiquement (Clair / Sombre)</string>
+    <string name="auto_logged_notice">Les strikes sont enregistrés automatiquement avec la date, l\'heure et l\'année.</string>
 </resources>

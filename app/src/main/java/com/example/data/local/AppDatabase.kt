@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 
-@Database(entities = [Individual::class, StrikeEvent::class], version = 2, exportSchema = false)
+@Database(entities = [Individual::class, StrikeEvent::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun individualDao(): IndividualDao
     abstract fun strikeEventDao(): StrikeEventDao

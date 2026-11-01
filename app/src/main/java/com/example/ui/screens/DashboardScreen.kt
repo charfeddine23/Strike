@@ -158,6 +158,69 @@ fun DashboardScreen(
                 }
             }
 
+            // Yearly Strikes Analytics Quick Banner
+            item {
+                LiquidGlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onNavigateToStrike(allList.firstOrNull()?.id ?: 1L) },
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(NeonEmerald.copy(alpha = 0.2f))
+                                    .border(1.dp, NeonEmerald, RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bolt,
+                                    contentDescription = null,
+                                    tint = NeonEmerald,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.yearly_dashboard_title),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "تتبع إجمالي الضربات لكل سنة • اضغط للعرض",
+                                    fontSize = 11.sp,
+                                    color = NeonEmerald
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(NeonCyan.copy(alpha = 0.2f))
+                                .border(1.dp, NeonCyan, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "عرض الداش بورد",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NeonCyan
+                            )
+                        }
+                    }
+                }
+            }
+
             // Search Bar & Sort Button
             item {
                 Row(

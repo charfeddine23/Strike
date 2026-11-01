@@ -56,4 +56,30 @@
     <string name="recent_activity">أحدث الضربات</string>
     <string name="analytics_overview">نظرة عامة والقياسات</string>
     <string name="theme_toggle">تبديل المظهر</string>
+
+    <!-- New Features: Yearly Dashboard, Pattern Lock, Settings, Historical Strikes -->
+    <string name="settings">الإعدادات</string>
+    <string name="strike_arena">حلبة السترايك</string>
+    <string name="yearly_analytics">إحصائيات السنوات</string>
+    <string name="yearly_dashboard_title">لوحة إحصائيات السنوات للضربات</string>
+    <string name="year">السنة</string>
+    <string name="total_strikes_in_year">ضربات هذه السنة</string>
+    <string name="all_time_strikes">إجمالي الضربات التاريخية</string>
+    <string name="historical_strikes_title">السترايكات السابقة (حسب السنة)</string>
+    <string name="historical_strikes_desc">أضف الضربات السابقة مع تحديد السنة لإدراجها في إحصائيات الداش بورد السنوي.</string>
+    <string name="add_year_entry">إضافة سنة</string>
+    <string name="strikes_amount">عدد الضربات</string>
+    <string name="pattern_lock">قفل التطبيق بالنقش (Schéma)</string>
+    <string name="pattern_lock_desc">تأمين التطبيق بنقش سري يتم رسمه عند الدخول.</string>
+    <string name="draw_pattern_to_unlock">ارسم النقش لفتح التطبيق</string>
+    <string name="pattern_incorrect">النقش غير صحيح! حاول مجدداً.</string>
+    <string name="pattern_unlocked">تم فتح التطبيق بنجاح</string>
+    <string name="set_pattern_title">إعداد قفل النقش</string>
+    <string name="draw_new_pattern">ارسم النقش الجديد (4 نقاط على الأقل)</string>
+    <string name="confirm_pattern">أعد رسم النقش للتأكيد</string>
+    <string name="pattern_mismatch">النقشان غير متطابقين، حاول ثانية.</string>
+    <string name="pattern_saved">تم تفعيل قفل النقش بنجاح!</string>
+    <string name="lock_now">قفل التطبيق الآن</string>
+    <string name="system_theme_active">يتبع التطبيق وضع الهاتف تلقائياً (الداكن / الفاتح)</string>
+    <string name="auto_logged_notice">تُخزن الضربات تلقائياً في قاعدة البيانات بالتاريخ والوقت والسنة.</string>
 </resources>
