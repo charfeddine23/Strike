@@ -1,0 +1,83 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: wrapper
+
+      - name: Ensure Gradle Wrapper Executable
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          else
+            gradle wrapper --gradle-version 8.9
+            chmod +x ./gradlew
+          fi
+
+      - name: Build APK with Gradle
+        run: |
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Locate Generated APK
+        id: find_apk
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "Error: APK file not found!"
+            exit 1
+          fi
+          echo "Found APK at: $APK_PATH"
+          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: strikepulse-debug-apk
+          path: ${{ steps.find_apk.outputs.apk_path }}
+          retention-days: 14
+
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          tag_name: ${{ github.ref_name || 'latest-build' }}
+          name: "Release ${{ github.ref_name || github.sha }}"
+          body: |
+            ### Automated CI/CD Release
+            - **Commit**: `${{ github.sha }}`
+            - **Build Status**: Success
+            - **Included**: Compiled Android APK with Room DB, Strike counter & Liquid Glass UI.
+          draft: false
+          prerelease: false
+          files: ${{ steps.find_apk.outputs.apk_path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

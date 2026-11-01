@@ -1,0 +1,6 @@
+{
+  "name": "StrikePulse",
+  "description": "Liquid Glass metrics & performance analytics app with Room DB, Strike tracking, and smart comparisons.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
