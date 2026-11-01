@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   build:
@@ -18,12 +19,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 21 (Required for AGP 9.x & Gradle 9.x)
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -39,58 +40,102 @@ jobs:
             cp .env.example .env 2>/dev/null || touch .env
           fi
 
-          # 2. Restore debug.keystore from debug.keystore.base64
+          # 2. Restore debug.keystore from base64 if needed
           if [ -f "debug.keystore.base64" ]; then
             echo "Restoring debug.keystore from base64..."
-            base64 -d debug.keystore.base64 > debug.keystore
+            base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null || true
           fi
 
-          # If debug.keystore still doesn't exist, generate standard debug keystore
-          if [ ! -f "debug.keystore" ]; then
+          # 3. Generate fallback debug.keystore if missing or empty
+          if [ ! -f "debug.keystore" ] || [ ! -s "debug.keystore" ]; then
             echo "Generating fallback debug.keystore..."
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-          # 3. Ensure Gradle wrapper is executable
+          # 4. Ensure Gradle wrapper is executable
           if [ -f "./gradlew" ]; then
             chmod +x ./gradlew
           fi
+
+      - name: Determine Dynamic Version & Tag
+        id: versioning
+        run: |
+          # Extract base versionName from app/build.gradle.kts
+          BASE_VERSION=$(grep -o 'versionName = "[^"]*"' app/build.gradle.kts | cut -d'"' -f2 || echo "1.0")
+          COMMIT_HASH=$(echo "${{ github.sha }}" | cut -c1-7)
+
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
+            RELEASE_TITLE="StrikePulse ${TAG_NAME}"
+          else
+            TAG_NAME="v${BASE_VERSION}.${{ github.run_number }}"
+            RELEASE_TITLE="StrikePulse v${BASE_VERSION} (Build #${{ github.run_number }})"
+          fi
+
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "release_title=${RELEASE_TITLE}" >> "$GITHUB_OUTPUT"
+          echo "base_version=${BASE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "commit_short=${COMMIT_HASH}" >> "$GITHUB_OUTPUT"
 
       - name: Build APK with Gradle
         run: |
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Locate Generated APK
+      - name: Locate and Rename APK
         id: find_apk
         run: |
-          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
-          if [ -z "$APK_PATH" ]; then
-            echo "Error: APK file not found!"
+          APK_RAW=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ -z "$APK_RAW" ]; then
+            echo "::error::No APK file generated in app/build/outputs/apk/debug!"
             exit 1
           fi
-          echo "Found APK at: $APK_PATH"
-          echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
 
-      - name: Upload APK Artifact
+          TAG_NAME="${{ steps.versioning.outputs.tag_name }}"
+          RELEASE_APK="StrikePulse-${TAG_NAME}.apk"
+          cp "$APK_RAW" "$RELEASE_APK"
+
+          echo "Found APK: $APK_RAW"
+          echo "Renamed for release: $RELEASE_APK"
+          echo "apk_path=${RELEASE_APK}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: strikepulse-debug-apk
+          name: strikepulse-apk
           path: ${{ steps.find_apk.outputs.apk_path }}
           retention-days: 14
 
-      - name: Create GitHub Release and Upload APK
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         with:
-          tag_name: ${{ github.ref_name || 'latest-build' }}
-          name: "Release ${{ github.ref_name || github.sha }}"
+          tag_name: ${{ steps.versioning.outputs.tag_name }}
+          name: ${{ steps.versioning.outputs.release_title }}
+          target_commitish: ${{ github.sha }}
           body: |
-            ### Automated CI/CD Release
-            - **Commit**: `${{ github.sha }}`
-            - **Build Status**: Success
-            - **Included**: Compiled Android APK with Room DB, Strike counter & Liquid Glass UI.
+            ## 🚀 StrikePulse Automated Release - ${{ steps.versioning.outputs.tag_name }}
+
+            ### 📦 App Details
+            - **Version**: `v${{ steps.versioning.outputs.base_version }}`
+            - **Build**: `#${{ github.run_number }}`
+            - **Commit**: `${{ steps.versioning.outputs.commit_short }}` (`${{ github.sha }}`)
+            - **Date**: $(date -u '+%Y-%m-%d %H:%M UTC')
+
+            ### ✨ Features Included
+            - 📊 **Dynamic Auto-calculations**: Size (Length × Width), Boost, and Score (Boost × Strike).
+            - ⚡ **Dedicated Strike Screen & Real-Time Tracking**: Instant strike increment with date, time, and year recorded to Room DB.
+            - 📈 **Yearly Strike Dashboard**: Statistics per year with interactive timeline.
+            - ⚖️ **Smart Comparison Page**: Side-by-side analytical comparison between two individuals.
+            - 🔒 **Security Pattern Lock (Schéma 3×3)**: App lock upon launch and pattern management in Settings.
+            - 🎨 **Liquid Glass UI & System Auto Theme**: Automatic dark/light theme switching based on device setting.
+            - 📥 **Past Strike Logging**: Historical strike entry per year.
+
+            ### 📲 Installation
+            1. Download the **`${{ steps.find_apk.outputs.apk_path }}`** file below.
+            2. Open the APK on your Android device and tap **Install**.
           draft: false
           prerelease: false
+          make_latest: true
+          generate_release_notes: true
           files: ${{ steps.find_apk.outputs.apk_path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
