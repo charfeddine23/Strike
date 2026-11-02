@@ -114,10 +114,17 @@ fun SettingsDialog(
         }
     }
 
-    val dialogBg = if (isDarkTheme) Color(0xF00B132B) else Color(0xF8FFFFFF)
-    val dialogBorder = if (isDarkTheme) Color(0x6038BDF8) else Color(0x6000B4D8)
-    val sectionBg = if (isDarkTheme) Color(0x221E293B) else Color(0x70F1F5F9)
-    val sectionBorder = if (isDarkTheme) Color(0x3538BDF8) else Color(0x40CBD5E1)
+    // Liquid Glass v3 Design Aesthetic Color Tokens
+    val dialogBg = if (isDarkTheme) Color(0xF00B132B) else Color(0xFFEEF2F6) // #EEF2F6 soft bluish-gray
+    val dialogBorder = if (isDarkTheme) Color(0x6038BDF8) else Color(0xFFCBD5E1) // #CBD5E1 subtle glass border
+    val cardBg = if (isDarkTheme) Color(0x221E293B) else Color(0xFFFFFFFF) // #FFFFFF clean white card
+    val cardBorder = if (isDarkTheme) Color(0x3538BDF8) else Color(0xFFCBD5E1) // #CBD5E1
+    val titleColor = if (isDarkTheme) Color(0xFFF8FAFC) else Color(0xFF1E293B) // #1E293B Deep Slate
+    val descColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF475569) // #475569 Medium Dark Gray
+    val activeCyan = Color(0xFF0EA5E9) // #0EA5E9 Vibrant Turquoise/Cyan
+    val activeTurquoise = Color(0xFF06B6D4) // #06B6D4
+    val primaryActionTeal = Color(0xFF0F766E) // #0F766E
+    val sensitiveRed = Color(0xFFE11D48) // #E11D48 Soft Coral Red
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -148,14 +155,14 @@ fun SettingsDialog(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(NeonCyan.copy(alpha = 0.2f))
-                                .border(1.dp, NeonCyan, RoundedCornerShape(12.dp)),
+                                .background(activeCyan.copy(alpha = 0.15f))
+                                .border(1.dp, activeCyan, RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Settings,
                                 contentDescription = null,
-                                tint = NeonCyan,
+                                tint = activeCyan,
                                 modifier = Modifier.size(22.dp)
                             )
                         }
@@ -165,12 +172,13 @@ fun SettingsDialog(
                                 text = stringResource(R.string.settings),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = titleColor
                             )
                             Text(
                                 text = stringResource(R.string.app_name),
                                 fontSize = 11.sp,
-                                color = NeonCyan
+                                fontWeight = FontWeight.Bold,
+                                color = activeCyan
                             )
                         }
                     }
@@ -182,7 +190,7 @@ fun SettingsDialog(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = stringResource(R.string.cancel),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = descColor
                         )
                     }
                 }
@@ -192,8 +200,8 @@ fun SettingsDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0x221E293B))
-                        .border(1.dp, Color(0x4038BDF8), RoundedCornerShape(16.dp))
+                        .background(cardBg)
+                        .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
                         .padding(14.dp)
                 ) {
                     Row(
@@ -208,7 +216,7 @@ fun SettingsDialog(
                             Icon(
                                 imageVector = Icons.Default.Gesture,
                                 contentDescription = null,
-                                tint = NeonViolet,
+                                tint = activeCyan,
                                 modifier = Modifier.size(24.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
@@ -217,12 +225,12 @@ fun SettingsDialog(
                                     text = stringResource(R.string.pattern_lock),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = titleColor
                                 )
                                 Text(
                                     text = stringResource(R.string.pattern_lock_desc),
                                     fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = descColor
                                 )
                             }
                         }
@@ -237,8 +245,8 @@ fun SettingsDialog(
                                 }
                             },
                             colors = SwitchDefaults.colors(
-                                checkedThumbColor = NeonCyan,
-                                checkedTrackColor = NeonCyan.copy(alpha = 0.4f)
+                                checkedThumbColor = activeCyan,
+                                checkedTrackColor = activeCyan.copy(alpha = 0.4f)
                             ),
                             modifier = Modifier.testTag("pattern_lock_switch")
                         )
@@ -255,9 +263,10 @@ fun SettingsDialog(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(40.dp),
-                                shape = RoundedCornerShape(10.dp)
+                                shape = RoundedCornerShape(10.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder)
                             ) {
-                                Text("تغيير النقش", fontSize = 12.sp)
+                                Text("تغيير النقش", fontSize = 12.sp, color = titleColor)
                             }
 
                             Button(
@@ -269,15 +278,21 @@ fun SettingsDialog(
                                     .weight(1f)
                                     .height(40.dp),
                                 shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = NeonRose.copy(alpha = 0.85f))
+                                colors = ButtonDefaults.buttonColors(containerColor = sensitiveRed)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Lock,
                                     contentDescription = null,
+                                    tint = Color.White,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text(stringResource(R.string.lock_now), fontSize = 12.sp)
+                                Text(
+                                    text = stringResource(R.string.lock_now),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
                             }
                         }
                     }
@@ -288,15 +303,15 @@ fun SettingsDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0x221E293B))
-                        .border(1.dp, Color(0x3038BDF8), RoundedCornerShape(16.dp))
+                        .background(cardBg)
+                        .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.BrightnessAuto,
                         contentDescription = null,
-                        tint = NeonAmber,
+                        tint = activeTurquoise,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
@@ -305,12 +320,12 @@ fun SettingsDialog(
                             text = "المظهر التلقائي (Auto Theme)",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = titleColor
                         )
                         Text(
                             text = stringResource(R.string.system_theme_active),
                             fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = descColor
                         )
                     }
                 }
@@ -320,15 +335,15 @@ fun SettingsDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0x221E293B))
-                        .border(1.dp, Color(0x3038BDF8), RoundedCornerShape(16.dp))
+                        .background(cardBg)
+                        .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
                         .padding(14.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Language,
                             contentDescription = null,
-                            tint = NeonCyan,
+                            tint = activeCyan,
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -336,7 +351,7 @@ fun SettingsDialog(
                             text = stringResource(R.string.language),
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = titleColor
                         )
                     }
 
@@ -359,10 +374,10 @@ fun SettingsDialog(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(if (isSelected) NeonCyan.copy(alpha = 0.25f) else Color(0x15FFFFFF))
+                                    .background(if (isSelected) activeCyan.copy(alpha = 0.15f) else if (isDarkTheme) Color(0x15FFFFFF) else Color(0xFFF8FAFC))
                                     .border(
                                         1.dp,
-                                        if (isSelected) NeonCyan else Color(0x20FFFFFF),
+                                        if (isSelected) activeCyan else cardBorder,
                                         RoundedCornerShape(10.dp)
                                     )
                                     .clickable { viewModel.setLanguage(code) }
@@ -373,7 +388,7 @@ fun SettingsDialog(
                                     text = tag,
                                     fontSize = 12.sp,
                                     fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Normal,
-                                    color = if (isSelected) NeonCyan else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (isSelected) activeCyan else descColor
                                 )
                             }
                         }
@@ -385,8 +400,8 @@ fun SettingsDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0x221E293B))
-                        .border(1.dp, Color(0x3538BDF8), RoundedCornerShape(16.dp))
+                        .background(cardBg)
+                        .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
                         .padding(14.dp)
                 ) {
                     Row(
@@ -398,7 +413,7 @@ fun SettingsDialog(
                             Icon(
                                 imageVector = Icons.Default.Info,
                                 contentDescription = null,
-                                tint = NeonCyan,
+                                tint = activeCyan,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -406,7 +421,7 @@ fun SettingsDialog(
                                 text = stringResource(R.string.version_information),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = titleColor
                             )
                         }
 
@@ -414,15 +429,15 @@ fun SettingsDialog(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(NeonEmerald.copy(alpha = 0.2f))
-                                .border(1.dp, NeonEmerald, RoundedCornerShape(8.dp))
+                                .background(primaryActionTeal.copy(alpha = 0.12f))
+                                .border(1.dp, primaryActionTeal, RoundedCornerShape(8.dp))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
                                 text = "v${BuildConfig.VERSION_NAME}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = NeonEmerald
+                                color = primaryActionTeal
                             )
                         }
                     }
@@ -436,13 +451,13 @@ fun SettingsDialog(
                         Text(
                             text = stringResource(R.string.app_version),
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = descColor
                         )
                         Text(
                             text = "v${BuildConfig.VERSION_NAME}",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = titleColor
                         )
                     }
 
@@ -455,13 +470,13 @@ fun SettingsDialog(
                         Text(
                             text = stringResource(R.string.build_number),
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = descColor
                         )
                         Text(
                             text = "#${BuildConfig.VERSION_CODE}",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = NeonAmber
+                            color = activeCyan
                         )
                     }
 
@@ -472,8 +487,8 @@ fun SettingsDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0x1838BDF8))
-                            .border(1.dp, Color(0x3038BDF8), RoundedCornerShape(10.dp))
+                            .background(if (isDarkTheme) Color(0x1838BDF8) else Color(0xFFF1F5F9))
+                            .border(1.dp, cardBorder, RoundedCornerShape(10.dp))
                             .padding(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -481,13 +496,13 @@ fun SettingsDialog(
                             modifier = Modifier
                                 .size(30.dp)
                                 .clip(CircleShape)
-                                .background(NeonViolet.copy(alpha = 0.25f)),
+                                .background(activeCyan.copy(alpha = 0.15f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = null,
-                                tint = NeonCyan,
+                                tint = activeCyan,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -498,7 +513,7 @@ fun SettingsDialog(
                                 fontFamily = CaveatHandwriting,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 17.sp,
-                                color = if (isDarkTheme) NeonCyan else DayCyan
+                                color = if (isDarkTheme) activeCyan else primaryActionTeal
                             )
                         }
                     }
@@ -509,8 +524,8 @@ fun SettingsDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
-                        .background(if (isDarkTheme) Color(0x221E293B) else Color(0x60F1F5F9))
-                        .border(1.dp, if (isDarkTheme) Color(0x3538BDF8) else Color(0x4000B4D8), RoundedCornerShape(16.dp))
+                        .background(cardBg)
+                        .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
                         .padding(14.dp)
                 ) {
                     Row(
@@ -522,7 +537,7 @@ fun SettingsDialog(
                             Icon(
                                 imageVector = Icons.Default.CloudSync,
                                 contentDescription = null,
-                                tint = if (isDarkTheme) NeonCyan else DayCyan,
+                                tint = activeCyan,
                                 modifier = Modifier.size(22.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -530,22 +545,22 @@ fun SettingsDialog(
                                 text = stringResource(R.string.backup_and_restore),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = titleColor
                             )
                         }
 
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isDarkTheme) NeonEmerald.copy(alpha = 0.2f) else DayEmerald.copy(alpha = 0.15f))
-                                .border(1.dp, if (isDarkTheme) NeonEmerald else DayEmerald, RoundedCornerShape(8.dp))
+                                .background(primaryActionTeal.copy(alpha = 0.12f))
+                                .border(1.dp, primaryActionTeal, RoundedCornerShape(8.dp))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
                                 text = "Drive",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isDarkTheme) NeonEmerald else DayEmerald
+                                color = primaryActionTeal
                             )
                         }
                     }
@@ -555,7 +570,7 @@ fun SettingsDialog(
                     Text(
                         text = stringResource(R.string.backup_desc),
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = descColor,
                         lineHeight = 15.sp
                     )
 
@@ -575,7 +590,7 @@ fun SettingsDialog(
                                 .height(42.dp),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isDarkTheme) NeonCyan.copy(alpha = 0.85f) else DayCyan
+                                containerColor = primaryActionTeal
                             )
                         ) {
                             Icon(
@@ -600,20 +615,21 @@ fun SettingsDialog(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(42.dp),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CloudDownload,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
-                                tint = if (isDarkTheme) NeonEmerald else DayEmerald
+                                tint = primaryActionTeal
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = stringResource(R.string.restore_from_drive),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = titleColor
                             )
                         }
                     }
@@ -628,15 +644,22 @@ fun SettingsDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(44.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = null,
+                        tint = activeCyan,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.seed_sample_data), fontSize = 12.sp)
+                    Text(
+                        text = stringResource(R.string.seed_sample_data),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = descColor
+                    )
                 }
 
                 // About Info Footer
@@ -675,12 +698,13 @@ fun SettingsDialog(
                     Icon(
                         imageVector = Icons.Default.CloudSync,
                         contentDescription = null,
-                        tint = if (isDarkTheme) NeonCyan else DayCyan
+                        tint = activeCyan
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = stringResource(R.string.restore_dialog_title),
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = titleColor
                     )
                 }
             },
@@ -688,7 +712,7 @@ fun SettingsDialog(
                 Text(
                     text = stringResource(R.string.restore_dialog_msg),
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = descColor
                 )
             },
             confirmButton = {
@@ -699,10 +723,15 @@ fun SettingsDialog(
                         pendingRestoreUri = null
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isDarkTheme) NeonCyan.copy(alpha = 0.85f) else DayCyan
+                        containerColor = primaryActionTeal
                     )
                 ) {
-                    Text(stringResource(R.string.restore_merge), fontSize = 12.sp)
+                    Text(
+                        text = stringResource(R.string.restore_merge),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
             },
             dismissButton = {
@@ -713,7 +742,7 @@ fun SettingsDialog(
                             pendingRestoreUri = null
                         }
                     ) {
-                        Text(stringResource(R.string.cancel))
+                        Text(stringResource(R.string.cancel), color = descColor)
                     }
 
                     OutlinedButton(
@@ -723,10 +752,16 @@ fun SettingsDialog(
                             pendingRestoreUri = null
                         },
                         colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = if (isDarkTheme) NeonRose else Color(0xFFDC2626)
-                        )
+                            contentColor = sensitiveRed
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, sensitiveRed.copy(alpha = 0.5f))
                     ) {
-                        Text(stringResource(R.string.restore_replace), fontSize = 12.sp)
+                        Text(
+                            text = stringResource(R.string.restore_replace),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = sensitiveRed
+                        )
                     }
                 }
             }
