@@ -61,10 +61,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.example.ui.theme.CaveatHandwriting
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonViolet
+import com.example.ui.theme.PlusJakartaSans
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.pow
@@ -86,6 +93,7 @@ fun PatternLockCanvas(
     val context = LocalContext.current
     val selectedNodes = remember { mutableStateListOf<Int>() }
     var currentTouchPosition by remember { mutableStateOf<Offset?>(null) }
+    val isDarkTheme = isSystemInDarkTheme()
 
     fun triggerTick() {
         try {
@@ -102,15 +110,20 @@ fun PatternLockCanvas(
         } catch (_: Exception) {}
     }
 
+    val canvasBg = if (isDarkTheme) Color(0x330F172A) else Color(0x80FFFFFF)
+    val successColor = if (isDarkTheme) NeonEmerald else DayEmerald
+    val errorColor = if (isDarkTheme) NeonRose else Color(0xFFDC2626)
+    val idleBorder = if (isDarkTheme) Color(0x4038BDF8) else Color(0x6000B4D8)
+
     BoxWithConstraints(
         modifier = modifier
             .aspectRatio(1f)
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(0x330F172A))
+            .background(canvasBg)
             .border(1.5.dp, when (status) {
-                PatternStatus.SUCCESS -> NeonEmerald
-                PatternStatus.ERROR -> NeonRose
-                else -> Color(0x4038BDF8)
+                PatternStatus.SUCCESS -> successColor
+                PatternStatus.ERROR -> errorColor
+                else -> idleBorder
             }, RoundedCornerShape(24.dp))
             .pointerInput(status) {
                 if (status == PatternStatus.SUCCESS || status == PatternStatus.ERROR) return@pointerInput
@@ -274,11 +287,20 @@ fun FullscreenPatternUnlockScreen(
     var status by remember { mutableStateOf(PatternStatus.IDLE) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val isDarkTheme = isSystemInDarkTheme()
+
+    val overlayBg = if (isDarkTheme) Color(0xE6050B14) else Color(0xF5F1F5F9)
+    val primaryColor = if (isDarkTheme) NeonCyan else DayCyan
+    val iconBorder = if (status == PatternStatus.ERROR) {
+        if (isDarkTheme) NeonRose else Color(0xFFDC2626)
+    } else {
+        primaryColor
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xE6050B14))
+            .background(overlayBg)
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -294,8 +316,8 @@ fun FullscreenPatternUnlockScreen(
                 modifier = Modifier
                     .size(72.dp)
                     .clip(CircleShape)
-                    .background(Color(0x2506B6D4))
-                    .border(1.5.dp, if (status == PatternStatus.ERROR) NeonRose else NeonCyan, CircleShape),
+                    .background(primaryColor.copy(alpha = 0.16f))
+                    .border(1.5.dp, iconBorder, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -306,9 +328,9 @@ fun FullscreenPatternUnlockScreen(
                     },
                     contentDescription = null,
                     tint = when (status) {
-                        PatternStatus.SUCCESS -> NeonEmerald
-                        PatternStatus.ERROR -> NeonRose
-                        else -> NeonCyan
+                        PatternStatus.SUCCESS -> if (isDarkTheme) NeonEmerald else DayEmerald
+                        PatternStatus.ERROR -> if (isDarkTheme) NeonRose else Color(0xFFDC2626)
+                        else -> primaryColor
                     },
                     modifier = Modifier.size(36.dp)
                 )
@@ -318,7 +340,8 @@ fun FullscreenPatternUnlockScreen(
 
             Text(
                 text = stringResource(R.string.app_name),
-                fontSize = 24.sp,
+                fontSize = 26.sp,
+                fontFamily = PlusJakartaSans,
                 fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 letterSpacing = 1.sp
@@ -328,8 +351,9 @@ fun FullscreenPatternUnlockScreen(
 
             Text(
                 text = errorMessage ?: stringResource(R.string.draw_pattern_to_unlock),
-                fontSize = 14.sp,
-                color = if (errorMessage != null) NeonRose else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 15.sp,
+                fontFamily = CaveatHandwriting,
+                color = if (errorMessage != null) (if (isDarkTheme) NeonRose else Color(0xFFDC2626)) else MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 fontWeight = if (errorMessage != null) FontWeight.Bold else FontWeight.Normal
             )

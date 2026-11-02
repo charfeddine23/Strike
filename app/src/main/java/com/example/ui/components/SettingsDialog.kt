@@ -56,14 +56,20 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.R
+import com.example.ui.theme.CaveatHandwriting
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonViolet
+import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -76,6 +82,12 @@ fun SettingsDialog(
 ) {
     val isPatternLockEnabled by viewModel.isPatternLockEnabled
     var showPatternSetupDialog by remember { mutableStateOf(false) }
+    val isDarkTheme = isSystemInDarkTheme()
+
+    val dialogBg = if (isDarkTheme) Color(0xF00B132B) else Color(0xF8FFFFFF)
+    val dialogBorder = if (isDarkTheme) Color(0x6038BDF8) else Color(0x6000B4D8)
+    val sectionBg = if (isDarkTheme) Color(0x221E293B) else Color(0x70F1F5F9)
+    val sectionBorder = if (isDarkTheme) Color(0x3538BDF8) else Color(0x40CBD5E1)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -85,8 +97,8 @@ fun SettingsDialog(
             modifier = Modifier
                 .fillMaxWidth(0.94f)
                 .clip(RoundedCornerShape(24.dp))
-                .background(Color(0xF00B132B))
-                .border(1.5.dp, Color(0x6038BDF8), RoundedCornerShape(24.dp))
+                .background(dialogBg)
+                .border(1.5.dp, dialogBorder, RoundedCornerShape(24.dp))
                 .padding(20.dp)
         ) {
             Column(
@@ -453,9 +465,10 @@ fun SettingsDialog(
                         Column {
                             Text(
                                 text = "Developed by Charfeddine Kahlessenane",
+                                fontFamily = CaveatHandwriting,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                fontSize = 17.sp,
+                                color = if (isDarkTheme) NeonCyan else DayCyan
                             )
                         }
                     }

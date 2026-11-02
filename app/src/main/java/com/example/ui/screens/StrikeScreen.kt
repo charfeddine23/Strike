@@ -72,14 +72,21 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
+import androidx.compose.foundation.isSystemInDarkTheme
 import com.example.ui.components.CosmicStrikeButton
 import com.example.ui.components.GlassTypeBadge
 import com.example.ui.components.LiquidGlassCard
+import com.example.ui.theme.CaveatHandwriting
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonViolet
+import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.ui.viewmodel.YearlyStrikeStat
 
@@ -676,7 +683,25 @@ fun StrikeScreen(
 }
 
 @Composable
-fun YearlyStatCard(stat: YearlyStrikeStat) {
+fun YearlyStatCard(
+    stat: YearlyStrikeStat,
+    darkTheme: Boolean = isSystemInDarkTheme()
+) {
+    val yearBadgeBg = if (darkTheme) Color(0xFF0F2537) else Color(0x2200B4D8)
+    val yearBadgeBorder = if (darkTheme) NeonCyan else DayCyan
+    val yearTextColor = if (darkTheme) NeonCyan else DayCyan
+
+    val topBadgeBg = if (darkTheme) NeonAmber.copy(alpha = 0.2f) else Color(0x24F59E0B)
+    val topBadgeBorder = if (darkTheme) NeonAmber else DayOrange.copy(alpha = 0.5f)
+    val topBadgeColor = if (darkTheme) NeonAmber else DayOrange
+
+    val trackColor = if (darkTheme) Color(0x331E293B) else Color(0x35CBD5E1)
+    val progressBrush = if (darkTheme) {
+        Brush.horizontalGradient(listOf(NeonCyan, NeonEmerald))
+    } else {
+        Brush.horizontalGradient(listOf(DayCyan, DayEmerald))
+    }
+
     LiquidGlassCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp)
@@ -691,15 +716,16 @@ fun YearlyStatCard(stat: YearlyStrikeStat) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF0F2537))
-                            .border(1.5.dp, NeonCyan, RoundedCornerShape(10.dp))
+                            .background(yearBadgeBg)
+                            .border(1.5.dp, yearBadgeBorder, RoundedCornerShape(10.dp))
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Text(
                             text = "${stat.year}",
                             fontWeight = FontWeight.Black,
+                            fontFamily = PlusJakartaSans,
                             fontSize = 16.sp,
-                            color = NeonCyan
+                            color = yearTextColor
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
@@ -707,12 +733,14 @@ fun YearlyStatCard(stat: YearlyStrikeStat) {
                         Text(
                             text = "${stat.totalStrikes} ضربة",
                             fontWeight = FontWeight.ExtraBold,
+                            fontFamily = PlusJakartaSans,
                             fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "${stat.eventCount} عملية تسجيل في السنة",
                             fontSize = 11.sp,
+                            fontFamily = PlusJakartaSans,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -721,23 +749,24 @@ fun YearlyStatCard(stat: YearlyStrikeStat) {
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(NeonAmber.copy(alpha = 0.2f))
-                        .border(1.dp, NeonAmber, RoundedCornerShape(8.dp))
+                        .background(topBadgeBg)
+                        .border(1.dp, topBadgeBorder, RoundedCornerShape(8.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.EmojiEvents,
                             contentDescription = null,
-                            tint = NeonAmber,
+                            tint = topBadgeColor,
                             modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = stat.topIndividualName,
                             fontSize = 11.sp,
+                            fontFamily = PlusJakartaSans,
                             fontWeight = FontWeight.Bold,
-                            color = NeonAmber
+                            color = topBadgeColor
                         )
                     }
                 }
@@ -751,18 +780,14 @@ fun YearlyStatCard(stat: YearlyStrikeStat) {
                     .fillMaxWidth()
                     .height(8.dp)
                     .clip(CircleShape)
-                    .background(Color(0x331E293B))
+                    .background(trackColor)
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(stat.percentageOfAllTime)
                         .height(8.dp)
                         .clip(CircleShape)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(NeonCyan, NeonEmerald)
-                            )
-                        )
+                        .background(progressBrush)
                 )
             }
 
@@ -775,12 +800,14 @@ fun YearlyStatCard(stat: YearlyStrikeStat) {
                 Text(
                     text = "الحصة من الإجمالي: ${(stat.percentageOfAllTime * 100).toInt()}%",
                     fontSize = 10.sp,
+                    fontFamily = PlusJakartaSans,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = "المتصدر: ${stat.topIndividualStrikes} ضربة",
                     fontSize = 10.sp,
-                    color = NeonEmerald,
+                    fontFamily = PlusJakartaSans,
+                    color = if (darkTheme) NeonEmerald else DayEmerald,
                     fontWeight = FontWeight.SemiBold
                 )
             }
@@ -789,14 +816,24 @@ fun YearlyStatCard(stat: YearlyStrikeStat) {
 }
 
 @Composable
-fun StrikeLogItem(event: StrikeEvent) {
-    // 10% transparency (90% opaque background) as previously requested
+fun StrikeLogItem(
+    event: StrikeEvent,
+    darkTheme: Boolean = isSystemInDarkTheme()
+) {
+    val cardBg = if (darkTheme) Color(0xE60D1527) else Color(0xF5FFFFFF)
+    val cardBorder = if (darkTheme) Color(0x3538BDF8) else Color(0x5500B4D8)
+    val boltBg = if (darkTheme) NeonCyan.copy(alpha = 0.2f) else Color(0x2000B4D8)
+    val boltColor = if (darkTheme) NeonCyan else DayCyan
+    val yearColor = if (darkTheme) NeonAmber else DayOrange
+    val countColor = if (darkTheme) NeonEmerald else DayEmerald
+    val countBg = if (darkTheme) NeonEmerald.copy(alpha = 0.2f) else Color(0x2010B981)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xE60D1527))
-            .border(1.dp, Color(0x3538BDF8), RoundedCornerShape(14.dp))
+            .background(cardBg)
+            .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
             .padding(12.dp)
     ) {
         Row(
@@ -809,14 +846,14 @@ fun StrikeLogItem(event: StrikeEvent) {
                     modifier = Modifier
                         .size(34.dp)
                         .clip(CircleShape)
-                        .background(NeonCyan.copy(alpha = 0.2f))
-                        .border(1.dp, NeonCyan, CircleShape),
+                        .background(boltBg)
+                        .border(1.dp, boltColor.copy(alpha = 0.6f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Bolt,
                         contentDescription = null,
-                        tint = NeonCyan,
+                        tint = boltColor,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -825,6 +862,7 @@ fun StrikeLogItem(event: StrikeEvent) {
                     Text(
                         text = event.individualName,
                         fontWeight = FontWeight.Bold,
+                        fontFamily = PlusJakartaSans,
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -832,14 +870,16 @@ fun StrikeLogItem(event: StrikeEvent) {
                         Text(
                             text = "${event.date} • ${event.time}",
                             fontSize = 10.sp,
+                            fontFamily = PlusJakartaSans,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "[${event.year}]",
                             fontSize = 10.sp,
+                            fontFamily = PlusJakartaSans,
                             fontWeight = FontWeight.Bold,
-                            color = NeonAmber
+                            color = yearColor
                         )
                     }
                 }
@@ -848,15 +888,16 @@ fun StrikeLogItem(event: StrikeEvent) {
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(NeonEmerald.copy(alpha = 0.2f))
-                    .border(1.dp, NeonEmerald.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                    .background(countBg)
+                    .border(1.dp, countColor.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Text(
                     text = "+${event.count}",
                     fontSize = 13.sp,
+                    fontFamily = PlusJakartaSans,
                     fontWeight = FontWeight.Black,
-                    color = NeonEmerald
+                    color = countColor
                 )
             }
         }

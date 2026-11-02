@@ -332,7 +332,8 @@ fun LiquidGlassTopBar(
     currentScreen: AppScreen,
     currentLang: String,
     onOpenLanguageDialog: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     val title = when (currentScreen) {
         AppScreen.DASHBOARD -> stringResource(R.string.nav_dashboard)
@@ -340,6 +341,12 @@ fun LiquidGlassTopBar(
         AppScreen.STRIKE -> stringResource(R.string.nav_strike)
         AppScreen.COMPARISON -> stringResource(R.string.nav_compare)
     }
+
+    val cyanColor = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan
+    val iconBg = if (isDarkTheme) Color(0xFF0F1E36) else Color(0x2000B4D8)
+    val iconBorder = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan.copy(alpha = 0.5f)
+    val buttonBg = if (isDarkTheme) Color(0x221E293B) else Color(0xCCFFFFFF)
+    val buttonBorder = if (isDarkTheme) Color(0x4038BDF8) else Color(0x5000B4D8)
 
     Row(
         modifier = Modifier
@@ -354,14 +361,14 @@ fun LiquidGlassTopBar(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFF0F1E36))
-                    .border(1.dp, NeonCyan, RoundedCornerShape(10.dp)),
+                    .background(iconBg)
+                    .border(1.dp, iconBorder, RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Bolt,
                     contentDescription = null,
-                    tint = NeonCyan,
+                    tint = cyanColor,
                     modifier = Modifier.size(22.dp)
                 )
             }
@@ -371,14 +378,17 @@ fun LiquidGlassTopBar(
                     text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.ExtraBold,
+                    fontFamily = com.example.ui.theme.PlusJakartaSans,
                     color = MaterialTheme.colorScheme.onSurface,
                     letterSpacing = 0.5.sp
                 )
                 Text(
                     text = title,
                     style = MaterialTheme.typography.labelSmall,
-                    color = NeonCyan,
-                    fontSize = 11.sp
+                    color = cyanColor,
+                    fontFamily = com.example.ui.theme.CaveatHandwriting,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
                 )
             }
         }
@@ -388,8 +398,8 @@ fun LiquidGlassTopBar(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0x221E293B))
-                    .border(1.dp, Color(0x4038BDF8), RoundedCornerShape(12.dp))
+                    .background(buttonBg)
+                    .border(1.dp, buttonBorder, RoundedCornerShape(12.dp))
                     .clickable(onClick = onOpenLanguageDialog)
                     .padding(horizontal = 10.dp, vertical = 6.dp)
                     .testTag("language_switch_btn"),
@@ -399,15 +409,16 @@ fun LiquidGlassTopBar(
                     Icon(
                         imageVector = Icons.Default.Language,
                         contentDescription = "Language",
-                        tint = NeonCyan,
+                        tint = cyanColor,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = currentLang.uppercase(),
                         fontWeight = FontWeight.Bold,
+                        fontFamily = com.example.ui.theme.PlusJakartaSans,
                         fontSize = 11.sp,
-                        color = NeonCyan
+                        color = cyanColor
                     )
                 }
             }
@@ -420,14 +431,14 @@ fun LiquidGlassTopBar(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(CircleShape)
-                    .background(Color(0x221E293B))
-                    .border(1.dp, Color(0x3538BDF8), CircleShape)
+                    .background(buttonBg)
+                    .border(1.dp, buttonBorder, CircleShape)
                     .testTag("settings_btn")
             ) {
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = stringResource(R.string.settings),
-                    tint = NeonCyan,
+                    tint = cyanColor,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -450,8 +461,8 @@ fun LiquidGlassBottomBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xCC0F172A))
-                .border(1.dp, Color(0x4038BDF8), RoundedCornerShape(22.dp))
+                .background(com.example.ui.theme.DarkNavBg)
+                .border(1.dp, com.example.ui.theme.DarkNavBorder, RoundedCornerShape(22.dp))
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
@@ -525,7 +536,7 @@ private fun BottomNavItem(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isSelected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = if (isSelected) activeColor else Color(0xFF94A3B8),
                 modifier = Modifier.size(20.dp)
             )
             if (isSelected) {
@@ -533,6 +544,7 @@ private fun BottomNavItem(
                 Text(
                     text = label,
                     color = activeColor,
+                    fontFamily = com.example.ui.theme.PlusJakartaSans,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp
                 )

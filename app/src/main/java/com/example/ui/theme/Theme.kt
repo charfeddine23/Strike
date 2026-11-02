@@ -28,25 +28,27 @@ private val DarkColorScheme = darkColorScheme(
     outlineVariant = Color(0xFF1E293B)
 )
 
+// Liquid Glass v5 Day Mode Color Scheme
+// Designed for pure daylight clarity, eye comfort, and high contrast ratios
 private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF0284C7),
+    primary = DayCyan,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE0F2FE),
-    onPrimaryContainer = Color(0xFF0369A1),
-    secondary = Color(0xFF7C3AED),
+    primaryContainer = Color(0xFFE0F7FA),
+    onPrimaryContainer = Color(0xFF004D61),
+    secondary = DayPurple,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFEDE9FE),
-    onSecondaryContainer = Color(0xFF5B21B6),
-    tertiary = Color(0xFF059669),
+    secondaryContainer = Color(0xFFF3E8FF),
+    onSecondaryContainer = Color(0xFF3B0764),
+    tertiary = DayEmerald,
     onTertiary = Color.White,
-    background = CosmicLightBg,
-    onBackground = Color(0xFF0F172A),
-    surface = CosmicLightSurface,
-    onSurface = Color(0xFF0F172A),
-    surfaceVariant = CosmicLightSurfaceElevated,
-    onSurfaceVariant = Color(0xFF475569),
-    outline = Color(0xFFCBD5E1),
-    outlineVariant = Color(0xFFE2E8F0)
+    background = DayGlassBg,
+    onBackground = DayTextPrimary,
+    surface = DayGlassSurface,
+    onSurface = DayTextPrimary,
+    surfaceVariant = DayGlassSurfaceElevated,
+    onSurfaceVariant = DayTextSecondary,
+    outline = Color(0xFF94A3B8),
+    outlineVariant = Color(0xFFCBD5E1)
 )
 
 @Composable

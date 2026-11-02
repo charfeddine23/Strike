@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,12 +70,20 @@ import com.example.data.model.Individual
 import com.example.ui.components.GlassStatSummaryCard
 import com.example.ui.components.GlassTypeBadge
 import com.example.ui.components.LiquidGlassCard
+import com.example.ui.components.LiquidGlassInnerPanel
+import com.example.ui.theme.CaveatHandwriting
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonSky
 import com.example.ui.theme.NeonViolet
+import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.ui.viewmodel.SortOrder
 
@@ -91,6 +100,7 @@ fun DashboardScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val filterType by viewModel.filterType.collectAsStateWithLifecycle()
     val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
+    val isDarkTheme = isSystemInDarkTheme()
 
     var individualToDelete by remember { mutableStateOf<Individual?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -381,17 +391,25 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         val filterOptions = listOf(
-                            Triple("ALL", allList.size, NeonCyan),
-                            Triple("M", allList.count { it.type == "M" }, NeonCyan),
-                            Triple("G", allList.count { it.type == "G" }, NeonViolet),
-                            Triple("TS", allList.count { it.type == "TS" }, NeonEmerald),
-                            Triple("FG", allList.count { it.type == "FG" }, NeonAmber)
+                            Triple("ALL", allList.size, if (isDarkTheme) NeonCyan else DayCyan),
+                            Triple("M", allList.count { it.type == "M" }, if (isDarkTheme) NeonCyan else DayCyan),
+                            Triple("G", allList.count { it.type == "G" }, if (isDarkTheme) NeonViolet else DayPurple),
+                            Triple("TS", allList.count { it.type == "TS" }, if (isDarkTheme) NeonEmerald else DayEmerald),
+                            Triple("FG", allList.count { it.type == "FG" }, if (isDarkTheme) NeonAmber else DayOrange)
                         )
 
                         items(filterOptions) { (opt, count, accentColor) ->
                             val isSelected = filterType == opt
-                            val chipBg = if (isSelected) accentColor.copy(alpha = 0.25f) else Color(0x14FFFFFF)
-                            val chipBorder = if (isSelected) accentColor else Color(0x2538BDF8)
+                            val chipBg = if (isSelected) {
+                                accentColor.copy(alpha = if (isDarkTheme) 0.25f else 0.16f)
+                            } else {
+                                if (isDarkTheme) Color(0x14FFFFFF) else Color(0xB3FFFFFF)
+                            }
+                            val chipBorder = if (isSelected) {
+                                accentColor
+                            } else {
+                                if (isDarkTheme) Color(0x2538BDF8) else Color(0x45CBD5E1)
+                            }
                             val textColor = if (isSelected) accentColor else MaterialTheme.colorScheme.onSurface
 
                             Box(
@@ -414,6 +432,7 @@ fun DashboardScreen(
                                     Text(
                                         text = if (opt == "ALL") stringResource(R.string.filter_all) else opt,
                                         color = textColor,
+                                        fontFamily = PlusJakartaSans,
                                         fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
                                         fontSize = 13.sp
                                     )
@@ -421,12 +440,13 @@ fun DashboardScreen(
                                     Box(
                                         modifier = Modifier
                                             .clip(CircleShape)
-                                            .background(if (isSelected) accentColor.copy(alpha = 0.35f) else Color(0x181E293B))
+                                            .background(if (isSelected) accentColor.copy(alpha = 0.35f) else if (isDarkTheme) Color(0x181E293B) else Color(0x25CBD5E1))
                                             .padding(horizontal = 6.dp, vertical = 1.dp)
                                     ) {
                                         Text(
                                             text = "$count",
                                             fontSize = 10.sp,
+                                            fontFamily = PlusJakartaSans,
                                             fontWeight = FontWeight.Bold,
                                             color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -662,7 +682,8 @@ fun IndividualRecordCard(
     onCompare: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    darkTheme: Boolean = isSystemInDarkTheme()
 ) {
     LiquidGlassCard(
         modifier = modifier
@@ -687,20 +708,24 @@ fun IndividualRecordCard(
                         text = individual.fullName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
+                        fontFamily = PlusJakartaSans,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
                 // BOOST Badge
+                val boostBg = if (darkTheme) {
+                    Brush.linearGradient(listOf(NeonEmerald.copy(alpha = 0.25f), NeonCyan.copy(alpha = 0.2f)))
+                } else {
+                    Brush.linearGradient(listOf(DayEmerald.copy(alpha = 0.18f), DayCyan.copy(alpha = 0.14f)))
+                }
+                val boostColor = if (darkTheme) NeonEmerald else DayEmerald
+
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(NeonEmerald.copy(alpha = 0.25f), NeonCyan.copy(alpha = 0.2f))
-                            )
-                        )
-                        .border(1.dp, NeonEmerald.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                        .background(boostBg)
+                        .border(1.dp, boostColor.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -708,13 +733,15 @@ fun IndividualRecordCard(
                             text = "BOOST: ",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
+                            fontFamily = PlusJakartaSans,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = "${individual.boost}",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Black,
-                            color = NeonEmerald
+                            fontFamily = PlusJakartaSans,
+                            color = boostColor
                         )
                     }
                 }
@@ -722,42 +749,47 @@ fun IndividualRecordCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Metrics Row: Dimensions & Size (Length x Width)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0x181E293B))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Metrics Row: Dimensions & Size (Length x Width) in a frosted inner tier
+            LiquidGlassInnerPanel(
+                modifier = Modifier.fillMaxWidth(),
+                darkTheme = darkTheme
             ) {
-                Column {
-                    Text(
-                        text = "${stringResource(R.string.length)} × ${stringResource(R.string.width)}",
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "${individual.length} × ${individual.width}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "${stringResource(R.string.length)} × ${stringResource(R.string.width)}",
+                            fontSize = 10.sp,
+                            fontFamily = PlusJakartaSans,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "${individual.length} × ${individual.width}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = PlusJakartaSans,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
 
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = stringResource(R.string.size),
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "${individual.size}",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = NeonCyan
-                    )
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = stringResource(R.string.size),
+                            fontSize = 10.sp,
+                            fontFamily = PlusJakartaSans,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "${individual.size}",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = PlusJakartaSans,
+                            color = if (darkTheme) NeonCyan else DayCyan
+                        )
+                    }
                 }
             }
 
@@ -772,35 +804,41 @@ fun IndividualRecordCard(
                     label = "S",
                     value = individual.sScore,
                     color = NeonSky,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    darkTheme = darkTheme
                 )
                 ScorePill(
                     label = "F",
                     value = individual.fScore,
                     color = NeonViolet,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    darkTheme = darkTheme
                 )
                 ScorePill(
                     label = "C",
                     value = individual.cScore,
                     color = NeonAmber,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    darkTheme = darkTheme
                 )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
             // Calculated Score Banner: BOOST × Strikes (Score = boost * strikeCount)
+            val scoreBannerBg = if (darkTheme) {
+                Brush.horizontalGradient(listOf(NeonAmber.copy(alpha = 0.22f), NeonCyan.copy(alpha = 0.18f)))
+            } else {
+                Brush.horizontalGradient(listOf(DayOrange.copy(alpha = 0.15f), DayCyan.copy(alpha = 0.12f)))
+            }
+            val scoreColor = if (darkTheme) NeonAmber else DayOrange
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(NeonAmber.copy(alpha = 0.22f), NeonCyan.copy(alpha = 0.18f))
-                        )
-                    )
-                    .border(1.dp, NeonAmber.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                    .background(scoreBannerBg)
+                    .border(1.dp, scoreColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
                     .padding(horizontal = 12.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -809,7 +847,7 @@ fun IndividualRecordCard(
                     Icon(
                         imageVector = Icons.Default.Speed,
                         contentDescription = null,
-                        tint = NeonAmber,
+                        tint = scoreColor,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -818,12 +856,14 @@ fun IndividualRecordCard(
                             text = "TOTAL SCORE (BOOST × STRIKES)",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = NeonAmber,
+                            fontFamily = PlusJakartaSans,
+                            color = scoreColor,
                             letterSpacing = 0.5.sp
                         )
                         Text(
                             text = "${individual.boost} × ${individual.strikeCount}",
                             fontSize = 10.sp,
+                            fontFamily = PlusJakartaSans,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -833,7 +873,8 @@ fun IndividualRecordCard(
                     text = "= ${individual.totalScore}",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Black,
-                    color = NeonAmber
+                    fontFamily = PlusJakartaSans,
+                    color = scoreColor
                 )
             }
 
@@ -846,39 +887,42 @@ fun IndividualRecordCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 // Strike info with Quick +1 Action
+                val strikeBtnColor = if (darkTheme) NeonAmber else DayOrange
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0x20F59E0B))
-                        .border(1.dp, NeonAmber.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .background(if (darkTheme) Color(0x20F59E0B) else Color(0x24F59E0B))
+                        .border(1.dp, strikeBtnColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Bolt,
                         contentDescription = null,
-                        tint = NeonAmber,
+                        tint = strikeBtnColor,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "${individual.strikeCount}",
                         fontWeight = FontWeight.Black,
+                        fontFamily = PlusJakartaSans,
                         fontSize = 14.sp,
-                        color = NeonAmber
+                        color = strikeBtnColor
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(NeonAmber)
+                            .background(strikeBtnColor)
                             .clickable { onStrike() }
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                             .testTag("quick_strike_${individual.id}")
                     ) {
                         Text(
                             text = "+1",
-                            color = Color(0xFF261300),
+                            color = Color.White,
+                            fontFamily = PlusJakartaSans,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 11.sp
                         )
@@ -894,7 +938,7 @@ fun IndividualRecordCard(
                         Icon(
                             imageVector = Icons.Default.Bolt,
                             contentDescription = stringResource(R.string.nav_strike),
-                            tint = NeonCyan,
+                            tint = if (darkTheme) NeonCyan else DayCyan,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -906,7 +950,7 @@ fun IndividualRecordCard(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.CompareArrows,
                             contentDescription = stringResource(R.string.nav_compare),
-                            tint = NeonViolet,
+                            tint = if (darkTheme) NeonViolet else DayPurple,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -930,7 +974,7 @@ fun IndividualRecordCard(
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = stringResource(R.string.delete),
-                            tint = NeonRose.copy(alpha = 0.8f),
+                            tint = if (darkTheme) NeonRose.copy(alpha = 0.8f) else Color(0xFFBE123C),
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -945,13 +989,22 @@ fun ScorePill(
     label: String,
     value: Double,
     color: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    darkTheme: Boolean = isSystemInDarkTheme()
 ) {
+    val effectiveColor = if (darkTheme) color else when (color) {
+        NeonSky, NeonCyan -> DayCyan
+        NeonViolet -> DayPurple
+        NeonAmber -> DayOrange
+        NeonEmerald -> DayEmerald
+        else -> color
+    }
+
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(color.copy(alpha = 0.12f))
-            .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+            .background(effectiveColor.copy(alpha = if (darkTheme) 0.12f else 0.16f))
+            .border(1.dp, effectiveColor.copy(alpha = if (darkTheme) 0.35f else 0.45f), RoundedCornerShape(8.dp))
             .padding(vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -959,12 +1012,14 @@ fun ScorePill(
             Text(
                 text = "$label: ",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontFamily = PlusJakartaSans,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Medium
             )
             Text(
                 text = "$value",
-                color = color,
+                color = effectiveColor,
+                fontFamily = PlusJakartaSans,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
             )
