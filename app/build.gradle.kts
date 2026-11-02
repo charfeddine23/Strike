@@ -16,7 +16,8 @@ android {
     applicationId = "com.aistudio.strikepulse.nxwz"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
+    val buildVersionCode = project.findProperty("versionCode")?.toString()?.toIntOrNull() ?: 1
+    versionCode = buildVersionCode
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

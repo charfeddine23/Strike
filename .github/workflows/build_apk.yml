@@ -79,7 +79,7 @@ jobs:
 
       - name: Build APK with Gradle
         run: |
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} --no-daemon --stacktrace
 
       - name: Locate and Rename APK
         id: find_apk
