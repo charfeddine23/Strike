@@ -82,4 +82,8 @@
     <string name="lock_now">Verrouiller maintenant</string>
     <string name="system_theme_active">Le thème suit le système automatiquement (Clair / Sombre)</string>
     <string name="auto_logged_notice">Les strikes sont enregistrés automatiquement avec la date, l\'heure et l\'année.</string>
+    <string name="version_information">Informations sur la Version</string>
+    <string name="app_version">Version de l\'application</string>
+    <string name="build_number">Numéro de Build</string>
+    <string name="developer_credit">Developed by Charfeddine Kahlessenane</string>
 </resources>

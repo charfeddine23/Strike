@@ -82,4 +82,8 @@
     <string name="lock_now">قفل التطبيق الآن</string>
     <string name="system_theme_active">يتبع التطبيق وضع الهاتف تلقائياً (الداكن / الفاتح)</string>
     <string name="auto_logged_notice">تُخزن الضربات تلقائياً في قاعدة البيانات بالتاريخ والوقت والسنة.</string>
+    <string name="version_information">معلومات الإصدار</string>
+    <string name="app_version">إصدار التطبيق</string>
+    <string name="build_number">رقم البناء</string>
+    <string name="developer_credit">Developed by Charfeddine Kahlessenane</string>
 </resources>

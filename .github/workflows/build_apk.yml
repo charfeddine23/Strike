@@ -60,26 +60,25 @@ jobs:
       - name: Determine Dynamic Version & Tag
         id: versioning
         run: |
-          # Extract base versionName from app/build.gradle.kts
-          BASE_VERSION=$(grep -o 'versionName = "[^"]*"' app/build.gradle.kts | cut -d'"' -f2 || echo "1.0")
           COMMIT_HASH=$(echo "${{ github.sha }}" | cut -c1-7)
+          VERSION_NAME="1.0.${{ github.run_number }}"
 
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG_NAME="${{ github.ref_name }}"
             RELEASE_TITLE="StrikePulse ${TAG_NAME}"
           else
-            TAG_NAME="v${BASE_VERSION}.${{ github.run_number }}"
-            RELEASE_TITLE="StrikePulse v${BASE_VERSION} (Build #${{ github.run_number }})"
+            TAG_NAME="v${VERSION_NAME}"
+            RELEASE_TITLE="StrikePulse v${VERSION_NAME} (Build #${{ github.run_number }})"
           fi
 
           echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
           echo "release_title=${RELEASE_TITLE}" >> "$GITHUB_OUTPUT"
-          echo "base_version=${BASE_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
           echo "commit_short=${COMMIT_HASH}" >> "$GITHUB_OUTPUT"
 
       - name: Build APK with Gradle
         run: |
-          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} --no-daemon --stacktrace
+          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName=${{ steps.versioning.outputs.version_name }} --no-daemon --stacktrace
 
       - name: Locate and Rename APK
         id: find_apk
@@ -115,8 +114,9 @@ jobs:
             ## 🚀 StrikePulse Automated Release - ${{ steps.versioning.outputs.tag_name }}
 
             ### 📦 App Details
-            - **Version**: `v${{ steps.versioning.outputs.base_version }}`
-            - **Build**: `#${{ github.run_number }}`
+            - **Version**: `v${{ steps.versioning.outputs.version_name }}`
+            - **Build Code**: `#${{ github.run_number }}`
+            - **Developer**: Developed by Charfeddine Kahlessenane
             - **Commit**: `${{ steps.versioning.outputs.commit_short }}` (`${{ github.sha }}`)
             - **Date**: $(date -u '+%Y-%m-%d %H:%M UTC')
 

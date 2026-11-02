@@ -82,4 +82,8 @@
     <string name="lock_now">Lock App Now</string>
     <string name="system_theme_active">Theme follows system automatically (Light / Dark)</string>
     <string name="auto_logged_notice">Strikes are automatically saved with date, time &amp; year.</string>
+    <string name="version_information">Version Information</string>
+    <string name="app_version">App Version</string>
+    <string name="build_number">Build Code</string>
+    <string name="developer_credit">Developed by Charfeddine Kahlessenane</string>
 </resources>
