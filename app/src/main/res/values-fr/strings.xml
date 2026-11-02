@@ -91,4 +91,12 @@
     <string name="strike_restored">Strike restauré</string>
     <string name="person_and_strikes_deleted">Enregistrement et tous les strikes associés supprimés</string>
     <string name="swipe_to_delete_hint">Glisser pour supprimer</string>
+    <string name="backup_and_restore">Sauvegarde &amp; Restauration (Google Drive)</string>
+    <string name="backup_desc">Exportez ou importez vos données directement vers Google Drive ou le stockage de l\'appareil.</string>
+    <string name="backup_to_drive">Sauvegarder vers Drive</string>
+    <string name="restore_from_drive">Restaurer depuis Drive</string>
+    <string name="restore_dialog_title">Restaurer la sauvegarde</string>
+    <string name="restore_dialog_msg">Choisissez comment restaurer cette sauvegarde dans la base de données :</string>
+    <string name="restore_merge">Fusionner avec l\'existant</string>
+    <string name="restore_replace">Remplacer tous les enregistrements</string>
 </resources>

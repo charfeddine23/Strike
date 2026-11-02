@@ -40,6 +40,9 @@ interface StrikeEventDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(events: List<StrikeEvent>)
 
+    @Query("SELECT * FROM strike_events")
+    suspend fun getAllStrikeEventsList(): List<StrikeEvent>
+
     @Query("DELETE FROM strike_events")
     suspend fun clearAll()
 }

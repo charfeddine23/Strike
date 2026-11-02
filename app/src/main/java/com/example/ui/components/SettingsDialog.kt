@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,6 +24,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Gesture
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
@@ -51,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +66,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import com.example.R
 import com.example.ui.theme.CaveatHandwriting
 import com.example.ui.theme.DayCyan
@@ -80,9 +90,29 @@ fun SettingsDialog(
     onDismiss: () -> Unit,
     onLockAppNow: () -> Unit
 ) {
+    val context = LocalContext.current
     val isPatternLockEnabled by viewModel.isPatternLockEnabled
     var showPatternSetupDialog by remember { mutableStateOf(false) }
+    var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
+    var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     val isDarkTheme = isSystemInDarkTheme()
+
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.exportBackup(context, uri)
+        }
+    }
+
+    val openDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            pendingRestoreUri = uri
+            showRestoreConfirmDialog = true
+        }
+    }
 
     val dialogBg = if (isDarkTheme) Color(0xF00B132B) else Color(0xF8FFFFFF)
     val dialogBorder = if (isDarkTheme) Color(0x6038BDF8) else Color(0x6000B4D8)
@@ -474,7 +504,122 @@ fun SettingsDialog(
                     }
                 }
 
-                // 5. Sample Data & Reset
+                // 5. Cloud Backup & Restore (Google Drive)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (isDarkTheme) Color(0x221E293B) else Color(0x60F1F5F9))
+                        .border(1.dp, if (isDarkTheme) Color(0x3538BDF8) else Color(0x4000B4D8), RoundedCornerShape(16.dp))
+                        .padding(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.CloudSync,
+                                contentDescription = null,
+                                tint = if (isDarkTheme) NeonCyan else DayCyan,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.backup_and_restore),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isDarkTheme) NeonEmerald.copy(alpha = 0.2f) else DayEmerald.copy(alpha = 0.15f))
+                                .border(1.dp, if (isDarkTheme) NeonEmerald else DayEmerald, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "Drive",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isDarkTheme) NeonEmerald else DayEmerald
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = stringResource(R.string.backup_desc),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 15.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
+                                createDocumentLauncher.launch("StrikePulse_Backup_$timestamp.json")
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isDarkTheme) NeonCyan.copy(alpha = 0.85f) else DayCyan
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudUpload,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = Color.White
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = stringResource(R.string.backup_to_drive),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                openDocumentLauncher.launch(arrayOf("application/json", "*/*"))
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDownload,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = if (isDarkTheme) NeonEmerald else DayEmerald
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = stringResource(R.string.restore_from_drive),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+
+                // 6. Sample Data & Reset
                 OutlinedButton(
                     onClick = {
                         viewModel.reloadSampleData()
@@ -515,6 +660,77 @@ fun SettingsDialog(
                 }
             }
         }
+    }
+
+    // Modal Dialog to Confirm Restore Option (Merge vs Replace)
+    if (showRestoreConfirmDialog && pendingRestoreUri != null) {
+        val uri = pendingRestoreUri!!
+        AlertDialog(
+            onDismissRequest = {
+                showRestoreConfirmDialog = false
+                pendingRestoreUri = null
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CloudSync,
+                        contentDescription = null,
+                        tint = if (isDarkTheme) NeonCyan else DayCyan
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.restore_dialog_title),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.restore_dialog_msg),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.importBackup(context, uri, replaceExisting = false)
+                        showRestoreConfirmDialog = false
+                        pendingRestoreUri = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDarkTheme) NeonCyan.copy(alpha = 0.85f) else DayCyan
+                    )
+                ) {
+                    Text(stringResource(R.string.restore_merge), fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            showRestoreConfirmDialog = false
+                            pendingRestoreUri = null
+                        }
+                    ) {
+                        Text(stringResource(R.string.cancel))
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.importBackup(context, uri, replaceExisting = true)
+                            showRestoreConfirmDialog = false
+                            pendingRestoreUri = null
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = if (isDarkTheme) NeonRose else Color(0xFFDC2626)
+                        )
+                    ) {
+                        Text(stringResource(R.string.restore_replace), fontSize = 12.sp)
+                    }
+                }
+            }
+        )
     }
 
     // Modal Dialog to Setup or Change Pattern Lock

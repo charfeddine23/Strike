@@ -1,11 +1,15 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.data.backup.BackupManager
+import com.example.data.backup.BackupResult
 import com.example.data.local.AppDatabase
 import com.example.data.local.SecurityPreferences
 import com.example.data.model.Individual
@@ -56,6 +60,7 @@ class IndividualViewModel(
 ) : AndroidViewModel(application) {
 
     private val securityPrefs = SecurityPreferences(application)
+    val backupManager = BackupManager(repository)
 
     // Security & Pattern Lock
     val isPatternLockEnabled = mutableStateOf(securityPrefs.isPatternLockEnabled)
@@ -549,6 +554,27 @@ class IndividualViewModel(
     }
 
     fun seedSampleData() = reloadSampleData()
+
+    fun exportBackup(context: Context, destinationUri: Uri, onResult: ((BackupResult) -> Unit)? = null) {
+        viewModelScope.launch {
+            val result = backupManager.exportBackup(context, destinationUri)
+            emitMessage(result.message)
+            onResult?.invoke(result)
+        }
+    }
+
+    fun importBackup(
+        context: Context,
+        sourceUri: Uri,
+        replaceExisting: Boolean,
+        onResult: ((BackupResult) -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val result = backupManager.importBackup(context, sourceUri, replaceExisting)
+            emitMessage(result.message)
+            onResult?.invoke(result)
+        }
+    }
 
     companion object {
         fun provideFactory(application: Application): ViewModelProvider.Factory =

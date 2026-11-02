@@ -262,6 +262,24 @@ class IndividualRepository(
         strikeEventDao.insertAll(sampleEvents)
     }
 
+    suspend fun getAllIndividualsList(): List<Individual> = dao.getAllIndividualsList()
+
+    suspend fun getAllStrikeEventsList(): List<StrikeEvent> = strikeEventDao.getAllStrikeEventsList()
+
+    suspend fun restoreBackup(
+        individuals: List<Individual>,
+        strikeEvents: List<StrikeEvent>,
+        replaceExisting: Boolean
+    ): Pair<Int, Int> {
+        if (replaceExisting) {
+            dao.clearAll()
+            strikeEventDao.clearAll()
+        }
+        dao.insertAll(individuals)
+        strikeEventDao.insertAll(strikeEvents)
+        return Pair(individuals.size, strikeEvents.size)
+    }
+
     private fun createSample(
         name: String,
         type: String,

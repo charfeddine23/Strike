@@ -51,6 +51,9 @@ interface IndividualDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(individuals: List<Individual>)
 
+    @Query("SELECT * FROM individuals")
+    suspend fun getAllIndividualsList(): List<Individual>
+
     @Query("DELETE FROM individuals")
     suspend fun clearAll()
 }

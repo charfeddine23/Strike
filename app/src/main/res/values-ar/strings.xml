@@ -91,4 +91,12 @@
     <string name="strike_restored">تمت استعادة الضربة بنجاح</string>
     <string name="person_and_strikes_deleted">تم حذف السجل وكافة الضربات المرتبطة به</string>
     <string name="swipe_to_delete_hint">اسحب لليسار أو اليمين للحذف</string>
+    <string name="backup_and_restore">النسخ الاحتياطي والاسترجاع (Google Drive)</string>
+    <string name="backup_desc">حفظ وتصدير بيانات السجلات والضربات مباشرة إلى Google Drive أو الذاكرة، واسترجاعها بأمان.</string>
+    <string name="backup_to_drive">نسخ احتياطي إلى Drive</string>
+    <string name="restore_from_drive">استرجاع من Drive</string>
+    <string name="restore_dialog_title">استرجاع النسخة الاحتياطية</string>
+    <string name="restore_dialog_msg">اختر طريقة استرجاع البيانات إلى قاعدة البيانات:</string>
+    <string name="restore_merge">دمج مع السجلات الحالية</string>
+    <string name="restore_replace">استبدال كامل لقاعدة البيانات</string>
 </resources>

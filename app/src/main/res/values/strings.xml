@@ -91,4 +91,12 @@
     <string name="strike_restored">Strike entry restored</string>
     <string name="person_and_strikes_deleted">Person and all associated strikes deleted</string>
     <string name="swipe_to_delete_hint">Swipe to delete</string>
+    <string name="backup_and_restore">Backup &amp; Restore (Google Drive)</string>
+    <string name="backup_desc">Export or import your records and strikes to Google Drive or device storage.</string>
+    <string name="backup_to_drive">Backup to Drive</string>
+    <string name="restore_from_drive">Restore from Drive</string>
+    <string name="restore_dialog_title">Restore Backup</string>
+    <string name="restore_dialog_msg">Choose how to restore this backup into your database:</string>
+    <string name="restore_merge">Merge with Existing</string>
+    <string name="restore_replace">Replace All Records</string>
 </resources>
