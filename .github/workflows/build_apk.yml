@@ -40,19 +40,32 @@ jobs:
             cp .env.example .env 2>/dev/null || touch .env
           fi
 
-          # 2. Restore debug.keystore from base64 if needed
-          if [ -f "debug.keystore.base64" ]; then
+          # 2. Restore permanent release keystore from base64 if needed
+          if [ -f "my-upload-key.jks.base64" ] && [ ! -s "my-upload-key.jks" ]; then
+            echo "Restoring my-upload-key.jks from base64..."
+            base64 -d my-upload-key.jks.base64 > my-upload-key.jks 2>/dev/null || true
+          fi
+          if [ -f "release.jks.base64" ] && [ ! -s "release.jks" ]; then
+            echo "Restoring release.jks from base64..."
+            base64 -d release.jks.base64 > release.jks 2>/dev/null || true
+          fi
+          if [ -f "my-upload-key.jks" ] && [ ! -f "release.jks" ]; then
+            cp my-upload-key.jks release.jks
+          fi
+
+          # 3. Restore debug.keystore from base64 if needed
+          if [ -f "debug.keystore.base64" ] && [ ! -s "debug.keystore" ]; then
             echo "Restoring debug.keystore from base64..."
             base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null || true
           fi
 
-          # 3. Generate fallback debug.keystore if missing or empty
+          # 4. Generate fallback debug.keystore if missing or empty
           if [ ! -f "debug.keystore" ] || [ ! -s "debug.keystore" ]; then
             echo "Generating fallback debug.keystore..."
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-          # 4. Ensure Gradle wrapper is executable
+          # 5. Ensure Gradle wrapper is executable
           if [ -f "./gradlew" ]; then
             chmod +x ./gradlew
           fi
@@ -76,16 +89,24 @@ jobs:
           echo "version_name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
           echo "commit_short=${COMMIT_HASH}" >> "$GITHUB_OUTPUT"
 
-      - name: Build APK with Gradle
+      - name: Build Release APK with Gradle
         run: |
-          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} -PversionName=${{ steps.versioning.outputs.version_name }} --no-daemon --stacktrace
+          ./gradlew assembleRelease -PversionCode=${{ github.run_number }} -PversionName=${{ steps.versioning.outputs.version_name }} --no-daemon --stacktrace
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'strikepulse2026' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'strikepulse2026' }}
 
       - name: Locate and Rename APK
         id: find_apk
         run: |
-          APK_RAW=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          APK_RAW=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           if [ -z "$APK_RAW" ]; then
-            echo "::error::No APK file generated in app/build/outputs/apk/debug!"
+            echo "Warning: No release APK found, checking debug output..."
+            APK_RAW=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          fi
+          if [ -z "$APK_RAW" ]; then
+            echo "::error::No APK file generated in app/build/outputs/apk!"
             exit 1
           fi
 

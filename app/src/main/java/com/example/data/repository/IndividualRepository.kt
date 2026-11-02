@@ -41,8 +41,18 @@ class IndividualRepository(
     }
 
     suspend fun delete(individual: Individual) {
-        dao.delete(individual)
-        strikeEventDao.deleteEventsForIndividual(individual.id)
+        dao.deleteWithCascade(individual)
+    }
+
+    suspend fun deleteStrikeEvent(event: StrikeEvent) {
+        strikeEventDao.deleteEvent(event)
+        dao.incrementStrike(event.individualId, -event.count)
+    }
+
+    suspend fun restoreStrikeEvent(event: StrikeEvent): Long {
+        val insertedId = strikeEventDao.insertEvent(event)
+        dao.incrementStrike(event.individualId, event.count)
+        return insertedId
     }
 
     /**

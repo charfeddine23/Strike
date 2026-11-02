@@ -4,10 +4,11 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 
-@Database(entities = [Individual::class, StrikeEvent::class], version = 3, exportSchema = false)
+@Database(entities = [Individual::class, StrikeEvent::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun individualDao(): IndividualDao
     abstract fun strikeEventDao(): StrikeEventDao
@@ -24,6 +25,12 @@ abstract class AppDatabase : RoomDatabase() {
                     "strikepulse_database"
                 )
                     .fallbackToDestructiveMigration()
+                    .addCallback(object : RoomDatabase.Callback() {
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            super.onOpen(db)
+                            db.execSQL("PRAGMA foreign_keys=ON;")
+                        }
+                    })
                     .build()
                 INSTANCE = instance
                 instance

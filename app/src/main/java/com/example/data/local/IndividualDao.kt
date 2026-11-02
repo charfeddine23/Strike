@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.example.data.model.Individual
 import kotlinx.coroutines.flow.Flow
@@ -29,7 +30,16 @@ interface IndividualDao {
     @Delete
     suspend fun delete(individual: Individual)
 
-    @Query("UPDATE individuals SET strikeCount = strikeCount + :delta, updatedAt = :timestamp WHERE id = :id")
+    @Query("DELETE FROM strike_events WHERE individualId = :individualId")
+    suspend fun deleteStrikesForIndividual(individualId: Long)
+
+    @Transaction
+    suspend fun deleteWithCascade(individual: Individual) {
+        deleteStrikesForIndividual(individual.id)
+        delete(individual)
+    }
+
+    @Query("UPDATE individuals SET strikeCount = CASE WHEN (strikeCount + :delta) < 0 THEN 0 ELSE (strikeCount + :delta) END, updatedAt = :timestamp WHERE id = :id")
     suspend fun incrementStrike(id: Long, delta: Int = 1, timestamp: Long = System.currentTimeMillis())
 
     @Query("UPDATE individuals SET strikeCount = :count, updatedAt = :timestamp WHERE id = :id")

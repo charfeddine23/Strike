@@ -86,4 +86,9 @@
     <string name="app_version">إصدار التطبيق</string>
     <string name="build_number">رقم البناء</string>
     <string name="developer_credit">Developed by Charfeddine Kahlessenane</string>
+    <string name="strike_deleted">تم حذف تسجيل الضربة</string>
+    <string name="undo">تراجع</string>
+    <string name="strike_restored">تمت استعادة الضربة بنجاح</string>
+    <string name="person_and_strikes_deleted">تم حذف السجل وكافة الضربات المرتبطة به</string>
+    <string name="swipe_to_delete_hint">اسحب لليسار أو اليمين للحذف</string>
 </resources>

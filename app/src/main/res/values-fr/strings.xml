@@ -86,4 +86,9 @@
     <string name="app_version">Version de l\'application</string>
     <string name="build_number">Numéro de Build</string>
     <string name="developer_credit">Developed by Charfeddine Kahlessenane</string>
+    <string name="strike_deleted">Strike supprimé</string>
+    <string name="undo">Annuler</string>
+    <string name="strike_restored">Strike restauré</string>
+    <string name="person_and_strikes_deleted">Enregistrement et tous les strikes associés supprimés</string>
+    <string name="swipe_to_delete_hint">Glisser pour supprimer</string>
 </resources>

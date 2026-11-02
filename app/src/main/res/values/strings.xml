@@ -86,4 +86,9 @@
     <string name="app_version">App Version</string>
     <string name="build_number">Build Code</string>
     <string name="developer_credit">Developed by Charfeddine Kahlessenane</string>
+    <string name="strike_deleted">Strike entry deleted</string>
+    <string name="undo">Undo</string>
+    <string name="strike_restored">Strike entry restored</string>
+    <string name="person_and_strikes_deleted">Person and all associated strikes deleted</string>
+    <string name="swipe_to_delete_hint">Swipe to delete</string>
 </resources>

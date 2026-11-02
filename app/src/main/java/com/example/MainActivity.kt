@@ -165,10 +165,24 @@ fun LiquidGlassApp(
     var showSettingsDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Listen to ViewModel events (e.g. Strike +1, record saved)
+    // Listen to ViewModel events (including Swipe-to-delete with Undo)
     LaunchedEffect(Unit) {
-        viewModel.eventFlow.collectLatest { message ->
-            snackbarHostState.showSnackbar(message)
+        viewModel.uiEvents.collectLatest { event ->
+            when (event) {
+                is com.example.ui.viewmodel.UiEvent.ShowMessage -> {
+                    snackbarHostState.showSnackbar(event.message)
+                }
+                is com.example.ui.viewmodel.UiEvent.ShowUndoSnackbar -> {
+                    val result = snackbarHostState.showSnackbar(
+                        message = event.message,
+                        actionLabel = event.actionLabel,
+                        duration = androidx.compose.material3.SnackbarDuration.Short
+                    )
+                    if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                        viewModel.undoDeleteStrikeEvent(event.strikeEvent)
+                    }
+                }
+            }
         }
     }
 

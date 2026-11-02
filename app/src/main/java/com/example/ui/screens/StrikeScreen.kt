@@ -34,19 +34,26 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Swipe
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -501,11 +508,20 @@ fun StrikeScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
-                            Text(
-                                text = "Auto-Logged (${allStrikeEvents.size})",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = stringResource(R.string.swipe_to_delete_hint),
+                                    fontSize = 11.sp,
+                                    color = NeonRose.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "(${allStrikeEvents.size})",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
@@ -524,7 +540,12 @@ fun StrikeScreen(
                         } else {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 allStrikeEvents.take(5).forEach { event ->
-                                    StrikeLogItem(event = event)
+                                    key(event.id) {
+                                        SwipeableStrikeLogItem(
+                                            event = event,
+                                            onDelete = { viewModel.deleteStrikeEvent(it) }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -619,16 +640,31 @@ fun StrikeScreen(
                 // Full Historical Strike Log List
                 item {
                     Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "سجل الضربات التاريخي المفصل",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "سجل الضربات التاريخي المفصل",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.swipe_to_delete_hint),
+                            fontSize = 11.sp,
+                            color = NeonRose.copy(alpha = 0.85f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
 
-                items(allStrikeEvents) { event ->
-                    StrikeLogItem(event = event)
+                items(allStrikeEvents, key = { it.id }) { event ->
+                    SwipeableStrikeLogItem(
+                        event = event,
+                        onDelete = { viewModel.deleteStrikeEvent(it) }
+                    )
                 }
             }
 
@@ -826,3 +862,66 @@ fun StrikeLogItem(event: StrikeEvent) {
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SwipeableStrikeLogItem(
+    event: StrikeEvent,
+    onDelete: (StrikeEvent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { dismissValue ->
+            if (dismissValue == SwipeToDismissBoxValue.EndToStart || dismissValue == SwipeToDismissBoxValue.StartToEnd) {
+                onDelete(event)
+                true
+            } else {
+                false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp)),
+        backgroundContent = {
+            val direction = dismissState.dismissDirection
+            val alignment = when (direction) {
+                SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                else -> Alignment.Center
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFFDC2626).copy(alpha = 0.9f))
+                    .padding(horizontal = 20.dp),
+                contentAlignment = alignment
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.delete),
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.delete),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+        }
+    ) {
+        StrikeLogItem(event = event)
+    }
+}
+

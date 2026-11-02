@@ -41,6 +41,15 @@ data class YearlyStrikeStat(
     val percentageOfAllTime: Float
 )
 
+sealed class UiEvent {
+    data class ShowMessage(val message: String) : UiEvent()
+    data class ShowUndoSnackbar(
+        val message: String,
+        val actionLabel: String,
+        val strikeEvent: StrikeEvent
+    ) : UiEvent()
+}
+
 class IndividualViewModel(
     application: Application,
     private val repository: IndividualRepository
@@ -56,6 +65,14 @@ class IndividualViewModel(
     // Events flow for snackbars/toasts
     private val _eventFlow = MutableSharedFlow<String>()
     val eventFlow: SharedFlow<String> = _eventFlow.asSharedFlow()
+
+    private val _uiEvents = MutableSharedFlow<UiEvent>()
+    val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
+
+    private suspend fun emitMessage(msg: String) {
+        _eventFlow.emit(msg)
+        _uiEvents.emit(UiEvent.ShowMessage(msg))
+    }
 
     // Strike button animation trigger
     private val _strikeAnimCount = MutableStateFlow(0)
@@ -269,7 +286,7 @@ class IndividualViewModel(
         isPatternLockEnabled.value = true
         _isAppUnlocked.value = true
         viewModelScope.launch {
-            _eventFlow.emit("تم تفعيل قفل النقش بنجاح")
+            emitMessage("تم تفعيل قفل النقش بنجاح")
         }
     }
 
@@ -278,7 +295,7 @@ class IndividualViewModel(
         isPatternLockEnabled.value = false
         _isAppUnlocked.value = true
         viewModelScope.launch {
-            _eventFlow.emit("تم إلغاء قفل النقش")
+            emitMessage("تم إلغاء قفل النقش")
         }
     }
 
@@ -336,7 +353,7 @@ class IndividualViewModel(
             val target = currentStrikeIndividual.value ?: return@launch
             repository.incrementStrike(target.id, delta)
             _strikeAnimCount.value += 1
-            _eventFlow.emit("تم تسجيل ضربة +$delta (${target.fullName})")
+            emitMessage("تم تسجيل ضربة +$delta (${target.fullName})")
         }
     }
 
@@ -344,14 +361,14 @@ class IndividualViewModel(
         viewModelScope.launch {
             repository.incrementStrike(id, delta)
             _strikeAnimCount.value += 1
-            _eventFlow.emit("Strike +$delta")
+            emitMessage("Strike +$delta")
         }
     }
 
     fun resetStrikes(id: Long) {
         viewModelScope.launch {
             repository.setStrikeCount(id, 0)
-            _eventFlow.emit("Strikes reset")
+            emitMessage("Strikes reset")
         }
     }
 
@@ -462,7 +479,57 @@ class IndividualViewModel(
     fun deleteIndividual(individual: Individual) {
         viewModelScope.launch {
             repository.delete(individual)
-            _eventFlow.emit("تم حذف السجل")
+            if (_selectedStrikeId.value == individual.id) {
+                _selectedStrikeId.value = null
+            }
+            if (_personAId.value == individual.id) {
+                _personAId.value = null
+            }
+            if (_personBId.value == individual.id) {
+                _personBId.value = null
+            }
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم حذف السجل وكافة الضربات المرتبطة به (${individual.fullName})"
+                "fr" -> "Enregistrement et tous les strikes associés supprimés (${individual.fullName})"
+                else -> "Record and all associated strikes deleted (${individual.fullName})"
+            }
+            emitMessage(msg)
+        }
+    }
+
+    fun deleteStrikeEvent(event: StrikeEvent) {
+        viewModelScope.launch {
+            repository.deleteStrikeEvent(event)
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم حذف ضربة (+${event.count} - ${event.individualName})"
+                "fr" -> "Strike supprimé (+${event.count} - ${event.individualName})"
+                else -> "Strike deleted (+${event.count} - ${event.individualName})"
+            }
+            val undoLabel = when (currentLanguage.value) {
+                "ar" -> "تراجع"
+                "fr" -> "Annuler"
+                else -> "Undo"
+            }
+            _eventFlow.emit(msg)
+            _uiEvents.emit(
+                UiEvent.ShowUndoSnackbar(
+                    message = msg,
+                    actionLabel = undoLabel,
+                    strikeEvent = event
+                )
+            )
+        }
+    }
+
+    fun undoDeleteStrikeEvent(event: StrikeEvent) {
+        viewModelScope.launch {
+            repository.restoreStrikeEvent(event)
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تمت استعادة الضربة بنجاح (+${event.count} - ${event.individualName})"
+                "fr" -> "Strike restauré avec succès (+${event.count} - ${event.individualName})"
+                else -> "Strike restored successfully (+${event.count} - ${event.individualName})"
+            }
+            emitMessage(msg)
         }
     }
 
@@ -470,14 +537,14 @@ class IndividualViewModel(
         _currentLanguage.value = lang
         securityPrefs.selectedLanguage = lang
         viewModelScope.launch {
-            _eventFlow.emit("اللغة: ${lang.uppercase()}")
+            emitMessage("اللغة: ${lang.uppercase()}")
         }
     }
 
     fun reloadSampleData() {
         viewModelScope.launch {
             repository.seedSampleData()
-            _eventFlow.emit("تم إعادة تحميل البيانات النموذجية بنجاح")
+            emitMessage("تم إعادة تحميل البيانات النموذجية بنجاح")
         }
     }
 

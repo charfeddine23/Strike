@@ -1,13 +1,26 @@
 package com.example.data.model
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-@Entity(tableName = "strike_events")
+@Entity(
+    tableName = "strike_events",
+    foreignKeys = [
+        ForeignKey(
+            entity = Individual::class,
+            parentColumns = ["id"],
+            childColumns = ["individualId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [Index(value = ["individualId"])]
+)
 data class StrikeEvent(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
