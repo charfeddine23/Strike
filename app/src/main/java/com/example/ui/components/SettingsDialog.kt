@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Vibration
 import com.example.BuildConfig
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -92,6 +93,7 @@ fun SettingsDialog(
 ) {
     val context = LocalContext.current
     val isPatternLockEnabled by viewModel.isPatternLockEnabled
+    val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
     var showPatternSetupDialog by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
@@ -298,7 +300,61 @@ fun SettingsDialog(
                     }
                 }
 
-                // 2. Automatic System Theme Info (وضع الهاتف تلقائياً)
+                // 2. Haptic Feedback Setting (الاهتزاز اللمسي للضربات)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardBg)
+                        .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
+                        .padding(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Vibration,
+                                contentDescription = null,
+                                tint = activeCyan,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.haptic_feedback_title),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = titleColor
+                                )
+                                Text(
+                                    text = stringResource(R.string.haptic_feedback_desc),
+                                    fontSize = 11.sp,
+                                    color = descColor
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = isHapticFeedbackEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.setHapticFeedbackEnabled(enabled)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = activeCyan,
+                                checkedTrackColor = activeCyan.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier.testTag("haptic_feedback_switch")
+                        )
+                    }
+                }
+
+                // 3. Automatic System Theme Info (وضع الهاتف تلقائياً)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

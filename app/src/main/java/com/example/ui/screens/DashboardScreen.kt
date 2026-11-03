@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.net.Uri
+import android.provider.ContactsContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -29,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterAlt
@@ -59,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -67,6 +73,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
+import com.example.util.HapticHelper
 import com.example.ui.components.GlassStatSummaryCard
 import com.example.ui.components.GlassTypeBadge
 import com.example.ui.components.LiquidGlassCard
@@ -101,6 +108,39 @@ fun DashboardScreen(
     val filterType by viewModel.filterType.collectAsStateWithLifecycle()
     val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
     val isDarkTheme = isSystemInDarkTheme()
+    val context = LocalContext.current
+    val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
+
+    val pickContactLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickContact()
+    ) { contactUri: Uri? ->
+        if (contactUri != null) {
+            try {
+                val cursor = context.contentResolver.query(
+                    contactUri,
+                    arrayOf(ContactsContract.Contacts.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val idx = it.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                        if (idx != -1) {
+                            val displayName = it.getString(idx)
+                            if (!displayName.isNullOrBlank()) {
+                                viewModel.initFormForNew()
+                                viewModel.formName.value = displayName
+                                viewModel.notifyContactImported(displayName)
+                                onNavigateToEntry()
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+            }
+        }
+    }
 
     var individualToDelete by remember { mutableStateOf<Individual?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -608,7 +648,10 @@ fun DashboardScreen(
                 items(individuals, key = { it.id }) { item ->
                     IndividualRecordCard(
                         individual = item,
-                        onStrike = { viewModel.incrementStrikeForId(item.id, 1) },
+                        onStrike = {
+                            HapticHelper.triggerStrikeHaptic(context, isHapticFeedbackEnabled)
+                            viewModel.incrementStrikeForId(item.id, 1)
+                        },
                         onGoToStrike = { onNavigateToStrike(item.id) },
                         onCompare = { onNavigateToCompare(item.id) },
                         onEdit = {
@@ -625,25 +668,51 @@ fun DashboardScreen(
             }
         }
 
-        // Floating Action Button to Add New
-        FloatingActionButton(
-            onClick = {
-                viewModel.initFormForNew()
-                onNavigateToEntry()
-            },
+        // Floating Action Buttons (Import Contact & Add New)
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(20.dp)
-                .testTag("add_record_fab"),
-            containerColor = NeonCyan,
-            contentColor = Color(0xFF03141F),
-            shape = CircleShape
+                .padding(20.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = stringResource(R.string.nav_entry),
-                modifier = Modifier.size(28.dp)
-            )
+            FloatingActionButton(
+                onClick = {
+                    try {
+                        pickContactLauncher.launch(null)
+                    } catch (e: Exception) {
+                    }
+                },
+                modifier = Modifier
+                    .size(48.dp)
+                    .testTag("import_contact_fab"),
+                containerColor = if (isDarkTheme) Color(0x3338BDF8) else Color(0xFFE0F2FE),
+                contentColor = NeonCyan,
+                shape = CircleShape
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Contacts,
+                    contentDescription = stringResource(R.string.import_from_contacts),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            FloatingActionButton(
+                onClick = {
+                    viewModel.initFormForNew()
+                    onNavigateToEntry()
+                },
+                modifier = Modifier.testTag("add_record_fab"),
+                containerColor = NeonCyan,
+                contentColor = Color(0xFF03141F),
+                shape = CircleShape
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = stringResource(R.string.nav_entry),
+                    modifier = Modifier.size(28.dp)
+                )
+            }
         }
     }
 

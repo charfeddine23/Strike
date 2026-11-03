@@ -115,4 +115,8 @@
     <string name="categories">categories</string>
     <string name="leads_with">leads with</string>
     <string name="perfect_balance">Perfect balance</string>
+    <string name="haptic_feedback_title">Strike Haptic Feedback</string>
+    <string name="haptic_feedback_desc">Subtle tactile vibration feedback when logging strikes.</string>
+    <string name="import_from_contacts">Import from Contacts</string>
+    <string name="import_contact_hint">Pick a person from contacts to autofill their name</string>
 </resources>

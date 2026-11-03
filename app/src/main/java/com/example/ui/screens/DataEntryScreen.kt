@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import android.net.Uri
+import android.provider.ContactsContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,6 +31,7 @@ import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.History
@@ -51,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -89,6 +95,37 @@ fun DataEntryScreen(
     val calculatedBoost by viewModel.liveCalculatedBoost.collectAsStateWithLifecycle()
 
     val isEditing = viewModel.editingId != null
+    val context = LocalContext.current
+
+    val pickContactLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickContact()
+    ) { contactUri: Uri? ->
+        if (contactUri != null) {
+            try {
+                val cursor = context.contentResolver.query(
+                    contactUri,
+                    arrayOf(ContactsContract.Contacts.DISPLAY_NAME),
+                    null,
+                    null,
+                    null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val idx = it.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                        if (idx != -1) {
+                            val displayName = it.getString(idx)
+                            if (!displayName.isNullOrBlank()) {
+                                viewModel.formName.value = displayName
+                                viewModel.notifyContactImported(displayName)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore gracefully
+            }
+        }
+    }
 
     // Local state for adding a historical strike entry
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
@@ -182,12 +219,46 @@ fun DataEntryScreen(
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = stringResource(R.string.full_name),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.full_name),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                try {
+                                    pickContactLauncher.launch(null)
+                                } catch (e: Exception) {
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+                            modifier = Modifier
+                                .height(32.dp)
+                                .testTag("btn_import_from_contacts")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Contacts,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.import_from_contacts),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
 
                     OutlinedTextField(
@@ -197,6 +268,23 @@ fun DataEntryScreen(
                             .fillMaxWidth()
                             .testTag("input_fullname"),
                         placeholder = { Text(stringResource(R.string.full_name_hint)) },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    try {
+                                        pickContactLauncher.launch(null)
+                                    } catch (e: Exception) {
+                                    }
+                                },
+                                modifier = Modifier.testTag("trailing_pick_contact_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Contacts,
+                                    contentDescription = stringResource(R.string.import_from_contacts),
+                                    tint = NeonCyan
+                                )
+                            }
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(

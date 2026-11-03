@@ -115,4 +115,8 @@
     <string name="categories">catégories</string>
     <string name="leads_with">mène avec</string>
     <string name="perfect_balance">Équilibre parfait</string>
+    <string name="haptic_feedback_title">Retour haptique des strikes</string>
+    <string name="haptic_feedback_desc">Vibration tactile subtile lors de l\'enregistrement des strikes.</string>
+    <string name="import_from_contacts">Importer des contacts</string>
+    <string name="import_contact_hint">Sélectionnez une personne dans vos contacts</string>
 </resources>

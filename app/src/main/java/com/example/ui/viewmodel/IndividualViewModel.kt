@@ -62,8 +62,9 @@ class IndividualViewModel(
     private val securityPrefs = SecurityPreferences(application)
     val backupManager = BackupManager(repository)
 
-    // Security & Pattern Lock
+    // Security, Pattern Lock & Haptics
     val isPatternLockEnabled = mutableStateOf(securityPrefs.isPatternLockEnabled)
+    val isHapticFeedbackEnabled = mutableStateOf(securityPrefs.isHapticFeedbackEnabled)
     private val _isAppUnlocked = MutableStateFlow(!securityPrefs.isPatternLockEnabled)
     val isAppUnlocked: StateFlow<Boolean> = _isAppUnlocked.asStateFlow()
 
@@ -309,6 +310,38 @@ class IndividualViewModel(
                 "ar" -> "تم إلغاء قفل النقش"
                 "fr" -> "Verrouillage par schéma désactivé"
                 else -> "Pattern lock disabled"
+            }
+            emitMessage(msg)
+        }
+    }
+
+    fun setHapticFeedbackEnabled(enabled: Boolean) {
+        isHapticFeedbackEnabled.value = enabled
+        securityPrefs.isHapticFeedbackEnabled = enabled
+        val msg = if (enabled) {
+            when (currentLanguage.value) {
+                "ar" -> "تم تفعيل الاهتزاز اللمسي"
+                "fr" -> "Retour haptique activé"
+                else -> "Haptic feedback enabled"
+            }
+        } else {
+            when (currentLanguage.value) {
+                "ar" -> "تم تعطيل الاهتزاز اللمسي"
+                "fr" -> "Retour haptique désactivé"
+                else -> "Haptic feedback disabled"
+            }
+        }
+        viewModelScope.launch {
+            emitMessage(msg)
+        }
+    }
+
+    fun notifyContactImported(name: String) {
+        viewModelScope.launch {
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم استيراد جهة الاتصال: $name"
+                "fr" -> "Contact importé : $name"
+                else -> "Contact imported: $name"
             }
             emitMessage(msg)
         }

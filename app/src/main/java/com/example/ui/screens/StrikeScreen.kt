@@ -90,12 +90,15 @@ import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.ui.viewmodel.YearlyStrikeStat
 
+import com.example.util.HapticHelper
+
 @Composable
 fun StrikeScreen(
     viewModel: IndividualViewModel,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
     val currentTarget by viewModel.currentStrikeIndividual.collectAsStateWithLifecycle()
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
@@ -106,27 +109,7 @@ fun StrikeScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
 
     fun triggerHapticFeedback() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-                vibratorManager?.defaultVibrator?.vibrate(
-                    VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator?.vibrate(
-                        VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE)
-                    )
-                } else {
-                    @Suppress("DEPRECATION")
-                    vibrator?.vibrate(50)
-                }
-            }
-        } catch (_: Exception) {
-            // Graceful fallback
-        }
+        HapticHelper.triggerStrikeHaptic(context, isHapticFeedbackEnabled)
     }
 
     Box(modifier = modifier.fillMaxSize()) {

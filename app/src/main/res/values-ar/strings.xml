@@ -115,4 +115,8 @@
     <string name="categories">فئات</string>
     <string name="leads_with">يتفوق في</string>
     <string name="perfect_balance">تعادل مثالي</string>
+    <string name="haptic_feedback_title">الاهتزاز اللمسي للضربات</string>
+    <string name="haptic_feedback_desc">اهتزاز خفيف واستجابة لمسية عند تسجيل الضربات.</string>
+    <string name="import_from_contacts">استيراد من جهات الاتصال</string>
+    <string name="import_contact_hint">اختر شخصاً من جهات الاتصال لتعبئة الاسم تلقائياً</string>
 </resources>
