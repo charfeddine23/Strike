@@ -152,22 +152,19 @@ fun ComparisonScreen(
                     }
                 }
 
-                // Swap Button
+                // Swap Button (Raw arrow icon without circular background or border)
                 IconButton(
                     onClick = { viewModel.swapComparisonPersons() },
                     modifier = Modifier
                         .padding(horizontal = 4.dp)
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x221E293B))
-                        .border(1.dp, Color(0x3538BDF8), CircleShape)
+                        .size(44.dp)
                         .testTag("swap_persons_btn")
                 ) {
                     Icon(
                         imageVector = Icons.Default.SwapHoriz,
-                        contentDescription = "Swap",
+                        contentDescription = stringResource(R.string.swap),
                         tint = NeonCyan,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 }
 
@@ -221,12 +218,16 @@ fun ComparisonScreen(
                         (if (b.fScore > a.fScore) 1 else 0) +
                         (if (b.cScore > a.cScore) 1 else 0)
 
+                val leadsWithStr = stringResource(R.string.leads_with)
+                val categoriesStr = stringResource(R.string.categories)
+                val perfectBalanceStr = stringResource(R.string.perfect_balance)
+
                 val leaderText = if (aWins > bWins) {
-                    "${a.fullName} leads with $aWins categories"
+                    "${a.fullName} $leadsWithStr $aWins $categoriesStr"
                 } else if (bWins > aWins) {
-                    "${b.fullName} leads with $bWins categories"
+                    "${b.fullName} $leadsWithStr $bWins $categoriesStr"
                 } else {
-                    "Perfect balance ($aWins — $bWins)"
+                    "$perfectBalanceStr ($aWins — $bWins)"
                 }
 
                 val leaderColor = if (aWins > bWins) NeonCyan else if (bWins > aWins) NeonViolet else NeonAmber
@@ -248,7 +249,7 @@ fun ComparisonScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "ANALYTICAL VERDICT",
+                                text = stringResource(R.string.analytical_verdict),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

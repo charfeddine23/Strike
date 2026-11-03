@@ -116,13 +116,14 @@ class MainActivity : ComponentActivity() {
                 "fr" -> Locale("fr")
                 else -> Locale("en")
             }
-            val layoutDirection = if (currentLang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
+            // Keep layout direction strictly LTR across all languages to prevent UI mirroring
+            val layoutDirection = LayoutDirection.Ltr
 
             val currentContext = LocalContext.current
             val localizedContext = remember(currentLang) {
                 val config = Configuration(currentContext.resources.configuration)
                 config.setLocale(locale)
-                config.setLayoutDirection(locale)
+                config.setLayoutDirection(Locale.ENGLISH)
                 currentContext.createConfigurationContext(config)
             }
 

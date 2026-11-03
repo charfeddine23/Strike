@@ -306,35 +306,35 @@ fun DashboardScreen(
                             onDismissRequest = { showSortMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Total Score (BOOST × Strikes)") },
+                                text = { Text(stringResource(R.string.sort_score)) },
                                 onClick = {
                                     viewModel.setSortOrder(SortOrder.SCORE_DESC)
                                     showSortMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("BOOST (Highest First)") },
+                                text = { Text(stringResource(R.string.sort_boost)) },
                                 onClick = {
                                     viewModel.setSortOrder(SortOrder.BOOST_DESC)
                                     showSortMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Strikes (Highest First)") },
+                                text = { Text(stringResource(R.string.sort_strikes)) },
                                 onClick = {
                                     viewModel.setSortOrder(SortOrder.STRIKES_DESC)
                                     showSortMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Size (Largest First)") },
+                                text = { Text(stringResource(R.string.sort_size)) },
                                 onClick = {
                                     viewModel.setSortOrder(SortOrder.SIZE_DESC)
                                     showSortMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Name (A → Z)") },
+                                text = { Text(stringResource(R.string.sort_name)) },
                                 onClick = {
                                     viewModel.setSortOrder(SortOrder.NAME_ASC)
                                     showSortMenu = false

@@ -266,7 +266,7 @@ fun SettingsDialog(
                                 shape = RoundedCornerShape(10.dp),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder)
                             ) {
-                                Text("تغيير النقش", fontSize = 12.sp, color = titleColor)
+                                Text(stringResource(R.string.change_pattern), fontSize = 12.sp, color = titleColor)
                             }
 
                             Button(
@@ -317,7 +317,7 @@ fun SettingsDialog(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "المظهر التلقائي (Auto Theme)",
+                            text = stringResource(R.string.auto_theme),
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             color = titleColor
@@ -788,8 +788,14 @@ fun PatternSetupDialog(
     onDismiss: () -> Unit,
     onPatternSaved: (String) -> Unit
 ) {
+    val drawNewPatternStr = stringResource(R.string.draw_new_pattern)
+    val confirmPatternStr = stringResource(R.string.confirm_pattern)
+    val minPointsErrorStr = stringResource(R.string.pattern_min_points_error)
+    val confirmedSuccessStr = stringResource(R.string.pattern_confirmed_success)
+    val mismatchRetryStr = stringResource(R.string.pattern_mismatch_retry)
+
     var firstPattern by remember { mutableStateOf<String?>(null) }
-    var instructionText by remember { mutableStateOf("ارسم النقش الجديد (4 نقاط على الأقل)") }
+    var instructionText by remember { mutableStateOf(drawNewPatternStr) }
     var status by remember { mutableStateOf(PatternStatus.IDLE) }
     val scope = rememberCoroutineScope()
 
@@ -844,33 +850,33 @@ fun PatternSetupDialog(
                         if (firstPattern == null) {
                             if (nodeCount < 4) {
                                 status = PatternStatus.ERROR
-                                instructionText = "يجب أن يحتوي النقش على 4 نقاط على الأقل"
+                                instructionText = minPointsErrorStr
                                 scope.launch {
                                     delay(900)
                                     status = PatternStatus.IDLE
-                                    instructionText = "ارسم النقش الجديد (4 نقاط على الأقل)"
+                                    instructionText = drawNewPatternStr
                                 }
                             } else {
                                 firstPattern = entered
-                                instructionText = "أعد رسم النقش للتأكيد"
+                                instructionText = confirmPatternStr
                                 status = PatternStatus.IDLE
                             }
                         } else {
                             if (entered == firstPattern) {
                                 status = PatternStatus.SUCCESS
-                                instructionText = "تم التأكيد بنجاح!"
+                                instructionText = confirmedSuccessStr
                                 scope.launch {
                                     delay(400)
                                     onPatternSaved(entered)
                                 }
                             } else {
                                 status = PatternStatus.ERROR
-                                instructionText = "النقشان غير متطابقين! أعد المحاولة"
+                                instructionText = mismatchRetryStr
                                 scope.launch {
                                     delay(900)
                                     firstPattern = null
                                     status = PatternStatus.IDLE
-                                    instructionText = "ارسم النقش الجديد (4 نقاط على الأقل)"
+                                    instructionText = drawNewPatternStr
                                 }
                             }
                         }
@@ -882,11 +888,11 @@ fun PatternSetupDialog(
                 TextButton(
                     onClick = {
                         firstPattern = null
-                        instructionText = "ارسم النقش الجديد (4 نقاط على الأقل)"
+                        instructionText = drawNewPatternStr
                         status = PatternStatus.IDLE
                     }
                 ) {
-                    Text("إعادة الرسم من البداية", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.redraw_from_start), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

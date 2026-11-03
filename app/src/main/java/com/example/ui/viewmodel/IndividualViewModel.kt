@@ -291,7 +291,12 @@ class IndividualViewModel(
         isPatternLockEnabled.value = true
         _isAppUnlocked.value = true
         viewModelScope.launch {
-            emitMessage("تم تفعيل قفل النقش بنجاح")
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم تفعيل قفل النقش بنجاح"
+                "fr" -> "Verrouillage par schéma activé avec succès"
+                else -> "Pattern lock enabled successfully"
+            }
+            emitMessage(msg)
         }
     }
 
@@ -300,7 +305,12 @@ class IndividualViewModel(
         isPatternLockEnabled.value = false
         _isAppUnlocked.value = true
         viewModelScope.launch {
-            emitMessage("تم إلغاء قفل النقش")
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم إلغاء قفل النقش"
+                "fr" -> "Verrouillage par schéma désactivé"
+                else -> "Pattern lock disabled"
+            }
+            emitMessage(msg)
         }
     }
 
@@ -358,7 +368,12 @@ class IndividualViewModel(
             val target = currentStrikeIndividual.value ?: return@launch
             repository.incrementStrike(target.id, delta)
             _strikeAnimCount.value += 1
-            emitMessage("تم تسجيل ضربة +$delta (${target.fullName})")
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم تسجيل ضربة +$delta (${target.fullName})"
+                "fr" -> "Strike enregistré +$delta (${target.fullName})"
+                else -> "Strike registered +$delta (${target.fullName})"
+            }
+            emitMessage(msg)
         }
     }
 
@@ -427,7 +442,11 @@ class IndividualViewModel(
     fun saveCurrentForm(onSuccess: () -> Unit) {
         val name = formName.value.trim()
         if (name.isEmpty()) {
-            formError.value = "الاسم واللقب حقل إلزامي."
+            formError.value = when (currentLanguage.value) {
+                "ar" -> "الاسم واللقب حقل إلزامي."
+                "fr" -> "Le nom complet est obligatoire."
+                else -> "Full name is required."
+            }
             return
         }
 
@@ -438,11 +457,19 @@ class IndividualViewModel(
         val c = formCScore.value.toDoubleOrNull()
 
         if (length == null || length <= 0 || width == null || width <= 0) {
-            formError.value = "يجب إدخال أبعاد موجبة صحيحة."
+            formError.value = when (currentLanguage.value) {
+                "ar" -> "يجب إدخال أبعاد موجبة صحيحة."
+                "fr" -> "Veuillez entrer des dimensions valides et positives."
+                else -> "Please enter valid positive dimensions."
+            }
             return
         }
         if (s == null || f == null || c == null) {
-            formError.value = "يرجى إدخال قيم صحيحة للدرجات (S, F, C)."
+            formError.value = when (currentLanguage.value) {
+                "ar" -> "يرجى إدخال قيم صحيحة للدرجات (S, F, C)."
+                "fr" -> "Veuillez entrer des scores valides (S, F, C)."
+                else -> "Please enter valid score values (S, F, C)."
+            }
             return
         }
 
@@ -476,7 +503,12 @@ class IndividualViewModel(
                 repository.recordHistoricalStrikes(effectiveId, formHistoricalEntries.value)
             }
 
-            _eventFlow.emit("تم حفظ السجل بنجاح")
+            val savedMsg = when (currentLanguage.value) {
+                "ar" -> "تم حفظ السجل بنجاح"
+                "fr" -> "Enregistrement sauvegardé avec succès"
+                else -> "Record saved successfully"
+            }
+            emitMessage(savedMsg)
             onSuccess()
         }
     }
@@ -542,14 +574,24 @@ class IndividualViewModel(
         _currentLanguage.value = lang
         securityPrefs.selectedLanguage = lang
         viewModelScope.launch {
-            emitMessage("اللغة: ${lang.uppercase()}")
+            val msg = when (lang) {
+                "ar" -> "تم تغيير اللغة إلى العربية"
+                "fr" -> "Langue changée en Français"
+                else -> "Language changed to English"
+            }
+            emitMessage(msg)
         }
     }
 
     fun reloadSampleData() {
         viewModelScope.launch {
             repository.seedSampleData()
-            emitMessage("تم إعادة تحميل البيانات النموذجية بنجاح")
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم إعادة تحميل البيانات النموذجية بنجاح"
+                "fr" -> "Données d'exemple rechargées avec succès"
+                else -> "Sample data reloaded successfully"
+            }
+            emitMessage(msg)
         }
     }
 
@@ -558,7 +600,20 @@ class IndividualViewModel(
     fun exportBackup(context: Context, destinationUri: Uri, onResult: ((BackupResult) -> Unit)? = null) {
         viewModelScope.launch {
             val result = backupManager.exportBackup(context, destinationUri)
-            emitMessage(result.message)
+            val msg = if (result.success) {
+                when (currentLanguage.value) {
+                    "ar" -> "تم حفظ النسخة الاحتياطية بنجاح (${result.individualsCount} سجل و ${result.strikeEventsCount} ضربة)"
+                    "fr" -> "Sauvegarde réussie (${result.individualsCount} enregistrements, ${result.strikeEventsCount} strikes)"
+                    else -> "Backup successful (${result.individualsCount} records, ${result.strikeEventsCount} strikes)"
+                }
+            } else {
+                when (currentLanguage.value) {
+                    "ar" -> result.message
+                    "fr" -> "Échec de la sauvegarde"
+                    else -> "Backup failed"
+                }
+            }
+            emitMessage(msg)
             onResult?.invoke(result)
         }
     }
@@ -571,7 +626,20 @@ class IndividualViewModel(
     ) {
         viewModelScope.launch {
             val result = backupManager.importBackup(context, sourceUri, replaceExisting)
-            emitMessage(result.message)
+            val msg = if (result.success) {
+                when (currentLanguage.value) {
+                    "ar" -> "تم استرجاع البيانات بنجاح: ${result.individualsCount} سجل و ${result.strikeEventsCount} ضربة"
+                    "fr" -> "Restauration réussie : ${result.individualsCount} enregistrements, ${result.strikeEventsCount} strikes"
+                    else -> "Restore successful: ${result.individualsCount} records, ${result.strikeEventsCount} strikes"
+                }
+            } else {
+                when (currentLanguage.value) {
+                    "ar" -> result.message
+                    "fr" -> "Fichier invalide ou erreur de lecture"
+                    else -> "Invalid file or error reading backup"
+                }
+            }
+            emitMessage(msg)
             onResult?.invoke(result)
         }
     }

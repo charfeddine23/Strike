@@ -39,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -94,6 +95,13 @@ fun PatternLockCanvas(
     val selectedNodes = remember { mutableStateListOf<Int>() }
     var currentTouchPosition by remember { mutableStateOf<Offset?>(null) }
     val isDarkTheme = isSystemInDarkTheme()
+
+    LaunchedEffect(status) {
+        if (status == PatternStatus.ERROR || status == PatternStatus.IDLE) {
+            selectedNodes.clear()
+            currentTouchPosition = null
+        }
+    }
 
     fun triggerTick() {
         try {
@@ -297,6 +305,8 @@ fun FullscreenPatternUnlockScreen(
         primaryColor
     }
 
+    val patternIncorrectMsg = stringResource(R.string.pattern_incorrect)
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -377,7 +387,7 @@ fun FullscreenPatternUnlockScreen(
                         }
                     } else {
                         status = PatternStatus.ERROR
-                        errorMessage = "نقش غير صحيح / Schéma incorrect"
+                        errorMessage = patternIncorrectMsg
                         scope.launch {
                             delay(900)
                             status = PatternStatus.IDLE
