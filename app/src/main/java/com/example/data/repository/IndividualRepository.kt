@@ -159,12 +159,12 @@ class IndividualRepository(
 
     suspend fun seedSampleData() {
         val samples = listOf(
-            createSample("Tariq Al-Mansoor", "M", 24.5, 12.0, 88.0, 76.5, 92.0, 42),
-            createSample("Alexandre Moreau", "TS", 30.0, 15.5, 94.0, 85.0, 89.5, 38),
-            createSample("Fatima Zahra", "FG", 18.0, 14.2, 82.5, 91.0, 78.0, 55),
-            createSample("Karim Ben Salah", "G", 28.0, 16.0, 79.0, 83.5, 87.0, 29),
-            createSample("Sarah Jenkins", "M", 22.0, 11.5, 90.0, 88.0, 93.0, 47),
-            createSample("Yassine Trabelsi", "FG", 26.5, 13.8, 86.0, 79.5, 84.0, 31)
+            createSample("Tariq Al-Mansoor", "M", 24.5, 12.0, 88.0, 76.5, 92.0, 42, "+15550198"),
+            createSample("Alexandre Moreau", "TS", 30.0, 15.5, 94.0, 85.0, 89.5, 38, "+33612345678"),
+            createSample("Fatima Zahra", "FG", 18.0, 14.2, 82.5, 91.0, 78.0, 55, "+213555123456"),
+            createSample("Karim Ben Salah", "G", 28.0, 16.0, 79.0, 83.5, 87.0, 29, "+213555987654"),
+            createSample("Sarah Jenkins", "M", 22.0, 11.5, 90.0, 88.0, 93.0, 47, "+15550244"),
+            createSample("Yassine Trabelsi", "FG", 26.5, 13.8, 86.0, 79.5, 84.0, 31, "+21698123456")
         )
         dao.insertAll(samples)
 
@@ -280,6 +280,8 @@ class IndividualRepository(
         return Pair(individuals.size, strikeEvents.size)
     }
 
+    suspend fun getIndividualsWithPhone(): List<Individual> = dao.getIndividualsWithPhone()
+
     private fun createSample(
         name: String,
         type: String,
@@ -288,7 +290,8 @@ class IndividualRepository(
         sScore: Double,
         fScore: Double,
         cScore: Double,
-        strikes: Int
+        strikes: Int,
+        phone: String = ""
     ): Individual {
         val size = Individual.calculateSize(length, width)
         val boost = Individual.calculateBoost(sScore, fScore, cScore, size)
@@ -302,7 +305,8 @@ class IndividualRepository(
             fScore = fScore,
             cScore = cScore,
             boost = boost,
-            strikeCount = strikes
+            strikeCount = strikes,
+            phoneNumber = phone
         )
     }
 }

@@ -58,6 +58,7 @@ class BackupManager(private val repository: IndividualRepository) {
                         put("cScore", item.cScore)
                         put("boost", item.boost)
                         put("strikeCount", item.strikeCount)
+                        put("phoneNumber", item.phoneNumber)
                         put("updatedAt", item.updatedAt)
                     }
                     individualsArray.put(obj)
@@ -151,6 +152,7 @@ class BackupManager(private val repository: IndividualRepository) {
                         cScore = cScore,
                         boost = boost,
                         strikeCount = obj.optInt("strikeCount", 0),
+                        phoneNumber = obj.optString("phoneNumber", ""),
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                     )
                 )

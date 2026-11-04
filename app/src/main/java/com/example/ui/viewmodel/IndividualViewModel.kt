@@ -229,6 +229,7 @@ class IndividualViewModel(
         private set
 
     val formName = MutableStateFlow("")
+    val formPhoneNumber = MutableStateFlow("")
     val formType = MutableStateFlow("M")
     val formLength = MutableStateFlow("20.0")
     val formWidth = MutableStateFlow("10.0")
@@ -336,12 +337,20 @@ class IndividualViewModel(
         }
     }
 
-    fun notifyContactImported(name: String) {
+    fun notifyContactImported(name: String, phone: String = "") {
         viewModelScope.launch {
-            val msg = when (currentLanguage.value) {
-                "ar" -> "تم استيراد جهة الاتصال: $name"
-                "fr" -> "Contact importé : $name"
-                else -> "Contact imported: $name"
+            val msg = if (phone.isNotBlank()) {
+                when (currentLanguage.value) {
+                    "ar" -> "تم ربط جهة الاتصال: $name ($phone)"
+                    "fr" -> "Contact lié : $name ($phone)"
+                    else -> "Contact linked: $name ($phone)"
+                }
+            } else {
+                when (currentLanguage.value) {
+                    "ar" -> "تم استيراد جهة الاتصال: $name"
+                    "fr" -> "Contact importé : $name"
+                    else -> "Contact imported: $name"
+                }
             }
             emitMessage(msg)
         }
@@ -449,6 +458,7 @@ class IndividualViewModel(
     fun initFormForNew() {
         editingId = null
         formName.value = ""
+        formPhoneNumber.value = ""
         formType.value = "M"
         formLength.value = "25.0"
         formWidth.value = "12.0"
@@ -462,6 +472,7 @@ class IndividualViewModel(
     fun initFormForEdit(individual: Individual) {
         editingId = individual.id
         formName.value = individual.fullName
+        formPhoneNumber.value = individual.phoneNumber
         formType.value = individual.type
         formLength.value = individual.length.toString()
         formWidth.value = individual.width.toString()
@@ -474,6 +485,7 @@ class IndividualViewModel(
 
     fun saveCurrentForm(onSuccess: () -> Unit) {
         val name = formName.value.trim()
+        val phone = formPhoneNumber.value.trim()
         if (name.isEmpty()) {
             formError.value = when (currentLanguage.value) {
                 "ar" -> "الاسم واللقب حقل إلزامي."
@@ -513,6 +525,7 @@ class IndividualViewModel(
         val individualToSave = Individual(
             id = editingId ?: 0,
             fullName = name,
+            phoneNumber = phone,
             type = formType.value,
             length = length,
             width = width,

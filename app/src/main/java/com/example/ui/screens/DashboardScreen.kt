@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Speed
@@ -110,37 +111,6 @@ fun DashboardScreen(
     val isDarkTheme = isSystemInDarkTheme()
     val context = LocalContext.current
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
-
-    val pickContactLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickContact()
-    ) { contactUri: Uri? ->
-        if (contactUri != null) {
-            try {
-                val cursor = context.contentResolver.query(
-                    contactUri,
-                    arrayOf(ContactsContract.Contacts.DISPLAY_NAME),
-                    null,
-                    null,
-                    null
-                )
-                cursor?.use {
-                    if (it.moveToFirst()) {
-                        val idx = it.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
-                        if (idx != -1) {
-                            val displayName = it.getString(idx)
-                            if (!displayName.isNullOrBlank()) {
-                                viewModel.initFormForNew()
-                                viewModel.formName.value = displayName
-                                viewModel.notifyContactImported(displayName)
-                                onNavigateToEntry()
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-            }
-        }
-    }
 
     var individualToDelete by remember { mutableStateOf<Individual?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -668,51 +638,25 @@ fun DashboardScreen(
             }
         }
 
-        // Floating Action Buttons (Import Contact & Add New)
-        Column(
+        // Floating Action Button to Add New
+        FloatingActionButton(
+            onClick = {
+                viewModel.initFormForNew()
+                onNavigateToEntry()
+            },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(20.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(20.dp)
+                .testTag("add_record_fab"),
+            containerColor = NeonCyan,
+            contentColor = Color(0xFF03141F),
+            shape = CircleShape
         ) {
-            FloatingActionButton(
-                onClick = {
-                    try {
-                        pickContactLauncher.launch(null)
-                    } catch (e: Exception) {
-                    }
-                },
-                modifier = Modifier
-                    .size(48.dp)
-                    .testTag("import_contact_fab"),
-                containerColor = if (isDarkTheme) Color(0x3338BDF8) else Color(0xFFE0F2FE),
-                contentColor = NeonCyan,
-                shape = CircleShape
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Contacts,
-                    contentDescription = stringResource(R.string.import_from_contacts),
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-
-            FloatingActionButton(
-                onClick = {
-                    viewModel.initFormForNew()
-                    onNavigateToEntry()
-                },
-                modifier = Modifier.testTag("add_record_fab"),
-                containerColor = NeonCyan,
-                contentColor = Color(0xFF03141F),
-                shape = CircleShape
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = stringResource(R.string.nav_entry),
-                    modifier = Modifier.size(28.dp)
-                )
-            }
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = stringResource(R.string.nav_entry),
+                modifier = Modifier.size(28.dp)
+            )
         }
     }
 
@@ -773,13 +717,32 @@ fun IndividualRecordCard(
                 ) {
                     GlassTypeBadge(type = individual.type)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = individual.fullName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = PlusJakartaSans,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Column {
+                        Text(
+                            text = individual.fullName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = PlusJakartaSans,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (individual.phoneNumber.isNotBlank()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = null,
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = individual.phoneNumber,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = NeonCyan
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // BOOST Badge

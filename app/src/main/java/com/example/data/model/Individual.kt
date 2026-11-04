@@ -19,6 +19,7 @@ data class Individual(
     val cScore: Double,
     val boost: Double, // (sScore + fScore + cScore) + (size / 100.0)
     val strikeCount: Int = 0,
+    val phoneNumber: String = "",
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     // Score = boost * strikeCount (النتيجة = ضرب boost في strike)

@@ -86,6 +86,7 @@ import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.StrikePulseTheme
 import com.example.ui.viewmodel.IndividualViewModel
+import com.example.util.CallNotificationHelper
 import kotlinx.coroutines.flow.collectLatest
 import java.util.Locale
 
@@ -103,6 +104,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CallNotificationHelper.createNotificationChannel(this)
         enableEdgeToEdge()
 
         setContent {

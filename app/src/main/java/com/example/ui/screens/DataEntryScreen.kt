@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -82,6 +83,7 @@ fun DataEntryScreen(
     modifier: Modifier = Modifier
 ) {
     val name by viewModel.formName.collectAsStateWithLifecycle()
+    val phoneNumber by viewModel.formPhoneNumber.collectAsStateWithLifecycle()
     val type by viewModel.formType.collectAsStateWithLifecycle()
     val length by viewModel.formLength.collectAsStateWithLifecycle()
     val width by viewModel.formWidth.collectAsStateWithLifecycle()
@@ -102,25 +104,58 @@ fun DataEntryScreen(
     ) { contactUri: Uri? ->
         if (contactUri != null) {
             try {
+                var contactName = ""
+                var contactPhone = ""
+
                 val cursor = context.contentResolver.query(
                     contactUri,
-                    arrayOf(ContactsContract.Contacts.DISPLAY_NAME),
+                    arrayOf(
+                        ContactsContract.Contacts._ID,
+                        ContactsContract.Contacts.DISPLAY_NAME,
+                        ContactsContract.Contacts.HAS_PHONE_NUMBER
+                    ),
                     null,
                     null,
                     null
                 )
                 cursor?.use {
                     if (it.moveToFirst()) {
-                        val idx = it.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
-                        if (idx != -1) {
-                            val displayName = it.getString(idx)
-                            if (!displayName.isNullOrBlank()) {
-                                viewModel.formName.value = displayName
-                                viewModel.notifyContactImported(displayName)
+                        val nameIdx = it.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                        if (nameIdx != -1) {
+                            contactName = it.getString(nameIdx) ?: ""
+                        }
+                        val idIdx = it.getColumnIndex(ContactsContract.Contacts._ID)
+                        val hasPhoneIdx = it.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER)
+                        val contactId = if (idIdx != -1) it.getString(idIdx) else null
+                        val hasPhone = if (hasPhoneIdx != -1) it.getInt(hasPhoneIdx) else 0
+
+                        if (!contactId.isNullOrBlank() && hasPhone > 0) {
+                            val phoneCursor = context.contentResolver.query(
+                                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                                arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+                                "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+                                arrayOf(contactId),
+                                null
+                            )
+                            phoneCursor?.use { pCursor ->
+                                if (pCursor.moveToFirst()) {
+                                    val numIdx = pCursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                                    if (numIdx != -1) {
+                                        contactPhone = pCursor.getString(numIdx) ?: ""
+                                    }
+                                }
                             }
                         }
                     }
                 }
+
+                if (contactName.isNotBlank()) {
+                    viewModel.formName.value = contactName
+                }
+                if (contactPhone.isNotBlank()) {
+                    viewModel.formPhoneNumber.value = contactPhone
+                }
+                viewModel.notifyContactImported(contactName, contactPhone)
             } catch (e: Exception) {
                 // Ignore gracefully
             }
@@ -286,6 +321,69 @@ fun DataEntryScreen(
                             }
                         },
                         singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = Color(0x3338BDF8)
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Phone Number Linking (for incoming call striker detection)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.phone_number),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.phone_number_desc),
+                            fontSize = 11.sp,
+                            color = NeonCyan
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    OutlinedTextField(
+                        value = phoneNumber,
+                        onValueChange = { viewModel.formPhoneNumber.value = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("input_phone_number"),
+                        placeholder = { Text(stringResource(R.string.phone_number_hint)) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Phone,
+                                contentDescription = null,
+                                tint = NeonCyan,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    try {
+                                        pickContactLauncher.launch(null)
+                                    } catch (e: Exception) {
+                                    }
+                                },
+                                modifier = Modifier.testTag("pick_phone_contact_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Contacts,
+                                    contentDescription = stringResource(R.string.import_from_contacts),
+                                    tint = NeonCyan
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = NeonCyan,

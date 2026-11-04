@@ -1,8 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="66dp"
-        android:height="66dp"
-        android:drawable="@drawable/ic_launcher_fg"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Ambient Glowing Aura Layers (Centralized kinetic energy field) -->
+    <path
+        android:fillColor="#1400E5FF"
+        android:pathData="M54,24.5 A29.5,29.5 0 1,1 53.9,24.5 Z" />
+    <path
+        android:fillColor="#2400E5FF"
+        android:pathData="M54,34 A20,20 0 1,1 53.9,34 Z" />
+    <path
+        android:fillColor="#3338BDF8"
+        android:pathData="M54,42 A12,12 0 1,1 53.9,42 Z" />
+
+    <!-- Outer Dynamic Pulse Ring (Radius 29.5dp, with 24.5dp breathable padding from icon edges) -->
+    <path
+        android:strokeColor="#5938BDF8"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,24.5 A29.5,29.5 0 1,0 54.01,24.5" />
+
+    <!-- Cardinal Pulse Accents on Outer Ring -->
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M54,20 L54,24" />
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M54,84 L54,88" />
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M20,54 L24,54" />
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M84,54 L88,54" />
+
+    <!-- Middle Energy Wave Ring (Radius 22.5dp) -->
+    <path
+        android:strokeColor="#9900E5FF"
+        android:strokeWidth="1.75"
+        android:strokeLineCap="round"
+        android:pathData="M54,31.5 A22.5,22.5 0 1,0 54.01,31.5" />
+
+    <!-- Inner Core Kinetic Ring (Radius 15.5dp) -->
+    <path
+        android:strokeColor="#66F59E0B"
+        android:strokeWidth="1.25"
+        android:strokeLineCap="round"
+        android:pathData="M54,38.5 A15.5,15.5 0 1,0 54.01,38.5" />
+
+    <!-- Ambient Strike Glow behind Central Bolt -->
+    <path
+        android:strokeColor="#4000E5FF"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M56,28 L45,52 L52.5,52 L50,79 L63,49 L55.5,49 Z" />
+
+    <!-- Central Sharp Lightning Strike Symbol - Primary Electric Cyan Facet -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M56,28 L45,52 L52.5,52 L50,79 L54,50.5 L56,28 Z" />
+
+    <!-- Central Sharp Lightning Strike Symbol - Secondary Vivid Sky Facet -->
+    <path
+        android:fillColor="#0EA5E9"
+        android:pathData="M56,28 L54,50.5 L50,79 L63,49 L55.5,49 L56,28 Z" />
+
+    <!-- Central Strike Core Energy Line (White High-Intensity Spine) -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.25"
+        android:strokeLineCap="round"
+        android:pathData="M55,30 L52,51 L50,76" />
+
+    <!-- Kinetic Pulse Sparks (Energy particles radiating outward) -->
+    <path
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M38,38 L41,41" />
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M70,36 L67,39" />
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M36,68 L39,65" />
+    <path
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M71,67 L68,64" />
+</vector>

@@ -33,10 +33,16 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
+import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Vibration
 import com.example.BuildConfig
+import com.example.util.CallNotificationHelper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -98,6 +104,30 @@ fun SettingsDialog(
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     val isDarkTheme = isSystemInDarkTheme()
+
+    val permissionsToRequest = remember {
+        buildList {
+            add(Manifest.permission.READ_PHONE_STATE)
+            add(Manifest.permission.READ_CALL_LOG)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    var callPermissionsGranted by remember {
+        mutableStateOf(
+            permissionsToRequest.all {
+                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+            }
+        )
+    }
+
+    val callPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        callPermissionsGranted = results.values.all { it }
+    }
 
     val createDocumentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -354,7 +384,113 @@ fun SettingsDialog(
                     }
                 }
 
-                // 3. Automatic System Theme Info (وضع الهاتف تلقائياً)
+                // 3. Striker Call Detection & Alerts (كشف اتصالات المهاجمين)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardBg)
+                        .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
+                        .padding(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhoneInTalk,
+                                contentDescription = null,
+                                tint = activeCyan,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.call_detection_title),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = titleColor
+                                )
+                                Text(
+                                    text = stringResource(R.string.call_detection_desc),
+                                    fontSize = 11.sp,
+                                    color = descColor
+                                )
+                            }
+                        }
+
+                        if (callPermissionsGranted) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0x2210B981))
+                                    .border(1.dp, Color(0xFF10B981), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.call_permissions_active),
+                                    color = Color(0xFF10B981),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!callPermissionsGranted) {
+                            Button(
+                                onClick = {
+                                    callPermissionLauncher.launch(permissionsToRequest.toTypedArray())
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp)
+                                    .testTag("grant_call_permissions_btn"),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryActionTeal)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.call_permissions_grant),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                CallNotificationHelper.showTestNotification(context)
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp)
+                                .testTag("test_call_alert_btn"),
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, activeCyan)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.test_call_alert),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = activeCyan
+                            )
+                        }
+                    }
+                }
+
+                // 4. Automatic System Theme Info (وضع الهاتف تلقائياً)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

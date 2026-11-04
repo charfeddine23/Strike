@@ -118,5 +118,15 @@
     <string name="haptic_feedback_title">Strike Haptic Feedback</string>
     <string name="haptic_feedback_desc">Subtle tactile vibration feedback when logging strikes.</string>
     <string name="import_from_contacts">Import from Contacts</string>
-    <string name="import_contact_hint">Pick a person from contacts to autofill their name</string>
+    <string name="import_contact_hint">Pick a person from contacts to autofill name &amp; phone</string>
+    <string name="phone_number">Phone Number</string>
+    <string name="phone_number_hint">e.g. +1 555-0198</string>
+    <string name="phone_number_desc">Link phone number to detect incoming calls</string>
+    <string name="striker_calling_title">A striker is calling</string>
+    <string name="striker_calling_msg">%1$s is calling! BOOST: %2$s • Strikes: %3$d</string>
+    <string name="call_detection_title">Striker Call Detection</string>
+    <string name="call_detection_desc">Monitors incoming phone calls to alert when a registered striker calls</string>
+    <string name="call_permissions_grant">Grant Call Permissions</string>
+    <string name="call_permissions_active">Call Alerts Active</string>
+    <string name="test_call_alert">Test Striker Call Alert</string>
 </resources>

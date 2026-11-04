@@ -54,6 +54,9 @@ interface IndividualDao {
     @Query("SELECT * FROM individuals")
     suspend fun getAllIndividualsList(): List<Individual>
 
+    @Query("SELECT * FROM individuals WHERE phoneNumber IS NOT NULL AND phoneNumber != ''")
+    suspend fun getIndividualsWithPhone(): List<Individual>
+
     @Query("DELETE FROM individuals")
     suspend fun clearAll()
 }

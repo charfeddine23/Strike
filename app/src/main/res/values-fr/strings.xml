@@ -118,5 +118,15 @@
     <string name="haptic_feedback_title">Retour haptique des strikes</string>
     <string name="haptic_feedback_desc">Vibration tactile subtile lors de l\'enregistrement des strikes.</string>
     <string name="import_from_contacts">Importer des contacts</string>
-    <string name="import_contact_hint">Sélectionnez une personne dans vos contacts</string>
+    <string name="import_contact_hint">Sélectionnez une personne pour remplir nom et numéro</string>
+    <string name="phone_number">Numéro de téléphone</string>
+    <string name="phone_number_hint">ex: +33 6 12 34 56 78</string>
+    <string name="phone_number_desc">Associez un numéro pour détecter les appels entrants</string>
+    <string name="striker_calling_title">Un striker vous appelle</string>
+    <string name="striker_calling_msg">%1$s vous appelle ! BOOST: %2$s • Strikes: %3$d</string>
+    <string name="call_detection_title">Détection d\'appels des strikers</string>
+    <string name="call_detection_desc">Surveille les appels entrants pour vous alerter lorsqu\'un striker appelle</string>
+    <string name="call_permissions_grant">Accorder les autorisations d\'appel</string>
+    <string name="call_permissions_active">Alertes d\'appels actives</string>
+    <string name="test_call_alert">Tester l\'alerte d\'appel striker</string>
 </resources>
