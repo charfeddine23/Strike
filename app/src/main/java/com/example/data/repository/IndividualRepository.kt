@@ -95,6 +95,8 @@ class IndividualRepository(
         dao.setStrikeCount(id, count.coerceAtLeast(0))
     }
 
+    suspend fun getLatestStrikeDate(): String? = strikeEventDao.getLatestStrikeDate()
+
     /**
      * Stores past/historical strikes per year for an individual.
      */

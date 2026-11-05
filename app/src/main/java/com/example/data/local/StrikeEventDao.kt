@@ -43,6 +43,9 @@ interface StrikeEventDao {
     @Query("SELECT * FROM strike_events")
     suspend fun getAllStrikeEventsList(): List<StrikeEvent>
 
+    @Query("SELECT MAX(date) FROM strike_events")
+    suspend fun getLatestStrikeDate(): String?
+
     @Query("DELETE FROM strike_events")
     suspend fun clearAll()
 }

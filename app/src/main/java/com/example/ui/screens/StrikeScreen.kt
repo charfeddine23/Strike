@@ -76,6 +76,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import com.example.ui.components.CosmicStrikeButton
 import com.example.ui.components.GlassTypeBadge
 import com.example.ui.components.LiquidGlassCard
+import com.example.ui.components.StrikerStatus
+import com.example.ui.components.StrikerStatusBadge
+import com.example.ui.components.DynamicAnimatedProfileCard
 import com.example.ui.theme.CaveatHandwriting
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
@@ -104,6 +107,7 @@ fun StrikeScreen(
     val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
     val yearlyStats by viewModel.yearlyStrikeStats.collectAsStateWithLifecycle()
     val allTimeStrikes by viewModel.allTimeStrikesCount.collectAsStateWithLifecycle()
+    val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
 
     // Screen Sub-tab: 0 = Arena, 1 = Yearly Dashboard
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -271,7 +275,9 @@ fun StrikeScreen(
                 item {
                     if (currentTarget != null) {
                         val target = currentTarget!!
-                        LiquidGlassCard(
+                        val targetStatus = viewModel.getStatusForIndividual(target, lastStrikeMap)
+                        DynamicAnimatedProfileCard(
+                            status = targetStatus,
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(20.dp)
                         ) {
@@ -299,12 +305,16 @@ fun StrikeScreen(
                                         }
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Column {
-                                            Text(
-                                                text = target.fullName,
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = target.fullName,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                StrikerStatusBadge(status = targetStatus)
+                                            }
                                             Text(
                                                 text = "Type ${target.type} • Size: ${target.size}",
                                                 style = MaterialTheme.typography.bodySmall,

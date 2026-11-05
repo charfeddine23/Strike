@@ -129,4 +129,31 @@
     <string name="call_permissions_grant">منح صلاحيات كشف المكالمات</string>
     <string name="call_permissions_active">تنبيهات الاتصال مفعّلة</string>
     <string name="test_call_alert">تجربة إشعار اتصال مهاجم</string>
+
+    <!-- Flame System Strings -->
+    <string name="flame_system_title">نظام الشعلة</string>
+    <string name="flame_system_subtitle">مؤشرات الخمول والطاقة الحركية</string>
+    <string name="flame_total_points">إجمالي نقاط طاقة الشعلة</string>
+    <string name="flame_stage_frozen">متجمدة / ساكنة (0 - 30)</string>
+    <string name="flame_stage_frozen_sub">سكون جليدي تام. الشعلة محبوسة كلياً داخل درع من الجليد الصلب.</string>
+    <string name="flame_stage_cracking">ذوبان / تصدع الجليد (31 - 60)</string>
+    <string name="flame_stage_cracking_sub">تصدعات جليدية تبدأ بالانفتاح مع شظايا جزيئات متطايرة خفيفة.</string>
+    <string name="flame_stage_gradient">تدرج حراري (61 - 300)</string>
+    <string name="flame_stage_gradient_sub">تدرج لوني ديناميكي ينتقل بسلاسة من الأزرق الجليدي إلى الأحمر الداكن.</string>
+    <string name="flame_stage_ignited">جحيم متوهج خارق (&gt; 300)</string>
+    <string name="flame_stage_ignited_sub">أقصى توهج! شعلة بلازما مشتعلة مع شرارات برتقالية ووردية متصاعدة.</string>
+    <string name="manual_controls_title">أزرار التحكم الفوري</string>
+    <string name="btn_deflame_title">Deflame (تخفيض)</string>
+    <string name="btn_girl_title">Girl (تبريد)</string>
+    <string name="flame_rules_title">قواعد احتساب وخصم نقاط الشعلة</string>
+    <string name="rule_inactivity_title">الخمول اليومي (+3 نقاط / يوم)</string>
+    <string name="rule_inactivity_desc">إضافة 3 نقاط تلقائياً لكل يوم يمر دون تسجيل أي ضربة.</string>
+    <string name="rule_call_title">اتصال جهة مربوطة (+5 نقاط)</string>
+    <string name="rule_call_desc">إضافة 5 نقاط عند تلقي مكالمة من رقم مهاجم مسجل.</string>
+    <string name="rule_retroactive_title">ضربة بأثر رجعي (محمية: 0 نقطة)</string>
+    <string name="rule_retroactive_desc">تسجيل ضربة بتاريخ أقدم من آخر تاريخ لا يغير نقاط الشعلة.</string>
+    <string name="rule_strike_title">خصم الضربات (-نقاط BOOST)</string>
+    <string name="rule_strike_desc">تسجيل ضربة جديدة يخصم قيمة BOOST للشخص من إجمالي الشعلة.</string>
+    <string name="flame_activity_log_title">سجل نشاط الشعلة الأخير</string>
+    <string name="flame_activity_empty">لا توجد أحداث شعلة مسجلة بعد.</string>
 </resources>

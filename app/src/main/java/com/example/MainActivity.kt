@@ -74,11 +74,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.FullscreenPatternUnlockScreen
+import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.SettingsDialog
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.DataEntryScreen
+import com.example.ui.screens.FlameScreen
 import com.example.ui.screens.StrikeScreen
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
@@ -94,7 +96,8 @@ enum class AppScreen {
     DASHBOARD,
     DATA_ENTRY,
     STRIKE,
-    COMPARISON
+    COMPARISON,
+    FLAME
 }
 
 class MainActivity : ComponentActivity() {
@@ -170,6 +173,8 @@ fun LiquidGlassApp(
     var showSettingsDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
+
     // Listen to ViewModel events (including Swipe-to-delete with Undo)
     LaunchedEffect(Unit) {
         viewModel.uiEvents.collectLatest { event ->
@@ -202,8 +207,10 @@ fun LiquidGlassApp(
             LiquidGlassTopBar(
                 currentScreen = currentScreen,
                 currentLang = currentLang,
+                flameScore = flameScore,
                 onOpenLanguageDialog = { showLanguageDialog = true },
-                onOpenSettings = { showSettingsDialog = true }
+                onOpenSettings = { showSettingsDialog = true },
+                onOpenFlame = { currentScreen = AppScreen.FLAME }
             )
         },
         bottomBar = {
@@ -264,6 +271,11 @@ fun LiquidGlassApp(
 
                     AppScreen.COMPARISON -> ComparisonScreen(
                         viewModel = viewModel
+                    )
+
+                    AppScreen.FLAME -> FlameScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
                     )
                 }
             }
@@ -336,8 +348,10 @@ fun LiquidGlassApp(
 fun LiquidGlassTopBar(
     currentScreen: AppScreen,
     currentLang: String,
+    flameScore: Double,
     onOpenLanguageDialog: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenFlame: () -> Unit,
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     val title = when (currentScreen) {
@@ -345,6 +359,7 @@ fun LiquidGlassTopBar(
         AppScreen.DATA_ENTRY -> stringResource(R.string.nav_entry)
         AppScreen.STRIKE -> stringResource(R.string.nav_strike)
         AppScreen.COMPARISON -> stringResource(R.string.nav_compare)
+        AppScreen.FLAME -> stringResource(R.string.flame_system_title)
     }
 
     val cyanColor = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan
@@ -427,6 +442,15 @@ fun LiquidGlassTopBar(
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Adaptive Glowing Animated "Fire" Header Icon (Located to the left of the settings icon)
+            GlowingFlameHeaderIcon(
+                flameScore = flameScore,
+                onClick = onOpenFlame,
+                isDarkTheme = isDarkTheme
+            )
 
             Spacer(modifier = Modifier.width(8.dp))
 

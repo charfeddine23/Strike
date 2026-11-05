@@ -10,6 +10,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.data.backup.BackupManager
 import com.example.data.backup.BackupResult
+import com.example.data.flame.FlameLogEntry
+import com.example.data.flame.FlameManager
 import com.example.data.local.AppDatabase
 import com.example.data.local.SecurityPreferences
 import com.example.data.model.Individual
@@ -18,6 +20,9 @@ import com.example.data.repository.IndividualRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -272,10 +277,51 @@ class IndividualViewModel(
     private val _currentLanguage = MutableStateFlow(securityPrefs.selectedLanguage)
     val currentLanguage: StateFlow<String> = _currentLanguage.asStateFlow()
 
+    // Flame System State
+    val flameScore: StateFlow<Double> = FlameManager.flameScore
+    val flameLogs: StateFlow<List<FlameLogEntry>> = FlameManager.flameLogs
+
     init {
+        FlameManager.init(application)
         viewModelScope.launch {
             repository.seedSampleDataIfEmpty()
+            val latestStrikeDate = repository.getLatestStrikeDate()
+            FlameManager.evaluateDailyInactivity(application, latestStrikeDate)
         }
+    }
+
+    /**
+     * "Deflame" Button: Each tap instantly decreases the total Flame score by 2 points (ensuring score >= 0).
+     */
+    fun deflame() {
+        val newScore = FlameManager.deflame(getApplication())
+        viewModelScope.launch {
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم خفض الشعلة (-2): ${String.format(Locale.US, "%.1f", newScore)}"
+                "fr" -> "Déflamme (-2 pts) : ${String.format(Locale.US, "%.1f", newScore)}"
+                else -> "Deflame (-2 pts): ${String.format(Locale.US, "%.1f", newScore)}"
+            }
+            emitMessage(msg)
+        }
+    }
+
+    /**
+     * "Girl" Button: Each tap instantly decreases the total Flame score by 3 points (ensuring score >= 0).
+     */
+    fun girl() {
+        val newScore = FlameManager.girl(getApplication())
+        viewModelScope.launch {
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تبريد Girl (-3): ${String.format(Locale.US, "%.1f", newScore)}"
+                "fr" -> "Action Girl (-3 pts) : ${String.format(Locale.US, "%.1f", newScore)}"
+                else -> "Girl cooldown (-3 pts): ${String.format(Locale.US, "%.1f", newScore)}"
+            }
+            emitMessage(msg)
+        }
+    }
+
+    fun setFlameScore(score: Double) {
+        FlameManager.setScore(getApplication(), score, "SIMULATION", "Score Slider")
     }
 
     // Security & Pattern Lock Operations
@@ -408,8 +454,19 @@ class IndividualViewModel(
     fun triggerStrike(delta: Int = 1) {
         viewModelScope.launch {
             val target = currentStrikeIndividual.value ?: return@launch
+            val latestBefore = repository.getLatestStrikeDate()
             repository.incrementStrike(target.id, delta)
             _strikeAnimCount.value += 1
+
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            FlameManager.onStrikeRegistered(
+                context = getApplication(),
+                strikeDate = today,
+                boost = target.boost,
+                personName = target.fullName,
+                latestDateBeforeInsert = latestBefore
+            )
+
             val msg = when (currentLanguage.value) {
                 "ar" -> "تم تسجيل ضربة +$delta (${target.fullName})"
                 "fr" -> "Strike enregistré +$delta (${target.fullName})"
@@ -421,8 +478,21 @@ class IndividualViewModel(
 
     fun incrementStrikeForId(id: Long, delta: Int = 1) {
         viewModelScope.launch {
+            val target = repository.getIndividualById(id)
+            val latestBefore = repository.getLatestStrikeDate()
             repository.incrementStrike(id, delta)
             _strikeAnimCount.value += 1
+
+            if (target != null) {
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                FlameManager.onStrikeRegistered(
+                    context = getApplication(),
+                    strikeDate = today,
+                    boost = target.boost,
+                    personName = target.fullName,
+                    latestDateBeforeInsert = latestBefore
+                )
+            }
             emitMessage("Strike +$delta")
         }
     }

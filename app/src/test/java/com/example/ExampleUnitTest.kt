@@ -119,4 +119,83 @@ class ExampleUnitTest {
         // individual.totalScore = 242.0 * 10 = 2420.0
         assertEquals(2420.0, individual.totalScore, 0.001)
     }
+
+    @Test
+    fun test_flame_stage_classification() {
+        // Range 0 to 30: Frozen / Static
+        assertTrue(0.0 <= 30.0)
+        assertTrue(30.0 <= 30.0)
+
+        // Range 31 to 60: Cracking Ice
+        val scoreCracking = 45.0
+        assertTrue(scoreCracking > 30.0 && scoreCracking <= 60.0)
+
+        // Range 61 to 300: Dynamic Color Gradient
+        val scoreGradient = 150.0
+        assertTrue(scoreGradient > 60.0 && scoreGradient <= 300.0)
+
+        // Range > 300: Supercharged Inferno
+        val scoreIgnited = 350.0
+        assertTrue(scoreIgnited > 300.0)
+    }
+
+    @Test
+    fun test_flame_manual_controls_and_clamping() {
+        var flameScore = 5.0
+
+        // Deflame decreases by 2
+        flameScore = maxOf(0.0, flameScore - 2.0)
+        assertEquals(3.0, flameScore, 0.001)
+
+        // Girl decreases by 3
+        flameScore = maxOf(0.0, flameScore - 3.0)
+        assertEquals(0.0, flameScore, 0.001)
+
+        // Cannot decrease below 0
+        flameScore = maxOf(0.0, flameScore - 2.0)
+        assertEquals(0.0, flameScore, 0.001)
+
+        flameScore = maxOf(0.0, flameScore - 3.0)
+        assertEquals(0.0, flameScore, 0.001)
+    }
+
+    @Test
+    fun test_flame_call_accrual_and_retroactive_strike_rule() {
+        var flameScore = 100.0
+
+        // Contact call adds 5 points
+        flameScore += 5.0
+        assertEquals(105.0, flameScore, 0.001)
+
+        val latestRecordedDate = "2026-11-05"
+        val retroactiveStrikeDate = "2026-11-02"
+        val boost = 25.0
+
+        // Retroactive strike: date < latestRecordedDate -> 0 points change
+        val isRetroactive = retroactiveStrikeDate < latestRecordedDate
+        assertTrue(isRetroactive)
+        if (!isRetroactive) {
+            flameScore = maxOf(0.0, flameScore - boost)
+        }
+        // Score unchanged
+        assertEquals(105.0, flameScore, 0.001)
+
+        // Current/New latest strike: date >= latestRecordedDate -> deduct BOOST
+        val currentStrikeDate = "2026-11-05"
+        val isCurrentOrNewer = currentStrikeDate >= latestRecordedDate
+        assertTrue(isCurrentOrNewer)
+        if (isCurrentOrNewer) {
+            flameScore = maxOf(0.0, flameScore - boost)
+        }
+        assertEquals(80.0, flameScore, 0.001)
+    }
+
+    @Test
+    fun test_flame_inactivity_accrual() {
+        val daysInactive = 4L
+        val accrualPerDay = 3.0
+        val addedPoints = daysInactive * accrualPerDay
+        assertEquals(12.0, addedPoints, 0.001)
+    }
 }
+

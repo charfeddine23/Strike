@@ -79,6 +79,9 @@ import com.example.ui.components.GlassStatSummaryCard
 import com.example.ui.components.GlassTypeBadge
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.LiquidGlassInnerPanel
+import com.example.ui.components.StrikerStatus
+import com.example.ui.components.StrikerStatusBadge
+import com.example.ui.components.DynamicAnimatedProfileCard
 import com.example.ui.theme.CaveatHandwriting
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
@@ -108,6 +111,7 @@ fun DashboardScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val filterType by viewModel.filterType.collectAsStateWithLifecycle()
     val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
+    val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
     val isDarkTheme = isSystemInDarkTheme()
     val context = LocalContext.current
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
@@ -616,8 +620,10 @@ fun DashboardScreen(
                 }
             } else {
                 items(individuals, key = { it.id }) { item ->
+                    val status = viewModel.getStatusForIndividual(item, lastStrikeMap)
                     IndividualRecordCard(
                         individual = item,
+                        status = status,
                         onStrike = {
                             HapticHelper.triggerStrikeHaptic(context, isHapticFeedbackEnabled)
                             viewModel.incrementStrikeForId(item.id, 1)
@@ -690,6 +696,7 @@ fun DashboardScreen(
 @Composable
 fun IndividualRecordCard(
     individual: Individual,
+    status: StrikerStatus,
     onStrike: () -> Unit,
     onGoToStrike: () -> Unit,
     onCompare: () -> Unit,
@@ -698,14 +705,16 @@ fun IndividualRecordCard(
     modifier: Modifier = Modifier,
     darkTheme: Boolean = isSystemInDarkTheme()
 ) {
-    LiquidGlassCard(
+    DynamicAnimatedProfileCard(
+        status = status,
         modifier = modifier
             .fillMaxWidth()
             .testTag("record_card_${individual.id}"),
-        shape = RoundedCornerShape(18.dp)
+        shape = RoundedCornerShape(18.dp),
+        darkTheme = darkTheme
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Header: Name, Type, and BOOST Badge
+            // Header: Name, Status Badge, Type, and BOOST Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -718,13 +727,19 @@ fun IndividualRecordCard(
                     GlassTypeBadge(type = individual.type)
                     Spacer(modifier = Modifier.width(8.dp))
                     Column {
-                        Text(
-                            text = individual.fullName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = PlusJakartaSans,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = individual.fullName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = PlusJakartaSans,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            StrikerStatusBadge(status = status, darkTheme = darkTheme)
+                        }
                         if (individual.phoneNumber.isNotBlank()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(

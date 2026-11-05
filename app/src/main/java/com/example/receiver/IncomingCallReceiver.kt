@@ -39,6 +39,7 @@ class IncomingCallReceiver : BroadcastReceiver() {
 
                             if (matchedStriker != null) {
                                 Log.i(TAG, "Striker match found! Notifying for: ${matchedStriker.fullName}")
+                                com.example.data.flame.FlameManager.onContactCallDetected(context, matchedStriker.fullName)
                                 CallNotificationHelper.showStrikerCallNotification(context, matchedStriker)
                             } else {
                                 Log.d(TAG, "No striker matched for incoming call number.")

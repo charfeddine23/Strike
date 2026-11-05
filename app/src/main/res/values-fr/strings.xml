@@ -129,4 +129,31 @@
     <string name="call_permissions_grant">Accorder les autorisations d\'appel</string>
     <string name="call_permissions_active">Alertes d\'appels actives</string>
     <string name="test_call_alert">Tester l\'alerte d\'appel striker</string>
+
+    <!-- Flame System Strings -->
+    <string name="flame_system_title">Système de Flamme</string>
+    <string name="flame_system_subtitle">Métriques d\'inactivité dynamique &amp; d\'énergie cinétique</string>
+    <string name="flame_total_points">POINTS TOTAUX D\'ÉNERGIE DE FLAMME</string>
+    <string name="flame_stage_frozen">GELÉ / STATIQUE (0 - 30)</string>
+    <string name="flame_stage_frozen_sub">Stase glaciaire. La flamme est totalement verrouillée dans la glace cristalline.</string>
+    <string name="flame_stage_cracking">DÉGEL / FISSURATION (31 - 60)</string>
+    <string name="flame_stage_cracking_sub">Fissures de glace éclatant avec de subtils éclats de particules.</string>
+    <string name="flame_stage_gradient">GRADIENT THERMIQUE (61 - 300)</string>
+    <string name="flame_stage_gradient_sub">Dégradé de couleurs fluide passant du bleu glacé au rouge profond.</string>
+    <string name="flame_stage_ignited">BRASIER SURCHARGÉ (&gt; 300)</string>
+    <string name="flame_stage_ignited_sub">Intensité maximale ! Brasier de plasma flamboyant avec étincelles orange et roses.</string>
+    <string name="manual_controls_title">Contrôles Manuels Instantanés</string>
+    <string name="btn_deflame_title">Déflammer</string>
+    <string name="btn_girl_title">Refroidissement Girl</string>
+    <string name="flame_rules_title">Règles de Cumul et Déduction</string>
+    <string name="rule_inactivity_title">Inactivité Quotidienne (+3 pts / jour)</string>
+    <string name="rule_inactivity_desc">Ajoute automatiquement 3 points pour chaque jour sans frappe enregistrée.</string>
+    <string name="rule_call_title">Appel de Contact (+5 pts)</string>
+    <string name="rule_call_desc">Ajoute 5 points lors des appels entrants de contacts liés.</string>
+    <string name="rule_retroactive_title">Strike Rétroactif (Protégé : 0 pt)</string>
+    <string name="rule_retroactive_desc">Les strikes datés avant la dernière date enregistrée ne modifient aucun point.</string>
+    <string name="rule_strike_title">Déduction de Strike (-BOOST pts)</string>
+    <string name="rule_strike_desc">Chaque nouveau strike récent déduit la valeur BOOST de la personne du total.</string>
+    <string name="flame_activity_log_title">Activité Récente de la Flamme</string>
+    <string name="flame_activity_empty">Aucun événement de flamme enregistré pour le moment.</string>
 </resources>

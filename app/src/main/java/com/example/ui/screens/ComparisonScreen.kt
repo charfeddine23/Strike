@@ -53,6 +53,9 @@ import com.example.data.model.Individual
 import com.example.ui.components.GlassTypeBadge
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.SmartMetricComparisonBar
+import com.example.ui.components.StrikerStatus
+import com.example.ui.components.StrikerStatusBadge
+import com.example.ui.components.DynamicAnimatedProfileCard
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -67,6 +70,7 @@ fun ComparisonScreen(
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val personA by viewModel.personA.collectAsStateWithLifecycle()
     val personB by viewModel.personB.collectAsStateWithLifecycle()
+    val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
 
     var showMenuA by remember { mutableStateOf(false) }
     var showMenuB by remember { mutableStateOf(false) }
@@ -131,6 +135,7 @@ fun ComparisonScreen(
                     PersonSelectorCard(
                         label = stringResource(R.string.select_person_a),
                         person = personA,
+                        status = personA?.let { viewModel.getStatusForIndividual(it, lastStrikeMap) },
                         accentColor = NeonCyan,
                         onClick = { showMenuA = true },
                         testTag = "selector_person_a"
@@ -173,6 +178,7 @@ fun ComparisonScreen(
                     PersonSelectorCard(
                         label = stringResource(R.string.select_person_b),
                         person = personB,
+                        status = personB?.let { viewModel.getStatusForIndividual(it, lastStrikeMap) },
                         accentColor = NeonViolet,
                         onClick = { showMenuB = true },
                         testTag = "selector_person_b"
@@ -496,36 +502,45 @@ fun ComparisonScreen(
 fun PersonSelectorCard(
     label: String,
     person: Individual?,
+    status: StrikerStatus?,
     accentColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     testTag: String? = null
 ) {
-    LiquidGlassCard(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = label,
-                fontSize = 10.sp,
-                color = accentColor,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.5.sp
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            if (person != null) {
+    if (person != null && status != null) {
+        DynamicAnimatedProfileCard(
+            status = status,
+            modifier = modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .then(if (testTag != null) Modifier.testTag(testTag) else Modifier),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = person.fullName,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1
+                    text = label,
+                    fontSize = 10.sp,
+                    color = accentColor,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = person.fullName,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    StrikerStatusBadge(status = status)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     GlassTypeBadge(type = person.type)
                     Spacer(modifier = Modifier.width(6.dp))
@@ -536,7 +551,25 @@ fun PersonSelectorCard(
                         color = NeonEmerald
                     )
                 }
-            } else {
+            }
+        }
+    } else {
+        LiquidGlassCard(
+            modifier = modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .then(if (testTag != null) Modifier.testTag(testTag) else Modifier),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = label,
+                    fontSize = 10.sp,
+                    color = accentColor,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Select…",
                     fontSize = 13.sp,
