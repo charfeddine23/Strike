@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.example.ui.components.StrikerStatus
+import com.example.ui.components.StrikerStatusEvaluator
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -138,6 +140,36 @@ class IndividualViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = 0
     )
+
+    // Map of individualId to timestamp of latest recorded strike event
+    val individualLastStrikeMap: StateFlow<Map<Long, Long>> = allStrikeEvents.map { events ->
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        events.groupBy { it.individualId }.mapValues { (_, evList) ->
+            evList.mapNotNull { ev ->
+                try {
+                    dateFormat.parse(ev.date)?.time
+                } catch (e: Exception) {
+                    null
+                }
+            }.maxOrNull() ?: 0L
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyMap()
+    )
+
+    fun getStatusForIndividual(
+        individual: Individual,
+        lastStrikeMap: Map<Long, Long>? = null
+    ): StrikerStatus {
+        val lastTimestamp = lastStrikeMap?.get(individual.id)
+        return StrikerStatusEvaluator.evaluate(
+            lastStrikeTimestamp = lastTimestamp,
+            strikeCount = individual.strikeCount,
+            updatedAt = individual.updatedAt
+        )
+    }
 
     // Search & Filter State
     private val _searchQuery = MutableStateFlow("")

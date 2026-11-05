@@ -59,13 +59,19 @@ jobs:
             base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null || true
           fi
 
-          # 4. Generate fallback debug.keystore if missing or empty
+          # 4. Generate fallback release keystore if missing
+          if [ ! -f "my-upload-key.jks" ] || [ ! -s "my-upload-key.jks" ]; then
+            echo "Generating fallback my-upload-key.jks..."
+            keytool -genkey -v -keystore my-upload-key.jks -storepass strikepulse2026 -alias upload -keypass strikepulse2026 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=StrikePulse,OU=Development,O=Charfeddine,L=Algiers,ST=Algiers,C=DZ"
+          fi
+
+          # 5. Generate fallback debug.keystore if missing or empty
           if [ ! -f "debug.keystore" ] || [ ! -s "debug.keystore" ]; then
             echo "Generating fallback debug.keystore..."
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-          # 5. Ensure Gradle wrapper is executable
+          # 6. Ensure Gradle wrapper is executable
           if [ -f "./gradlew" ]; then
             chmod +x ./gradlew
           fi
@@ -91,7 +97,10 @@ jobs:
 
       - name: Build Release APK with Gradle
         run: |
-          ./gradlew assembleRelease -PversionCode=${{ github.run_number }} -PversionName=${{ steps.versioning.outputs.version_name }} --no-daemon --stacktrace
+          export KEYSTORE_PATH="${KEYSTORE_PATH:-$GITHUB_WORKSPACE/my-upload-key.jks}"
+          export STORE_PASSWORD="${STORE_PASSWORD:-strikepulse2026}"
+          export KEY_PASSWORD="${KEY_PASSWORD:-strikepulse2026}"
+          ./gradlew assembleRelease -PversionCode=${{ github.run_number }} -PversionName=${{ steps.versioning.outputs.version_name }} -Djava.awt.headless=true --stacktrace
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'strikepulse2026' }}
