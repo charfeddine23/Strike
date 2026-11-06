@@ -312,6 +312,10 @@ class IndividualViewModel(
     // Flame System State
     val flameScore: StateFlow<Double> = FlameManager.flameScore
     val flameLogs: StateFlow<List<FlameLogEntry>> = FlameManager.flameLogs
+    val isStreakShieldActive: StateFlow<Boolean> = FlameManager.isStreakShieldActive
+    val peakFlameScore: StateFlow<Double> = FlameManager.peakScore
+    val totalPointsGained: StateFlow<Double> = FlameManager.totalPointsGained
+    val totalPointsExtinguished: StateFlow<Double> = FlameManager.totalPointsExtinguished
 
     init {
         FlameManager.init(application)
@@ -353,7 +357,23 @@ class IndividualViewModel(
     }
 
     fun setFlameScore(score: Double) {
-        FlameManager.setScore(getApplication(), score, "SIMULATION", "Score Slider")
+        FlameManager.setScore(getApplication(), score, "SIMULATION", "Score Simulator")
+    }
+
+    fun clearFlameLogs() {
+        FlameManager.clearLogs(getApplication())
+    }
+
+    fun setStreakShieldActive(active: Boolean) {
+        FlameManager.setStreakShieldActive(getApplication(), active)
+        viewModelScope.launch {
+            val msg = when (currentLanguage.value) {
+                "ar" -> if (active) "تم تفعيل درع السلسلة (إيقاف الخمول مؤقتاً)" else "تم إلغاء درع السلسلة (استئناف الخمول)"
+                "fr" -> if (active) "Bouclier de série activé (pause inactivité)" else "Bouclier de série désactivé"
+                else -> if (active) "Streak Shield Activated (Inactivity paused)" else "Streak Shield Deactivated"
+            }
+            emitMessage(msg)
+        }
     }
 
     // Security & Pattern Lock Operations
@@ -682,13 +702,38 @@ class IndividualViewModel(
         }
     }
 
+    /**
+     * When a strike is deleted, it automatically retrieves its penalty value,
+     * adds it back to the current Flame Score (Flame Score + penaltyValue),
+     * and updates both the database and the UI instantly.
+     */
+    fun deleteStrike(event: StrikeEvent) = deleteStrikeEvent(event)
+
     fun deleteStrikeEvent(event: StrikeEvent) {
         viewModelScope.launch {
+            val penaltyValue = if (event.performanceValue > 0.0) {
+                event.performanceValue
+            } else {
+                repository.getIndividualById(event.individualId)?.boost ?: 0.0
+            }
+
+            // 1. Update database
             repository.deleteStrikeEvent(event)
+
+            // 2. Automatically add penalty value back to the Flame Score (Flame Score + penaltyValue) & update UI
+            if (penaltyValue > 0.0) {
+                FlameManager.onStrikeDeleted(
+                    context = getApplication(),
+                    penaltyValue = penaltyValue,
+                    personName = event.individualName,
+                    strikeDate = event.date
+                )
+            }
+
             val msg = when (currentLanguage.value) {
-                "ar" -> "تم حذف ضربة (+${event.count} - ${event.individualName})"
-                "fr" -> "Strike supprimé (+${event.count} - ${event.individualName})"
-                else -> "Strike deleted (+${event.count} - ${event.individualName})"
+                "ar" -> "تم حذف الضربة واستعادة نقاط الشعلة (+${String.format(Locale.US, "%.1f", penaltyValue)})"
+                "fr" -> "Strike supprimé et points de flamme restitués (+${String.format(Locale.US, "%.1f", penaltyValue)})"
+                else -> "Strike deleted & flame points restored (+${String.format(Locale.US, "%.1f", penaltyValue)})"
             }
             val undoLabel = when (currentLanguage.value) {
                 "ar" -> "تراجع"
@@ -708,7 +753,24 @@ class IndividualViewModel(
 
     fun undoDeleteStrikeEvent(event: StrikeEvent) {
         viewModelScope.launch {
+            val penaltyValue = if (event.performanceValue > 0.0) {
+                event.performanceValue
+            } else {
+                repository.getIndividualById(event.individualId)?.boost ?: 0.0
+            }
+
+            // 1. Restore to database
             repository.restoreStrikeEvent(event)
+
+            // 2. Re-apply penalty deduction to Flame Score
+            if (penaltyValue > 0.0) {
+                FlameManager.onStrikeRestoredAfterUndo(
+                    context = getApplication(),
+                    penaltyValue = penaltyValue,
+                    personName = event.individualName
+                )
+            }
+
             val msg = when (currentLanguage.value) {
                 "ar" -> "تمت استعادة الضربة بنجاح (+${event.count} - ${event.individualName})"
                 "fr" -> "Strike restauré avec succès (+${event.count} - ${event.individualName})"

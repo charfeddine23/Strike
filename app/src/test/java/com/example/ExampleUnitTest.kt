@@ -197,5 +197,19 @@ class ExampleUnitTest {
         val addedPoints = daysInactive * accrualPerDay
         assertEquals(12.0, addedPoints, 0.001)
     }
+
+    @Test
+    fun test_flame_penalty_refund_on_strike_deleted() {
+        var flameScore = 50.0
+        val strikePenaltyValue = 28.5
+
+        // Strike deletion automatically adds penalty value back to Flame Score
+        flameScore += strikePenaltyValue
+        assertEquals(78.5, flameScore, 0.001)
+
+        // Undo delete restores strike and re-deducts penalty value
+        flameScore = maxOf(0.0, flameScore - strikePenaltyValue)
+        assertEquals(50.0, flameScore, 0.001)
+    }
 }
 

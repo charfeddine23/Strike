@@ -132,7 +132,17 @@ jobs:
         with:
           name: strikepulse-apk
           path: ${{ steps.find_apk.outputs.apk_path }}
-          retention-days: 14
+      - name: Prune Old GitHub Releases & Tags (Keep Latest Only)
+        run: |
+          echo "Scanning for previous releases to purge..."
+          EXISTING_RELEASES=$(gh release list --limit 100 --json tagName -q '.[].tagName' 2>/dev/null || true)
+          for old_tag in $EXISTING_RELEASES; do
+            echo "Deleting previous release: $old_tag"
+            gh release delete "$old_tag" --yes --cleanup-tag || true
+          done
+          echo "Previous releases cleaned up. Only the latest release will be kept."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.components.FlameEnergyBanner
 import com.example.ui.components.FullscreenPatternUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
@@ -204,14 +205,24 @@ fun LiquidGlassApp(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            LiquidGlassTopBar(
-                currentScreen = currentScreen,
-                currentLang = currentLang,
-                flameScore = flameScore,
-                onOpenLanguageDialog = { showLanguageDialog = true },
-                onOpenSettings = { showSettingsDialog = true },
-                onOpenFlame = { currentScreen = AppScreen.FLAME }
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                LiquidGlassTopBar(
+                    currentScreen = currentScreen,
+                    currentLang = currentLang,
+                    flameScore = flameScore,
+                    onOpenLanguageDialog = { showLanguageDialog = true },
+                    onOpenSettings = { showSettingsDialog = true },
+                    onOpenFlame = { currentScreen = AppScreen.FLAME },
+                    isDarkTheme = isDarkTheme
+                )
+                if (currentScreen != AppScreen.FLAME) {
+                    FlameEnergyBanner(
+                        flameScore = flameScore,
+                        onClick = { currentScreen = AppScreen.FLAME },
+                        isDarkTheme = isDarkTheme
+                    )
+                }
+            }
         },
         bottomBar = {
             LiquidGlassBottomBar(

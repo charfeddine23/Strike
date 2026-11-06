@@ -9,7 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -31,17 +30,19 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * Visual state definition for the Flame System based on the exact user-specified score ranges:
+ * Visual state definition for the Flame System:
  * - 0 to 30: Completely frozen / static
  * - 31 to 60: Ice begins to crack smoothly with subtle particle/crack effects
  * - 61 to 300: Flame dynamically transitions its color gradient from icy blue to deep dark red
- * - > 300: Fully ignited with intense blazing particles and glow
+ * - 301 to 600: Fully ignited blazing plasma inferno with glowing orange and pink sparks
+ * - > 600: "Supernova / Overload" Phase — intense bright white and glowing violet plasma with high-energy particle animations
  */
 enum class FlameVisualStage {
-    FROZEN_STATIC,   // 0 - 30
-    ICE_CRACKING,    // 31 - 60
-    COLOR_GRADIENT,  // 61 - 300
-    FULLY_IGNITED    // > 300
+    FROZEN_STATIC,       // 0 - 30
+    ICE_CRACKING,        // 31 - 60
+    COLOR_GRADIENT,      // 61 - 300
+    FULLY_IGNITED,       // 301 - 600
+    SUPERNOVA_OVERLOAD   // > 600
 }
 
 fun getFlameStage(score: Double): FlameVisualStage {
@@ -49,16 +50,18 @@ fun getFlameStage(score: Double): FlameVisualStage {
         score <= 30.0 -> FlameVisualStage.FROZEN_STATIC
         score <= 60.0 -> FlameVisualStage.ICE_CRACKING
         score <= 300.0 -> FlameVisualStage.COLOR_GRADIENT
-        else -> FlameVisualStage.FULLY_IGNITED
+        score <= 600.0 -> FlameVisualStage.FULLY_IGNITED
+        else -> FlameVisualStage.SUPERNOVA_OVERLOAD
     }
 }
 
 /**
- * Interpolates flame colors smoothly based on the exact score ranges:
+ * Interpolates flame colors smoothly based on score ranges:
  * - Under 30: Glacial white & icy blue
  * - 31 - 60: Thawing ice cyan
- * - 61 - 300: Continuous smooth transition from icy blue to deep dark red
- * - > 300: Blazing incandescent gold-to-dark red inferno
+ * - 61 - 300: Smooth spectrum from electric blue to deep crimson
+ * - 301 - 600: Blazing incandescent gold-to-dark red inferno
+ * - > 600: Supernova / Overload Phase: Radiant white apex, electric glowing violet plasma body, deep ultraviolet base
  */
 fun getFlameColors(score: Double): Triple<Color, Color, Color> {
     return when {
@@ -79,11 +82,6 @@ fun getFlameColors(score: Double): Triple<Color, Color, Color> {
         }
         score <= 300.0 -> {
             val t = ((score - 61.0) / (300.0 - 61.0)).toFloat().coerceIn(0f, 1f)
-            // Interpolate across spectrum:
-            // 0.0 (61) -> Icy Electric Blue
-            // 0.35 (145) -> Electric Violet / Purple
-            // 0.70 (228) -> Radiant Crimson / Orange
-            // 1.0 (300) -> Deep Dark Red
             val apex = when {
                 t < 0.35f -> lerp(Color(0xFF38BDF8), Color(0xFFC084FC), t / 0.35f)
                 t < 0.70f -> lerp(Color(0xFFC084FC), Color(0xFFFB7185), (t - 0.35f) / 0.35f)
@@ -101,12 +99,21 @@ fun getFlameColors(score: Double): Triple<Color, Color, Color> {
             }
             Triple(apex, body, base)
         }
-        else -> {
-            // Score > 300: Fully Ignited Blazing Inferno
+        score <= 600.0 -> {
+            val t = ((score - 301.0) / 299.0).toFloat().coerceIn(0f, 1f)
             Triple(
-                Color(0xFFFFFBEB), // Incandescent white-gold core
-                Color(0xFFF97316), // Blazing neon orange
-                Color(0xFF7F1D1D)  // Deep ember furnace red
+                lerp(Color(0xFFFFFBEB), Color(0xFFFEF08A), t), // Incandescent white-gold core
+                lerp(Color(0xFFF97316), Color(0xFFEA580C), t), // Blazing neon orange
+                lerp(Color(0xFF7F1D1D), Color(0xFF991B1B), t)  // Deep ember furnace red
+            )
+        }
+        else -> {
+            // Supernova Phase (> 600)
+            val t = ((score - 601.0) / 1000.0).toFloat().coerceIn(0f, 1f)
+            Triple(
+                Color(0xFFFFFFFF),                             // Pure brilliant incandescent white core
+                lerp(Color(0xFFF0ABFC), Color(0xFFC084FC), t), // Intense glowing violet/fuchsia plasma
+                lerp(Color(0xFF581C87), Color(0xFF3B0764), t)  // Deep cosmic ultraviolet furnace
             )
         }
     }
@@ -134,7 +141,10 @@ fun FlameVisualizer(
         initialValue = 0f,
         targetValue = 2f * PI.toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2800, easing = LinearEasing),
+            animation = tween(
+                durationMillis = if (stage == FlameVisualStage.SUPERNOVA_OVERLOAD) 1800 else 2800,
+                easing = LinearEasing
+            ),
             repeatMode = RepeatMode.Restart
         ),
         label = "flame_time"
@@ -163,12 +173,13 @@ fun FlameVisualizer(
             val cx = w / 2f
             val cy = h / 2f
 
-            // Animation motion factor: completely 0 for frozen 0-30, up to 1.8 for >300
+            // Animation motion factor: completely 0 for frozen 0-30, up to 2.2 for Supernova
             val motionFactor = when (stage) {
                 FlameVisualStage.FROZEN_STATIC -> 0f
                 FlameVisualStage.ICE_CRACKING -> ((score - 30.0) / 30.0).toFloat().coerceIn(0f, 1f) * 0.35f
                 FlameVisualStage.COLOR_GRADIENT -> 0.35f + ((score - 61.0) / 239.0).toFloat().coerceIn(0f, 1f) * 0.65f
-                FlameVisualStage.FULLY_IGNITED -> 1.0f + min(0.8f, ((score - 300.0) / 200.0).toFloat() * 0.4f)
+                FlameVisualStage.FULLY_IGNITED -> 1.0f + min(0.6f, ((score - 300.0) / 300.0).toFloat() * 0.4f)
+                FlameVisualStage.SUPERNOVA_OVERLOAD -> 1.8f + min(0.8f, ((score - 600.0) / 1000.0).toFloat() * 0.5f)
             }
 
             // 1. Ambient Background Glow Aura
@@ -180,7 +191,7 @@ fun FlameVisualizer(
             // 3. Inner Core Flame
             drawInnerCoreFlame(cx, cy, w, h, colors, time, motionFactor, stage)
 
-            // 4. Score-Specific Overlays (Ice Crystal / Cracks / Supercharged Inferno Sparks)
+            // 4. Score-Specific Overlays (Ice Crystal / Cracks / Supercharged Inferno / Supernova Overload)
             when (stage) {
                 FlameVisualStage.FROZEN_STATIC -> {
                     drawFrozenIceShield(cx, cy, w, h)
@@ -194,6 +205,9 @@ fun FlameVisualizer(
                 }
                 FlameVisualStage.FULLY_IGNITED -> {
                     drawSuperchargedInferno(cx, cy, w, h, colors, particles, time)
+                }
+                FlameVisualStage.SUPERNOVA_OVERLOAD -> {
+                    drawSupernovaOverload(cx, cy, w, h, colors, particles, time)
                 }
             }
         }
@@ -213,14 +227,16 @@ private fun DrawScope.drawAuraGlow(
     time: Float,
     motionFactor: Float
 ) {
-    val pulse = if (motionFactor > 0f) 1f + sin(time * 2f) * 0.08f * motionFactor else 1f
-    val auraRadius = (min(w, h) * 0.46f) * pulse
+    val pulseFrequency = if (stage == FlameVisualStage.SUPERNOVA_OVERLOAD) 5f else 2f
+    val pulse = if (motionFactor > 0f) 1f + sin(time * pulseFrequency) * 0.10f * motionFactor else 1f
+    val auraRadius = (min(w, h) * (if (stage == FlameVisualStage.SUPERNOVA_OVERLOAD) 0.52f else 0.46f)) * pulse
 
     val glowAlpha = when (stage) {
         FlameVisualStage.FROZEN_STATIC -> 0.16f
         FlameVisualStage.ICE_CRACKING -> 0.22f
         FlameVisualStage.COLOR_GRADIENT -> 0.32f
         FlameVisualStage.FULLY_IGNITED -> 0.52f
+        FlameVisualStage.SUPERNOVA_OVERLOAD -> 0.72f
     }
 
     drawCircle(
@@ -236,6 +252,23 @@ private fun DrawScope.drawAuraGlow(
         radius = auraRadius,
         center = Offset(cx, cy)
     )
+
+    if (stage == FlameVisualStage.SUPERNOVA_OVERLOAD) {
+        // Additional intense violet/white shockwave core glow
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color.White.copy(alpha = 0.55f),
+                    Color(0xFFC084FC).copy(alpha = 0.35f),
+                    Color.Transparent
+                ),
+                center = Offset(cx, cy),
+                radius = auraRadius * 0.55f
+            ),
+            radius = auraRadius * 0.55f,
+            center = Offset(cx, cy)
+        )
+    }
 }
 
 /**
@@ -254,8 +287,8 @@ private fun DrawScope.drawFlameBody(
     val flameWidth = w * 0.52f
     val flameHeight = h * 0.70f
 
-    // Dynamic wave offsets for flicker
-    val tipSway = if (motionFactor > 0f) sin(time * 3f) * 14f * motionFactor else 0f
+    val tipSwaySpeed = if (stage == FlameVisualStage.SUPERNOVA_OVERLOAD) 5f else 3f
+    val tipSway = if (motionFactor > 0f) sin(time * tipSwaySpeed) * 16f * motionFactor else 0f
     val waistSwayL = if (motionFactor > 0f) sin(time * 2.4f) * 10f * motionFactor else 0f
     val waistSwayR = if (motionFactor > 0f) cos(time * 2.8f) * 10f * motionFactor else 0f
 
@@ -269,7 +302,6 @@ private fun DrawScope.drawFlameBody(
     val flamePath = Path().apply {
         moveTo(cx, baseY)
 
-        // Left flame belly curve up to flame tip
         cubicTo(
             baseLeftX - flameWidth * 0.30f, baseY - flameHeight * 0.30f,
             cx - flameWidth * 0.45f + waistSwayL, cy - flameHeight * 0.22f,
@@ -281,7 +313,6 @@ private fun DrawScope.drawFlameBody(
             tipX, tipY
         )
 
-        // Right flame curve down from tip to base
         cubicTo(
             tipX + 8f, tipY + 14f,
             cx + flameWidth * 0.16f, cy - flameHeight * 0.38f,
@@ -308,16 +339,20 @@ private fun DrawScope.drawFlameBody(
     drawPath(path = flamePath, brush = flameBrush)
 
     // Outer subtle contour stroke for glass depth
-    val strokeColor = if (stage == FlameVisualStage.FROZEN_STATIC) {
-        Color.White.copy(alpha = 0.65f)
-    } else {
-        colors.first.copy(alpha = 0.55f)
+    val strokeColor = when (stage) {
+        FlameVisualStage.FROZEN_STATIC -> Color.White.copy(alpha = 0.65f)
+        FlameVisualStage.SUPERNOVA_OVERLOAD -> Color.White.copy(alpha = 0.85f)
+        else -> colors.first.copy(alpha = 0.55f)
     }
 
     drawPath(
         path = flamePath,
         color = strokeColor,
-        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        style = Stroke(
+            width = if (stage == FlameVisualStage.SUPERNOVA_OVERLOAD) 2.5.dp.toPx() else 2.dp.toPx(),
+            cap = StrokeCap.Round,
+            join = StrokeJoin.Round
+        )
     )
 }
 
@@ -357,14 +392,20 @@ private fun DrawScope.drawInnerCoreFlame(
         close()
     }
 
-    val coreColors = if (stage == FlameVisualStage.FULLY_IGNITED) {
-        listOf(Color(0xFFFFFFFF), Color(0xFFFDE047), Color(0xFFF97316))
-    } else {
-        listOf(
-            Color.White.copy(alpha = 0.9f),
-            colors.first.copy(alpha = 0.75f),
-            colors.second.copy(alpha = 0.5f)
-        )
+    val coreColors = when (stage) {
+        FlameVisualStage.FULLY_IGNITED -> {
+            listOf(Color(0xFFFFFFFF), Color(0xFFFDE047), Color(0xFFF97316))
+        }
+        FlameVisualStage.SUPERNOVA_OVERLOAD -> {
+            listOf(Color(0xFFFFFFFF), Color(0xFFF5D0FE), Color(0xFFC084FC))
+        }
+        else -> {
+            listOf(
+                Color.White.copy(alpha = 0.9f),
+                colors.first.copy(alpha = 0.75f),
+                colors.second.copy(alpha = 0.5f)
+            )
+        }
     }
 
     drawPath(
@@ -383,7 +424,6 @@ private fun DrawScope.drawInnerCoreFlame(
 private fun DrawScope.drawFrozenIceShield(cx: Float, cy: Float, w: Float, h: Float) {
     val shieldRadius = min(w, h) * 0.36f
 
-    // Draw frosted hexagonal perimeter
     val hexPath = Path()
     for (i in 0 until 6) {
         val angle = (i * 60f - 30f) * (PI.toFloat() / 180f)
@@ -393,7 +433,6 @@ private fun DrawScope.drawFrozenIceShield(cx: Float, cy: Float, w: Float, h: Flo
     }
     hexPath.close()
 
-    // Semi-transparent icy glass facet fill
     drawPath(
         path = hexPath,
         brush = Brush.linearGradient(
@@ -407,14 +446,12 @@ private fun DrawScope.drawFrozenIceShield(cx: Float, cy: Float, w: Float, h: Flo
         )
     )
 
-    // Frost facet lines
     drawPath(
         path = hexPath,
         color = Color.White.copy(alpha = 0.85f),
         style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
     )
 
-    // Sharp crystalline internal frost vectors
     drawLine(
         color = Color(0xCCBAE6FD),
         start = Offset(cx, cy - shieldRadius),
@@ -434,7 +471,6 @@ private fun DrawScope.drawFrozenIceShield(cx: Float, cy: Float, w: Float, h: Flo
         strokeWidth = 1.5.dp.toPx()
     )
 
-    // Star frost sparkles at crystal intersections
     val starPoints = listOf(
         Offset(cx, cy),
         Offset(cx - shieldRadius * 0.45f, cy - shieldRadius * 0.25f),
@@ -464,12 +500,10 @@ private fun DrawScope.drawCrackingIce(
     val crackAlpha = (1f - progress * 0.4f).coerceIn(0.2f, 1f)
     val maxLen = min(w, h) * 0.38f * progress
 
-    // Draw main central fractures splitting outwards
     val crackColor = Color.White.copy(alpha = crackAlpha)
     val branchColor = Color(0xFFBAE6FD).copy(alpha = crackAlpha * 0.85f)
     val strokeW = (2.2f * (1f + progress * 0.6f)).dp.toPx()
 
-    // 4 major fracture branches with jagged lightning-like segments
     val angles = listOf(45f, 135f, 220f, 310f, 85f, 275f)
     for ((idx, baseDeg) in angles.withIndex()) {
         val rad = baseDeg * (PI.toFloat() / 180f)
@@ -497,7 +531,6 @@ private fun DrawScope.drawCrackingIce(
         )
     }
 
-    // Subtle flaking ice shard particles drifting off
     val shardCount = (progress * 24).toInt()
     for (i in 0 until shardCount) {
         val p = particles[i]
@@ -540,7 +573,6 @@ private fun DrawScope.drawRisingEmbers(
         val p = particles[i]
         val pProgress = ((time * (0.8f + p.speed * 0.4f) + p.phase) % (2f * PI.toFloat())) / (2f * PI.toFloat())
 
-        // Embers rise from flame body upward
         val startY = cy + flameHeight * 0.30f
         val endY = cy - flameHeight * 0.65f
         val py = startY - pProgress * (startY - endY)
@@ -566,7 +598,7 @@ private fun DrawScope.drawRisingEmbers(
 }
 
 /**
- * Draws the blazing supercharged inferno with intense rising glowing orange and pink sparks (> 300).
+ * Draws the blazing supercharged inferno with intense rising glowing orange and pink sparks (301 - 600).
  */
 private fun DrawScope.drawSuperchargedInferno(
     cx: Float,
@@ -580,7 +612,6 @@ private fun DrawScope.drawSuperchargedInferno(
     val flameHeight = h * 0.72f
     val flameWidth = w * 0.55f
 
-    // 1. Double pulsing heat aura
     val outerPulse = 1f + sin(time * 4f) * 0.12f
     drawCircle(
         brush = Brush.radialGradient(
@@ -597,7 +628,6 @@ private fun DrawScope.drawSuperchargedInferno(
         center = Offset(cx, cy)
     )
 
-    // 2. High-speed rising glowing orange, gold, and pink sparks (55+ particles)
     for (i in 0 until 55) {
         val p = particles[i]
         val pProgress = ((time * (1.6f + p.speed * 0.8f) + p.phase) % (2f * PI.toFloat())) / (2f * PI.toFloat())
@@ -620,16 +650,131 @@ private fun DrawScope.drawSuperchargedInferno(
 
         val sparkRadius = (2.2f + p.sizeRatio * 2.5f).dp.toPx()
 
-        // Glow halo
         drawCircle(
             color = sparkColor.copy(alpha = pAlpha * 0.35f),
             radius = sparkRadius * 2.2f,
             center = Offset(px, py)
         )
-        // Core spark
         drawCircle(
             color = sparkColor,
             radius = sparkRadius,
+            center = Offset(px, py)
+        )
+    }
+}
+
+/**
+ * Draws the "Supernova / Overload" Phase (> 600 Points).
+ * Features an intense bright white or glowing violet plasma effect with high-energy particle animations
+ * and electric arcs to indicate maximum system overload.
+ */
+private fun DrawScope.drawSupernovaOverload(
+    cx: Float,
+    cy: Float,
+    w: Float,
+    h: Float,
+    colors: Triple<Color, Color, Color>,
+    particles: List<Particle>,
+    time: Float
+) {
+    val flameHeight = h * 0.76f
+    val flameWidth = w * 0.60f
+
+    // 1. Triple pulsating shockwave aura with intense violet & white plasma
+    val shockwave1 = 1f + sin(time * 6f) * 0.15f
+    val shockwave2 = 1f + cos(time * 4.5f) * 0.20f
+
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                Color(0x66FFFFFF),
+                Color(0x55C084FC),
+                Color(0x33A855F7),
+                Color(0x153B0764),
+                Color.Transparent
+            ),
+            center = Offset(cx, cy),
+            radius = min(w, h) * 0.54f * shockwave1
+        ),
+        radius = min(w, h) * 0.54f * shockwave1,
+        center = Offset(cx, cy)
+    )
+
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(
+                Color(0x44E879F9),
+                Color(0x22818CF8),
+                Color.Transparent
+            ),
+            center = Offset(cx, cy),
+            radius = min(w, h) * 0.42f * shockwave2
+        ),
+        radius = min(w, h) * 0.42f * shockwave2,
+        center = Offset(cx, cy)
+    )
+
+    // 2. High-energy electric plasma discharge arcs crackling around perimeter
+    val arcAngles = listOf(30f, 90f, 150f, 210f, 270f, 330f)
+    for ((idx, deg) in arcAngles.withIndex()) {
+        val baseAngle = deg * (PI.toFloat() / 180f) + sin(time * 8f + idx) * 0.15f
+        val arcLen = min(w, h) * (0.35f + sin(time * 10f + idx * 2f) * 0.08f)
+        var arcX = cx + min(w, h) * 0.15f * cos(baseAngle)
+        var arcY = cy + min(w, h) * 0.15f * sin(baseAngle)
+
+        val arcPath = Path().apply {
+            moveTo(arcX, arcY)
+            for (step in 1..4) {
+                val stepLen = arcLen / 4f
+                val jitter = sin(time * 12f + idx * 3f + step) * 12f
+                arcX += stepLen * cos(baseAngle) + jitter * -sin(baseAngle)
+                arcY += stepLen * sin(baseAngle) + jitter * cos(baseAngle)
+                lineTo(arcX, arcY)
+            }
+        }
+
+        drawPath(
+            path = arcPath,
+            color = if (idx % 2 == 0) Color.White.copy(alpha = 0.95f) else Color(0xFFE879F9).copy(alpha = 0.85f),
+            style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+        )
+    }
+
+    // 3. 60 Hyper-velocity high-energy particles (pure white, neon violet, electric cyan, and hot magenta)
+    for (i in 0 until 60) {
+        val p = particles[i]
+        // Faster upward acceleration
+        val pProgress = ((time * (2.2f + p.speed * 1.2f) + p.phase) % (2f * PI.toFloat())) / (2f * PI.toFloat())
+
+        val startY = cy + flameHeight * 0.45f
+        val endY = cy - flameHeight * 1.05f
+        val py = startY - pProgress * (startY - endY)
+
+        val spread = flameWidth * 0.95f * (0.7f + pProgress * 0.7f)
+        val turbulence = sin(pProgress * 12f + p.phase) * 18f
+        val px = cx + (p.initialXRatio - 0.5f) * spread + turbulence
+
+        val pAlpha = (sin(pProgress * PI.toFloat())).coerceIn(0f, 1f)
+
+        val particleColor = when {
+            i % 5 == 0 -> Color(0xFFFFFFFF).copy(alpha = pAlpha)
+            i % 3 == 0 -> Color(0xFFE879F9).copy(alpha = pAlpha)
+            i % 2 == 0 -> Color(0xFFC084FC).copy(alpha = pAlpha)
+            else -> Color(0xFF22D3EE).copy(alpha = pAlpha)
+        }
+
+        val particleRadius = (2.4f + p.sizeRatio * 3.0f).dp.toPx()
+
+        // Outer neon aura
+        drawCircle(
+            color = particleColor.copy(alpha = pAlpha * 0.45f),
+            radius = particleRadius * 2.5f,
+            center = Offset(px, py)
+        )
+        // Solid core
+        drawCircle(
+            color = particleColor,
+            radius = particleRadius,
             center = Offset(px, py)
         )
     }
