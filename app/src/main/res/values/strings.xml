@@ -195,4 +195,10 @@
     <string name="flame_long_press_hint">Hold flame for 2s to open Settings &amp; Simulator</string>
     <string name="flame_settings_title">Flame System Settings &amp; Simulator</string>
     <string name="flame_settings_subtitle">Configure Streak Shield, Haptics &amp; Kinetic Controls</string>
+    <string name="deflame_adjustment_title">Deflame &amp; Penalty Adjustment</string>
+    <string name="deflame_adjustment_subtitle">Select preset deduction or enter custom penalty points</string>
+    <string name="deflame_manual_input_label">Custom Penalty Points</string>
+    <string name="deflame_manual_input_hint">e.g. 5.0</string>
+    <string name="deflame_apply_action">Apply Deflame</string>
+    <string name="deflame_select_preset">Quick Penalty Presets</string>
 </resources>

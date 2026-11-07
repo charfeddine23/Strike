@@ -195,4 +195,10 @@
     <string name="flame_long_press_hint">Maintenez la flamme 2s pour ouvrir Réglages &amp; Simulateur</string>
     <string name="flame_settings_title">Réglages du Système &amp; Simulateur</string>
     <string name="flame_settings_subtitle">Configurer le Bouclier, Retour Haptique &amp; Simulateur</string>
+    <string name="deflame_adjustment_title">Ajustement Déflamme &amp; Pénalités</string>
+    <string name="deflame_adjustment_subtitle">Sélectionnez un palier ou saisissez les points manuellement</string>
+    <string name="deflame_manual_input_label">Points de pénalité personnalisés</string>
+    <string name="deflame_manual_input_hint">ex. 5.0</string>
+    <string name="deflame_apply_action">Appliquer la Déflamme</string>
+    <string name="deflame_select_preset">Paliers Rapides</string>
 </resources>

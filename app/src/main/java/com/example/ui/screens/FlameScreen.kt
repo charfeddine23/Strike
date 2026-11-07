@@ -79,9 +79,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import com.example.ui.components.DeflameAdjustmentDialog
+import kotlin.math.sin
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
@@ -161,6 +166,7 @@ fun FlameScreen(
 
     var selectedFilter by remember { mutableStateOf(FlameLogFilter.ALL) }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
+    var showDeflameDialog by remember { mutableStateOf(false) }
 
     val animatedScore by animateFloatAsState(
         targetValue = flameScore.toFloat(),
@@ -262,86 +268,24 @@ fun FlameScreen(
         )
     }
 
+    // Deflame / Penalty Points Adjustment Dialog
+    if (showDeflameDialog) {
+        DeflameAdjustmentDialog(
+            currentFlameScore = flameScore,
+            onDismiss = { showDeflameDialog = false },
+            onApply = { penaltyPoints ->
+                viewModel.deflame(penaltyPoints)
+            },
+            isHapticEnabled = isHapticEnabled
+        )
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Navigation Header (Clean, minimalist)
-        item {
-            LiquidGlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(
-                            onClick = {
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                onNavigateBack()
-                            },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color(0x221E293B))
-                                .border(1.dp, Color(0x3338BDF8), CircleShape)
-                                .testTag("flame_back_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = NeonCyan,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.flame_system_title),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontFamily = PlusJakartaSans,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = stringResource(R.string.flame_system_subtitle),
-                                fontSize = 11.sp,
-                                color = NeonCyan
-                            )
-                        }
-                    }
-
-                    // Discreet settings shortcut icon as a convenience
-                    IconButton(
-                        onClick = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            showSettingsModal = true
-                        },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color(0x15FFFFFF))
-                            .border(1.dp, Color(0x33FFFFFF), CircleShape)
-                            .testTag("flame_settings_shortcut_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tune,
-                            contentDescription = stringResource(R.string.flame_settings_title),
-                            tint = NeonCyan,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // 2. Hero Flame Stage Card (Placed at the very top as requested!)
+        // 1. Hero Flame Stage Card (Placed at the very top of the Flame Screen!)
         item {
             LiquidGlassCard(
                 modifier = Modifier
@@ -353,32 +297,60 @@ fun FlameScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Stage Pill
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(stageBadgeColor.copy(alpha = 0.18f))
-                            .border(1.dp, stageBadgeColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                    // Top Header Row inside Flame Card: Back Button & Stage Pill
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = {
+                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                onNavigateBack()
+                            },
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x221E293B))
+                                .border(1.dp, Color(0x3338BDF8), CircleShape)
+                                .testTag("flame_back_btn")
+                        ) {
                             Icon(
-                                imageVector = when (stage) {
-                                    FlameVisualStage.FROZEN_STATIC -> Icons.Default.AcUnit
-                                    FlameVisualStage.SUPERNOVA_OVERLOAD -> Icons.Default.Bolt
-                                    else -> Icons.Default.LocalFireDepartment
-                                },
-                                contentDescription = null,
-                                tint = stageBadgeColor,
-                                modifier = Modifier.size(14.dp)
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = NeonCyan,
+                                modifier = Modifier.size(18.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = stageLabel,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
-                                color = stageBadgeColor
-                            )
+                        }
+
+                        // Stage Pill
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(stageBadgeColor.copy(alpha = 0.18f))
+                                .border(1.dp, stageBadgeColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = when (stage) {
+                                        FlameVisualStage.FROZEN_STATIC -> Icons.Default.AcUnit
+                                        FlameVisualStage.SUPERNOVA_OVERLOAD -> Icons.Default.Bolt
+                                        else -> Icons.Default.LocalFireDepartment
+                                    },
+                                    contentDescription = null,
+                                    tint = stageBadgeColor,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = stageLabel,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    color = stageBadgeColor
+                                )
+                            }
                         }
                     }
 
@@ -432,20 +404,38 @@ fun FlameScreen(
                             .testTag("flame_hero_canvas"),
                         contentAlignment = Alignment.Center
                     ) {
-                        // Dynamic circular charging ring when holding for 2 seconds
+                        // Smooth dynamic energy aura & scaling effect during long press gesture (replaces circular ring)
                         if (isHoldingFlame && holdProgress > 0f) {
-                            CircularProgressIndicator(
-                                progress = { holdProgress },
-                                modifier = Modifier.size(244.dp),
-                                color = NeonCyan,
-                                trackColor = Color(0x2238BDF8),
-                                strokeWidth = 3.5.dp
+                            val auraPulse = (sin(holdProgress * 18f) + 1f) / 2f
+                            val auraScale = 1f + holdProgress * 0.18f + auraPulse * 0.04f
+                            Box(
+                                modifier = Modifier
+                                    .size(240.dp)
+                                    .scale(auraScale)
+                                    .drawBehind {
+                                        val radius = (size.minDimension / 2f) * (0.82f + holdProgress * 0.38f)
+                                        drawCircle(
+                                            brush = Brush.radialGradient(
+                                                colors = listOf(
+                                                    NeonCyan.copy(alpha = 0.50f * holdProgress),
+                                                    Color(0xFF8B5CF6).copy(alpha = 0.40f * holdProgress),
+                                                    Color(0xFF38BDF8).copy(alpha = 0.20f * holdProgress),
+                                                    Color.Transparent
+                                                ),
+                                                center = center,
+                                                radius = radius
+                                            ),
+                                            radius = radius
+                                        )
+                                    }
                             )
                         }
 
                         FlameVisualizer(
                             score = flameScore,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .scale(if (isHoldingFlame) 1f + holdProgress * 0.12f else 1f)
                         )
                     }
 
@@ -483,40 +473,6 @@ fun FlameScreen(
                         currentScore = flameScore,
                         modifier = Modifier.fillMaxWidth()
                     )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Long press hint under the flame
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isHoldingFlame) NeonCyan.copy(alpha = 0.15f) else Color(0x10FFFFFF))
-                            .clickable {
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                showSettingsModal = true
-                            }
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Tune,
-                            contentDescription = null,
-                            tint = if (isHoldingFlame) NeonCyan else Color(0x99FFFFFF),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isHoldingFlame) {
-                                "${(holdProgress * 100).toInt()}% • " + stringResource(R.string.flame_long_press_hint)
-                            } else {
-                                stringResource(R.string.flame_long_press_hint)
-                            },
-                            fontSize = 10.sp,
-                            fontWeight = if (isHoldingFlame) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isHoldingFlame) NeonCyan else Color(0x99FFFFFF)
-                        )
-                    }
                 }
             }
         }
@@ -536,7 +492,7 @@ fun FlameScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // "Deflame" Button (-2 points)
+                    // "Deflame" Button / Manual Penalty Adjustment
                     LiquidGlassCard(
                         modifier = Modifier
                             .weight(1f)
@@ -544,7 +500,7 @@ fun FlameScreen(
                             .clickable {
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                                viewModel.deflame()
+                                showDeflameDialog = true
                             }
                             .testTag("btn_deflame"),
                         shape = RoundedCornerShape(18.dp)
@@ -579,17 +535,26 @@ fun FlameScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0x2238BDF8))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "-2 PTS",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color(0xFF38BDF8)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0x2238BDF8))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "-2 PTS",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color(0xFF38BDF8)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = "Adjust",
+                                    tint = Color(0xFF38BDF8),
+                                    modifier = Modifier.size(12.dp)
                                 )
                             }
                         }
@@ -882,111 +847,7 @@ fun FlameScreen(
             }
         }
 
-        // 5. "Streak Shield" Card (Quick status)
-        item {
-            LiquidGlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("streak_shield_card"),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isStreakShieldActive) NeonEmerald.copy(alpha = 0.22f)
-                                    else Color(0x2064748B)
-                                )
-                                .border(
-                                    1.5.dp,
-                                    if (isStreakShieldActive) NeonEmerald else Color(0x4094A3B8),
-                                    CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = null,
-                                tint = if (isStreakShieldActive) NeonEmerald else Color(0xFF94A3B8),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = stringResource(R.string.streak_shield_title),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    fontFamily = PlusJakartaSans,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(
-                                            if (isStreakShieldActive) NeonEmerald.copy(alpha = 0.2f)
-                                            else Color(0x15FFFFFF)
-                                        )
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = if (isStreakShieldActive) {
-                                            stringResource(R.string.streak_shield_active_badge)
-                                        } else {
-                                            stringResource(R.string.streak_shield_inactive_badge)
-                                        },
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = if (isStreakShieldActive) NeonEmerald else Color.Gray
-                                    )
-                                }
-                            }
-
-                            Text(
-                                text = stringResource(R.string.streak_shield_desc),
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Switch(
-                        checked = isStreakShieldActive,
-                        onCheckedChange = { active ->
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            viewModel.setStreakShieldActive(active)
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = NeonEmerald,
-                            uncheckedThumbColor = Color.Gray,
-                            uncheckedTrackColor = Color(0x221E293B)
-                        ),
-                        modifier = Modifier.testTag("streak_shield_switch")
-                    )
-                }
-            }
-        }
-
-        // 6. Calculation & Event Logic Rules Summary
+        // 5. Calculation & Event Logic Rules Summary
         item {
             LiquidGlassCard(
                 modifier = Modifier.fillMaxWidth(),

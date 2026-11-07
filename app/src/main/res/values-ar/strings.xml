@@ -195,4 +195,10 @@
     <string name="flame_long_press_hint">اضغط مطولاً على الشعلة لمدة ثانيتين لفتح الإعدادات والمحاكي</string>
     <string name="flame_settings_title">إعدادات نظام الشعلة والمحاكي</string>
     <string name="flame_settings_subtitle">ضبط درع السلسلة، الاهتزاز اللمسي، ومحاكي النقاط</string>
+    <string name="deflame_adjustment_title">تعديل خفض الشعلة والنقاط</string>
+    <string name="deflame_adjustment_subtitle">اختر خصماً مسبقاً أو أدخل قيمة النقاط يدوياً</string>
+    <string name="deflame_manual_input_label">نقاط الخصم المخصصة</string>
+    <string name="deflame_manual_input_hint">مثال: 5.0</string>
+    <string name="deflame_apply_action">تطبيق الخفض</string>
+    <string name="deflame_select_preset">خيارات الخصم السريعة</string>
 </resources>

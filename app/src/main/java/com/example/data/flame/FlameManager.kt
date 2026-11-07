@@ -225,14 +225,16 @@ object FlameManager {
     }
 
     /**
-     * "Deflame" Button: Each tap instantly decreases the total Flame score by 2 points (ensuring score >= 0).
+     * "Deflame" Button / Manual Penalty Adjustment: Decreases the total Flame score by delta points (ensuring score >= 0).
      */
-    fun deflame(context: Context): Double {
+    fun deflame(context: Context, delta: Double = 2.0): Double {
+        val safeDelta = delta.coerceAtLeast(0.1)
+        val formatted = if (safeDelta % 1.0 == 0.0) "${safeDelta.toInt()}" else String.format(Locale.US, "%.1f", safeDelta)
         return deductPoints(
             context = context,
-            delta = 2.0,
+            delta = safeDelta,
             reason = "DEFLAME",
-            details = "Manual instant decrease (-2.0 pts)",
+            details = "Manual instant decrease (-$formatted pts)",
             title = "Deflame Button Action"
         )
     }

@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.components.DynamicStreakShieldHeaderButton
 import com.example.ui.components.FlameEnergyBanner
 import com.example.ui.components.FullscreenPatternUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
@@ -170,11 +171,11 @@ fun LiquidGlassApp(
     onSelectLanguage: (String) -> Unit
 ) {
     var currentScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
-    var showLanguageDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
+    val isStreakShieldActive by viewModel.isStreakShieldActive.collectAsStateWithLifecycle()
 
     // Listen to ViewModel events (including Swipe-to-delete with Undo)
     LaunchedEffect(Unit) {
@@ -208,9 +209,9 @@ fun LiquidGlassApp(
             Column(modifier = Modifier.fillMaxWidth()) {
                 LiquidGlassTopBar(
                     currentScreen = currentScreen,
-                    currentLang = currentLang,
                     flameScore = flameScore,
-                    onOpenLanguageDialog = { showLanguageDialog = true },
+                    isStreakShieldActive = isStreakShieldActive,
+                    onToggleShield = { viewModel.setStreakShieldActive(!isStreakShieldActive) },
                     onOpenSettings = { showSettingsDialog = true },
                     onOpenFlame = { currentScreen = AppScreen.FLAME },
                     isDarkTheme = isDarkTheme
@@ -301,66 +302,14 @@ fun LiquidGlassApp(
             onLockAppNow = { viewModel.lockApp() }
         )
     }
-
-    // Language Selector Dialog
-    if (showLanguageDialog) {
-        AlertDialog(
-            onDismissRequest = { showLanguageDialog = false },
-            title = { Text(stringResource(R.string.language)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val languages = listOf(
-                        Triple("en", "English", "EN"),
-                        Triple("ar", "العربية (Arabic - RTL)", "AR"),
-                        Triple("fr", "Français (French)", "FR")
-                    )
-
-                    languages.forEach { (code, title, tag) ->
-                        val isSelected = currentLang == code
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) NeonCyan.copy(alpha = 0.2f) else Color(0x101E293B))
-                                .border(1.dp, if (isSelected) NeonCyan else Color(0x3038BDF8), RoundedCornerShape(12.dp))
-                                .clickable {
-                                    onSelectLanguage(code)
-                                    showLanguageDialog = false
-                                }
-                                .padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = title,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) NeonCyan else MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = tag,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Black,
-                                color = if (isSelected) NeonCyan else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showLanguageDialog = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            }
-        )
-    }
 }
 
 @Composable
 fun LiquidGlassTopBar(
     currentScreen: AppScreen,
-    currentLang: String,
     flameScore: Double,
-    onOpenLanguageDialog: () -> Unit,
+    isStreakShieldActive: Boolean = false,
+    onToggleShield: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenFlame: () -> Unit,
     isDarkTheme: Boolean = isSystemInDarkTheme()
@@ -425,38 +374,7 @@ fun LiquidGlassTopBar(
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // Language selector button
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(buttonBg)
-                    .border(1.dp, buttonBorder, RoundedCornerShape(12.dp))
-                    .clickable(onClick = onOpenLanguageDialog)
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                    .testTag("language_switch_btn"),
-                contentAlignment = Alignment.Center
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Language,
-                        contentDescription = "Language",
-                        tint = cyanColor,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = currentLang.uppercase(),
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = com.example.ui.theme.PlusJakartaSans,
-                        fontSize = 11.sp,
-                        color = cyanColor
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Adaptive Glowing Animated "Fire" Header Icon (Located to the left of the settings icon)
+            // Adaptive Glowing Animated "Fire" Header Icon
             GlowingFlameHeaderIcon(
                 flameScore = flameScore,
                 onClick = onOpenFlame,
@@ -465,7 +383,16 @@ fun LiquidGlassTopBar(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Settings button (Replaced Dark/Light Theme button)
+            // Dynamic Streak Shield Element (Replaces the old button position next to the flame)
+            DynamicStreakShieldHeaderButton(
+                isShieldActive = isStreakShieldActive,
+                onClick = onToggleShield,
+                isDarkTheme = isDarkTheme
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Settings button
             IconButton(
                 onClick = onOpenSettings,
                 modifier = Modifier

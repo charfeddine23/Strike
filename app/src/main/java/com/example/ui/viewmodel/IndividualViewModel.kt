@@ -327,15 +327,16 @@ class IndividualViewModel(
     }
 
     /**
-     * "Deflame" Button: Each tap instantly decreases the total Flame score by 2 points (ensuring score >= 0).
+     * "Deflame" Button / Manual Penalty Adjustment: Decreases the total Flame score by [points] (default 2.0).
      */
-    fun deflame() {
-        val newScore = FlameManager.deflame(getApplication())
+    fun deflame(points: Double = 2.0) {
+        val newScore = FlameManager.deflame(getApplication(), points)
         viewModelScope.launch {
+            val formatted = if (points % 1.0 == 0.0) "${points.toInt()}" else String.format(Locale.US, "%.1f", points)
             val msg = when (currentLanguage.value) {
-                "ar" -> "تم خفض الشعلة (-2): ${String.format(Locale.US, "%.1f", newScore)}"
-                "fr" -> "Déflamme (-2 pts) : ${String.format(Locale.US, "%.1f", newScore)}"
-                else -> "Deflame (-2 pts): ${String.format(Locale.US, "%.1f", newScore)}"
+                "ar" -> "تم خفض الشعلة (-$formatted): ${String.format(Locale.US, "%.1f", newScore)}"
+                "fr" -> "Déflamme (-$formatted pts) : ${String.format(Locale.US, "%.1f", newScore)}"
+                else -> "Deflame (-$formatted pts): ${String.format(Locale.US, "%.1f", newScore)}"
             }
             emitMessage(msg)
         }
