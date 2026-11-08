@@ -204,4 +204,20 @@
     <string name="girl_adjustment_title">Girl Deduction Adjustment</string>
     <string name="girl_adjustment_subtitle">Select preset or enter points to deduct</string>
     <string name="girl_apply_action">Apply Deduction</string>
+    <string name="rule_double_strike_title">Double Strike Penalty (2 Strikes/Day)</string>
+    <string name="rule_double_strike_desc">Deducts (Boost1 + Boost2) × 3 from Flame score and unlocks a 3-Day Manual Streak Shield.</string>
+    <string name="rule_multi_strike_title">Multi-Strike Combo (3-5 Strikes/Day)</string>
+    <string name="rule_multi_strike_desc">Deducts Sum of Boosts × Strike Count and auto-activates a 7-Day Streak Shield.</string>
+    <string name="rule_extreme_overload_title">Extreme System Overload (6+ Strikes/Day)</string>
+    <string name="rule_extreme_overload_desc">Completely resets Flame score to 0, freezes visuals, and restarts from scratch.</string>
+    <string name="shield_unprotected">Unprotected</string>
+    <string name="shield_activate_manual">Activate 3-Day Shield</string>
+    <string name="shield_available_count">%1$d Manual Shield(s) Available</string>
+    <string name="shield_countdown_label">Time Remaining</string>
+    <string name="shield_status_active">Streak Shield Active</string>
+    <string name="shield_status_inactive">Streak Shield Inactive</string>
+    <string name="shield_modal_title">Streak Shield System</string>
+    <string name="shield_modal_subtitle">Inactivity protection, countdown timer &amp; reward shields</string>
+    <string name="shield_inventory_title">Available Shield Inventory</string>
+    <string name="shield_rules_summary_title">Multi-Strike Shield Rewards</string>
 </resources>

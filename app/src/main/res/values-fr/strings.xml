@@ -204,4 +204,20 @@
     <string name="girl_adjustment_title">Ajustement Déduction Girl</string>
     <string name="girl_adjustment_subtitle">Sélectionnez un palier ou saisissez les points à déduire</string>
     <string name="girl_apply_action">Appliquer la Déduction</string>
+    <string name="rule_double_strike_title">Pénalité Double Strike (2 Strikes/Jour)</string>
+    <string name="rule_double_strike_desc">Déduit (Boost1 + Boost2) × 3 du score de flamme et débloque un Bouclier 3 jours manuel.</string>
+    <string name="rule_multi_strike_title">Combo Multi-Strikes (3-5 Strikes/Jour)</string>
+    <string name="rule_multi_strike_desc">Déduit Somme des Boosts × Nb de Strikes et active automatiquement un Bouclier 7 jours.</string>
+    <string name="rule_extreme_overload_title">Surcharge Système Extrême (6+ Strikes/Jour)</string>
+    <string name="rule_extreme_overload_desc">Réinitialise totalement la flamme à 0, gèle les visuels et redémarre à zéro.</string>
+    <string name="shield_unprotected">Non protégé</string>
+    <string name="shield_activate_manual">Activer Bouclier 3 Jours</string>
+    <string name="shield_available_count">%1$d Bouclier(s) manuel(s) disponible(s)</string>
+    <string name="shield_countdown_label">Temps restant</string>
+    <string name="shield_status_active">Bouclier de Série Actif</string>
+    <string name="shield_status_inactive">Bouclier Inactif</string>
+    <string name="shield_modal_title">Système de Boucliers</string>
+    <string name="shield_modal_subtitle">Protection contre l\'inactivité, compte à rebours et récompenses</string>
+    <string name="shield_inventory_title">Inventaire des Boucliers</string>
+    <string name="shield_rules_summary_title">Récompenses Multi-Strikes</string>
 </resources>

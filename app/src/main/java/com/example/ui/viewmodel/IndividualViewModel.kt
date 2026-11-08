@@ -313,6 +313,8 @@ class IndividualViewModel(
     val flameScore: StateFlow<Double> = FlameManager.flameScore
     val flameLogs: StateFlow<List<FlameLogEntry>> = FlameManager.flameLogs
     val isStreakShieldActive: StateFlow<Boolean> = FlameManager.isStreakShieldActive
+    val activeShieldExpiresAt: StateFlow<Long?> = FlameManager.activeShieldExpiresAt
+    val availableManualShields: StateFlow<Int> = FlameManager.availableManualShields
     val peakFlameScore: StateFlow<Double> = FlameManager.peakScore
     val totalPointsGained: StateFlow<Double> = FlameManager.totalPointsGained
     val totalPointsExtinguished: StateFlow<Double> = FlameManager.totalPointsExtinguished
@@ -364,6 +366,20 @@ class IndividualViewModel(
 
     fun clearFlameLogs() {
         FlameManager.clearLogs(getApplication())
+    }
+
+    fun activateManualShield() {
+        val success = FlameManager.activateManualShield(getApplication(), days = 3)
+        viewModelScope.launch {
+            if (success) {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> "تم تفعيل درع السلسلة بنجاح (3 أيام حماية)"
+                    "fr" -> "Bouclier de série activé avec succès (3 jours)"
+                    else -> "Streak Shield activated successfully (3 days protection)"
+                }
+                emitMessage(msg)
+            }
+        }
     }
 
     fun setStreakShieldActive(active: Boolean) {
@@ -509,22 +525,54 @@ class IndividualViewModel(
         viewModelScope.launch {
             val target = currentStrikeIndividual.value ?: return@launch
             val latestBefore = repository.getLatestStrikeDate()
-            repository.incrementStrike(target.id, delta)
+            val eventId = repository.incrementStrike(target.id, delta)
             _strikeAnimCount.value += 1
 
             val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-            FlameManager.onStrikeRegistered(
+            val strikesToday = repository.getEventsForDate(today)
+
+            val result = FlameManager.onStrikeRegistered(
                 context = getApplication(),
                 strikeDate = today,
                 boost = target.boost,
                 personName = target.fullName,
-                latestDateBeforeInsert = latestBefore
+                latestDateBeforeInsert = latestBefore,
+                strikesToday = strikesToday
             )
 
-            val msg = when (currentLanguage.value) {
-                "ar" -> "تم تسجيل ضربة +$delta (${target.fullName})"
-                "fr" -> "Strike enregistré +$delta (${target.fullName})"
-                else -> "Strike registered +$delta (${target.fullName})"
+            if (result.penaltyDeducted > 0.0) {
+                repository.updateEventNotes(eventId, "PENALTY:${result.penaltyDeducted}|RULE:${result.ruleApplied}")
+            }
+
+            val msg = when (result.ruleApplied) {
+                "DOUBLE_STRIKE" -> {
+                    when (currentLanguage.value) {
+                        "ar" -> "عقوبة الضربة المزدوجة! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} نقطة) وفتح درع 3 أيام"
+                        "fr" -> "Pénalité Double Strike ! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & Bouclier 3j débloqué"
+                        else -> "Double Strike Penalty! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & 3-Day Shield unlocked"
+                    }
+                }
+                "MULTI_STRIKE_COMBO" -> {
+                    when (currentLanguage.value) {
+                        "ar" -> "كومبو ضربات متعددة! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} نقطة) وتفعيل درع 7 أيام تلقائياً"
+                        "fr" -> "Combo Multi-Strikes ! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & Bouclier 7j activé"
+                        else -> "Multi-Strike Combo! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & 7-Day Shield auto-activated"
+                    }
+                }
+                "EXTREME_OVERLOAD" -> {
+                    when (currentLanguage.value) {
+                        "ar" -> "تحميل زائد أقصى! تم تصفير نقاط الشعلة إلى 0 وتجميد النار"
+                        "fr" -> "Surcharge Extrême ! Score réinitialisé à 0 et flamme gelée"
+                        else -> "Extreme System Overload! Flame score reset to 0 & flame frozen"
+                    }
+                }
+                else -> {
+                    when (currentLanguage.value) {
+                        "ar" -> "تم تسجيل ضربة +$delta (${target.fullName})"
+                        "fr" -> "Strike enregistré +$delta (${target.fullName})"
+                        else -> "Strike registered +$delta (${target.fullName})"
+                    }
+                }
             }
             emitMessage(msg)
         }
@@ -534,20 +582,52 @@ class IndividualViewModel(
         viewModelScope.launch {
             val target = repository.getIndividualById(id)
             val latestBefore = repository.getLatestStrikeDate()
-            repository.incrementStrike(id, delta)
+            val eventId = repository.incrementStrike(id, delta)
             _strikeAnimCount.value += 1
 
             if (target != null) {
                 val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-                FlameManager.onStrikeRegistered(
+                val strikesToday = repository.getEventsForDate(today)
+
+                val result = FlameManager.onStrikeRegistered(
                     context = getApplication(),
                     strikeDate = today,
                     boost = target.boost,
                     personName = target.fullName,
-                    latestDateBeforeInsert = latestBefore
+                    latestDateBeforeInsert = latestBefore,
+                    strikesToday = strikesToday
                 )
+
+                if (result.penaltyDeducted > 0.0) {
+                    repository.updateEventNotes(eventId, "PENALTY:${result.penaltyDeducted}|RULE:${result.ruleApplied}")
+                }
+
+                val msg = when (result.ruleApplied) {
+                    "DOUBLE_STRIKE" -> {
+                        when (currentLanguage.value) {
+                            "ar" -> "عقوبة الضربة المزدوجة! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} نقطة) وفتح درع 3 أيام"
+                            "fr" -> "Pénalité Double Strike ! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & Bouclier 3j débloqué"
+                            else -> "Double Strike Penalty! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & 3-Day Shield unlocked"
+                        }
+                    }
+                    "MULTI_STRIKE_COMBO" -> {
+                        when (currentLanguage.value) {
+                            "ar" -> "كومبو ضربات متعددة! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} نقطة) وتفعيل درع 7 أيام تلقائياً"
+                            "fr" -> "Combo Multi-Strikes ! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & Bouclier 7j activé"
+                            else -> "Multi-Strike Combo! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & 7-Day Shield auto-activated"
+                        }
+                    }
+                    "EXTREME_OVERLOAD" -> {
+                        when (currentLanguage.value) {
+                            "ar" -> "تحميل زائد أقصى! تم تصفير نقاط الشعلة إلى 0 وتجميد النار"
+                            "fr" -> "Surcharge Extrême ! Score réinitialisé à 0 et flamme gelée"
+                            else -> "Extreme System Overload! Flame score reset to 0 & flame frozen"
+                        }
+                    }
+                    else -> "Strike +$delta"
+                }
+                emitMessage(msg)
             }
-            emitMessage("Strike +$delta")
         }
     }
 
@@ -713,7 +793,10 @@ class IndividualViewModel(
 
     fun deleteStrikeEvent(event: StrikeEvent) {
         viewModelScope.launch {
-            val penaltyValue = if (event.performanceValue > 0.0) {
+            val effective = event.getEffectivePenalty()
+            val penaltyValue = if (effective > 0.0) {
+                effective
+            } else if (event.performanceValue > 0.0) {
                 event.performanceValue
             } else {
                 repository.getIndividualById(event.individualId)?.boost ?: 0.0
@@ -755,7 +838,10 @@ class IndividualViewModel(
 
     fun undoDeleteStrikeEvent(event: StrikeEvent) {
         viewModelScope.launch {
-            val penaltyValue = if (event.performanceValue > 0.0) {
+            val effective = event.getEffectivePenalty()
+            val penaltyValue = if (effective > 0.0) {
+                effective
+            } else if (event.performanceValue > 0.0) {
                 event.performanceValue
             } else {
                 repository.getIndividualById(event.individualId)?.boost ?: 0.0

@@ -21,6 +21,12 @@ data class FlameLogEntry(
     val details: String = ""
 )
 
+data class StrikeRegistrationResult(
+    val penaltyDeducted: Double,
+    val ruleApplied: String, // "RETROACTIVE", "SINGLE_STRIKE", "DOUBLE_STRIKE", "MULTI_STRIKE_COMBO", "EXTREME_OVERLOAD"
+    val shieldGranted: String = "" // "3_DAYS_MANUAL", "7_DAYS_AUTO", ""
+)
+
 object FlameManager {
     private const val PREFS_NAME = "strikepulse_flame_prefs"
     private const val KEY_SCORE = "key_flame_score"
@@ -28,6 +34,8 @@ object FlameManager {
     private const val KEY_LAST_STRIKE_DATE = "key_last_strike_date"
     private const val KEY_FLAME_LOGS = "key_flame_logs_json"
     private const val KEY_STREAK_SHIELD = "key_streak_shield_active"
+    private const val KEY_ACTIVE_SHIELD_EXPIRES_AT = "key_active_shield_expires_at"
+    private const val KEY_AVAILABLE_MANUAL_SHIELDS = "key_available_manual_shields"
     private const val KEY_PEAK_SCORE = "key_peak_flame_score"
     private const val KEY_TOTAL_POINTS_GAINED = "key_total_points_gained"
     private const val KEY_TOTAL_POINTS_EXTINGUISHED = "key_total_points_extinguished"
@@ -41,6 +49,12 @@ object FlameManager {
 
     private val _isStreakShieldActive = MutableStateFlow(false)
     val isStreakShieldActive: StateFlow<Boolean> = _isStreakShieldActive.asStateFlow()
+
+    private val _activeShieldExpiresAt = MutableStateFlow<Long?>(null)
+    val activeShieldExpiresAt: StateFlow<Long?> = _activeShieldExpiresAt.asStateFlow()
+
+    private val _availableManualShields = MutableStateFlow(0)
+    val availableManualShields: StateFlow<Int> = _availableManualShields.asStateFlow()
 
     private val _peakScore = MutableStateFlow(45.0)
     val peakScore: StateFlow<Double> = _peakScore.asStateFlow()
@@ -61,6 +75,39 @@ object FlameManager {
         return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
     }
 
+    private fun format(value: Double): String {
+        return if (value % 1.0 == 0.0) "${value.toInt()}" else String.format(Locale.US, "%.1f", value)
+    }
+
+    fun isShieldActiveNow(): Boolean {
+        val expires = _activeShieldExpiresAt.value
+        if (expires != null) {
+            val now = System.currentTimeMillis()
+            if (now < expires) return true
+        }
+        return _isStreakShieldActive.value
+    }
+
+    fun getActiveShieldRemainingMillis(): Long {
+        val expires = _activeShieldExpiresAt.value ?: return 0L
+        return (expires - System.currentTimeMillis()).coerceAtLeast(0L)
+    }
+
+    fun formatRemaining(millis: Long): String {
+        if (millis <= 0L) return "0s"
+        val totalSecs = millis / 1000
+        val days = totalSecs / (24 * 3600)
+        val hours = (totalSecs % (24 * 3600)) / 3600
+        val mins = (totalSecs % 3600) / 60
+        val secs = totalSecs % 60
+        return when {
+            days > 0 -> "${days}d ${hours}h ${mins}m"
+            hours > 0 -> "${hours}h ${mins}m ${secs}s"
+            mins > 0 -> "${mins}m ${secs}s"
+            else -> "${secs}s"
+        }
+    }
+
     @Synchronized
     fun init(context: Context) {
         if (isInitialized) return
@@ -68,7 +115,24 @@ object FlameManager {
         val savedScore = prefs.getFloat(KEY_SCORE, 45.0f).toDouble().coerceAtLeast(0.0)
         _flameScore.value = savedScore
 
-        _isStreakShieldActive.value = prefs.getBoolean(KEY_STREAK_SHIELD, false)
+        val now = System.currentTimeMillis()
+        val expiresAt = if (prefs.contains(KEY_ACTIVE_SHIELD_EXPIRES_AT)) {
+            prefs.getLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, 0L)
+        } else null
+
+        if (expiresAt != null && expiresAt > now) {
+            _activeShieldExpiresAt.value = expiresAt
+            _isStreakShieldActive.value = true
+        } else {
+            _activeShieldExpiresAt.value = null
+            _isStreakShieldActive.value = prefs.getBoolean(KEY_STREAK_SHIELD, false)
+            if (expiresAt != null && expiresAt <= now) {
+                _isStreakShieldActive.value = false
+                prefs.edit().putBoolean(KEY_STREAK_SHIELD, false).remove(KEY_ACTIVE_SHIELD_EXPIRES_AT).apply()
+            }
+        }
+
+        _availableManualShields.value = prefs.getInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
         val savedPeak = prefs.getFloat(KEY_PEAK_SCORE, savedScore.toFloat()).toDouble()
         _peakScore.value = maxOf(savedScore, savedPeak)
         _totalPointsGained.value = prefs.getFloat(KEY_TOTAL_POINTS_GAINED, 0.0f).toDouble()
@@ -106,25 +170,107 @@ object FlameManager {
     }
 
     @Synchronized
-    fun setStreakShieldActive(context: Context, active: Boolean) {
+    fun grantManualShield(context: Context, days: Int = 3, reason: String = "Double Strike Reward"): Int {
         init(context)
-        _isStreakShieldActive.value = active
-        getPrefs(context).edit().putBoolean(KEY_STREAK_SHIELD, active).apply()
+        val newCount = _availableManualShields.value + 1
+        _availableManualShields.value = newCount
+        getPrefs(context).edit().putInt(KEY_AVAILABLE_MANUAL_SHIELDS, newCount).apply()
+        return newCount
+    }
 
-        val title = if (active) "Streak Shield Activated" else "Streak Shield Deactivated"
-        val details = if (active) {
-            "Inactivity accrual (+3 pts/day) paused during rest period."
-        } else {
-            "Inactivity accrual resumed."
-        }
+    @Synchronized
+    fun activateManualShield(context: Context, days: Int = 3): Boolean {
+        init(context)
+        if (_availableManualShields.value <= 0) return false
+        val now = System.currentTimeMillis()
+        val currentExpires = _activeShieldExpiresAt.value
+        val base = if (currentExpires != null && currentExpires > now) currentExpires else now
+        val newExpires = base + days * 24 * 3600 * 1000L
+
+        val newCount = (_availableManualShields.value - 1).coerceAtLeast(0)
+        _availableManualShields.value = newCount
+        _activeShieldExpiresAt.value = newExpires
+        _isStreakShieldActive.value = true
+
+        getPrefs(context).edit()
+            .putInt(KEY_AVAILABLE_MANUAL_SHIELDS, newCount)
+            .putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, newExpires)
+            .putBoolean(KEY_STREAK_SHIELD, true)
+            .apply()
+
+        val expiryStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(newExpires))
+        val countdown = formatRemaining(newExpires - now)
         logEvent(
             context = context,
-            title = title,
+            title = "Manual Streak Shield Activated",
             change = 0.0,
             resultingScore = _flameScore.value,
             reason = "STREAK_SHIELD",
-            details = details
+            details = "Manual ${days}-Day Shield activated. Protected until $expiryStr ($countdown countdown remaining)."
         )
+        return true
+    }
+
+    @Synchronized
+    fun grantAndActivateAutoShield(context: Context, days: Int = 7, reason: String = "Multi-Strike Combo Reward"): Long {
+        init(context)
+        val now = System.currentTimeMillis()
+        val currentExpires = _activeShieldExpiresAt.value
+        val base = if (currentExpires != null && currentExpires > now) currentExpires else now
+        val newExpires = base + days * 24 * 3600 * 1000L
+
+        _activeShieldExpiresAt.value = newExpires
+        _isStreakShieldActive.value = true
+
+        getPrefs(context).edit()
+            .putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, newExpires)
+            .putBoolean(KEY_STREAK_SHIELD, true)
+            .apply()
+
+        return newExpires
+    }
+
+    @Synchronized
+    fun setStreakShieldActive(context: Context, active: Boolean) {
+        init(context)
+        val now = System.currentTimeMillis()
+        if (active) {
+            val base = maxOf(now, _activeShieldExpiresAt.value ?: now)
+            val expires = base + 3 * 24 * 3600 * 1000L
+            _activeShieldExpiresAt.value = expires
+            _isStreakShieldActive.value = true
+            getPrefs(context).edit()
+                .putBoolean(KEY_STREAK_SHIELD, true)
+                .putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, expires)
+                .apply()
+
+            val expiryStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(expires))
+            val countdown = formatRemaining(expires - now)
+            logEvent(
+                context = context,
+                title = "Streak Shield Activated",
+                change = 0.0,
+                resultingScore = _flameScore.value,
+                reason = "STREAK_SHIELD",
+                details = "Inactivity accrual (+3 pts/day) paused. Shield active until $expiryStr ($countdown remaining)."
+            )
+        } else {
+            _isStreakShieldActive.value = false
+            _activeShieldExpiresAt.value = null
+            getPrefs(context).edit()
+                .putBoolean(KEY_STREAK_SHIELD, false)
+                .remove(KEY_ACTIVE_SHIELD_EXPIRES_AT)
+                .apply()
+
+            logEvent(
+                context = context,
+                title = "Streak Shield Deactivated",
+                change = 0.0,
+                resultingScore = _flameScore.value,
+                reason = "STREAK_SHIELD",
+                details = "Inactivity accrual resumed (+3 pts/day active)."
+            )
+        }
     }
 
     @Synchronized
@@ -286,8 +432,9 @@ object FlameManager {
         val days = daysBetween(baseDate, today).toInt()
 
         // Check if Streak Shield is currently active
-        if (_isStreakShieldActive.value) {
+        if (isShieldActiveNow()) {
             prefs.edit().putString(KEY_LAST_INACTIVITY_DATE, today).apply()
+            val remainingStr = formatRemaining(getActiveShieldRemainingMillis())
             if (days > 0) {
                 logEvent(
                     context = context,
@@ -295,7 +442,7 @@ object FlameManager {
                     change = 0.0,
                     resultingScore = _flameScore.value,
                     reason = "STREAK_SHIELD",
-                    details = "Protected against $days day${if (days > 1) "s" else ""} inactivity accrual"
+                    details = "Protected against $days day${if (days > 1) "s" else ""} inactivity accrual (Countdown remaining: $remainingStr)"
                 )
             }
             return 0
@@ -321,9 +468,21 @@ object FlameManager {
     }
 
     /**
-     * Retroactive Entry Rule & Strike Deduction:
-     * - If strikeDate < latestDateBeforeInsert: Retroactive entry, NO points or deductions.
-     * - If strikeDate >= latestDateBeforeInsert: Deduct points equal to the current BOOST value.
+     * Multi-Strike Penalty, Shield Rewards, and Extreme Reset Rules:
+     * 1. Double Strike Penalty Rule (2 Strikes on exact same calendar day):
+     *    - Take BOOST values of both individuals, add together, multiply by 3: (Boost1 + Boost2) * 3
+     *    - Deduct directly from total Flame score (score >= 0)
+     *    - Grant user a Streak Shield valid for 3 days with manual/optional activation.
+     * 2. Multi-Strike Combo Penalty Rule (3 to 5 Strikes on exact same calendar day):
+     *    - Add BOOST values of all individuals involved together: Sum(Boosts)
+     *    - Multiply sum by exact number of strikes registered that day: Sum(Boosts) * Number of Strikes
+     *    - Deduct directly from total Flame score (score >= 0)
+     *    - Automatically grant user a Streak Shield valid for 1 week (7 days) with automatic activation.
+     * 3. Extreme Overload Reset Rule (6 or more Strikes on exact same calendar day):
+     *    - Trigger extreme system overload event
+     *    - Completely reset Flame score to 0, freeze flame visuals back to initial static state, restart entirely from zero.
+     * 4. Single Strike / Normal Latest Strike:
+     *    - Deduct individual's BOOST value.
      */
     @Synchronized
     fun onStrikeRegistered(
@@ -331,8 +490,9 @@ object FlameManager {
         strikeDate: String,
         boost: Double,
         personName: String,
-        latestDateBeforeInsert: String?
-    ): Boolean {
+        latestDateBeforeInsert: String?,
+        strikesToday: List<com.example.data.model.StrikeEvent> = emptyList()
+    ): StrikeRegistrationResult {
         init(context)
         val prefs = getPrefs(context)
 
@@ -353,24 +513,122 @@ object FlameManager {
                 reason = "RETROACTIVE",
                 details = "Date ($strikeDate) is before latest ($latestDateBeforeInsert). Protected from flame deduction."
             )
-            return false
-        } else {
-            // New latest strike registered: Deduct points equal to BOOST
-            val deduction = boost.coerceAtLeast(0.0)
-            deductPoints(
-                context = context,
-                delta = deduction,
-                reason = "STRIKE_DEDUCTION",
-                details = "Strike registered for $personName (-${String.format(Locale.US, "%.1f", deduction)} BOOST)",
-                title = "New Strike Registered"
-            )
-            // Update last strike date & reset inactivity baseline date to this strike's date
-            prefs.edit()
-                .putString(KEY_LAST_STRIKE_DATE, strikeDate)
-                .putString(KEY_LAST_INACTIVITY_DATE, strikeDate)
-                .apply()
-            return true
+            return StrikeRegistrationResult(0.0, "RETROACTIVE")
         }
+
+        val strikesCount = strikesToday.size.coerceAtLeast(1)
+
+        val result = when {
+            // Case 4: Extreme Overload Reset Rule (6 or more Strikes on exact same day)
+            strikesCount >= 6 -> {
+                val oldScore = _flameScore.value
+                _flameScore.value = 0.0
+                val updatedExt = _totalPointsExtinguished.value + oldScore
+                _totalPointsExtinguished.value = updatedExt
+                prefs.edit()
+                    .putFloat(KEY_SCORE, 0.0f)
+                    .putFloat(KEY_TOTAL_POINTS_EXTINGUISHED, updatedExt.toFloat())
+                    .apply()
+
+                val namesList = strikesToday.joinToString(", ") { it.individualName }
+                val details = "Extreme system overload triggered! $strikesCount strikes registered today ($namesList). Flame score completely reset to 0.0 PTS. Visuals frozen to initial static state. Counting restarts from zero."
+                logEvent(
+                    context = context,
+                    title = "Extreme System Overload (Score Reset to 0)",
+                    change = -oldScore,
+                    resultingScore = 0.0,
+                    reason = "EXTREME_OVERLOAD",
+                    details = details
+                )
+                StrikeRegistrationResult(oldScore, "EXTREME_OVERLOAD")
+            }
+
+            // Case 3: Multi-Strike Combo Penalty Rule (3 to 5 Strikes on exact same day)
+            strikesCount in 3..5 -> {
+                val sumBoosts = strikesToday.sumOf {
+                    if (it.performanceValue > 0.0) it.performanceValue else boost.coerceAtLeast(0.1)
+                }
+                val penalty = sumBoosts * strikesCount
+                deductPoints(
+                    context = context,
+                    delta = penalty,
+                    reason = "MULTI_STRIKE_COMBO",
+                    details = "",
+                    title = "${strikesCount}x Multi-Strike Combo (-${format(penalty)} PTS)"
+                )
+
+                // Auto grant & activate 7-day shield
+                val expiresAt = grantAndActivateAutoShield(context, days = 7, reason = "Multi-Strike Combo Reward")
+                val expiryStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(expiresAt))
+                val countdown = formatRemaining(expiresAt - System.currentTimeMillis())
+                val namesList = strikesToday.joinToString(", ") {
+                    "${it.individualName} (BOOST ${format(if (it.performanceValue > 0.0) it.performanceValue else boost)})"
+                }
+
+                val details = "${strikesCount} strikes today: $namesList. Formula: Sum of Boosts (${format(sumBoosts)}) × $strikesCount strikes = ${format(penalty)} PTS deducted. Reward: 7-Day Auto Streak Shield activated (Active until $expiryStr, countdown: $countdown)."
+
+                // Update the log entry details
+                val currentLogs = _flameLogs.value.toMutableList()
+                if (currentLogs.isNotEmpty() && currentLogs[0].reason == "MULTI_STRIKE_COMBO") {
+                    currentLogs[0] = currentLogs[0].copy(details = details)
+                    _flameLogs.value = currentLogs
+                }
+
+                StrikeRegistrationResult(penalty, "MULTI_STRIKE_COMBO", "7_DAYS_AUTO")
+            }
+
+            // Case 2: Double Strike Penalty Rule (2 Strikes on exact same day)
+            strikesCount == 2 -> {
+                val s1 = strikesToday[0]
+                val s2 = strikesToday[1]
+                val b1 = if (s1.performanceValue > 0.0) s1.performanceValue else boost.coerceAtLeast(0.1)
+                val b2 = if (s2.performanceValue > 0.0) s2.performanceValue else boost.coerceAtLeast(0.1)
+                val sumBoosts = b1 + b2
+                val penalty = sumBoosts * 3.0
+
+                deductPoints(
+                    context = context,
+                    delta = penalty,
+                    reason = "DOUBLE_STRIKE",
+                    details = "",
+                    title = "Double Strike Penalty (-${format(penalty)} PTS)"
+                )
+
+                // Grant 3-day manual shield
+                val availableCount = grantManualShield(context, days = 3, reason = "Double Strike Reward")
+                val details = "2 strikes today: ${s1.individualName} (BOOST ${format(b1)}) + ${s2.individualName} (BOOST ${format(b2)}). Formula: (${format(b1)} + ${format(b2)}) × 3 = ${format(penalty)} PTS deducted. Reward: 3-Day Manual Streak Shield unlocked (Available: $availableCount, tap Shield to activate)."
+
+                // Update the log entry details
+                val currentLogs = _flameLogs.value.toMutableList()
+                if (currentLogs.isNotEmpty() && currentLogs[0].reason == "DOUBLE_STRIKE") {
+                    currentLogs[0] = currentLogs[0].copy(details = details)
+                    _flameLogs.value = currentLogs
+                }
+
+                StrikeRegistrationResult(penalty, "DOUBLE_STRIKE", "3_DAYS_MANUAL")
+            }
+
+            // Case 1: Normal Single Strike
+            else -> {
+                val deduction = boost.coerceAtLeast(0.0)
+                deductPoints(
+                    context = context,
+                    delta = deduction,
+                    reason = "STRIKE_DEDUCTION",
+                    details = "Strike registered for $personName (-${format(deduction)} BOOST)",
+                    title = "New Strike Registered"
+                )
+                StrikeRegistrationResult(deduction, "SINGLE_STRIKE")
+            }
+        }
+
+        // Update last strike date & reset inactivity baseline date to this strike's date
+        prefs.edit()
+            .putString(KEY_LAST_STRIKE_DATE, strikeDate)
+            .putString(KEY_LAST_INACTIVITY_DATE, strikeDate)
+            .apply()
+
+        return result
     }
 
     /**

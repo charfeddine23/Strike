@@ -46,6 +46,12 @@ interface StrikeEventDao {
     @Query("SELECT MAX(date) FROM strike_events")
     suspend fun getLatestStrikeDate(): String?
 
+    @Query("SELECT * FROM strike_events WHERE date = :date ORDER BY timestamp ASC")
+    suspend fun getEventsForDate(date: String): List<StrikeEvent>
+
+    @Query("UPDATE strike_events SET notes = :notes WHERE id = :id")
+    suspend fun updateEventNotes(id: Long, notes: String)
+
     @Query("DELETE FROM strike_events")
     suspend fun clearAll()
 }

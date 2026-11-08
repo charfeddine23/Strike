@@ -35,6 +35,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Call
@@ -52,6 +53,7 @@ import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -74,6 +76,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -88,6 +91,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import com.example.ui.components.DeflameAdjustmentDialog
+import com.example.ui.components.StreakShieldModalSheet
+import com.example.data.flame.FlameManager
 import kotlin.math.sin
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -145,9 +150,22 @@ fun FlameScreen(
     val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
     val flameLogs by viewModel.flameLogs.collectAsStateWithLifecycle()
     val isStreakShieldActive by viewModel.isStreakShieldActive.collectAsStateWithLifecycle()
+    val activeShieldExpiresAt by viewModel.activeShieldExpiresAt.collectAsStateWithLifecycle()
+    val availableManualShields by viewModel.availableManualShields.collectAsStateWithLifecycle()
     val peakScore by viewModel.peakFlameScore.collectAsStateWithLifecycle()
     val totalGained by viewModel.totalPointsGained.collectAsStateWithLifecycle()
     val totalExtinguished by viewModel.totalPointsExtinguished.collectAsStateWithLifecycle()
+
+    var showShieldModal by remember { mutableStateOf(false) }
+    var currentShieldRemainingMillis by remember { mutableLongStateOf(FlameManager.getActiveShieldRemainingMillis()) }
+
+    LaunchedEffect(isStreakShieldActive, activeShieldExpiresAt) {
+        while (true) {
+            currentShieldRemainingMillis = FlameManager.getActiveShieldRemainingMillis()
+            kotlinx.coroutines.delay(1000L)
+        }
+    }
+    val isShieldActive = isStreakShieldActive && (activeShieldExpiresAt == null || currentShieldRemainingMillis > 0L)
 
     val stage = getFlameStage(flameScore)
     val colors = getFlameColors(flameScore)
@@ -205,7 +223,15 @@ fun FlameScreen(
         when (selectedFilter) {
             FlameLogFilter.ALL -> flameLogs
             FlameLogFilter.STRIKES -> flameLogs.filter {
-                it.reason in listOf("STRIKE_DEDUCTION", "RETROACTIVE", "STRIKE_DELETED_REFUND", "STRIKE_RESTORED_UNDO")
+                it.reason in listOf(
+                    "STRIKE_DEDUCTION",
+                    "RETROACTIVE",
+                    "STRIKE_DELETED_REFUND",
+                    "STRIKE_RESTORED_UNDO",
+                    "DOUBLE_STRIKE",
+                    "MULTI_STRIKE_COMBO",
+                    "EXTREME_OVERLOAD"
+                )
             }
             FlameLogFilter.CALLS -> flameLogs.filter { it.reason == "CONTACT_CALL" }
             FlameLogFilter.INACTIVITY -> flameLogs.filter { it.reason in listOf("INACTIVITY", "STREAK_SHIELD") }
@@ -270,6 +296,21 @@ fun FlameScreen(
         )
     }
 
+    // Streak Shield Modal Sheet (Detailed countdown, inventory & rules)
+    if (showShieldModal) {
+        StreakShieldModalSheet(
+            isShieldActive = isShieldActive,
+            activeShieldExpiresAt = activeShieldExpiresAt,
+            remainingMillis = currentShieldRemainingMillis,
+            availableManualShields = availableManualShields,
+            onActivateManualShield = {
+                viewModel.activateManualShield()
+            },
+            onDismiss = { showShieldModal = false },
+            isHapticEnabled = isHapticEnabled
+        )
+    }
+
     // Girl Points Adjustment Dialog (Opened on long press of the Girl button)
     if (showGirlAdjustmentDialog) {
         DeflameAdjustmentDialog(
@@ -327,32 +368,108 @@ fun FlameScreen(
                             )
                         }
 
-                        // Stage Pill
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(stageBadgeColor.copy(alpha = 0.18f))
-                                .border(1.dp, stageBadgeColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = when (stage) {
-                                        FlameVisualStage.FROZEN_STATIC -> Icons.Default.AcUnit
-                                        FlameVisualStage.SUPERNOVA_OVERLOAD -> Icons.Default.Bolt
-                                        else -> Icons.Default.LocalFireDepartment
-                                    },
-                                    contentDescription = null,
-                                    tint = stageBadgeColor,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = stageLabel,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
-                                    color = stageBadgeColor
-                                )
+                            // Dynamic Streak Shield Element
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (isShieldActive) Color(0x3310B981)
+                                        else if (availableManualShields > 0) Color(0x3338BDF8)
+                                        else Color(0x22F43F5E)
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (isShieldActive) NeonEmerald
+                                        else if (availableManualShields > 0) Color(0xFF38BDF8)
+                                        else Color(0x66F43F5E),
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable {
+                                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        showShieldModal = true
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .testTag("flame_shield_status_badge")
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (isShieldActive) {
+                                        Icon(
+                                            imageVector = Icons.Default.Shield,
+                                            contentDescription = "Shield Active",
+                                            tint = NeonEmerald,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = FlameManager.formatRemaining(currentShieldRemainingMillis),
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 11.sp,
+                                            color = NeonEmerald
+                                        )
+                                    } else if (availableManualShields > 0) {
+                                        Icon(
+                                            imageVector = Icons.Default.Shield,
+                                            contentDescription = "Shield Available",
+                                            tint = Color(0xFF38BDF8),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "${availableManualShields}x 3D",
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF38BDF8)
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.Add,
+                                            contentDescription = "Unprotected Streak",
+                                            tint = Color(0xFFFB7185),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = stringResource(R.string.shield_unprotected),
+                                            fontWeight = FontWeight.ExtraBold,
+                                            fontSize = 10.sp,
+                                            color = Color(0xFFFB7185)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Stage Pill
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(stageBadgeColor.copy(alpha = 0.18f))
+                                    .border(1.dp, stageBadgeColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = when (stage) {
+                                            FlameVisualStage.FROZEN_STATIC -> Icons.Default.AcUnit
+                                            FlameVisualStage.SUPERNOVA_OVERLOAD -> Icons.Default.Bolt
+                                            else -> Icons.Default.LocalFireDepartment
+                                        },
+                                        contentDescription = null,
+                                        tint = stageBadgeColor,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = stageLabel,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = stageBadgeColor
+                                    )
+                                }
                             }
                         }
                     }
@@ -907,6 +1024,21 @@ fun FlameScreen(
                             Icons.Default.LocalFireDepartment,
                             stringResource(R.string.rule_strike_title),
                             stringResource(R.string.rule_strike_desc)
+                        ),
+                        Triple(
+                            Icons.Default.Bolt,
+                            stringResource(R.string.rule_double_strike_title),
+                            stringResource(R.string.rule_double_strike_desc)
+                        ),
+                        Triple(
+                            Icons.Default.LocalFireDepartment,
+                            stringResource(R.string.rule_multi_strike_title),
+                            stringResource(R.string.rule_multi_strike_desc)
+                        ),
+                        Triple(
+                            Icons.Default.Warning,
+                            stringResource(R.string.rule_extreme_overload_title),
+                            stringResource(R.string.rule_extreme_overload_desc)
                         )
                     )
 
@@ -1420,6 +1552,8 @@ private fun FlameSettingsAndSimulatorSheet(
                     )
 
                     // Streak Shield Row
+                    val availableManualShields by viewModel.availableManualShields.collectAsStateWithLifecycle()
+                    val activeShieldExpiresAt by viewModel.activeShieldExpiresAt.collectAsStateWithLifecycle()
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1443,8 +1577,17 @@ private fun FlameSettingsAndSimulatorSheet(
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
+                                val remainingMillis = if (activeShieldExpiresAt != null) {
+                                    (activeShieldExpiresAt!! - System.currentTimeMillis()).coerceAtLeast(0L)
+                                } else 0L
+                                val subText = if (isStreakShieldActive) {
+                                    if (activeShieldExpiresAt != null && remainingMillis > 0) {
+                                        "Active (${FlameManager.formatRemaining(remainingMillis)} remaining)"
+                                    } else "Inactivity paused (+3/day off)"
+                                } else "Normal accrual active"
+
                                 Text(
-                                    text = if (isStreakShieldActive) "Inactivity paused (+3/day off)" else "Normal accrual active",
+                                    text = subText,
                                     fontSize = 10.sp,
                                     color = if (isStreakShieldActive) NeonEmerald else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1463,6 +1606,34 @@ private fun FlameSettingsAndSimulatorSheet(
                                 checkedTrackColor = NeonEmerald
                             )
                         )
+                    }
+
+                    if (availableManualShields > 0) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                viewModel.activateManualShield()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("btn_sheet_activate_manual_shield")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shield,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Activate 3-Day Shield ($availableManualShields Available)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -1659,6 +1830,21 @@ private fun FlameAuditLogItemCard(entry: FlameLogEntry) {
             icon = Icons.Default.Undo
             iconColor = NeonAmber
             iconBgColor = NeonAmber.copy(alpha = 0.18f)
+        }
+        "DOUBLE_STRIKE" -> {
+            icon = Icons.Default.Bolt
+            iconColor = NeonAmber
+            iconBgColor = NeonAmber.copy(alpha = 0.18f)
+        }
+        "MULTI_STRIKE_COMBO" -> {
+            icon = Icons.Default.LocalFireDepartment
+            iconColor = Color(0xFFF472B6)
+            iconBgColor = Color(0x33EC4899)
+        }
+        "EXTREME_OVERLOAD" -> {
+            icon = Icons.Default.Warning
+            iconColor = Color(0xFFEF4444)
+            iconBgColor = Color(0x33EF4444)
         }
         else -> {
             icon = Icons.Default.Tune

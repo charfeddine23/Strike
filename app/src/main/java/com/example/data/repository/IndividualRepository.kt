@@ -59,7 +59,7 @@ class IndividualRepository(
      * Increments the individual's strike count and AUTOMATICALLY creates an audit StrikeEvent record
      * with the current date, time, year, and individual details.
      */
-    suspend fun incrementStrike(id: Long, delta: Int = 1) {
+    suspend fun incrementStrike(id: Long, delta: Int = 1): Long {
         val countDelta = delta.coerceAtLeast(1)
         dao.incrementStrike(id, countDelta)
 
@@ -88,7 +88,7 @@ class IndividualRepository(
             notes = "Auto-recorded strike event",
             timestamp = System.currentTimeMillis()
         )
-        strikeEventDao.insertEvent(event)
+        return strikeEventDao.insertEvent(event)
     }
 
     suspend fun setStrikeCount(id: Long, count: Int) {
@@ -96,6 +96,10 @@ class IndividualRepository(
     }
 
     suspend fun getLatestStrikeDate(): String? = strikeEventDao.getLatestStrikeDate()
+
+    suspend fun getEventsForDate(date: String): List<StrikeEvent> = strikeEventDao.getEventsForDate(date)
+
+    suspend fun updateEventNotes(id: Long, notes: String) = strikeEventDao.updateEventNotes(id, notes)
 
     /**
      * Stores past/historical strikes per year for an individual.

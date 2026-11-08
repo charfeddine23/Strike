@@ -35,6 +35,14 @@ data class StrikeEvent(
     val notes: String = "",
     val timestamp: Long = System.currentTimeMillis()
 ) {
+    fun getEffectivePenalty(): Double {
+        if (notes.contains("PENALTY:")) {
+            val part = notes.substringAfter("PENALTY:").substringBefore("|").toDoubleOrNull()
+            if (part != null) return part
+        }
+        return if (performanceValue > 0.0) performanceValue else 0.0
+    }
+
     companion object {
         val STRIKE_TYPES = listOf("Automatic", "Quick +1", "Quick +5", "Quick +10", "Historical", "Power", "Precision")
 

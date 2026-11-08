@@ -204,4 +204,20 @@
     <string name="girl_adjustment_title">تعديل نقاط خصم Girl</string>
     <string name="girl_adjustment_subtitle">اختر خصماً مسبقاً أو أدخل عدد النقاط المراد إنقاصها</string>
     <string name="girl_apply_action">تطبيق الخصم</string>
+    <string name="rule_double_strike_title">عقوبة الضربة المزدوجة (ضربتان/يوم)</string>
+    <string name="rule_double_strike_desc">تخصم (Boost 1 + Boost 2) × 3 من نقاط الشعلة وتمنح درع حماية لـ 3 أيام تفعله يدوياً.</string>
+    <string name="rule_multi_strike_title">كومبو الضربات المتعددة (3-5 ضربات/يوم)</string>
+    <string name="rule_multi_strike_desc">تخصم مجموع قيم الـ Boost × عدد الضربات وتفعّل تلقائياً درع حماية لمدة 7 أيام.</string>
+    <string name="rule_extreme_overload_title">التحميل الزائد الأقصى (6 ضربات أو أكثر/يوم)</string>
+    <string name="rule_extreme_overload_desc">تصفير كامل لنقاط الشعلة إلى 0، وتجميد مظهر النار، وبدء الحساب من الصفر.</string>
+    <string name="shield_unprotected">غير محمي</string>
+    <string name="shield_activate_manual">تفعيل درع 3 أيام</string>
+    <string name="shield_available_count">%1$d درع يدوي متاح</string>
+    <string name="shield_countdown_label">الوقت المتبقي</string>
+    <string name="shield_status_active">درع السلسلة مفعّل</string>
+    <string name="shield_status_inactive">درع السلسلة غير مفعّل</string>
+    <string name="shield_modal_title">نظام دروع السلسلة</string>
+    <string name="shield_modal_subtitle">حماية الخمول، العداد التنازلي ودروع المكافآت</string>
+    <string name="shield_inventory_title">مخزون الدروع المتاحة</string>
+    <string name="shield_rules_summary_title">مكافآت دروع الضربات المتعددة</string>
 </resources>
