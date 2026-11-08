@@ -4,9 +4,11 @@ import android.view.SoundEffectConstants
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
@@ -127,7 +129,7 @@ private enum class FlameLogFilter {
     SIMULATOR
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun FlameScreen(
     viewModel: IndividualViewModel,
@@ -166,7 +168,7 @@ fun FlameScreen(
 
     var selectedFilter by remember { mutableStateOf(FlameLogFilter.ALL) }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
-    var showDeflameDialog by remember { mutableStateOf(false) }
+    var showGirlAdjustmentDialog by remember { mutableStateOf(false) }
 
     val animatedScore by animateFloatAsState(
         targetValue = flameScore.toFloat(),
@@ -268,15 +270,16 @@ fun FlameScreen(
         )
     }
 
-    // Deflame / Penalty Points Adjustment Dialog
-    if (showDeflameDialog) {
+    // Girl Points Adjustment Dialog (Opened on long press of the Girl button)
+    if (showGirlAdjustmentDialog) {
         DeflameAdjustmentDialog(
             currentFlameScore = flameScore,
-            onDismiss = { showDeflameDialog = false },
+            onDismiss = { showGirlAdjustmentDialog = false },
             onApply = { penaltyPoints ->
-                viewModel.deflame(penaltyPoints)
+                viewModel.girl(penaltyPoints)
             },
-            isHapticEnabled = isHapticEnabled
+            isHapticEnabled = isHapticEnabled,
+            isGirlMode = true
         )
     }
 
@@ -492,7 +495,7 @@ fun FlameScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // "Deflame" Button / Manual Penalty Adjustment
+                    // "Deflame" Button (reverted to original instant 3 PTS deduction, no dialog/settings)
                     LiquidGlassCard(
                         modifier = Modifier
                             .weight(1f)
@@ -500,7 +503,7 @@ fun FlameScreen(
                             .clickable {
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                                showDeflameDialog = true
+                                viewModel.deflame(3.0)
                             }
                             .testTag("btn_deflame"),
                         shape = RoundedCornerShape(18.dp)
@@ -535,41 +538,39 @@ fun FlameScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color(0x2238BDF8))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "-2 PTS",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = Color(0xFF38BDF8)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.Default.Tune,
-                                    contentDescription = "Adjust",
-                                    tint = Color(0xFF38BDF8),
-                                    modifier = Modifier.size(12.dp)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0x2238BDF8))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "-3 PTS",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color(0xFF38BDF8)
                                 )
                             }
                         }
                     }
 
-                    // "Girl" Button (-3 points)
+                    // "Girl" Button (Normal tap: -3 pts, Long press: adjust deduction points up to 10000)
                     LiquidGlassCard(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(18.dp))
-                            .clickable {
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                viewModel.girl()
-                            }
+                            .combinedClickable(
+                                onClick = {
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    viewModel.girl()
+                                },
+                                onLongClick = {
+                                    HapticHelper.triggerStageTransitionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    showGirlAdjustmentDialog = true
+                                }
+                            )
                             .testTag("btn_girl"),
                         shape = RoundedCornerShape(18.dp)
                     ) {
@@ -603,17 +604,26 @@ fun FlameScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0x22FB7185))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = "-3 PTS",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color(0xFFFB7185)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0x22FB7185))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "-3 PTS",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color(0xFFFB7185)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = "Adjust points (Hold)",
+                                    tint = Color(0xFFFB7185),
+                                    modifier = Modifier.size(12.dp)
                                 )
                             }
                         }

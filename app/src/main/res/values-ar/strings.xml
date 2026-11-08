@@ -201,4 +201,7 @@
     <string name="deflame_manual_input_hint">مثال: 5.0</string>
     <string name="deflame_apply_action">تطبيق الخفض</string>
     <string name="deflame_select_preset">خيارات الخصم السريعة</string>
+    <string name="girl_adjustment_title">تعديل نقاط خصم Girl</string>
+    <string name="girl_adjustment_subtitle">اختر خصماً مسبقاً أو أدخل عدد النقاط المراد إنقاصها</string>
+    <string name="girl_apply_action">تطبيق الخصم</string>
 </resources>

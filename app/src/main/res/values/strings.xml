@@ -201,4 +201,7 @@
     <string name="deflame_manual_input_hint">e.g. 5.0</string>
     <string name="deflame_apply_action">Apply Deflame</string>
     <string name="deflame_select_preset">Quick Penalty Presets</string>
+    <string name="girl_adjustment_title">Girl Deduction Adjustment</string>
+    <string name="girl_adjustment_subtitle">Select preset or enter points to deduct</string>
+    <string name="girl_apply_action">Apply Deduction</string>
 </resources>

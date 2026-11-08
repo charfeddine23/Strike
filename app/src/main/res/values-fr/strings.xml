@@ -201,4 +201,7 @@
     <string name="deflame_manual_input_hint">ex. 5.0</string>
     <string name="deflame_apply_action">Appliquer la Déflamme</string>
     <string name="deflame_select_preset">Paliers Rapides</string>
+    <string name="girl_adjustment_title">Ajustement Déduction Girl</string>
+    <string name="girl_adjustment_subtitle">Sélectionnez un palier ou saisissez les points à déduire</string>
+    <string name="girl_apply_action">Appliquer la Déduction</string>
 </resources>

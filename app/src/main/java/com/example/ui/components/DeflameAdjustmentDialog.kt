@@ -23,13 +23,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -55,15 +55,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
-import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.PlusJakartaSans
 import com.example.util.HapticHelper
 import java.util.Locale
 
 /**
- * Luxurious Liquid Glass Deflame / Penalty Points Adjustment Dialog.
+ * Luxurious Liquid Glass Points Deduction / Penalty Adjustment Dialog.
+ * Triggered on long-press of the Girl button.
  * Allows selecting preset deduction options (-2, -3, -5, -10, -25, -50 PTS)
- * AND entering custom penalty points manually via a styled text field.
+ * AND entering custom points manually via a styled text field.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -71,16 +71,28 @@ fun DeflameAdjustmentDialog(
     currentFlameScore: Double,
     onDismiss: () -> Unit,
     onApply: (Double) -> Unit,
-    isHapticEnabled: Boolean = true
+    isHapticEnabled: Boolean = true,
+    isGirlMode: Boolean = true
 ) {
     val context = LocalContext.current
     val view = LocalView.current
     val focusManager = LocalFocusManager.current
 
+    val primaryColor = if (isGirlMode) Color(0xFFFB7185) else Color(0xFF38BDF8)
+    val buttonBgColor = if (isGirlMode) Color(0xFFE11D48) else Color(0xFF0284C7)
+    val chipSelectedBg = if (isGirlMode) Color(0xFFBE123C) else Color(0xFF0284C7)
+    val iconVector = if (isGirlMode) Icons.Default.Favorite else Icons.Default.AcUnit
+    val iconBg = if (isGirlMode) Color(0x33E11D48) else Color(0x330284C7)
+
+    val defaultVal = if (isGirlMode) 3.0 else 2.0
     val presets = listOf(2.0, 3.0, 5.0, 10.0, 25.0, 50.0)
-    var selectedPreset by remember { mutableDoubleStateOf(2.0) }
-    var textInput by remember { mutableStateOf("2.0") }
+    var selectedPreset by remember { mutableDoubleStateOf(defaultVal) }
+    var textInput by remember { mutableStateOf(if (defaultVal % 1.0 == 0.0) "${defaultVal.toInt()}" else "$defaultVal") }
     var inputError by remember { mutableStateOf<String?>(null) }
+
+    val dialogTitle = if (isGirlMode) stringResource(R.string.girl_adjustment_title) else stringResource(R.string.deflame_adjustment_title)
+    val dialogSubtitle = if (isGirlMode) stringResource(R.string.girl_adjustment_subtitle) else stringResource(R.string.deflame_adjustment_subtitle)
+    val applyButtonText = if (isGirlMode) stringResource(R.string.girl_apply_action) else stringResource(R.string.deflame_apply_action)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -98,28 +110,28 @@ fun DeflameAdjustmentDialog(
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color(0x330284C7))
-                            .border(1.5.dp, Color(0xFF38BDF8), CircleShape),
+                            .background(iconBg)
+                            .border(1.5.dp, primaryColor, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.AcUnit,
+                            imageVector = iconVector,
                             contentDescription = null,
-                            tint = Color(0xFF38BDF8),
+                            tint = primaryColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = stringResource(R.string.deflame_adjustment_title),
+                            text = dialogTitle,
                             fontWeight = FontWeight.Bold,
                             fontFamily = PlusJakartaSans,
                             fontSize = 17.sp,
                             color = Color.White
                         )
                         Text(
-                            text = stringResource(R.string.deflame_adjustment_subtitle),
+                            text = dialogSubtitle,
                             fontSize = 10.sp,
                             color = Color(0xFF94A3B8)
                         )
@@ -149,8 +161,8 @@ fun DeflameAdjustmentDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0x1838BDF8))
-                        .border(1.dp, Color(0x3538BDF8), RoundedCornerShape(12.dp))
+                        .background(primaryColor.copy(alpha = 0.12f))
+                        .border(1.dp, primaryColor.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Row(
@@ -168,7 +180,7 @@ fun DeflameAdjustmentDialog(
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Black,
                             fontFamily = PlusJakartaSans,
-                            color = Color(0xFF38BDF8)
+                            color = primaryColor
                         )
                     }
                 }
@@ -198,31 +210,31 @@ fun DeflameAdjustmentDialog(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(
-                                    if (isSelected) Color(0xFF0284C7)
+                                    if (isSelected) chipSelectedBg
                                     else Color(0x221E293B)
                                 )
                                 .border(
                                     1.dp,
-                                    if (isSelected) Color(0xFF38BDF8)
-                                    else Color(0x4038BDF8),
+                                    if (isSelected) primaryColor
+                                    else primaryColor.copy(alpha = 0.35f),
                                     RoundedCornerShape(10.dp)
                                 )
                                 .clickable {
                                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
                                     selectedPreset = presetVal
-                                    textInput = presetVal.toString()
+                                    textInput = if (presetVal % 1.0 == 0.0) "${presetVal.toInt()}" else "$presetVal"
                                     inputError = null
                                 }
                                 .padding(horizontal = 12.dp, vertical = 7.dp)
-                                .testTag("deflame_chip_${presetVal.toInt()}"),
+                                .testTag("adjustment_chip_${presetVal.toInt()}"),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = chipText,
                                 fontSize = 12.sp,
                                 fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else Color(0xFF38BDF8)
+                                color = if (isSelected) Color.White else primaryColor
                             )
                         }
                     }
@@ -264,7 +276,7 @@ fun DeflameAdjustmentDialog(
                         Icon(
                             imageVector = Icons.Default.Tune,
                             contentDescription = null,
-                            tint = Color(0xFF38BDF8),
+                            tint = primaryColor,
                             modifier = Modifier.size(18.dp)
                         )
                     },
@@ -280,16 +292,16 @@ fun DeflameAdjustmentDialog(
                     ),
                     isError = inputError != null,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF38BDF8),
-                        unfocusedBorderColor = Color(0x4038BDF8),
-                        focusedLabelColor = Color(0xFF38BDF8),
-                        cursorColor = Color(0xFF38BDF8),
+                        focusedBorderColor = primaryColor,
+                        unfocusedBorderColor = primaryColor.copy(alpha = 0.40f),
+                        focusedLabelColor = primaryColor,
+                        cursorColor = primaryColor,
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .testTag("deflame_manual_input")
+                        .testTag("adjustment_manual_input")
                 )
 
                 if (inputError != null) {
@@ -315,12 +327,12 @@ fun DeflameAdjustmentDialog(
                         inputError = "Enter value > 0"
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                colors = ButtonDefaults.buttonColors(containerColor = buttonBgColor),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.testTag("deflame_apply_btn")
+                modifier = Modifier.testTag("adjustment_apply_btn")
             ) {
                 Text(
-                    text = stringResource(R.string.deflame_apply_action),
+                    text = applyButtonText,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )

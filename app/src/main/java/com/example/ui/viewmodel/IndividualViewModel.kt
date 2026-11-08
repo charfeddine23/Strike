@@ -327,9 +327,9 @@ class IndividualViewModel(
     }
 
     /**
-     * "Deflame" Button / Manual Penalty Adjustment: Decreases the total Flame score by [points] (default 2.0).
+     * "Deflame" Button: Decreases the total Flame score by 3 points (default 3.0).
      */
-    fun deflame(points: Double = 2.0) {
+    fun deflame(points: Double = 3.0) {
         val newScore = FlameManager.deflame(getApplication(), points)
         viewModelScope.launch {
             val formatted = if (points % 1.0 == 0.0) "${points.toInt()}" else String.format(Locale.US, "%.1f", points)
@@ -343,15 +343,16 @@ class IndividualViewModel(
     }
 
     /**
-     * "Girl" Button: Each tap instantly decreases the total Flame score by 3 points (ensuring score >= 0).
+     * "Girl" Button: Decreases the total Flame score by [points] (default 3.0 or custom value).
      */
-    fun girl() {
-        val newScore = FlameManager.girl(getApplication())
+    fun girl(points: Double = 3.0) {
+        val newScore = FlameManager.girl(getApplication(), points)
         viewModelScope.launch {
+            val formatted = if (points % 1.0 == 0.0) "${points.toInt()}" else String.format(Locale.US, "%.1f", points)
             val msg = when (currentLanguage.value) {
-                "ar" -> "تبريد Girl (-3): ${String.format(Locale.US, "%.1f", newScore)}"
-                "fr" -> "Action Girl (-3 pts) : ${String.format(Locale.US, "%.1f", newScore)}"
-                else -> "Girl cooldown (-3 pts): ${String.format(Locale.US, "%.1f", newScore)}"
+                "ar" -> "تبريد Girl (-$formatted): ${String.format(Locale.US, "%.1f", newScore)}"
+                "fr" -> "Action Girl (-$formatted pts) : ${String.format(Locale.US, "%.1f", newScore)}"
+                else -> "Girl cooldown (-$formatted pts): ${String.format(Locale.US, "%.1f", newScore)}"
             }
             emitMessage(msg)
         }

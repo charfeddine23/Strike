@@ -225,9 +225,9 @@ object FlameManager {
     }
 
     /**
-     * "Deflame" Button / Manual Penalty Adjustment: Decreases the total Flame score by delta points (ensuring score >= 0).
+     * "Deflame" Button: Each tap instantly decreases the total Flame score by 3 points (ensuring score >= 0).
      */
-    fun deflame(context: Context, delta: Double = 2.0): Double {
+    fun deflame(context: Context, delta: Double = 3.0): Double {
         val safeDelta = delta.coerceAtLeast(0.1)
         val formatted = if (safeDelta % 1.0 == 0.0) "${safeDelta.toInt()}" else String.format(Locale.US, "%.1f", safeDelta)
         return deductPoints(
@@ -240,14 +240,16 @@ object FlameManager {
     }
 
     /**
-     * "Girl" Button: Each tap instantly decreases the total Flame score by 3 points (ensuring score >= 0).
+     * "Girl" Button / Custom Points Adjustment: Each tap decreases the total Flame score by [delta] (default 3.0).
      */
-    fun girl(context: Context): Double {
+    fun girl(context: Context, delta: Double = 3.0): Double {
+        val safeDelta = delta.coerceAtLeast(0.1)
+        val formatted = if (safeDelta % 1.0 == 0.0) "${safeDelta.toInt()}" else String.format(Locale.US, "%.1f", safeDelta)
         return deductPoints(
             context = context,
-            delta = 3.0,
+            delta = safeDelta,
             reason = "GIRL",
-            details = "Manual cooldown decrease (-3.0 pts)",
+            details = "Manual cooldown decrease (-$formatted pts)",
             title = "Girl Button Action"
         )
     }
