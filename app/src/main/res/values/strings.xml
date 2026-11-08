@@ -219,5 +219,17 @@
     <string name="shield_modal_title">Streak Shield System</string>
     <string name="shield_modal_subtitle">Inactivity protection, countdown timer &amp; reward shields</string>
     <string name="shield_inventory_title">Available Shield Inventory</string>
-    <string name="shield_rules_summary_title">Multi-Strike Shield Rewards</string>
+    <string name="shield_rules_summary_title">Streak Shield &amp; Multi-Strike Rules</string>
+    <string name="shield_1day_title">1-Day Streak Shield</string>
+    <string name="shield_1day_desc">Pauses daily inactivity accrual (+3 pts/day) for 24 hours.</string>
+    <string name="shield_activate_1day">Activate 1-Day Shield</string>
+    <string name="shield_claim_1day">+ Add 1-Day Shield</string>
+    <string name="shield_3day_title">3-Day Streak Shield</string>
+    <string name="shield_3day_desc">Earned from Double Strike penalties. Pauses inactivity for 72 hours.</string>
+    <string name="shield_activate_3day">Activate 3-Day Shield</string>
+    <string name="shield_7day_title">7-Day Streak Shield (Auto)</string>
+    <string name="shield_7day_desc">Automatically activated when registering 3 to 5 strikes in a single day.</string>
+    <string name="shield_available_qty">%1$d Available</string>
+    <string name="shield_settings_toggle">Streak Shield Protection</string>
+    <string name="shield_settings_toggle_desc">Pause daily inactivity points manually or via inventory shields</string>
 </resources>

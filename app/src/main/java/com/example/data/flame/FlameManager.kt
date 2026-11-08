@@ -36,6 +36,7 @@ object FlameManager {
     private const val KEY_STREAK_SHIELD = "key_streak_shield_active"
     private const val KEY_ACTIVE_SHIELD_EXPIRES_AT = "key_active_shield_expires_at"
     private const val KEY_AVAILABLE_MANUAL_SHIELDS = "key_available_manual_shields"
+    private const val KEY_AVAILABLE_1DAY_SHIELDS = "key_available_1day_shields"
     private const val KEY_PEAK_SCORE = "key_peak_flame_score"
     private const val KEY_TOTAL_POINTS_GAINED = "key_total_points_gained"
     private const val KEY_TOTAL_POINTS_EXTINGUISHED = "key_total_points_extinguished"
@@ -53,8 +54,11 @@ object FlameManager {
     private val _activeShieldExpiresAt = MutableStateFlow<Long?>(null)
     val activeShieldExpiresAt: StateFlow<Long?> = _activeShieldExpiresAt.asStateFlow()
 
-    private val _availableManualShields = MutableStateFlow(0)
+    private val _availableManualShields = MutableStateFlow(0) // 3-Day Shields from Double Strike
     val availableManualShields: StateFlow<Int> = _availableManualShields.asStateFlow()
+
+    private val _available1DayShields = MutableStateFlow(1) // 1-Day Shields
+    val available1DayShields: StateFlow<Int> = _available1DayShields.asStateFlow()
 
     private val _peakScore = MutableStateFlow(45.0)
     val peakScore: StateFlow<Double> = _peakScore.asStateFlow()
@@ -133,6 +137,7 @@ object FlameManager {
         }
 
         _availableManualShields.value = prefs.getInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
+        _available1DayShields.value = prefs.getInt(KEY_AVAILABLE_1DAY_SHIELDS, 1)
         val savedPeak = prefs.getFloat(KEY_PEAK_SCORE, savedScore.toFloat()).toDouble()
         _peakScore.value = maxOf(savedScore, savedPeak)
         _totalPointsGained.value = prefs.getFloat(KEY_TOTAL_POINTS_GAINED, 0.0f).toDouble()
@@ -207,6 +212,48 @@ object FlameManager {
             resultingScore = _flameScore.value,
             reason = "STREAK_SHIELD",
             details = "Manual ${days}-Day Shield activated. Protected until $expiryStr ($countdown countdown remaining)."
+        )
+        return true
+    }
+
+    @Synchronized
+    fun grant1DayShield(context: Context, count: Int = 1): Int {
+        init(context)
+        val newCount = (_available1DayShields.value + count).coerceAtLeast(0)
+        _available1DayShields.value = newCount
+        getPrefs(context).edit().putInt(KEY_AVAILABLE_1DAY_SHIELDS, newCount).apply()
+        return newCount
+    }
+
+    @Synchronized
+    fun activate1DayShield(context: Context): Boolean {
+        init(context)
+        if (_available1DayShields.value <= 0) return false
+        val now = System.currentTimeMillis()
+        val currentExpires = _activeShieldExpiresAt.value
+        val base = if (currentExpires != null && currentExpires > now) currentExpires else now
+        val newExpires = base + 1 * 24 * 3600 * 1000L
+
+        val newCount = (_available1DayShields.value - 1).coerceAtLeast(0)
+        _available1DayShields.value = newCount
+        _activeShieldExpiresAt.value = newExpires
+        _isStreakShieldActive.value = true
+
+        getPrefs(context).edit()
+            .putInt(KEY_AVAILABLE_1DAY_SHIELDS, newCount)
+            .putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, newExpires)
+            .putBoolean(KEY_STREAK_SHIELD, true)
+            .apply()
+
+        val expiryStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(newExpires))
+        val countdown = formatRemaining(newExpires - now)
+        logEvent(
+            context = context,
+            title = "1-Day Streak Shield Activated",
+            change = 0.0,
+            resultingScore = _flameScore.value,
+            reason = "STREAK_SHIELD",
+            details = "1-Day Shield activated. Protected until $expiryStr ($countdown countdown remaining)."
         )
         return true
     }

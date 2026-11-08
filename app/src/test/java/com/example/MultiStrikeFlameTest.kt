@@ -145,4 +145,17 @@ class MultiStrikeFlameTest {
         assertEquals(650.0, newScore, 0.001)
         assertEquals(650.0, FlameManager.flameScore.value, 0.001)
     }
+
+    @Test
+    fun `verify 1-day shield grant and activation`() {
+        val initialCount = FlameManager.available1DayShields.value
+        FlameManager.grant1DayShield(context, count = 2)
+        assertEquals(initialCount + 2, FlameManager.available1DayShields.value)
+
+        val success = FlameManager.activate1DayShield(context)
+        assertTrue(success)
+        assertEquals(initialCount + 1, FlameManager.available1DayShields.value)
+        assertTrue(FlameManager.isShieldActiveNow())
+        assertTrue(FlameManager.getActiveShieldRemainingMillis() > 0)
+    }
 }

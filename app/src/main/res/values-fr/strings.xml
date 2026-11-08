@@ -219,5 +219,17 @@
     <string name="shield_modal_title">Système de Boucliers</string>
     <string name="shield_modal_subtitle">Protection contre l\'inactivité, compte à rebours et récompenses</string>
     <string name="shield_inventory_title">Inventaire des Boucliers</string>
-    <string name="shield_rules_summary_title">Récompenses Multi-Strikes</string>
+    <string name="shield_rules_summary_title">Règles et Réglages des Boucliers</string>
+    <string name="shield_1day_title">Bouclier 1 Jour</string>
+    <string name="shield_1day_desc">Met en pause l\'inactivité quotidienne (+3 pts/jour) pendant 24 heures.</string>
+    <string name="shield_activate_1day">Activer Bouclier 1 Jour</string>
+    <string name="shield_claim_1day">+ Ajouter Bouclier 1 Jour</string>
+    <string name="shield_3day_title">Bouclier 3 Jours</string>
+    <string name="shield_3day_desc">Obtenu via la pénalité Double Strike. Pause l\'inactivité 72 heures.</string>
+    <string name="shield_activate_3day">Activer Bouclier 3 Jours</string>
+    <string name="shield_7day_title">Bouclier 7 Jours (Auto)</string>
+    <string name="shield_7day_desc">Activé automatiquement lors de 3 à 5 strikes le même jour.</string>
+    <string name="shield_available_qty">%1$d disponible(s)</string>
+    <string name="shield_settings_toggle">Protection de Série</string>
+    <string name="shield_settings_toggle_desc">Mettre en pause les points d\'inactivité manuellement ou via vos boucliers</string>
 </resources>

@@ -152,6 +152,7 @@ fun FlameScreen(
     val isStreakShieldActive by viewModel.isStreakShieldActive.collectAsStateWithLifecycle()
     val activeShieldExpiresAt by viewModel.activeShieldExpiresAt.collectAsStateWithLifecycle()
     val availableManualShields by viewModel.availableManualShields.collectAsStateWithLifecycle()
+    val available1DayShields by viewModel.available1DayShields.collectAsStateWithLifecycle()
     val peakScore by viewModel.peakFlameScore.collectAsStateWithLifecycle()
     val totalGained by viewModel.totalPointsGained.collectAsStateWithLifecycle()
     val totalExtinguished by viewModel.totalPointsExtinguished.collectAsStateWithLifecycle()
@@ -303,8 +304,18 @@ fun FlameScreen(
             activeShieldExpiresAt = activeShieldExpiresAt,
             remainingMillis = currentShieldRemainingMillis,
             availableManualShields = availableManualShields,
+            available1DayShields = available1DayShields,
             onActivateManualShield = {
                 viewModel.activateManualShield()
+            },
+            onActivate1DayShield = {
+                viewModel.activate1DayShield()
+            },
+            onGrant1DayShield = {
+                viewModel.grant1DayShield()
+            },
+            onToggleShieldActive = { active ->
+                viewModel.setStreakShieldActive(active)
             },
             onDismiss = { showShieldModal = false },
             isHapticEnabled = isHapticEnabled
@@ -378,13 +389,13 @@ fun FlameScreen(
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(
                                         if (isShieldActive) Color(0x3310B981)
-                                        else if (availableManualShields > 0) Color(0x3338BDF8)
+                                        else if (available1DayShields > 0 || availableManualShields > 0) Color(0x3338BDF8)
                                         else Color(0x22F43F5E)
                                     )
                                     .border(
                                         1.dp,
                                         if (isShieldActive) NeonEmerald
-                                        else if (availableManualShields > 0) Color(0xFF38BDF8)
+                                        else if (available1DayShields > 0 || availableManualShields > 0) Color(0xFF38BDF8)
                                         else Color(0x66F43F5E),
                                         RoundedCornerShape(12.dp)
                                     )
@@ -411,7 +422,8 @@ fun FlameScreen(
                                             fontSize = 11.sp,
                                             color = NeonEmerald
                                         )
-                                    } else if (availableManualShields > 0) {
+                                    } else if (available1DayShields > 0 || availableManualShields > 0) {
+                                        val totalAvail = available1DayShields + availableManualShields
                                         Icon(
                                             imageVector = Icons.Default.Shield,
                                             contentDescription = "Shield Available",
@@ -420,7 +432,9 @@ fun FlameScreen(
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = "${availableManualShields}x 3D",
+                                            text = if (available1DayShields > 0 && availableManualShields == 0) "${available1DayShields}x 1D"
+                                            else if (availableManualShields > 0 && available1DayShields == 0) "${availableManualShields}x 3D"
+                                            else "${totalAvail} Shields",
                                             fontWeight = FontWeight.ExtraBold,
                                             fontSize = 11.sp,
                                             color = Color(0xFF38BDF8)
@@ -1001,11 +1015,6 @@ fun FlameScreen(
 
                     val rules = listOf(
                         Triple(
-                            Icons.Default.Shield,
-                            stringResource(R.string.rule_shield_title),
-                            stringResource(R.string.rule_shield_desc)
-                        ),
-                        Triple(
                             Icons.Default.Schedule,
                             stringResource(R.string.rule_inactivity_title),
                             stringResource(R.string.rule_inactivity_desc)
@@ -1551,92 +1560,7 @@ private fun FlameSettingsAndSimulatorSheet(
                         modifier = Modifier.padding(bottom = 10.dp)
                     )
 
-                    // Streak Shield Row
-                    val availableManualShields by viewModel.availableManualShields.collectAsStateWithLifecycle()
-                    val activeShieldExpiresAt by viewModel.activeShieldExpiresAt.collectAsStateWithLifecycle()
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = null,
-                                tint = if (isStreakShieldActive) NeonEmerald else Color.Gray,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.streak_shield_title),
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                val remainingMillis = if (activeShieldExpiresAt != null) {
-                                    (activeShieldExpiresAt!! - System.currentTimeMillis()).coerceAtLeast(0L)
-                                } else 0L
-                                val subText = if (isStreakShieldActive) {
-                                    if (activeShieldExpiresAt != null && remainingMillis > 0) {
-                                        "Active (${FlameManager.formatRemaining(remainingMillis)} remaining)"
-                                    } else "Inactivity paused (+3/day off)"
-                                } else "Normal accrual active"
 
-                                Text(
-                                    text = subText,
-                                    fontSize = 10.sp,
-                                    color = if (isStreakShieldActive) NeonEmerald else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        Switch(
-                            checked = isStreakShieldActive,
-                            onCheckedChange = { active ->
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                viewModel.setStreakShieldActive(active)
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = NeonEmerald
-                            )
-                        )
-                    }
-
-                    if (availableManualShields > 0) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = {
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                viewModel.activateManualShield()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("btn_sheet_activate_manual_shield")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Activate 3-Day Shield ($availableManualShields Available)",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
 
                     // Haptics Feedback Row
                     Row(

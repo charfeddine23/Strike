@@ -219,5 +219,17 @@
     <string name="shield_modal_title">نظام دروع السلسلة</string>
     <string name="shield_modal_subtitle">حماية الخمول، العداد التنازلي ودروع المكافآت</string>
     <string name="shield_inventory_title">مخزون الدروع المتاحة</string>
-    <string name="shield_rules_summary_title">مكافآت دروع الضربات المتعددة</string>
+    <string name="shield_rules_summary_title">شرح قواعد وإعدادات دروع السلسلة</string>
+    <string name="shield_1day_title">درع 1 يوم</string>
+    <string name="shield_1day_desc">يوقف احتساب نقاط الخمول اليومي (+3 نقاط/يوم) لمدة 24 ساعة كاملة.</string>
+    <string name="shield_activate_1day">تفعيل درع 1 يوم</string>
+    <string name="shield_claim_1day">+ إضافة درع 1 يوم</string>
+    <string name="shield_3day_title">درع 3 أيام</string>
+    <string name="shield_3day_desc">يُكتسب من عقوبة الضربة المزدوجة. يوقف الخمول لمدة 72 ساعة.</string>
+    <string name="shield_activate_3day">تفعيل درع 3 أيام</string>
+    <string name="shield_7day_title">درع 7 أيام (تلقائي)</string>
+    <string name="shield_7day_desc">يُفعّل تلقائياً وفوراً عند تسجيل 3 إلى 5 ضربات في يوم واحد.</string>
+    <string name="shield_available_qty">المتوفر: %1$d</string>
+    <string name="shield_settings_toggle">حماية درع السلسلة</string>
+    <string name="shield_settings_toggle_desc">إيقاف نقاط الخمول اليومية يدوياً أو عبر تفعيل الدروع المتاحة</string>
 </resources>

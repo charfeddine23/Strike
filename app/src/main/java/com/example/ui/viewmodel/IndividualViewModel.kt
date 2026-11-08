@@ -315,6 +315,7 @@ class IndividualViewModel(
     val isStreakShieldActive: StateFlow<Boolean> = FlameManager.isStreakShieldActive
     val activeShieldExpiresAt: StateFlow<Long?> = FlameManager.activeShieldExpiresAt
     val availableManualShields: StateFlow<Int> = FlameManager.availableManualShields
+    val available1DayShields: StateFlow<Int> = FlameManager.available1DayShields
     val peakFlameScore: StateFlow<Double> = FlameManager.peakScore
     val totalPointsGained: StateFlow<Double> = FlameManager.totalPointsGained
     val totalPointsExtinguished: StateFlow<Double> = FlameManager.totalPointsExtinguished
@@ -379,6 +380,32 @@ class IndividualViewModel(
                 }
                 emitMessage(msg)
             }
+        }
+    }
+
+    fun activate1DayShield() {
+        val success = FlameManager.activate1DayShield(getApplication())
+        viewModelScope.launch {
+            if (success) {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> "تم تفعيل درع 1 يوم بنجاح (24 ساعة حماية)"
+                    "fr" -> "Bouclier 1 jour activé avec succès (24h de protection)"
+                    else -> "1-Day Shield activated successfully (24h protection)"
+                }
+                emitMessage(msg)
+            }
+        }
+    }
+
+    fun grant1DayShield(count: Int = 1) {
+        val newCount = FlameManager.grant1DayShield(getApplication(), count)
+        viewModelScope.launch {
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تمت إضافة درع 1 يوم إلى مخزونك (المتوفر: $newCount)"
+                "fr" -> "Bouclier 1 jour ajouté à votre inventaire (Dispo : $newCount)"
+                else -> "1-Day Shield added to your inventory (Available: $newCount)"
+            }
+            emitMessage(msg)
         }
     }
 
