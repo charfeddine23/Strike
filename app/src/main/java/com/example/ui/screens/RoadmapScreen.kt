@@ -553,6 +553,33 @@ fun WavyStationItem(
             .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center
     ) {
+        // Connecting Cyber Conduit to next station along the sine wave
+        if (station.id < 500) {
+            val nextPhase = ((station.id + 1) * 0.42f)
+            val nextOffsetDp = (sin(nextPhase) * 60f).dp
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(32.dp)
+                    .align(Alignment.BottomCenter)
+            ) {
+                val startX = size.width / 2f + horizontalOffsetDp.toPx()
+                val endX = size.width / 2f + nextOffsetDp.toPx()
+                val conduitColor = when (station.state) {
+                    StationState.CLAIMED -> Color(0xFFF59E0B).copy(alpha = 0.65f)
+                    StationState.UNLOCKED -> Color(0xFF10B981).copy(alpha = 0.85f)
+                    StationState.LOCKED -> Color(0x3364748B)
+                }
+                drawLine(
+                    color = conduitColor,
+                    start = Offset(startX, 0f),
+                    end = Offset(endX, size.height),
+                    strokeWidth = 2.5f,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+                )
+            }
+        }
+
         Box(
             modifier = Modifier
                 .offset { IntOffset(horizontalOffsetDp.roundToPx(), 0) }

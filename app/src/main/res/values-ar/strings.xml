@@ -255,4 +255,8 @@
     <string name="roadmap_task_completed">مكتملة</string>
     <string name="roadmap_hammers_active">المطارق الخارقة النشطة</string>
     <string name="roadmap_keys_inventory">مخزون مفاتيح التجاوز</string>
+    <string name="deviations_warning_shadow_hazard">⚠️ خطر داهم: اختراق الظلال بنسبة %1$d%% • الرتبة: %2$s • طهّر النظام عبر Deflame</string>
+    <string name="deviations_harmonic_resonance">✨ رنين النور الملائكي: %1$d%% • صعود قدسي نحو: %2$s</string>
+    <string name="deviations_baphomet_overload">🚨 انهيار وشيك: بافوميت يمسك بالشيفرة الجينية بالكامل!</string>
+    <string name="deviations_gabriel_ascension">🌟 صعود إلهي: جبريل يمس الشيفرة محولاً إياها إلى النور الأبيض الخالص!</string>
 </resources>

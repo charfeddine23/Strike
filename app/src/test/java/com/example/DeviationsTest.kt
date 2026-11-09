@@ -65,4 +65,15 @@ class DeviationsTest {
         assertEquals(0.0f, tier50.estrogenPercent, 0.01f)
         assertEquals(1.0f, tier50.testosteronePercent, 0.01f)
     }
+
+    @Test
+    fun `verify all 20 Dark Ranks and 20 Light Ranks are complete and non-empty`() {
+        assertEquals(20, DeviationsManager.DARK_RANKS.size)
+        assertEquals(20, DeviationsManager.LIGHT_RANKS.size)
+        assertEquals(50, DeviationsManager.BIOLOGICAL_50_TIERS.size)
+
+        DeviationsManager.DARK_RANKS.forEach { assertTrue(it.isNotBlank()) }
+        DeviationsManager.LIGHT_RANKS.forEach { assertTrue(it.isNotBlank()) }
+        DeviationsManager.BIOLOGICAL_50_TIERS.forEach { assertTrue(it.isNotBlank()) }
+    }
 }

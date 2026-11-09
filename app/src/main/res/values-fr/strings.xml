@@ -255,4 +255,8 @@
     <string name="roadmap_task_completed">Accomplie</string>
     <string name="roadmap_hammers_active">Marteaux de Puissance Actifs</string>
     <string name="roadmap_keys_inventory">Inventaire des Clés de Passe</string>
+    <string name="deviations_warning_shadow_hazard">DANGER DE L\'OMBRE : Emprise à %1$d%% • Menace : %2$s • Purifiez via Deflame</string>
+    <string name="deviations_harmonic_resonance">RÉSONANCE CÉLESTE : %1$d%% • Ascension : %2$s</string>
+    <string name="deviations_baphomet_overload">ALERTE CRITIQUE : Baphomet a totalement saisi l\'ADN neuronal !</string>
+    <string name="deviations_gabriel_ascension">SANCTIFIÉ : Gabriel a transmuté l\'ADN en pure lumière céleste !</string>
 </resources>

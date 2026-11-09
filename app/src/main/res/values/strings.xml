@@ -255,4 +255,8 @@
     <string name="roadmap_task_completed">Completed</string>
     <string name="roadmap_hammers_active">Active Power Hammers</string>
     <string name="roadmap_keys_inventory">Skipping Keys Inventory</string>
+    <string name="deviations_warning_shadow_hazard">CRITICAL SHADOW HAZARD: Grip at %1$d%% • Threat: %2$s • Purify system</string>
+    <string name="deviations_harmonic_resonance">CELESTIAL HARMONY: Resonance at %1$d%% • Ascending: %2$s</string>
+    <string name="deviations_baphomet_overload">OVERLOAD: Baphomet has fully seized the neural DNA!</string>
+    <string name="deviations_gabriel_ascension">SANCTIFIED: Gabriel has touched the genetic code into pure diamond light!</string>
 </resources>
