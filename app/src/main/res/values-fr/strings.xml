@@ -243,4 +243,16 @@
     <string name="deviations_tier_label">Rang %1$d / 50</string>
     <string name="deviations_inspect_tiers">Voir les 50 Rangs Biologiques</string>
     <string name="deviations_dna_rotate_hint">Glissez pour faire pivoter l\'ADN • Physique réactive</string>
+    <string name="roadmap_nav_title">Parcours</string>
+    <string name="roadmap_title">Parcours Cyber &amp; Missions</string>
+    <string name="roadmap_subtitle">500 Stations, Progression XP &amp; Œufs Cyber</string>
+    <string name="roadmap_tab_stations">Parcours Ondulé (500 Stations)</string>
+    <string name="roadmap_tab_tasks">Moteur de Missions Dynamique</string>
+    <string name="roadmap_arsenal_title">Arsenal Cyber &amp; Marteaux de Puissance</string>
+    <string name="roadmap_claim_reward">Réclamer Récompense</string>
+    <string name="roadmap_jump_current">Aller à ma Station</string>
+    <string name="roadmap_skip_with_key">Passer avec Clé</string>
+    <string name="roadmap_task_completed">Accomplie</string>
+    <string name="roadmap_hammers_active">Marteaux de Puissance Actifs</string>
+    <string name="roadmap_keys_inventory">Inventaire des Clés de Passe</string>
 </resources>

@@ -243,4 +243,16 @@
     <string name="deviations_tier_label">Tier %1$d / 50</string>
     <string name="deviations_inspect_tiers">Inspect 50 Biological Tiers</string>
     <string name="deviations_dna_rotate_hint">Drag DNA to rotate • Spring physics active</string>
+    <string name="roadmap_nav_title">Roadmap</string>
+    <string name="roadmap_title">Cyber Roadmap &amp; Tasks</string>
+    <string name="roadmap_subtitle">500 Stations, XP Progression &amp; Egg Rewards</string>
+    <string name="roadmap_tab_stations">500-Station Roadmap</string>
+    <string name="roadmap_tab_tasks">Dynamic Tasks</string>
+    <string name="roadmap_arsenal_title">Cyber Arsenal &amp; Power Hammers</string>
+    <string name="roadmap_claim_reward">Claim Reward</string>
+    <string name="roadmap_jump_current">Jump to Station</string>
+    <string name="roadmap_skip_with_key">Skip with Key</string>
+    <string name="roadmap_task_completed">Completed</string>
+    <string name="roadmap_hammers_active">Active Power Hammers</string>
+    <string name="roadmap_keys_inventory">Skipping Keys Inventory</string>
 </resources>

@@ -17,6 +17,9 @@ import com.example.data.local.SecurityPreferences
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 import com.example.data.repository.IndividualRepository
+import com.example.data.roadmap.RoadmapManager
+import com.example.data.roadmap.RewardType
+import com.example.data.roadmap.TaskItem
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -320,8 +323,30 @@ class IndividualViewModel(
     val totalPointsGained: StateFlow<Double> = FlameManager.totalPointsGained
     val totalPointsExtinguished: StateFlow<Double> = FlameManager.totalPointsExtinguished
 
+    // 500-Station Wavy Roadmap & XP Progression Engine State
+    val totalXp: StateFlow<Long> = RoadmapManager.totalXp
+    val claimedStations: StateFlow<Set<Int>> = RoadmapManager.claimedStations
+    val dailyTasks: StateFlow<List<TaskItem>> = RoadmapManager.dailyTasks
+    val weeklyTasks: StateFlow<List<TaskItem>> = RoadmapManager.weeklyTasks
+    val monthlyTasks: StateFlow<List<TaskItem>> = RoadmapManager.monthlyTasks
+    val yearlyTasks: StateFlow<List<TaskItem>> = RoadmapManager.yearlyTasks
+
+    val commonKeys: StateFlow<Int> = RoadmapManager.commonKeys
+    val normalKeys: StateFlow<Int> = RoadmapManager.normalKeys
+    val rareKeys: StateFlow<Int> = RoadmapManager.rareKeys
+    val legendaryKeys: StateFlow<Int> = RoadmapManager.legendaryKeys
+
+    val shields24h: StateFlow<Int> = RoadmapManager.shields24h
+    val shields48h: StateFlow<Int> = RoadmapManager.shields48h
+    val shields72h: StateFlow<Int> = RoadmapManager.shields72h
+
+    val girlBoostHammerExpiresAt: StateFlow<Long?> = RoadmapManager.girlBoostHammerExpiresAt
+    val deflameBoostHammerExpiresAt: StateFlow<Long?> = RoadmapManager.deflameBoostHammerExpiresAt
+    val thorHammerExpiresAt: StateFlow<Long?> = RoadmapManager.thorHammerExpiresAt
+
     init {
         FlameManager.init(application)
+        RoadmapManager.init(application)
         viewModelScope.launch {
             repository.seedSampleDataIfEmpty()
             val latestStrikeDate = repository.getLatestStrikeDate()
@@ -416,6 +441,72 @@ class IndividualViewModel(
                 "ar" -> if (active) "تم تفعيل درع السلسلة (إيقاف الخمول مؤقتاً)" else "تم إلغاء درع السلسلة (استئناف الخمول)"
                 "fr" -> if (active) "Bouclier de série activé (pause inactivité)" else "Bouclier de série désactivé"
                 else -> if (active) "Streak Shield Activated (Inactivity paused)" else "Streak Shield Deactivated"
+            }
+            emitMessage(msg)
+        }
+    }
+
+    // 500-Station Wavy Roadmap & Task Actions
+    fun claimStation(stationId: Int) {
+        val reward = RoadmapManager.claimStationReward(getApplication(), stationId)
+        if (reward != null) {
+            viewModelScope.launch {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> "تم جني مكافأة المحطة $stationId: ${reward.title} 🎉"
+                    "fr" -> "Récompense de la station $stationId réclamée : ${reward.title} 🎉"
+                    else -> "Station $stationId Reward Claimed: ${reward.title} 🎉"
+                }
+                emitMessage(msg)
+            }
+        }
+    }
+
+    fun completeTask(taskId: String) {
+        val success = RoadmapManager.completeTask(getApplication(), taskId)
+        if (success) {
+            viewModelScope.launch {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> "تم إنجاز المهمة وحصد نقاط الـ XP بنجاح! ⚡"
+                    "fr" -> "Mission accomplie et XP récolté avec succès ! ⚡"
+                    else -> "Task Completed and XP awarded successfully! ⚡"
+                }
+                emitMessage(msg)
+            }
+        }
+    }
+
+    fun useSkipKeyForTask(taskId: String) {
+        val success = RoadmapManager.useSkipKeyForTask(getApplication(), taskId)
+        viewModelScope.launch {
+            if (success) {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> "تم استخدام مفتاح التجاوز وحصد نقاط الـ XP فورياً! 🔑"
+                    "fr" -> "Clé de passe utilisée et XP récolté immédiatement ! 🔑"
+                    else -> "Skip Key used and XP awarded instantly! 🔑"
+                }
+                emitMessage(msg)
+            } else {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> "لا تملك مفتاح تجاوز مناسباً لهذه المهمة"
+                    "fr" -> "Aucune clé de passe correspondante disponible"
+                    else -> "No suitable skip key available for this task"
+                }
+                emitMessage(msg)
+            }
+        }
+    }
+
+    fun addXp(amount: Int) {
+        RoadmapManager.addXp(getApplication(), amount)
+    }
+
+    fun activateHammer(rewardType: RewardType) {
+        RoadmapManager.activateHammer(getApplication(), rewardType)
+        viewModelScope.launch {
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم تفعيل المطرقة الخارقة بنجاح! 🔨"
+                "fr" -> "Marteau de puissance activé avec succès ! 🔨"
+                else -> "Power Hammer activated successfully! 🔨"
             }
             emitMessage(msg)
         }

@@ -83,11 +83,13 @@ import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.SettingsDialog
 import com.example.ui.components.StreakShieldModalSheet
+import androidx.compose.material.icons.filled.Timeline
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.DataEntryScreen
 import com.example.ui.screens.DeviationsScreen
 import com.example.ui.screens.FlameScreen
+import com.example.ui.screens.RoadmapScreen
 import com.example.ui.screens.StrikeScreen
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
@@ -106,7 +108,8 @@ enum class AppScreen {
     STRIKE,
     COMPARISON,
     FLAME,
-    DEVIATIONS
+    DEVIATIONS,
+    ROADMAP
 }
 
 class MainActivity : ComponentActivity() {
@@ -236,7 +239,7 @@ fun LiquidGlassApp(
                     onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
                     isDarkTheme = isDarkTheme
                 )
-                if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS) {
+                if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP) {
                     FlameEnergyBanner(
                         flameScore = flameScore,
                         onClick = { currentScreen = AppScreen.FLAME },
@@ -314,6 +317,11 @@ fun LiquidGlassApp(
                         viewModel = viewModel,
                         onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
                     )
+
+                    AppScreen.ROADMAP -> RoadmapScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
+                    )
                 }
             }
         }
@@ -363,6 +371,7 @@ fun LiquidGlassTopBar(
         AppScreen.COMPARISON -> stringResource(R.string.nav_compare)
         AppScreen.FLAME -> stringResource(R.string.flame_system_title)
         AppScreen.DEVIATIONS -> stringResource(R.string.deviations_title)
+        AppScreen.ROADMAP -> stringResource(R.string.roadmap_title)
     }
 
     val cyanColor = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan
@@ -519,6 +528,15 @@ fun LiquidGlassBottomBar(
                 activeColor = NeonViolet,
                 testTag = "nav_tab_compare",
                 onClick = { onScreenSelected(AppScreen.COMPARISON) }
+            )
+
+            BottomNavItem(
+                icon = Icons.Default.Timeline,
+                label = stringResource(R.string.roadmap_nav_title),
+                isSelected = currentScreen == AppScreen.ROADMAP,
+                activeColor = NeonAmber,
+                testTag = "nav_tab_roadmap",
+                onClick = { onScreenSelected(AppScreen.ROADMAP) }
             )
         }
     }

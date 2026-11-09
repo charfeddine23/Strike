@@ -419,30 +419,38 @@ object FlameManager {
 
     /**
      * "Deflame" Button: Each tap instantly decreases the total Flame score by 3 points (ensuring score >= 0).
+     * If Deflame Boost Hammer is active, adds +50 points bonus.
      */
     fun deflame(context: Context, delta: Double = 3.0): Double {
-        val safeDelta = delta.coerceAtLeast(0.1)
+        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "DEFLAME")
+        val bonus = if (com.example.data.roadmap.RoadmapManager.isDeflameBoostHammerActive()) 50.0 else 0.0
+        val safeDelta = (delta + bonus).coerceAtLeast(0.1)
         val formatted = if (safeDelta % 1.0 == 0.0) "${safeDelta.toInt()}" else String.format(Locale.US, "%.1f", safeDelta)
+        val hammerNote = if (bonus > 0.0) " [Deflame Hammer Active: +50 pts]" else ""
         return deductPoints(
             context = context,
             delta = safeDelta,
             reason = "DEFLAME",
-            details = "Manual instant decrease (-$formatted pts)",
+            details = "Manual instant decrease (-$formatted pts)$hammerNote",
             title = "Deflame Button Action"
         )
     }
 
     /**
      * "Girl" Button / Custom Points Adjustment: Each tap decreases the total Flame score by [delta] (default 3.0).
+     * If Girl Boost Hammer is active, adds +50 points bonus.
      */
     fun girl(context: Context, delta: Double = 3.0): Double {
-        val safeDelta = delta.coerceAtLeast(0.1)
+        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "GIRL")
+        val bonus = if (com.example.data.roadmap.RoadmapManager.isGirlBoostHammerActive()) 50.0 else 0.0
+        val safeDelta = (delta + bonus).coerceAtLeast(0.1)
         val formatted = if (safeDelta % 1.0 == 0.0) "${safeDelta.toInt()}" else String.format(Locale.US, "%.1f", safeDelta)
+        val hammerNote = if (bonus > 0.0) " [Girl Hammer Active: +50 pts]" else ""
         return deductPoints(
             context = context,
             delta = safeDelta,
             reason = "GIRL",
-            details = "Manual cooldown decrease (-$formatted pts)",
+            details = "Manual cooldown decrease (-$formatted pts)$hammerNote",
             title = "Girl Button Action"
         )
     }
@@ -657,14 +665,18 @@ object FlameManager {
 
             // Case 1: Normal Single Strike
             else -> {
-                val deduction = boost.coerceAtLeast(0.0)
+                val isThorActive = com.example.data.roadmap.RoadmapManager.isThorHammerActive()
+                val rawDeduction = boost.coerceAtLeast(0.0)
+                val deduction = if (isThorActive) rawDeduction * 0.40 else rawDeduction
+                val thorNote = if (isThorActive) " [Thor's Hammer Active: -60% Mitigation]" else ""
                 deductPoints(
                     context = context,
                     delta = deduction,
                     reason = "STRIKE_DEDUCTION",
-                    details = "Strike registered for $personName (-${format(deduction)} BOOST)",
+                    details = "Strike registered for $personName (-${format(deduction)} BOOST)$thorNote",
                     title = "New Strike Registered"
                 )
+                com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "STRIKE")
                 StrikeRegistrationResult(deduction, "SINGLE_STRIKE")
             }
         }
