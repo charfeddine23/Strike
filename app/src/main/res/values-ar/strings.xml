@@ -232,4 +232,15 @@
     <string name="shield_available_qty">المتوفر: %1$d</string>
     <string name="shield_settings_toggle">حماية درع السلسلة</string>
     <string name="shield_settings_toggle_desc">إيقاف نقاط الخمول اليومية يدوياً أو عبر تفعيل الدروع المتاحة</string>
+    <string name="deviations_title">الانحرافات</string>
+    <string name="deviations_subtitle">تطور الشيفرة الجينية ومسار الكيانات المزدوج</string>
+    <string name="deviations_dark_track">مسار الظلال الرقمية (0 - 1000 نقطة)</string>
+    <string name="deviations_light_track">مسار النور الملائكي (1001 - 10000 نقطة)</string>
+    <string name="deviations_estrogen">إستروجين (أنوثة)</string>
+    <string name="deviations_testosterone">تيستوستيرون (رجولة)</string>
+    <string name="deviations_grip_status">قبضة الظلال: %1$d%%</string>
+    <string name="deviations_angel_status">الاقتراب الملائكي: %1$d%%</string>
+    <string name="deviations_tier_label">المستوى %1$d من 50</string>
+    <string name="deviations_inspect_tiers">استعراض كافة المستويات الـ 50</string>
+    <string name="deviations_dna_rotate_hint">اسحب لتدوير الـ DNA • فيزياء الحركة التفاعلية نشطة</string>
 </resources>

@@ -232,4 +232,15 @@
     <string name="shield_available_qty">%1$d Available</string>
     <string name="shield_settings_toggle">Streak Shield Protection</string>
     <string name="shield_settings_toggle_desc">Pause daily inactivity points manually or via inventory shields</string>
+    <string name="deviations_title">Deviations</string>
+    <string name="deviations_subtitle">Biological DNA &amp; Dual-Track Entity Evolution</string>
+    <string name="deviations_dark_track">Cyber-Shadow Track (Score 0 - 1000)</string>
+    <string name="deviations_light_track">Cyber-Angel Track (Score 1001 - 10000)</string>
+    <string name="deviations_estrogen">Estrogen (Femininity)</string>
+    <string name="deviations_testosterone">Testosterone (Masculinity)</string>
+    <string name="deviations_grip_status">Shadow Grip: %1$d%%</string>
+    <string name="deviations_angel_status">Celestial Touch: %1$d%%</string>
+    <string name="deviations_tier_label">Tier %1$d / 50</string>
+    <string name="deviations_inspect_tiers">Inspect 50 Biological Tiers</string>
+    <string name="deviations_dna_rotate_hint">Drag DNA to rotate • Spring physics active</string>
 </resources>

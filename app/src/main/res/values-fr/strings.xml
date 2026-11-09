@@ -232,4 +232,15 @@
     <string name="shield_available_qty">%1$d disponible(s)</string>
     <string name="shield_settings_toggle">Protection de Série</string>
     <string name="shield_settings_toggle_desc">Mettre en pause les points d\'inactivité manuellement ou via vos boucliers</string>
+    <string name="deviations_title">Déviations</string>
+    <string name="deviations_subtitle">ADN Biologique &amp; Évolution d\'Entités</string>
+    <string name="deviations_dark_track">Voie de l\'Ombre Cyber (0 - 1000 pts)</string>
+    <string name="deviations_light_track">Voie de l\'Ange Cyber (1001 - 10000 pts)</string>
+    <string name="deviations_estrogen">Œstrogène (Féminité)</string>
+    <string name="deviations_testosterone">Testostérone (Virilité)</string>
+    <string name="deviations_grip_status">Emprise de l\'Ombre : %1$d%%</string>
+    <string name="deviations_angel_status">Touche Céleste : %1$d%%</string>
+    <string name="deviations_tier_label">Rang %1$d / 50</string>
+    <string name="deviations_inspect_tiers">Voir les 50 Rangs Biologiques</string>
+    <string name="deviations_dna_rotate_hint">Glissez pour faire pivoter l\'ADN • Physique réactive</string>
 </resources>

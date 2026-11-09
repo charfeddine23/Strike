@@ -72,16 +72,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.flame.FlameManager
+import com.example.ui.components.DnaHeaderIcon
 import com.example.ui.components.DynamicStreakShieldHeaderButton
 import com.example.ui.components.FlameEnergyBanner
 import com.example.ui.components.FullscreenPatternUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.SettingsDialog
+import com.example.ui.components.StreakShieldModalSheet
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.DataEntryScreen
+import com.example.ui.screens.DeviationsScreen
 import com.example.ui.screens.FlameScreen
 import com.example.ui.screens.StrikeScreen
 import com.example.ui.theme.NeonAmber
@@ -91,6 +96,7 @@ import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.StrikePulseTheme
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.util.CallNotificationHelper
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import java.util.Locale
 
@@ -99,7 +105,8 @@ enum class AppScreen {
     DATA_ENTRY,
     STRIKE,
     COMPARISON,
-    FLAME
+    FLAME,
+    DEVIATIONS
 }
 
 class MainActivity : ComponentActivity() {
@@ -172,10 +179,22 @@ fun LiquidGlassApp(
 ) {
     var currentScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showShieldModal by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
     val isStreakShieldActive by viewModel.isStreakShieldActive.collectAsStateWithLifecycle()
+    val activeShieldExpiresAt by viewModel.activeShieldExpiresAt.collectAsStateWithLifecycle()
+    val availableManualShields by viewModel.availableManualShields.collectAsStateWithLifecycle()
+    val available1DayShields by viewModel.available1DayShields.collectAsStateWithLifecycle()
+    var currentShieldRemainingMillis by remember { mutableLongStateOf(FlameManager.getActiveShieldRemainingMillis()) }
+
+    LaunchedEffect(isStreakShieldActive, activeShieldExpiresAt) {
+        while (true) {
+            currentShieldRemainingMillis = FlameManager.getActiveShieldRemainingMillis()
+            delay(1000L)
+        }
+    }
 
     // Listen to ViewModel events (including Swipe-to-delete with Undo)
     LaunchedEffect(Unit) {
@@ -211,12 +230,13 @@ fun LiquidGlassApp(
                     currentScreen = currentScreen,
                     flameScore = flameScore,
                     isStreakShieldActive = isStreakShieldActive,
-                    onToggleShield = { viewModel.setStreakShieldActive(!isStreakShieldActive) },
+                    onOpenShieldModal = { showShieldModal = true },
                     onOpenSettings = { showSettingsDialog = true },
                     onOpenFlame = { currentScreen = AppScreen.FLAME },
+                    onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
                     isDarkTheme = isDarkTheme
                 )
-                if (currentScreen != AppScreen.FLAME) {
+                if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS) {
                     FlameEnergyBanner(
                         flameScore = flameScore,
                         onClick = { currentScreen = AppScreen.FLAME },
@@ -289,6 +309,11 @@ fun LiquidGlassApp(
                         viewModel = viewModel,
                         onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
                     )
+
+                    AppScreen.DEVIATIONS -> DeviationsScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
+                    )
                 }
             }
         }
@@ -302,6 +327,22 @@ fun LiquidGlassApp(
             onLockAppNow = { viewModel.lockApp() }
         )
     }
+
+    // Streak Shield Modal Sheet (Settings, Inventory, 1-Day shield, and Rules)
+    if (showShieldModal) {
+        StreakShieldModalSheet(
+            isShieldActive = isStreakShieldActive && (activeShieldExpiresAt == null || currentShieldRemainingMillis > 0L),
+            activeShieldExpiresAt = activeShieldExpiresAt,
+            remainingMillis = currentShieldRemainingMillis,
+            availableManualShields = availableManualShields,
+            available1DayShields = available1DayShields,
+            onActivateManualShield = { viewModel.activateManualShield() },
+            onActivate1DayShield = { viewModel.activate1DayShield() },
+            onGrant1DayShield = { viewModel.grant1DayShield() },
+            onToggleShieldActive = { active -> viewModel.setStreakShieldActive(active) },
+            onDismiss = { showShieldModal = false }
+        )
+    }
 }
 
 @Composable
@@ -309,9 +350,10 @@ fun LiquidGlassTopBar(
     currentScreen: AppScreen,
     flameScore: Double,
     isStreakShieldActive: Boolean = false,
-    onToggleShield: () -> Unit = {},
+    onOpenShieldModal: () -> Unit = {},
     onOpenSettings: () -> Unit,
     onOpenFlame: () -> Unit,
+    onOpenDeviations: () -> Unit,
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     val title = when (currentScreen) {
@@ -320,6 +362,7 @@ fun LiquidGlassTopBar(
         AppScreen.STRIKE -> stringResource(R.string.nav_strike)
         AppScreen.COMPARISON -> stringResource(R.string.nav_compare)
         AppScreen.FLAME -> stringResource(R.string.flame_system_title)
+        AppScreen.DEVIATIONS -> stringResource(R.string.deviations_title)
     }
 
     val cyanColor = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan
@@ -374,6 +417,14 @@ fun LiquidGlassTopBar(
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
+            // Sleek, vertical, 3D-styled DNA double helix icon on the left of main flame icon
+            DnaHeaderIcon(
+                onClick = onOpenDeviations,
+                isDarkTheme = isDarkTheme
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
             // Adaptive Glowing Animated "Fire" Header Icon
             GlowingFlameHeaderIcon(
                 flameScore = flameScore,
@@ -383,10 +434,10 @@ fun LiquidGlassTopBar(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Dynamic Streak Shield Element (Replaces the old button position next to the flame)
+            // Dynamic Streak Shield Element next to the flame with plus (+) action button
             DynamicStreakShieldHeaderButton(
                 isShieldActive = isStreakShieldActive,
-                onClick = onToggleShield,
+                onClick = onOpenShieldModal,
                 isDarkTheme = isDarkTheme
             )
 
