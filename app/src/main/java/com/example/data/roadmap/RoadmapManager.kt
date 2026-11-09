@@ -64,11 +64,11 @@ object RoadmapManager {
     private val _yearlyTasks = MutableStateFlow<List<TaskItem>>(emptyList())
     val yearlyTasks: StateFlow<List<TaskItem>> = _yearlyTasks.asStateFlow()
 
-    // Skipping Keys Inventory
-    private val _commonKeys = MutableStateFlow(2)
+    // Skipping Keys Inventory (Initialized to 0 - earned strictly via tasks and rewards)
+    private val _commonKeys = MutableStateFlow(0)
     val commonKeys: StateFlow<Int> = _commonKeys.asStateFlow()
 
-    private val _normalKeys = MutableStateFlow(1)
+    private val _normalKeys = MutableStateFlow(0)
     val normalKeys: StateFlow<Int> = _normalKeys.asStateFlow()
 
     private val _rareKeys = MutableStateFlow(0)
@@ -77,8 +77,8 @@ object RoadmapManager {
     private val _legendaryKeys = MutableStateFlow(0)
     val legendaryKeys: StateFlow<Int> = _legendaryKeys.asStateFlow()
 
-    // Shields Inventory
-    private val _shields24h = MutableStateFlow(1)
+    // Shields Inventory (Initialized to 0 - earned strictly via tasks and rewards)
+    private val _shields24h = MutableStateFlow(0)
     val shields24h: StateFlow<Int> = _shields24h.asStateFlow()
 
     private val _shields48h = MutableStateFlow(0)
@@ -114,16 +114,38 @@ object RoadmapManager {
         val claimedStrSet = prefs.getStringSet(KEY_CLAIMED_STATIONS, emptySet()) ?: emptySet()
         _claimedStations.value = claimedStrSet.mapNotNull { it.toIntOrNull() }.toSet()
 
-        // Read keys inventory
-        _commonKeys.value = prefs.getInt(KEY_KEYS_COMMON, 2)
-        _normalKeys.value = prefs.getInt(KEY_KEYS_NORMAL, 1)
-        _rareKeys.value = prefs.getInt(KEY_KEYS_RARE, 0)
-        _legendaryKeys.value = prefs.getInt(KEY_KEYS_LEGENDARY, 0)
+        // Ensure inventory starts clean at 0 (or loads saved non-default earned inventory)
+        val hasResetInventory = prefs.getBoolean("has_reset_inventory_to_zero_v2", false)
+        if (!hasResetInventory) {
+            _commonKeys.value = 0
+            _normalKeys.value = 0
+            _rareKeys.value = 0
+            _legendaryKeys.value = 0
+            _shields24h.value = 0
+            _shields48h.value = 0
+            _shields72h.value = 0
+            prefs.edit()
+                .putInt(KEY_KEYS_COMMON, 0)
+                .putInt(KEY_KEYS_NORMAL, 0)
+                .putInt(KEY_KEYS_RARE, 0)
+                .putInt(KEY_KEYS_LEGENDARY, 0)
+                .putInt(KEY_SHIELDS_24H, 0)
+                .putInt(KEY_SHIELDS_48H, 0)
+                .putInt(KEY_SHIELDS_72H, 0)
+                .putBoolean("has_reset_inventory_to_zero_v2", true)
+                .apply()
+        } else {
+            // Read keys inventory (defaults to 0)
+            _commonKeys.value = prefs.getInt(KEY_KEYS_COMMON, 0)
+            _normalKeys.value = prefs.getInt(KEY_KEYS_NORMAL, 0)
+            _rareKeys.value = prefs.getInt(KEY_KEYS_RARE, 0)
+            _legendaryKeys.value = prefs.getInt(KEY_KEYS_LEGENDARY, 0)
 
-        // Read shields inventory
-        _shields24h.value = prefs.getInt(KEY_SHIELDS_24H, 1)
-        _shields48h.value = prefs.getInt(KEY_SHIELDS_48H, 0)
-        _shields72h.value = prefs.getInt(KEY_SHIELDS_72H, 0)
+            // Read shields inventory (defaults to 0)
+            _shields24h.value = prefs.getInt(KEY_SHIELDS_24H, 0)
+            _shields48h.value = prefs.getInt(KEY_SHIELDS_48H, 0)
+            _shields72h.value = prefs.getInt(KEY_SHIELDS_72H, 0)
+        }
 
         // Read hammers expiry
         val now = System.currentTimeMillis()
@@ -154,6 +176,33 @@ object RoadmapManager {
         _yearlyTasks.value = loadTasks(context, KEY_YEARLY_TASKS_JSON) ?: TaskPools.YEARLY_EPIC_GOALS
 
         isInitialized = true
+    }
+
+    @Synchronized
+    fun resetForTesting(context: Context) {
+        isInitialized = false
+        init(context)
+    }
+
+    @Synchronized
+    fun resetInventoryToZero(context: Context) {
+        init(context)
+        _commonKeys.value = 0
+        _normalKeys.value = 0
+        _rareKeys.value = 0
+        _legendaryKeys.value = 0
+        _shields24h.value = 0
+        _shields48h.value = 0
+        _shields72h.value = 0
+        getPrefs(context).edit()
+            .putInt(KEY_KEYS_COMMON, 0)
+            .putInt(KEY_KEYS_NORMAL, 0)
+            .putInt(KEY_KEYS_RARE, 0)
+            .putInt(KEY_KEYS_LEGENDARY, 0)
+            .putInt(KEY_SHIELDS_24H, 0)
+            .putInt(KEY_SHIELDS_48H, 0)
+            .putInt(KEY_SHIELDS_72H, 0)
+            .apply()
     }
 
     /**

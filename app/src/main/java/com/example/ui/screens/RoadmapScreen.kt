@@ -499,11 +499,6 @@ fun RoadmapScreen(
                                 KeyRarity.RARE -> rareKeys
                                 KeyRarity.LEGENDARY -> legendaryKeys
                             },
-                            onComplete = {
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                viewModel.completeTask(task.id)
-                            },
                             onSkipWithKey = {
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -744,7 +739,6 @@ fun WavyStationItem(
 fun TaskItemCard(
     task: TaskItem,
     availableKeysForRarity: Int,
-    onComplete: () -> Unit,
     onSkipWithKey: () -> Unit
 ) {
     LiquidGlassCard(
@@ -848,32 +842,33 @@ fun TaskItemCard(
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
-                        onClick = onComplete,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(36.dp)
-                            .testTag("btn_complete_task_${task.id}")
-                    ) {
-                        Text(text = "إنجاز فوري", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
+                    Text(
+                        text = "تُنجز بالنشاط الفعلي أو بالتجاوز",
+                        fontSize = 10.sp,
+                        color = Color(0xFF64748B),
+                        fontWeight = FontWeight.Medium
+                    )
 
                     OutlinedButton(
                         onClick = onSkipWithKey,
                         enabled = availableKeysForRarity > 0,
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
-                            .height(36.dp)
+                            .height(34.dp)
                             .testTag("btn_skip_task_${task.id}")
                     ) {
-                        Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = if (availableKeysForRarity > 0) NeonAmber else Color.Gray, modifier = Modifier.size(13.dp))
+                        Icon(
+                            imageVector = Icons.Default.VpnKey,
+                            contentDescription = null,
+                            tint = if (availableKeysForRarity > 0) NeonAmber else Color.Gray,
+                            modifier = Modifier.size(13.dp)
+                        )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "تجاوز ($availableKeysForRarity)",
+                            text = "تجاوز بمفتاح ($availableKeysForRarity)",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (availableKeysForRarity > 0) NeonAmber else Color.Gray

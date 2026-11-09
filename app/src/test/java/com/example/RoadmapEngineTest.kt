@@ -30,11 +30,11 @@ class RoadmapEngineTest {
         app = ApplicationProvider.getApplicationContext()
         val prefs = app.getSharedPreferences("strikepulse_roadmap_prefs", Application.MODE_PRIVATE)
         prefs.edit().clear().commit()
-        RoadmapManager.init(app)
+        RoadmapManager.resetForTesting(app)
 
         val flamePrefs = app.getSharedPreferences("strike_pulse_flame_prefs", Application.MODE_PRIVATE)
         flamePrefs.edit().clear().commit()
-        FlameManager.init(app)
+        FlameManager.resetForTesting(app)
     }
 
     @Test
@@ -157,15 +157,30 @@ class RoadmapEngineTest {
     }
 
     @Test
-    fun testSkipKeyConsumption() {
-        // Give 1 Normal key
-        RoadmapManager.addKey(app, KeyRarity.NORMAL, 1)
-        val initialCount = RoadmapManager.normalKeys.value
-        assertTrue(initialCount >= 1)
+    fun testInitialInventoryIsZero() {
+        // Verify keys start at 0
+        assertEquals(0, RoadmapManager.commonKeys.value)
+        assertEquals(0, RoadmapManager.normalKeys.value)
+        assertEquals(0, RoadmapManager.rareKeys.value)
+        assertEquals(0, RoadmapManager.legendaryKeys.value)
 
-        // Consume normal key for task
+        // Verify shields start at 0
+        assertEquals(0, RoadmapManager.shields24h.value)
+        assertEquals(0, RoadmapManager.shields48h.value)
+        assertEquals(0, RoadmapManager.shields72h.value)
+        assertEquals(0, FlameManager.available1DayShields.value)
+        assertEquals(0, FlameManager.availableManualShields.value)
+    }
+
+    @Test
+    fun testSkipKeyConsumption() {
         val daily = RoadmapManager.dailyTasks.value
         val targetTask = daily.first()
+
+        // Give 1 key matching the required rarity of the task
+        RoadmapManager.addKey(app, targetTask.requiredKeyRarity, 1)
+
+        // Consume key for task
         val used = RoadmapManager.useSkipKeyForTask(app, targetTask.id)
         assertTrue(used)
 

@@ -57,7 +57,7 @@ object FlameManager {
     private val _availableManualShields = MutableStateFlow(0) // 3-Day Shields from Double Strike
     val availableManualShields: StateFlow<Int> = _availableManualShields.asStateFlow()
 
-    private val _available1DayShields = MutableStateFlow(1) // 1-Day Shields
+    private val _available1DayShields = MutableStateFlow(0) // 1-Day Shields (starts at 0, earned via tasks & rewards)
     val available1DayShields: StateFlow<Int> = _available1DayShields.asStateFlow()
 
     private val _peakScore = MutableStateFlow(45.0)
@@ -136,8 +136,19 @@ object FlameManager {
             }
         }
 
-        _availableManualShields.value = prefs.getInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
-        _available1DayShields.value = prefs.getInt(KEY_AVAILABLE_1DAY_SHIELDS, 1)
+        val hasResetShields = prefs.getBoolean("has_reset_shields_to_zero_v2", false)
+        if (!hasResetShields) {
+            _availableManualShields.value = 0
+            _available1DayShields.value = 0
+            prefs.edit()
+                .putInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
+                .putInt(KEY_AVAILABLE_1DAY_SHIELDS, 0)
+                .putBoolean("has_reset_shields_to_zero_v2", true)
+                .apply()
+        } else {
+            _availableManualShields.value = prefs.getInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
+            _available1DayShields.value = prefs.getInt(KEY_AVAILABLE_1DAY_SHIELDS, 0)
+        }
         val savedPeak = prefs.getFloat(KEY_PEAK_SCORE, savedScore.toFloat()).toDouble()
         _peakScore.value = maxOf(savedScore, savedPeak)
         _totalPointsGained.value = prefs.getFloat(KEY_TOTAL_POINTS_GAINED, 0.0f).toDouble()
@@ -167,6 +178,23 @@ object FlameManager {
             }
         }
         isInitialized = true
+    }
+
+    @Synchronized
+    fun resetForTesting(context: Context) {
+        isInitialized = false
+        init(context)
+    }
+
+    @Synchronized
+    fun resetShieldsInventoryToZero(context: Context) {
+        init(context)
+        _availableManualShields.value = 0
+        _available1DayShields.value = 0
+        getPrefs(context).edit()
+            .putInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
+            .putInt(KEY_AVAILABLE_1DAY_SHIELDS, 0)
+            .apply()
     }
 
     fun getScore(context: Context): Double {
