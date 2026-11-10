@@ -12,6 +12,7 @@ on:
 permissions:
   contents: write
   packages: write
+  actions: write
 
 jobs:
   build:
@@ -127,11 +128,29 @@ jobs:
           echo "Renamed for release: $RELEASE_APK"
           echo "apk_path=${RELEASE_APK}" >> "$GITHUB_OUTPUT"
 
+      - name: Prune Old Workflow Artifacts to Free Storage Quota
+        continue-on-error: true
+        run: |
+          echo "Scanning and deleting old workflow artifacts to free storage..."
+          gh api -X GET /repos/${{ github.repository }}/actions/artifacts --paginate --jq '.artifacts[] | .id' 2>/dev/null | while read -r artifact_id; do
+            if [ -n "$artifact_id" ]; then
+              echo "Purging old artifact ID: $artifact_id"
+              gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/$artifact_id 2>/dev/null || true
+            fi
+          done
+          echo "Artifact cleanup complete."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: strikepulse-apk
           path: ${{ steps.find_apk.outputs.apk_path }}
+          retention-days: 1
+          if-no-files-found: warn
+
       - name: Prune Old GitHub Releases & Tags (Keep Latest Only)
         run: |
           echo "Scanning for previous releases to purge..."
