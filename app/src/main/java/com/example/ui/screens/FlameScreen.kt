@@ -182,6 +182,7 @@ fun FlameScreen(
 
     // Modal state for Settings & Interactive Simulator (opened on 2-second hold)
     var showSettingsModal by remember { mutableStateOf(false) }
+    var showStartDateDialog by remember { mutableStateOf(false) }
     var holdProgress by remember { mutableFloatStateOf(0f) }
     var isHoldingFlame by remember { mutableStateOf(false) }
 
@@ -294,6 +295,15 @@ fun FlameScreen(
             isHapticEnabled = isHapticEnabled,
             onDismiss = { showSettingsModal = false },
             onClearLogs = { showClearConfirmDialog = true }
+        )
+    }
+
+    // Streak Start Date Dialog (Launched by 2-second hold on the flame canvas)
+    if (showStartDateDialog) {
+        com.example.ui.components.StreakStartDateDialog(
+            viewModel = viewModel,
+            onDismiss = { showStartDateDialog = false },
+            isDarkTheme = isDarkTheme
         )
     }
 
@@ -512,7 +522,7 @@ fun FlameScreen(
                                         holdProgress = 1f
                                         HapticHelper.triggerStageTransitionHaptic(context, isHapticEnabled)
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        showSettingsModal = true
+                                        showStartDateDialog = true
                                         isHoldingFlame = false
                                         holdProgress = 0f
                                     }

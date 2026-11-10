@@ -394,6 +394,28 @@ class IndividualViewModel(
         FlameManager.clearLogs(getApplication())
     }
 
+    fun getStreakStartDate(): String? {
+        return FlameManager.getStreakStartDate(getApplication())
+    }
+
+    fun previewStartDateRecalculation(startDateStr: String): com.example.data.flame.FlameRecalculationResult {
+        return FlameManager.previewRecalculation(startDateStr, allStrikeEvents.value)
+    }
+
+    fun recalculateFlameScoreFromStartDate(startDateStr: String): com.example.data.flame.FlameRecalculationResult {
+        val result = FlameManager.recalculateFromStartDate(getApplication(), startDateStr, allStrikeEvents.value)
+        viewModelScope.launch {
+            val formattedScore = if (result.resultingScore % 1.0 == 0.0) "${result.resultingScore.toInt()}" else String.format(Locale.US, "%.1f", result.resultingScore)
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تمت إعادة حساب نقاط الشعلة بنجاح: $formattedScore نقطة (+${result.inactivityPointsAdded.toInt()} خمول، -${String.format(Locale.US, "%.1f", result.totalDeductions)} سترايك)"
+                "fr" -> "Score recalculé avec succès : $formattedScore pts"
+                else -> "Flame score recalculated: $formattedScore pts (+${result.inactivityPointsAdded.toInt()} inactivity, -${String.format(Locale.US, "%.1f", result.totalDeductions)} strikes)"
+            }
+            emitMessage(msg)
+        }
+        return result
+    }
+
     fun activateManualShield() {
         val success = FlameManager.activateManualShield(getApplication(), days = 3)
         viewModelScope.launch {

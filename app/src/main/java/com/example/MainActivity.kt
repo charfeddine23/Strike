@@ -183,6 +183,7 @@ fun LiquidGlassApp(
     var currentScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showShieldModal by remember { mutableStateOf(false) }
+    var showStartDateDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
@@ -237,6 +238,7 @@ fun LiquidGlassApp(
                     onOpenSettings = { showSettingsDialog = true },
                     onOpenFlame = { currentScreen = AppScreen.FLAME },
                     onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
+                    onLongPressFlame = { showStartDateDialog = true },
                     isDarkTheme = isDarkTheme
                 )
                 if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP) {
@@ -351,6 +353,15 @@ fun LiquidGlassApp(
             onDismiss = { showShieldModal = false }
         )
     }
+
+    // Streak Start Date Dialog (Launched by 2-second hold on the flame icon)
+    if (showStartDateDialog) {
+        com.example.ui.components.StreakStartDateDialog(
+            viewModel = viewModel,
+            onDismiss = { showStartDateDialog = false },
+            isDarkTheme = isDarkTheme
+        )
+    }
 }
 
 @Composable
@@ -362,6 +373,7 @@ fun LiquidGlassTopBar(
     onOpenSettings: () -> Unit,
     onOpenFlame: () -> Unit,
     onOpenDeviations: () -> Unit,
+    onLongPressFlame: () -> Unit = {},
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     val title = when (currentScreen) {
@@ -434,10 +446,11 @@ fun LiquidGlassTopBar(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Adaptive Glowing Animated "Fire" Header Icon
+            // Adaptive Glowing Animated "Fire" Header Icon (with 2-second hold detector)
             GlowingFlameHeaderIcon(
                 flameScore = flameScore,
                 onClick = onOpenFlame,
+                onLongClick2s = onLongPressFlame,
                 isDarkTheme = isDarkTheme
             )
 

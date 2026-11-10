@@ -27,9 +27,20 @@ data class StrikeRegistrationResult(
     val shieldGranted: String = "" // "3_DAYS_MANUAL", "7_DAYS_AUTO", ""
 )
 
+data class FlameRecalculationResult(
+    val startDate: String,
+    val todayDate: String,
+    val daysElapsed: Int,
+    val inactivityPointsAdded: Double,
+    val totalStrikesCount: Int,
+    val totalDeductions: Double,
+    val resultingScore: Double
+)
+
 object FlameManager {
     private const val PREFS_NAME = "strikepulse_flame_prefs"
     private const val KEY_SCORE = "key_flame_score"
+    private const val KEY_START_COUNT_DATE = "key_start_count_date"
     private const val KEY_LAST_INACTIVITY_DATE = "key_last_inactivity_date"
     private const val KEY_LAST_STRIKE_DATE = "key_last_strike_date"
     private const val KEY_FLAME_LOGS = "key_flame_logs_json"
@@ -764,6 +775,116 @@ object FlameManager {
         init(context)
         _flameLogs.value = emptyList()
         getPrefs(context).edit().remove(KEY_FLAME_LOGS).apply()
+    }
+
+    fun getStreakStartDate(context: Context): String? {
+        init(context)
+        return getPrefs(context).getString(KEY_START_COUNT_DATE, null)
+    }
+
+    /**
+     * Preview recalculation from a given start date without modifying persistent state.
+     */
+    fun previewRecalculation(
+        startDateStr: String,
+        strikeEvents: List<com.example.data.model.StrikeEvent>
+    ): FlameRecalculationResult {
+        val today = todayString()
+        val daysElapsed = daysBetween(startDateStr, today).toInt().coerceAtLeast(0)
+        val inactivityPointsAdded = daysElapsed * 3.0
+
+        // Filter strikes within the range [startDateStr, today]
+        val relevantStrikes = strikeEvents.filter { it.date >= startDateStr && it.date <= today }
+        val strikesByDate = relevantStrikes.groupBy { it.date }
+
+        var totalDeductions = 0.0
+        for ((_, dayStrikes) in strikesByDate) {
+            val count = dayStrikes.size
+            val dayPenalty = when {
+                count >= 6 -> {
+                    dayStrikes.sumOf { it.performanceValue.coerceAtLeast(0.1) } * count
+                }
+                count in 3..5 -> {
+                    val sumBoosts = dayStrikes.sumOf { it.performanceValue.coerceAtLeast(0.1) }
+                    sumBoosts * count
+                }
+                count == 2 -> {
+                    val b1 = dayStrikes[0].performanceValue.coerceAtLeast(0.1)
+                    val b2 = dayStrikes[1].performanceValue.coerceAtLeast(0.1)
+                    (b1 + b2) * 3.0
+                }
+                count == 1 -> {
+                    dayStrikes[0].performanceValue.coerceAtLeast(0.1)
+                }
+                else -> 0.0
+            }
+            totalDeductions += dayPenalty
+        }
+
+        val resultingScore = (inactivityPointsAdded - totalDeductions).coerceIn(0.0, 10000.0)
+
+        return FlameRecalculationResult(
+            startDate = startDateStr,
+            todayDate = today,
+            daysElapsed = daysElapsed,
+            inactivityPointsAdded = inactivityPointsAdded,
+            totalStrikesCount = relevantStrikes.size,
+            totalDeductions = totalDeductions,
+            resultingScore = resultingScore
+        )
+    }
+
+    /**
+     * Recalculates Flame Score starting from [startDateStr] up to today:
+     * - Adds +3.0 points daily inactivity for each calendar day elapsed since start date.
+     * - Accounts for all strikes registered in that period, deducting their multi-strike / single-strike penalties.
+     * - Updates database preferences, peak score, and logs the action in the Flame log.
+     */
+    @Synchronized
+    fun recalculateFromStartDate(
+        context: Context,
+        startDateStr: String,
+        strikeEvents: List<com.example.data.model.StrikeEvent>
+    ): FlameRecalculationResult {
+        init(context)
+        val result = previewRecalculation(startDateStr, strikeEvents)
+        val oldScore = _flameScore.value
+        val newScore = result.resultingScore
+        val diff = newScore - oldScore
+
+        _flameScore.value = newScore
+        if (newScore > _peakScore.value) {
+            _peakScore.value = newScore
+            getPrefs(context).edit().putFloat(KEY_PEAK_SCORE, newScore.toFloat()).apply()
+        }
+
+        if (diff > 0) {
+            val updatedGained = _totalPointsGained.value + diff
+            _totalPointsGained.value = updatedGained
+            getPrefs(context).edit().putFloat(KEY_TOTAL_POINTS_GAINED, updatedGained.toFloat()).apply()
+        } else if (diff < 0) {
+            val updatedExt = _totalPointsExtinguished.value + (-diff)
+            _totalPointsExtinguished.value = updatedExt
+            getPrefs(context).edit().putFloat(KEY_TOTAL_POINTS_EXTINGUISHED, updatedExt.toFloat()).apply()
+        }
+
+        getPrefs(context).edit()
+            .putFloat(KEY_SCORE, newScore.toFloat())
+            .putString(KEY_START_COUNT_DATE, startDateStr)
+            .putString(KEY_LAST_INACTIVITY_DATE, result.todayDate)
+            .apply()
+
+        val details = "تاريخ البداية: $startDateStr | الأيام المنقضية: ${result.daysElapsed} (+${result.inactivityPointsAdded.toInt()} نقطة) | السترايكات: ${result.totalStrikesCount} (-${format(result.totalDeductions)} نقطة)"
+        logEvent(
+            context = context,
+            title = "إعادة حساب تاريخ بداية العد",
+            change = diff,
+            resultingScore = newScore,
+            reason = "START_DATE_RECALCULATION",
+            details = details
+        )
+
+        return result
     }
 
     private fun daysBetween(fromDateStr: String, toDateStr: String): Long {

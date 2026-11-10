@@ -6,24 +6,37 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -32,13 +45,15 @@ import kotlin.math.sin
  * - Clean, borderless, circular-background-free design
  * - Slightly enlarged glowing flame burning with rising glowing orange and pink sparks
  * - Smooth motion graphics and subtle radial aura glow on dark minimalist liquid glass background
+ * - 2-second hold detector to launch Streak Start Date Dialog
  */
 @Composable
 fun GlowingFlameHeaderIcon(
     flameScore: Double,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    isDarkTheme: Boolean = isSystemInDarkTheme()
+    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    onLongClick2s: (() -> Unit)? = null
 ) {
     val stage = getFlameStage(flameScore)
     val colors = getFlameColors(flameScore)
@@ -64,6 +79,16 @@ fun GlowingFlameHeaderIcon(
         label = "header_pulse"
     )
 
+    val haptic = LocalHapticFeedback.current
+    val coroutineScope = rememberCoroutineScope()
+    var isHolding by remember { mutableStateOf(false) }
+
+    val pressScale by animateFloatAsState(
+        targetValue = if (isHolding) 1.25f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow),
+        label = "flame_press_scale"
+    )
+
     // Micro sparks precomputed for allocation-free drawing
     val microSparks = remember {
         List(14) { i ->
@@ -75,11 +100,37 @@ fun GlowingFlameHeaderIcon(
         }
     }
 
+    val gestureModifier = if (onLongClick2s != null) {
+        Modifier.pointerInput(onLongClick2s, onClick) {
+            detectTapGestures(
+                onPress = {
+                    isHolding = true
+                    var triggered = false
+                    val job = coroutineScope.launch {
+                        delay(2000L)
+                        triggered = true
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onLongClick2s.invoke()
+                    }
+                    val released = tryAwaitRelease()
+                    isHolding = false
+                    job.cancel()
+                    if (released && !triggered) {
+                        onClick()
+                    }
+                }
+            )
+        }
+    } else {
+        Modifier.clickable(onClick = onClick)
+    }
+
     Box(
         modifier = modifier
             .size(42.dp)
+            .scale(pressScale)
             .clip(CircleShape)
-            .clickable(onClick = onClick)
+            .then(gestureModifier)
             .testTag("header_flame_btn"),
         contentAlignment = Alignment.Center
     ) {

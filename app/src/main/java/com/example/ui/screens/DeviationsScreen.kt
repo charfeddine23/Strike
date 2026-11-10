@@ -141,7 +141,6 @@ fun DeviationsScreen(
 
     var showInfoDialog by remember { mutableStateOf(false) }
     var showAllTiersSheet by remember { mutableStateOf(false) }
-    var showSimulatorControls by remember { mutableStateOf(false) }
 
     // Spring-reactive rotation angle for 3D DNA with velocity
     val manualAngleOffset = remember { Animatable(0f) }
@@ -276,27 +275,6 @@ fun DeviationsScreen(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Quick Simulator Toggle Button
-                    IconButton(
-                        onClick = {
-                            showSimulatorControls = !showSimulatorControls
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(if (showSimulatorControls) Color(0x3338BDF8) else Color(0x221E293B))
-                            .border(1.dp, if (showSimulatorControls) NeonCyan else Color(0x3338BDF8), CircleShape)
-                            .testTag("btn_toggle_deviations_sim")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Bolt,
-                            contentDescription = "Simulator",
-                            tint = if (showSimulatorControls) NeonCyan else Color(0xFF94A3B8),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
                     // Info Dialog Button
                     IconButton(
                         onClick = {
@@ -331,68 +309,6 @@ fun DeviationsScreen(
                 approachProgress = lightRank.approachProgress,
                 strobe = warningStrobe
             )
-        }
-
-        // 3. SIMULATOR CONTROLS (IF EXPANDED)
-        item {
-            AnimatedVisibility(
-                visible = showSimulatorControls,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                LiquidGlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Live Flame Simulator (0 - 10,000 PTS)",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                color = NeonCyan
-                            )
-                            Text(
-                                text = "${flameScore.toInt()} PTS",
-                                fontWeight = FontWeight.Black,
-                                fontSize = 14.sp,
-                                color = if (isDarkTrack) NeonRose else NeonCyan
-                            )
-                        }
-
-                        Slider(
-                            value = flameScore.toFloat(),
-                            onValueChange = { newVal ->
-                                viewModel.setFlameScore(newVal.toDouble())
-                            },
-                            valueRange = 0f..10000f,
-                            colors = SliderDefaults.colors(
-                                thumbColor = if (isDarkTrack) NeonRose else Color.White,
-                                activeTrackColor = if (isDarkTrack) NeonRose else NeonCyan
-                            ),
-                            modifier = Modifier.testTag("deviations_score_slider")
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            PresetScoreChip(label = "0 (بافوميت)", score = 0.0, onClick = { viewModel.setFlameScore(0.0) })
-                            PresetScoreChip(label = "500 (ظلال)", score = 500.0, onClick = { viewModel.setFlameScore(500.0) })
-                            PresetScoreChip(label = "4000 (تعادل)", score = 4000.0, onClick = { viewModel.setFlameScore(4000.0) })
-                            PresetScoreChip(label = "10K (جبريل)", score = 10000.0, onClick = { viewModel.setFlameScore(10000.0) })
-                        }
-                    }
-                }
-            }
         }
 
         // 4. CENTRAL 3D VOLUMETRIC DNA CANVAS & MENACING CYBER-SHADOW / ANGEL HERO CARD
@@ -1717,19 +1633,5 @@ fun LuxuryCyberRankFrame(
                 )
             }
         }
-    }
-}
-
-@Composable
-fun PresetScoreChip(label: String, score: Double, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0x221E293B))
-            .border(1.dp, Color(0x3338BDF8), RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        Text(text = label, fontSize = 10.sp, color = NeonCyan, fontWeight = FontWeight.Bold)
     }
 }
