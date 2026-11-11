@@ -17,7 +17,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -109,7 +111,8 @@ enum class AppScreen {
     COMPARISON,
     FLAME,
     DEVIATIONS,
-    ROADMAP
+    ROADMAP,
+    PROFILE
 }
 
 class MainActivity : ComponentActivity() {
@@ -235,13 +238,13 @@ fun LiquidGlassApp(
                     flameScore = flameScore,
                     isStreakShieldActive = isStreakShieldActive,
                     onOpenShieldModal = { showShieldModal = true },
-                    onOpenSettings = { showSettingsDialog = true },
+                    onOpenSettings = { currentScreen = AppScreen.PROFILE },
                     onOpenFlame = { currentScreen = AppScreen.FLAME },
                     onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
                     onLongPressFlame = { showStartDateDialog = true },
                     isDarkTheme = isDarkTheme
                 )
-                if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP) {
+                if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
                     FlameEnergyBanner(
                         flameScore = flameScore,
                         onClick = { currentScreen = AppScreen.FLAME },
@@ -274,6 +277,14 @@ fun LiquidGlassApp(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures { change, dragAmount ->
+                        // Detect Swipe Right from left edge: when drag originates near edge and moves rightward
+                        if (change.position.x < 160f && dragAmount > 20f) {
+                            showSettingsDialog = true
+                        }
+                    }
+                }
         ) {
             AnimatedContent(
                 targetState = currentScreen,
@@ -321,6 +332,11 @@ fun LiquidGlassApp(
                     )
 
                     AppScreen.ROADMAP -> RoadmapScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
+                    )
+
+                    AppScreen.PROFILE -> com.example.ui.screens.ProfileScreen(
                         viewModel = viewModel,
                         onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
                     )
@@ -384,6 +400,7 @@ fun LiquidGlassTopBar(
         AppScreen.FLAME -> stringResource(R.string.flame_system_title)
         AppScreen.DEVIATIONS -> stringResource(R.string.deviations_title)
         AppScreen.ROADMAP -> stringResource(R.string.roadmap_title)
+        AppScreen.PROFILE -> "الملف الشخصي"
     }
 
     val cyanColor = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan
@@ -391,6 +408,9 @@ fun LiquidGlassTopBar(
     val iconBorder = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan.copy(alpha = 0.5f)
     val buttonBg = if (isDarkTheme) Color(0x221E293B) else Color(0xCCFFFFFF)
     val buttonBorder = if (isDarkTheme) Color(0x4038BDF8) else Color(0x5000B4D8)
+
+    val equippedAvatar by com.example.data.profile.ProfileManager.equippedAvatar.collectAsStateWithLifecycle()
+    val equippedTitle by com.example.data.profile.ProfileManager.equippedTitle.collectAsStateWithLifecycle()
 
     Row(
         modifier = Modifier
@@ -427,7 +447,7 @@ fun LiquidGlassTopBar(
                     letterSpacing = 0.5.sp
                 )
                 Text(
-                    text = title,
+                    text = if (currentScreen == AppScreen.PROFILE) "الملف الشخصي" else title,
                     style = MaterialTheme.typography.labelSmall,
                     color = cyanColor,
                     fontFamily = com.example.ui.theme.CaveatHandwriting,
@@ -465,23 +485,13 @@ fun LiquidGlassTopBar(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Settings button
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(buttonBg)
-                    .border(1.dp, buttonBorder, CircleShape)
-                    .testTag("settings_btn")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = stringResource(R.string.settings),
-                    tint = cyanColor,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+            // Dynamic Circular Profile Avatar Icon (Replaces legacy settings icon)
+            com.example.ui.components.ProfileAvatarHeaderIcon(
+                avatar = equippedAvatar,
+                title = equippedTitle,
+                onClick = onOpenSettings, // Triggers Profile Navigation
+                size = 38.dp
+            )
         }
     }
 }

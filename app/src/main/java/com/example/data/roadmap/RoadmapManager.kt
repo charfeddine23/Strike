@@ -69,6 +69,17 @@ object RoadmapManager {
 
     private val _yearlyTasks = MutableStateFlow<List<TaskItem>>(emptyList())
     val yearlyTasks: StateFlow<List<TaskItem>> = _yearlyTasks.asStateFlow()
+    val everlastingTasks: StateFlow<List<TaskItem>> = _yearlyTasks.asStateFlow()
+
+    fun getRemainingPoolCount(period: TaskPeriod): Int {
+        val completed = _completedTaskIds.value
+        return when (period) {
+            TaskPeriod.DAILY -> TaskPools.ALL_DAILY_TASKS.count { !completed.contains(it.id) }
+            TaskPeriod.WEEKLY -> TaskPools.ALL_WEEKLY_TASKS.count { !completed.contains(it.id) }
+            TaskPeriod.MONTHLY -> TaskPools.ALL_MONTHLY_TASKS.count { !completed.contains(it.id) }
+            TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> TaskPools.ALL_EVERLASTING_TASKS.count { !completed.contains(it.id) }
+        }
+    }
 
     // Skipping Keys Inventory (Initialized to 0 - earned strictly via tasks and rewards)
     private val _commonKeys = MutableStateFlow(0)
@@ -324,6 +335,7 @@ object RoadmapManager {
 
         // Distribute reward to inventory
         applyReward(context, reward)
+        com.example.data.profile.ProfileManager.onStationUnlocked(context, stationId)
         return reward
     }
 
@@ -331,22 +343,29 @@ object RoadmapManager {
         val prefs = getPrefs(context)
         when (reward.type) {
             RewardType.SHIELD_24H -> {
-                val newCount = _shields24h.value + reward.quantity
-                _shields24h.value = newCount
-                prefs.edit().putInt(KEY_SHIELDS_24H, newCount).apply()
+                // Tier 1: Mandatory and instantaneous activation upon receipt
                 FlameManager.grant1DayShield(context, reward.quantity)
+                FlameManager.activate1DayShield(context)
             }
             RewardType.SHIELD_48H -> {
-                val newCount = _shields48h.value + reward.quantity
-                _shields48h.value = newCount
-                prefs.edit().putInt(KEY_SHIELDS_48H, newCount).apply()
                 FlameManager.grant1DayShield(context, reward.quantity * 2)
+                FlameManager.activate1DayShield(context)
             }
             RewardType.SHIELD_72H -> {
-                val newCount = _shields72h.value + reward.quantity
-                _shields72h.value = newCount
-                prefs.edit().putInt(KEY_SHIELDS_72H, newCount).apply()
                 FlameManager.grantManualShield(context, days = 3)
+                FlameManager.activateManualShield(context, days = 3)
+            }
+            RewardType.KEY_WOODEN -> {
+                com.example.data.profile.ProfileManager.grantSkipKeys(context, com.example.data.profile.SkipKeyType.WOODEN, reward.quantity)
+                addKey(context, KeyRarity.COMMON, reward.quantity)
+            }
+            RewardType.KEY_BRONZE -> {
+                com.example.data.profile.ProfileManager.grantSkipKeys(context, com.example.data.profile.SkipKeyType.BRONZE, reward.quantity)
+                addKey(context, KeyRarity.NORMAL, reward.quantity)
+            }
+            RewardType.KEY_SILVER -> {
+                com.example.data.profile.ProfileManager.grantSkipKeys(context, com.example.data.profile.SkipKeyType.SILVER, reward.quantity)
+                addKey(context, KeyRarity.RARE, reward.quantity)
             }
             RewardType.KEY_COMMON -> {
                 val newCount = _commonKeys.value + reward.quantity
@@ -367,6 +386,28 @@ object RoadmapManager {
                 val newCount = _legendaryKeys.value + reward.quantity
                 _legendaryKeys.value = newCount
                 prefs.edit().putInt(KEY_KEYS_LEGENDARY, newCount).apply()
+            }
+            RewardType.POTION_PULSE_ELIXIR -> {
+                com.example.data.profile.ProfileManager.grantPotion(context, com.example.data.profile.PotionType.PULSE_ELIXIR, reward.quantity)
+            }
+            RewardType.POTION_SHADOW_SERUM -> {
+                com.example.data.profile.ProfileManager.grantPotion(context, com.example.data.profile.PotionType.SHADOW_GRIP_SERUM, reward.quantity)
+            }
+            RewardType.POTION_GABRIEL_DROPLET -> {
+                // Instantly auto-activates upon receipt
+                com.example.data.profile.ProfileManager.grantPotion(context, com.example.data.profile.PotionType.GABRIEL_PURITY_DROPLET, reward.quantity)
+            }
+            RewardType.POTION_CRYO_INFUSION -> {
+                com.example.data.profile.ProfileManager.grantPotion(context, com.example.data.profile.PotionType.ABSOLUTE_CRYO_INFUSION, reward.quantity)
+            }
+            RewardType.POTION_ETERNAL_REBIRTH -> {
+                com.example.data.profile.ProfileManager.grantPotion(context, com.example.data.profile.PotionType.ETERNAL_REBIRTH_ELIXIR, reward.quantity)
+            }
+            RewardType.REWARD_AVATAR -> {
+                // ProfileManager station checks handle avatar unlocking
+            }
+            RewardType.REWARD_TITLE -> {
+                // ProfileManager station checks handle title unlocking
             }
             RewardType.GIRL_BOOST_HAMMER_7D -> {
                 activateHammer(context, RewardType.GIRL_BOOST_HAMMER_7D)

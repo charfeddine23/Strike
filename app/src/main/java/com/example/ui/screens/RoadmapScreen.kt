@@ -560,7 +560,7 @@ fun RoadmapScreen(
                     TaskPeriod.DAILY -> dailyTasks
                     TaskPeriod.WEEKLY -> weeklyTasks
                     TaskPeriod.MONTHLY -> monthlyTasks
-                    TaskPeriod.YEARLY -> when (everlastingFilter) {
+                    TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> when (everlastingFilter) {
                         1 -> yearlyTasks.filter { !it.isCompleted }
                         2 -> yearlyTasks.filter { it.isCompleted }
                         else -> yearlyTasks
@@ -735,7 +735,7 @@ fun WavyStationItem(
                                         .border(1.5.dp, NeonEmerald, CircleShape),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(imageVector = Icons.Default.Egg, contentDescription = null, tint = NeonEmerald, modifier = Modifier.size(18.dp))
+                                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonEmerald, modifier = Modifier.size(18.dp))
                                 }
                             }
                             StationState.LOCKED -> {

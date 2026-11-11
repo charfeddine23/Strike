@@ -93,39 +93,51 @@ object TaskPools {
         )
     )
 
+    // 5-Tier Reward Matrix (Tier 1: Shields, Tier 2: Skip Keys, Tier 3: Cyber Potions, Tier 4: Avatars & Titles, Tier 5: Station 500 Eternal Rebirth)
+    val HIERARCHICAL_REWARDS = listOf(
+        // Tier 1: Common Protective Shields
+        StationReward(RewardType.SHIELD_24H, "درع حماية 24 ساعة (تفعيل فوري)", "حماية فورية وتلقائية للشعلة من غرامة الـ 3 نقاط اليومية لمدة 24 ساعة", "shield_24h", 1),
+        // Tier 2: Task-Skip Keys
+        StationReward(RewardType.KEY_WOODEN, "مفتاح تجاوز خشبي (Wooden Key)", "استخدام فردي واحد لتجاوز المهام اليومية مع حصد الـ XP فورياً", "key_wooden", 1),
+        // Tier 3: Cybernetic Potions
+        StationReward(RewardType.POTION_PULSE_ELIXIR, "إكسير النبض (Pulse Elixir)", "+5 نقاط إضافية لزر التبريد Deflame للـ 3 تفعيلات القادمة", "potion_pulse", 1),
+        // Tier 1: 48h Shield
+        StationReward(RewardType.SHIELD_48H, "درع حماية 48 ساعة (تفعيل فوري)", "حماية فورية وتلقائية للشعلة من الخمول لمدة يومين كاملين", "shield_48h", 1),
+        // Tier 2: Bronze Key (2 uses)
+        StationReward(RewardType.KEY_BRONZE, "مفتاح تجاوز برونزي (Bronze Key)", "مفتاح استثنائي بـ استخدامين لتجاوز المهام وحصد الـ XP فورياً", "key_bronze", 1),
+        // Tier 3: Shadow-Grip Serum
+        StationReward(RewardType.POTION_SHADOW_SERUM, "مصل قبضة الظل (Shadow-Grip Serum)", "يقلل وتيرة صعود نقاط الشعلة بنسبة 50% لمدة 3 أيام متتالية", "potion_shadow", 1),
+        // Tier 1: 72h Shield
+        StationReward(RewardType.SHIELD_72H, "درع حماية 72 ساعة (تفعيل فوري)", "حماية متينة للشعلة لمدة 3 أيام متتالية من أي عقوبة خمول", "shield_72h", 1),
+        // Tier 2: Silver Key (3 uses)
+        StationReward(RewardType.KEY_SILVER, "مفتاح تجاوز فضي (Silver Key)", "مفتاح متقدم بـ 3 استخدامات لتجاوز المهام وحصد الـ XP فورياً", "key_silver", 1),
+        // Tier 3: Gabriel's Purity Droplet
+        StationReward(RewardType.POTION_GABRIEL_DROPLET, "قطرة نقاء جبريل (Gabriel's Droplet)", "تسارع نمو نقاط الشعلة بنسبة 50% لمدة 7 أيام (تفعيل تلقائي وفوري)", "potion_gabriel", 1),
+        // Tier 3: Absolute Cryo-Infusion
+        StationReward(RewardType.POTION_CRYO_INFUSION, "الحقن التجميدي المطلق (Cryo-Infusion)", "+100 نقطة بونص لتعزيز الستريك التالي (تفعيل اختياري)", "potion_cryo", 1)
+    )
+
     fun getRewardForStation(stationId: Int): StationReward {
         return when {
+            // Tier 5: Station 500 Ultimate Legendary Reward
             stationId == 500 -> StationReward(
-                type = RewardType.THOR_HAMMER_30D,
-                title = "تاج السيادة المطلقة + مطرقة ثور الخارقة",
-                description = "الجائزة الكبرى للمحطة 500: حماية ثور لمدة شهر + 10 مفاتيح أسطورية",
-                iconName = "hammer_thor",
-                quantity = 10
-            )
-            stationId % 100 == 0 -> StationReward(
-                type = RewardType.THOR_HAMMER_30D,
-                title = "مطرقة ثور الكبرى (Thor's Hammer)",
-                description = "جائزة المئة الكبرى: تقليل 60% من الضربات لمدة 30 يوماً",
-                iconName = "hammer_thor",
+                type = RewardType.POTION_ETERNAL_REBIRTH,
+                title = "جرعة الانبعاث الأبدي (Eternal Rebirth) + لقب سيد النقوشة",
+                description = "الجائزة الكبرى للمحطة 500: تمنح درع مناعة أبدي ضد التصفير ولقب سيد النقوشة (Gary Master)",
+                iconName = "potion_rebirth",
                 quantity = 1
             )
-            stationId % 50 == 0 -> StationReward(
+            // Extra Legendary Reward every 20 levels (20, 40, 60... 480) paired with titles/avatars
+            stationId % 20 == 0 -> StationReward(
                 type = RewardType.KEY_LEGENDARY,
-                title = "مفتاح أسطوري مزدوج (2x Legendary Keys)",
-                description = "مفتاحان أسطوريان لتجاوز المهام الكبرى",
+                title = "مكافأة أسطورية محطة #$stationId (Legendary Apex)",
+                description = "جائزة المستوى العشرين: مفتاح أسطوري مزدوج وفتح ألقاب وأفاتار حصرية في الملف الشخصي",
                 iconName = "key_legendary",
                 quantity = 2
             )
-            stationId % 25 == 0 -> StationReward(
-                type = RewardType.GIRL_BOOST_HAMMER_7D,
-                title = "مطرقة تعزيز Girl الأسبوعية",
-                description = "+50 نقطة لكل ضغطة زر Girl لمدة 7 أيام",
-                iconName = "hammer_girl",
-                quantity = 1
-            )
             else -> {
-                val idx = (stationId - 1) % STRATEGIC_REWARDS.size
-                STRATEGIC_REWARDS[idx]
+                val idx = (stationId - 1) % HIERARCHICAL_REWARDS.size
+                HIERARCHICAL_REWARDS[idx]
             }
         }
     }

@@ -144,19 +144,21 @@ class RoadmapEngineTest {
 
     @Test
     fun testMilestoneStrategicRewards() {
-        val reward25 = TaskPools.getRewardForStation(25)
-        val reward50 = TaskPools.getRewardForStation(50)
+        val reward20 = TaskPools.getRewardForStation(20)
         val reward100 = TaskPools.getRewardForStation(100)
         val reward500 = TaskPools.getRewardForStation(500)
 
-        assertNotNull(reward25)
-        assertNotNull(reward50)
+        assertNotNull(reward20)
         assertNotNull(reward100)
         assertNotNull(reward500)
 
-        // Station 500 should be the ultimate Thor Hammer
-        assertEquals(RewardType.THOR_HAMMER_30D, reward500.type)
-        assertEquals(10, reward500.quantity)
+        // Station 20 and 100 have extra legendary rewards
+        assertEquals(RewardType.KEY_LEGENDARY, reward20.type)
+        assertEquals(RewardType.KEY_LEGENDARY, reward100.type)
+
+        // Station 500 should be the ultimate Tier 5 Eternal Rebirth Elixir
+        assertEquals(RewardType.POTION_ETERNAL_REBIRTH, reward500.type)
+        assertEquals(1, reward500.quantity)
     }
 
     @Test

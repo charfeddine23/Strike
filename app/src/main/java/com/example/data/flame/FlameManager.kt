@@ -359,10 +359,12 @@ object FlameManager {
         }
     }
 
+    const val MAX_SCORE = 20000.0
+
     @Synchronized
     fun setScore(context: Context, newScore: Double, reason: String = "SIMULATION", details: String = ""): Double {
         init(context)
-        val clamped = newScore.coerceIn(0.0, 10000.0)
+        val clamped = newScore.coerceIn(0.0, MAX_SCORE)
         val diff = clamped - _flameScore.value
         _flameScore.value = clamped
 
@@ -370,6 +372,9 @@ object FlameManager {
             _peakScore.value = clamped
             getPrefs(context).edit().putFloat(KEY_PEAK_SCORE, clamped.toFloat()).apply()
         }
+
+        // Check Milestone Peak Title unlock at 20,000 pts
+        com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(context, clamped)
 
         if (diff > 0) {
             val updatedGained = _totalPointsGained.value + diff
@@ -400,8 +405,14 @@ object FlameManager {
     @Synchronized
     fun addPoints(context: Context, delta: Double, reason: String, details: String, title: String = ""): Double {
         init(context)
+        // If Shadow-Grip Serum is active, flame score growth rate is reduced by 50%
+        val shadowFactor = if (com.example.data.profile.ProfileManager.isShadowSerumActive() && reason == "INACTIVITY") 0.5 else 1.0
+        // If Gabriel's Purity Droplet is active, flame score growth is accelerated by 50%
+        val gabrielFactor = if (com.example.data.profile.ProfileManager.isGabrielDropletActive() && reason == "INACTIVITY") 1.5 else 1.0
+        val effectiveDelta = delta * shadowFactor * gabrielFactor
+
         val old = _flameScore.value
-        val updated = (old + delta).coerceIn(0.0, 10000.0)
+        val updated = (old + effectiveDelta).coerceIn(0.0, MAX_SCORE)
         _flameScore.value = updated
 
         if (updated > _peakScore.value) {
@@ -409,7 +420,10 @@ object FlameManager {
             getPrefs(context).edit().putFloat(KEY_PEAK_SCORE, updated.toFloat()).apply()
         }
 
-        val updatedGained = _totalPointsGained.value + delta
+        // Check Milestone Peak Title unlock at 20,000 pts
+        com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(context, updated)
+
+        val updatedGained = _totalPointsGained.value + effectiveDelta
         _totalPointsGained.value = updatedGained
         getPrefs(context).edit()
             .putFloat(KEY_SCORE, updated.toFloat())
@@ -424,7 +438,7 @@ object FlameManager {
                 else -> "Flame Energy Accrual"
             }
         }
-        logEvent(context, eventTitle, delta, updated, reason, details)
+        logEvent(context, eventTitle, effectiveDelta, updated, reason, details)
         return updated
     }
 
@@ -432,7 +446,7 @@ object FlameManager {
     fun deductPoints(context: Context, delta: Double, reason: String, details: String, title: String = ""): Double {
         init(context)
         val old = _flameScore.value
-        val updated = (old - delta).coerceIn(0.0, 10000.0)
+        val updated = (old - delta).coerceIn(0.0, MAX_SCORE)
         val actualDeducted = old - updated
         _flameScore.value = updated
 
@@ -458,19 +472,26 @@ object FlameManager {
 
     /**
      * "Deflame" Button: Each tap instantly decreases the total Flame score by 3 points (ensuring score >= 0).
+     * If Pulse Elixir is active, grants +5 extra points (consumes 1 of 3 uses).
      * If Deflame Boost Hammer is active, adds +50 points bonus.
      */
     fun deflame(context: Context, delta: Double = 3.0): Double {
         com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "DEFLAME")
-        val bonus = if (com.example.data.roadmap.RoadmapManager.isDeflameBoostHammerActive()) 50.0 else 0.0
-        val safeDelta = (delta + bonus).coerceAtLeast(0.1)
+        val pulseElixirBonus = com.example.data.profile.ProfileManager.consumePulseElixirUseIfActive(context)
+        val hammerBonus = if (com.example.data.roadmap.RoadmapManager.isDeflameBoostHammerActive()) 50.0 else 0.0
+        val safeDelta = (delta + pulseElixirBonus + hammerBonus).coerceAtLeast(0.1)
         val formatted = if (safeDelta % 1.0 == 0.0) "${safeDelta.toInt()}" else String.format(Locale.US, "%.1f", safeDelta)
-        val hammerNote = if (bonus > 0.0) " [Deflame Hammer Active: +50 pts]" else ""
+        val bonusNote = when {
+            pulseElixirBonus > 0 && hammerBonus > 0 -> " [Pulse Elixir +5 & Deflame Hammer +50]"
+            pulseElixirBonus > 0 -> " [Pulse Elixir: +5 pts]"
+            hammerBonus > 0 -> " [Deflame Hammer Active: +50 pts]"
+            else -> ""
+        }
         return deductPoints(
             context = context,
             delta = safeDelta,
             reason = "DEFLAME",
-            details = "Manual instant decrease (-$formatted pts)$hammerNote",
+            details = "Manual instant decrease (-$formatted pts)$bonusNote",
             title = "Deflame Button Action"
         )
     }
@@ -821,7 +842,7 @@ object FlameManager {
             totalDeductions += dayPenalty
         }
 
-        val resultingScore = (inactivityPointsAdded - totalDeductions).coerceIn(0.0, 10000.0)
+        val resultingScore = (inactivityPointsAdded - totalDeductions).coerceIn(0.0, MAX_SCORE)
 
         return FlameRecalculationResult(
             startDate = startDateStr,

@@ -134,21 +134,25 @@ object DeviationsManager {
         "هرقل"
     )
 
+    const val MAX_FLAME = 20000.0
+    const val DARK_THRESHOLD = 2000.0
+
     /**
-     * Dark Ranks (Score 0 to 1000):
-     * As score drops from 1000 down to 0, rank ascends from 1 (المتغير) to 20 (بافوميت).
-     * Grip progress goes from 0.0 at 1000 up to 1.0 at 0.
+     * Dark Ranks (Score 0 to 2000):
+     * As score drops from 2000 down to 0, rank ascends from 1 (المتغير) to 20 (بافوميت).
+     * Grip progress goes from 0.0 at 2000 up to 1.0 at 0.
      */
     fun getDarkRank(score: Double): DarkRank {
-        val clamped = score.coerceIn(0.0, 1000.0)
-        // 1000 -> 0 rank index 0..19
-        // At 1000: index = 0 ("المتغير")
+        val clamped = score.coerceIn(0.0, DARK_THRESHOLD)
+        // 2000 -> 0 rank index 0..19
+        // At 2000: index = 0 ("المتغير")
         // At 0: index = 19 ("بافوميت")
-        val fraction = (1000.0 - clamped) / 1000.0 // 0.0 at 1000, 1.0 at 0
+        val fraction = (DARK_THRESHOLD - clamped) / DARK_THRESHOLD // 0.0 at 2000, 1.0 at 0
         val rawIndex = (fraction * 19.999).toInt().coerceIn(0, 19)
         val rankNumber = rawIndex + 1
-        val minSc = (1000.0 - (rawIndex + 1) * 50.0).coerceAtLeast(0.0)
-        val maxSc = (1000.0 - rawIndex * 50.0).coerceAtMost(1000.0)
+        val step = DARK_THRESHOLD / 20.0
+        val minSc = (DARK_THRESHOLD - (rawIndex + 1) * step).coerceAtLeast(0.0)
+        val maxSc = (DARK_THRESHOLD - rawIndex * step).coerceAtMost(DARK_THRESHOLD)
 
         return DarkRank(
             index = rankNumber,
@@ -160,18 +164,18 @@ object DeviationsManager {
     }
 
     /**
-     * Light Ranks (Score 1001 to 10000):
-     * As score rises from 1001 to 10000, rank ascends from 1 (التائب) to 20 (جبريل).
-     * Approach progress goes from 0.0 at 1001 up to 1.0 at 10000 (transforming into pure white).
+     * Light Ranks (Score 2001 to 20000):
+     * As score rises from 2001 to 20000, rank ascends from 1 (التائب) to 20 (جبريل).
+     * Approach progress goes from 0.0 at 2001 up to 1.0 at 20000 (transforming into pure white).
      */
     fun getLightRank(score: Double): LightRank {
-        val clamped = score.coerceIn(1001.0, 10000.0)
-        val fraction = (clamped - 1001.0) / (10000.0 - 1001.0) // 0.0 to 1.0
+        val clamped = score.coerceIn(2001.0, MAX_FLAME)
+        val fraction = (clamped - 2001.0) / (MAX_FLAME - 2001.0) // 0.0 to 1.0
         val rawIndex = (fraction * 19.999).toInt().coerceIn(0, 19)
         val rankNumber = rawIndex + 1
-        val step = (10000.0 - 1001.0) / 20.0
-        val minSc = 1001.0 + rawIndex * step
-        val maxSc = 1001.0 + (rawIndex + 1) * step
+        val step = (MAX_FLAME - 2001.0) / 20.0
+        val minSc = 2001.0 + rawIndex * step
+        val maxSc = 2001.0 + (rawIndex + 1) * step
 
         return LightRank(
             index = rankNumber,
@@ -183,21 +187,21 @@ object DeviationsManager {
     }
 
     /**
-     * Biological 50-Tier Progression System (Score 0 to 10000):
+     * Biological 50-Tier Progression System (Score 0 to 20000):
      * Tier 1: الأنثى المطلقة (0 pts, 100% Estrogen, 0% Testosterone)
-     * Tier 20: نقطة التعادل (Score ~4000 pts, 50% Estrogen / 50% Testosterone equilibrium)
-     * Tier 50: هرقل (10000 pts, 0% Estrogen, 100% Testosterone)
+     * Tier 20: نقطة التعادل (Score ~8000 pts, 50% Estrogen / 50% Testosterone equilibrium)
+     * Tier 50: هرقل (20000 pts, 0% Estrogen, 100% Testosterone)
      */
     fun getBiologicalTier(score: Double): BiologicalTier {
-        val clamped = score.coerceIn(0.0, 10000.0)
-        // 50 tiers: each tier spans 200 points
-        val step = 10000.0 / 50.0 // 200.0 pts per tier
+        val clamped = score.coerceIn(0.0, MAX_FLAME)
+        // 50 tiers: each tier spans 400 points
+        val step = MAX_FLAME / 50.0 // 400.0 pts per tier
         val rawIndex = (clamped / step).toInt().coerceIn(0, 49)
         val tierNumber = rawIndex + 1
         val minSc = rawIndex * step
         val maxSc = (rawIndex + 1) * step
 
-        val tPercent = (clamped / 10000.0).toFloat().coerceIn(0f, 1f)
+        val tPercent = (clamped / MAX_FLAME).toFloat().coerceIn(0f, 1f)
         val ePercent = 1f - tPercent
 
         return BiologicalTier(
@@ -210,5 +214,5 @@ object DeviationsManager {
         )
     }
 
-    fun isDarkTrack(score: Double): Boolean = score <= 1000.0
+    fun isDarkTrack(score: Double): Boolean = score <= DARK_THRESHOLD
 }
