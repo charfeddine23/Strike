@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.VpnKey
@@ -108,7 +109,8 @@ import java.util.Locale
 @Composable
 fun ProfileScreen(
     viewModel: IndividualViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onOpenSettings: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -204,24 +206,45 @@ fun ProfileScreen(
                 }
             }
 
-            // Edit username button
-            IconButton(
-                onClick = {
-                    tempName = userName
-                    showEditNameDialog = true
-                },
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Color(0x221E293B))
-                    .border(1.dp, Color(0x4038BDF8), CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit Name",
-                    tint = NeonCyan,
-                    modifier = Modifier.size(18.dp)
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Settings button in Profile Screen
+                IconButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x221E293B))
+                        .border(1.dp, Color(0x4038BDF8), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        tint = NeonCyan,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Edit username button
+                IconButton(
+                    onClick = {
+                        tempName = userName
+                        showEditNameDialog = true
+                    },
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x221E293B))
+                        .border(1.dp, Color(0x4038BDF8), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Name",
+                        tint = NeonCyan,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
 

@@ -17,6 +17,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.input.pointer.pointerInput
@@ -229,63 +230,91 @@ fun LiquidGlassApp(
         currentScreen = AppScreen.DASHBOARD
     }
 
-    Scaffold(
-        containerColor = Color.Transparent,
-        topBar = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                LiquidGlassTopBar(
-                    currentScreen = currentScreen,
-                    flameScore = flameScore,
-                    isStreakShieldActive = isStreakShieldActive,
-                    onOpenShieldModal = { showShieldModal = true },
-                    onOpenSettings = { currentScreen = AppScreen.PROFILE },
-                    onOpenFlame = { currentScreen = AppScreen.FLAME },
-                    onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
-                    onLongPressFlame = { showStartDateDialog = true },
-                    isDarkTheme = isDarkTheme
-                )
-                if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
-                    FlameEnergyBanner(
-                        flameScore = flameScore,
-                        onClick = { currentScreen = AppScreen.FLAME },
-                        isDarkTheme = isDarkTheme
-                    )
-                }
-            }
-        },
-        bottomBar = {
-            LiquidGlassBottomBar(
-                currentScreen = currentScreen,
-                onScreenSelected = { screen ->
-                    if (screen == AppScreen.DATA_ENTRY && currentScreen != AppScreen.DATA_ENTRY) {
-                        viewModel.initFormForNew()
-                    }
-                    currentScreen = screen
-                }
-            )
-        },
-        snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(bottom = 68.dp)
-            )
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures { change, dragAmount ->
-                        // Detect Swipe Right from left edge: when drag originates near edge and moves rightward
-                        if (change.position.x < 160f && dragAmount > 20f) {
-                            showSettingsDialog = true
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var startX = down.position.x
+                        var startY = down.position.y
+                        var totalDragX = 0f
+                        var isEdge = startX < 180f // within ~60dp of left screen edge
+
+                        if (isEdge) {
+                            var dragOccurred = false
+                            do {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull() ?: break
+                                if (change.pressed) {
+                                    val dx = change.position.x - startX
+                                    val dy = change.position.y - startY
+                                    totalDragX = dx
+
+                                    // Check if user swiped right from left edge by at least 40px with mostly horizontal motion
+                                    if (totalDragX > 40f && kotlin.math.abs(totalDragX) > kotlin.math.abs(dy) * 0.8f) {
+                                        showSettingsDialog = true
+                                        change.consume()
+                                        dragOccurred = true
+                                        break
+                                    }
+                                }
+                            } while (event.changes.any { it.pressed })
                         }
                     }
                 }
-        ) {
+            }
+    ) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    LiquidGlassTopBar(
+                        currentScreen = currentScreen,
+                        flameScore = flameScore,
+                        isStreakShieldActive = isStreakShieldActive,
+                        onOpenShieldModal = { showShieldModal = true },
+                        onOpenSettings = { currentScreen = AppScreen.PROFILE },
+                        onOpenFlame = { currentScreen = AppScreen.FLAME },
+                        onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
+                        onLongPressFlame = { showStartDateDialog = true },
+                        isDarkTheme = isDarkTheme
+                    )
+                    if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
+                        FlameEnergyBanner(
+                            flameScore = flameScore,
+                            onClick = { currentScreen = AppScreen.FLAME },
+                            isDarkTheme = isDarkTheme
+                        )
+                    }
+                }
+            },
+            bottomBar = {
+                LiquidGlassBottomBar(
+                    currentScreen = currentScreen,
+                    onScreenSelected = { screen ->
+                        if (screen == AppScreen.DATA_ENTRY && currentScreen != AppScreen.DATA_ENTRY) {
+                            viewModel.initFormForNew()
+                        }
+                        currentScreen = screen
+                    }
+                )
+            },
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = 68.dp)
+                )
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
             AnimatedContent(
                 targetState = currentScreen,
                 transitionSpec = {
@@ -338,11 +367,24 @@ fun LiquidGlassApp(
 
                     AppScreen.PROFILE -> com.example.ui.screens.ProfileScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
+                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD },
+                        onOpenSettings = { showSettingsDialog = true }
                     )
                 }
             }
         }
+    }
+
+        // Cyberpunk Edge Drawer Handle on the left edge (Tap or swipe to open settings)
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .size(width = 12.dp, height = 70.dp)
+                .clip(RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
+                .background(NeonCyan.copy(alpha = 0.35f))
+                .border(1.dp, NeonCyan.copy(alpha = 0.8f), RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
+                .clickable { showSettingsDialog = true }
+        )
     }
 
     // Settings Dialog
