@@ -290,53 +290,40 @@ fun RoadmapScreen(
                                 fontSize = 15.sp,
                                 color = NeonCyan
                             )
+                            val reqCurrent = TaskPools.getRequiredXpForStation(currentStationId)
+                            val reqNext = TaskPools.getRequiredXpForStation((currentStationId + 1).coerceAtMost(500))
                             Text(
-                                text = "المجموع التراكمي: $totalXp XP",
+                                text = "المجموع التراكمي: $totalXp / ${TaskPools.TOTAL_XP_POOL} XP (المحطة التالية: $reqNext XP)",
                                 fontSize = 11.sp,
                                 color = Color(0xFFCBD5E1)
                             )
                         }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // Quick Jump to Current Station
-                            Button(
-                                onClick = {
-                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                    coroutineScope.launch {
-                                        val targetIdx = (currentStationId - 2).coerceAtLeast(0)
-                                        roadmapListState.animateScrollToItem(targetIdx)
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0x330284C7)),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(28.dp)
-                            ) {
-                                Text(text = "قفزة لمحطتي", fontSize = 10.sp, color = NeonCyan, fontWeight = FontWeight.Bold)
-                            }
-
-                            // XP Booster Simulator (+100 XP)
-                            Button(
-                                onClick = {
-                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                    viewModel.addXp(100)
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0x3310B981)),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(28.dp)
-                            ) {
-                                Text(text = "+100 XP", fontSize = 10.sp, color = NeonEmerald, fontWeight = FontWeight.Bold)
-                            }
+                        // Quick Jump to Current Station
+                        Button(
+                            onClick = {
+                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                coroutineScope.launch {
+                                    val targetIdx = (currentStationId - 2).coerceAtLeast(0)
+                                    roadmapListState.animateScrollToItem(targetIdx)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x330284C7)),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text(text = "قفزة لمحطتي", fontSize = 10.sp, color = NeonCyan, fontWeight = FontWeight.Bold)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val prevStationXp = ((currentStationId - 1) * 100L).coerceAtLeast(0L)
-                    val nextStationXp = (currentStationId * 100L)
+                    val prevStationXp = TaskPools.getRequiredXpForStation(currentStationId)
+                    val nextStationXp = TaskPools.getRequiredXpForStation((currentStationId + 1).coerceAtMost(500))
                     val xpInLevel = (totalXp - prevStationXp).coerceAtLeast(0L)
-                    val progressFraction = (xpInLevel.toFloat() / 100f).coerceIn(0f, 1f)
+                    val levelRange = (nextStationXp - prevStationXp).coerceAtLeast(1L)
+                    val progressFraction = (xpInLevel.toFloat() / levelRange.toFloat()).coerceIn(0f, 1f)
 
                     Box(
                         modifier = Modifier
@@ -449,7 +436,9 @@ fun RoadmapScreen(
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
             ) {
-                // Period Selector Chips (Daily, Weekly, Monthly, Yearly)
+                var everlastingFilter by remember { mutableStateOf(0) } // 0: All, 1: Pending, 2: Completed
+
+                // Period Selector Chips (Daily, Weekly, Monthly, Everlasting)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -472,17 +461,110 @@ fun RoadmapScreen(
                         onClick = { selectedTaskPeriod = TaskPeriod.MONTHLY }
                     )
                     PeriodFilterChip(
-                        label = "سنوية",
+                        label = "أهداف أبدية (250)",
                         isSelected = selectedTaskPeriod == TaskPeriod.YEARLY,
                         onClick = { selectedTaskPeriod = TaskPeriod.YEARLY }
                     )
+                }
+
+                // Master Goals Header Banner (Displayed when Everlasting tab is active)
+                if (selectedTaskPeriod == TaskPeriod.YEARLY) {
+                    val completedCount = yearlyTasks.count { it.isCompleted }
+                    val totalEverlastingXpEarned = yearlyTasks.filter { it.isCompleted }.sumOf { it.xpBounty }
+                    val progressFraction = (completedCount.toFloat() / yearlyTasks.size.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+
+                    LiquidGlassCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "مصفوفة الأهداف الأبدية (Master Goals)",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Black,
+                                        fontFamily = PlusJakartaSans,
+                                        color = NeonAmber
+                                    )
+                                    Text(
+                                        text = "250 هدفاً ملحمياً معروضة بالكامل | الإجمالي: 245,350 XP",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF94A3B8)
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0x33F59E0B))
+                                        .border(1.dp, NeonAmber, RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "$completedCount / ${yearlyTasks.size}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = NeonAmber
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(Color(0x331E293B))
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(progressFraction)
+                                        .height(6.dp)
+                                        .background(Brush.horizontalGradient(listOf(NeonAmber, Color(0xFFF97316))))
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Sub-filter chips for 250 master goals
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                FilterChipTiny(
+                                    label = "الكل (250)",
+                                    selected = everlastingFilter == 0,
+                                    onClick = { everlastingFilter = 0 }
+                                )
+                                FilterChipTiny(
+                                    label = "قيد الإنجاز (${yearlyTasks.count { !it.isCompleted }})",
+                                    selected = everlastingFilter == 1,
+                                    onClick = { everlastingFilter = 1 }
+                                )
+                                FilterChipTiny(
+                                    label = "المكتملة ($completedCount)",
+                                    selected = everlastingFilter == 2,
+                                    onClick = { everlastingFilter = 2 }
+                                )
+                            }
+                        }
+                    }
                 }
 
                 val currentTasks = when (selectedTaskPeriod) {
                     TaskPeriod.DAILY -> dailyTasks
                     TaskPeriod.WEEKLY -> weeklyTasks
                     TaskPeriod.MONTHLY -> monthlyTasks
-                    TaskPeriod.YEARLY -> yearlyTasks
+                    TaskPeriod.YEARLY -> when (everlastingFilter) {
+                        1 -> yearlyTasks.filter { !it.isCompleted }
+                        2 -> yearlyTasks.filter { it.isCompleted }
+                        else -> yearlyTasks
+                    }
                 }
 
                 LazyColumn(
@@ -1110,3 +1192,27 @@ fun PeriodFilterChip(
         )
     }
 }
+
+@Composable
+fun FilterChipTiny(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) Color(0x33F59E0B) else Color(0x221E293B))
+            .border(1.dp, if (selected) NeonAmber else Color(0x20FFFFFF), RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) NeonAmber else Color(0xFF94A3B8)
+        )
+    }
+}
+

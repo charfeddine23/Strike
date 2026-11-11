@@ -330,6 +330,12 @@ class IndividualViewModel(
     val weeklyTasks: StateFlow<List<TaskItem>> = RoadmapManager.weeklyTasks
     val monthlyTasks: StateFlow<List<TaskItem>> = RoadmapManager.monthlyTasks
     val yearlyTasks: StateFlow<List<TaskItem>> = RoadmapManager.yearlyTasks
+    val everlastingTasks: StateFlow<List<TaskItem>> = RoadmapManager.everlastingTasks
+    val completedTaskIds: StateFlow<Set<String>> = RoadmapManager.completedTaskIds
+
+    fun getRemainingPoolCount(period: com.example.data.roadmap.TaskPeriod): Int {
+        return RoadmapManager.getRemainingPoolCount(period)
+    }
 
     val commonKeys: StateFlow<Int> = RoadmapManager.commonKeys
     val normalKeys: StateFlow<Int> = RoadmapManager.normalKeys

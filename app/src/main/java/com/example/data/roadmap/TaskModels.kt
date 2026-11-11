@@ -12,7 +12,8 @@ enum class TaskPeriod {
     DAILY,
     WEEKLY,
     MONTHLY,
-    YEARLY
+    YEARLY,
+    EVERLASTING
 }
 
 enum class TaskStatus {

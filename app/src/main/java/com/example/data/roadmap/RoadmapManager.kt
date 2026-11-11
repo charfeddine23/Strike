@@ -12,9 +12,10 @@ import java.util.Locale
 
 /**
  * Singleton state and persistence manager for:
- * - 500-Station Wavy Roadmap & Station Claims
- * - XP Accumulation & Progression Engine
- * - Dynamic Task Engine (Daily, Weekly, Monthly, Yearly)
+ * - 500-Station Wavy Roadmap & Station Claims (Exponential XP scaling from 50 to 434,725 XP)
+ * - 1000-Task Matrix & Progression Engine
+ * - Non-Repeating Consumption Rotation Engine (Daily, Weekly, Monthly)
+ * - Master Goals Interface (Everlasting Tasks)
  * - Cyber Inventory (Keys, Shields, Power Hammers with Live Coroutine Expiry Timers)
  */
 object RoadmapManager {
@@ -23,11 +24,13 @@ object RoadmapManager {
 
     private const val KEY_TOTAL_XP = "key_total_xp"
     private const val KEY_CLAIMED_STATIONS = "key_claimed_stations"
+    private const val KEY_COMPLETED_TASK_IDS = "key_completed_task_ids"
     private const val KEY_LAST_DAILY_DATE = "key_last_daily_date"
+    private const val KEY_LAST_WEEKLY_CODE = "key_last_weekly_code"
+    private const val KEY_LAST_MONTHLY_CODE = "key_last_monthly_code"
     private const val KEY_DAILY_TASKS_JSON = "key_daily_tasks_json"
     private const val KEY_WEEKLY_TASKS_JSON = "key_weekly_tasks_json"
     private const val KEY_MONTHLY_TASKS_JSON = "key_monthly_tasks_json"
-    private const val KEY_YEARLY_TASKS_JSON = "key_yearly_tasks_json"
 
     // Inventory Keys
     private const val KEY_KEYS_COMMON = "key_keys_common"
@@ -46,11 +49,14 @@ object RoadmapManager {
     private const val KEY_HAMMER_THOR_EXPIRES = "key_hammer_thor_expires"
 
     // Flows
-    private val _totalXp = MutableStateFlow(250L) // Default initial XP to start at Station 2
+    private val _totalXp = MutableStateFlow(50L) // Default initial XP starts at Station 1
     val totalXp: StateFlow<Long> = _totalXp.asStateFlow()
 
     private val _claimedStations = MutableStateFlow<Set<Int>>(emptySet())
     val claimedStations: StateFlow<Set<Int>> = _claimedStations.asStateFlow()
+
+    private val _completedTaskIds = MutableStateFlow<Set<String>>(emptySet())
+    val completedTaskIds: StateFlow<Set<String>> = _completedTaskIds.asStateFlow()
 
     private val _dailyTasks = MutableStateFlow<List<TaskItem>>(emptyList())
     val dailyTasks: StateFlow<List<TaskItem>> = _dailyTasks.asStateFlow()
@@ -108,14 +114,18 @@ object RoadmapManager {
         if (isInitialized) return
         val prefs = getPrefs(context)
 
-        _totalXp.value = prefs.getLong(KEY_TOTAL_XP, 250L)
+        _totalXp.value = prefs.getLong(KEY_TOTAL_XP, 50L)
 
         // Read claimed stations
         val claimedStrSet = prefs.getStringSet(KEY_CLAIMED_STATIONS, emptySet()) ?: emptySet()
         _claimedStations.value = claimedStrSet.mapNotNull { it.toIntOrNull() }.toSet()
 
+        // Read permanently completed task IDs
+        val completedStrSet = prefs.getStringSet(KEY_COMPLETED_TASK_IDS, emptySet()) ?: emptySet()
+        _completedTaskIds.value = completedStrSet
+
         // Ensure inventory starts clean at 0 (or loads saved non-default earned inventory)
-        val hasResetInventory = prefs.getBoolean("has_reset_inventory_to_zero_v2", false)
+        val hasResetInventory = prefs.getBoolean("has_reset_inventory_to_zero_v3", false)
         if (!hasResetInventory) {
             _commonKeys.value = 0
             _normalKeys.value = 0
@@ -132,16 +142,14 @@ object RoadmapManager {
                 .putInt(KEY_SHIELDS_24H, 0)
                 .putInt(KEY_SHIELDS_48H, 0)
                 .putInt(KEY_SHIELDS_72H, 0)
-                .putBoolean("has_reset_inventory_to_zero_v2", true)
+                .putBoolean("has_reset_inventory_to_zero_v3", true)
                 .apply()
         } else {
-            // Read keys inventory (defaults to 0)
             _commonKeys.value = prefs.getInt(KEY_KEYS_COMMON, 0)
             _normalKeys.value = prefs.getInt(KEY_KEYS_NORMAL, 0)
             _rareKeys.value = prefs.getInt(KEY_KEYS_RARE, 0)
             _legendaryKeys.value = prefs.getInt(KEY_KEYS_LEGENDARY, 0)
 
-            // Read shields inventory (defaults to 0)
             _shields24h.value = prefs.getInt(KEY_SHIELDS_24H, 0)
             _shields48h.value = prefs.getInt(KEY_SHIELDS_48H, 0)
             _shields72h.value = prefs.getInt(KEY_SHIELDS_72H, 0)
@@ -158,22 +166,44 @@ object RoadmapManager {
         val tExp = if (prefs.contains(KEY_HAMMER_THOR_EXPIRES)) prefs.getLong(KEY_HAMMER_THOR_EXPIRES, 0L) else null
         _thorHammerExpiresAt.value = if (tExp != null && tExp > now) tExp else null
 
-        // Evaluate Daily Tasks (Seeded by date)
+        // 1. Evaluate Daily Tasks (Seeded by date & non-repeating consumption)
         val today = TaskPools.todayDateString()
         val lastDate = prefs.getString(KEY_LAST_DAILY_DATE, null)
         if (lastDate != today) {
-            val freshTasks = TaskPools.getDailyTasksForDate(today)
+            val freshTasks = TaskPools.getRotatedDailyTasks(_completedTaskIds.value, today)
             _dailyTasks.value = freshTasks
             saveTasks(context, KEY_DAILY_TASKS_JSON, freshTasks)
             prefs.edit().putString(KEY_LAST_DAILY_DATE, today).apply()
         } else {
-            _dailyTasks.value = loadTasks(context, KEY_DAILY_TASKS_JSON) ?: TaskPools.getDailyTasksForDate(today)
+            _dailyTasks.value = loadTasks(context, KEY_DAILY_TASKS_JSON) ?: TaskPools.getRotatedDailyTasks(_completedTaskIds.value, today)
         }
 
-        // Load weekly, monthly, yearly tasks
-        _weeklyTasks.value = loadTasks(context, KEY_WEEKLY_TASKS_JSON) ?: TaskPools.WEEKLY_CORE_TASKS
-        _monthlyTasks.value = loadTasks(context, KEY_MONTHLY_TASKS_JSON) ?: TaskPools.MONTHLY_MILESTONES
-        _yearlyTasks.value = loadTasks(context, KEY_YEARLY_TASKS_JSON) ?: TaskPools.YEARLY_EPIC_GOALS
+        // 2. Evaluate Weekly Tasks (Seeded by week & non-repeating consumption)
+        val currentWeek = TaskPools.currentWeekString()
+        val lastWeek = prefs.getString(KEY_LAST_WEEKLY_CODE, null)
+        if (lastWeek != currentWeek) {
+            val freshWeekly = TaskPools.getRotatedWeeklyTasks(_completedTaskIds.value, currentWeek)
+            _weeklyTasks.value = freshWeekly
+            saveTasks(context, KEY_WEEKLY_TASKS_JSON, freshWeekly)
+            prefs.edit().putString(KEY_LAST_WEEKLY_CODE, currentWeek).apply()
+        } else {
+            _weeklyTasks.value = loadTasks(context, KEY_WEEKLY_TASKS_JSON) ?: TaskPools.getRotatedWeeklyTasks(_completedTaskIds.value, currentWeek)
+        }
+
+        // 3. Evaluate Monthly Tasks (Seeded by month & non-repeating consumption)
+        val currentMonth = TaskPools.currentMonthString()
+        val lastMonth = prefs.getString(KEY_LAST_MONTHLY_CODE, null)
+        if (lastMonth != currentMonth) {
+            val freshMonthly = TaskPools.getRotatedMonthlyTasks(_completedTaskIds.value, currentMonth)
+            _monthlyTasks.value = freshMonthly
+            saveTasks(context, KEY_MONTHLY_TASKS_JSON, freshMonthly)
+            prefs.edit().putString(KEY_LAST_MONTHLY_CODE, currentMonth).apply()
+        } else {
+            _monthlyTasks.value = loadTasks(context, KEY_MONTHLY_TASKS_JSON) ?: TaskPools.getRotatedMonthlyTasks(_completedTaskIds.value, currentMonth)
+        }
+
+        // 4. Everlasting / Master Goals Tasks (All 250 everlasting master goals displayed at once)
+        _yearlyTasks.value = TaskPools.getEverlastingTasks(_completedTaskIds.value)
 
         isInitialized = true
     }
@@ -207,20 +237,23 @@ object RoadmapManager {
 
     /**
      * Calculates the highest unlocked station (1 to 500) based on Total XP.
-     * Formula: Required XP = Station ID * 100 XP
+     * Follows the Exponential Curve: Station 1 = 50 XP, Station 500 = 434,725 XP.
      */
     fun calculateUnlockedStationId(currentXp: Long): Int {
-        val st = (currentXp / 100L).toInt().coerceIn(1, 500)
-        return st
+        for (s in 500 downTo 1) {
+            if (currentXp >= TaskPools.getRequiredXpForStation(s)) {
+                return s
+            }
+        }
+        return 0
     }
 
     fun generateStations(totalXp: Long, claimedStations: Set<Int>): List<RoadmapStation> {
-        val maxUnlocked = calculateUnlockedStationId(totalXp)
         return (1..500).map { id ->
-            val reqXp = id * 100L
+            val reqXp = TaskPools.getRequiredXpForStation(id)
             val state = when {
                 claimedStations.contains(id) -> StationState.CLAIMED
-                id <= maxUnlocked -> StationState.UNLOCKED
+                totalXp >= reqXp -> StationState.UNLOCKED
                 else -> StationState.LOCKED
             }
             RoadmapStation(
@@ -234,8 +267,8 @@ object RoadmapManager {
 
     fun getStationState(stationId: Int): StationState {
         if (_claimedStations.value.contains(stationId)) return StationState.CLAIMED
-        val unlockedMax = calculateUnlockedStationId(_totalXp.value)
-        return if (stationId <= unlockedMax) StationState.UNLOCKED else StationState.LOCKED
+        val reqXp = TaskPools.getRequiredXpForStation(stationId)
+        return if (_totalXp.value >= reqXp) StationState.UNLOCKED else StationState.LOCKED
     }
 
     @Synchronized
@@ -301,7 +334,6 @@ object RoadmapManager {
                 val newCount = _shields24h.value + reward.quantity
                 _shields24h.value = newCount
                 prefs.edit().putInt(KEY_SHIELDS_24H, newCount).apply()
-                // Also give 1-day shield to FlameManager inventory
                 FlameManager.grant1DayShield(context, reward.quantity)
             }
             RewardType.SHIELD_48H -> {
@@ -348,12 +380,6 @@ object RoadmapManager {
         }
     }
 
-    /**
-     * Power Hammers Activation:
-     * - Girl Boost: 7 Days (+50 pts / tap)
-     * - Deflame Boost: 7 Days (+50 pts / tap)
-     * - Thor's Hammer: 30 Days (-60% strike impact)
-     */
     @Synchronized
     fun activateHammer(context: Context, hammerType: RewardType): Long {
         init(context)
@@ -401,6 +427,10 @@ object RoadmapManager {
         return System.currentTimeMillis() < exp
     }
 
+    /**
+     * Completes a task, awards its exact XP bounty, and permanently adds its ID to [completedTaskIds]
+     * so it never repeats until the entire category pool is exhausted.
+     */
     @Synchronized
     fun completeTask(context: Context, taskId: String): Boolean {
         init(context)
@@ -420,18 +450,27 @@ object RoadmapManager {
         _dailyTasks.value = updateList(_dailyTasks.value).also { if (found) saveTasks(context, KEY_DAILY_TASKS_JSON, it) }
         if (!found) _weeklyTasks.value = updateList(_weeklyTasks.value).also { if (found) saveTasks(context, KEY_WEEKLY_TASKS_JSON, it) }
         if (!found) _monthlyTasks.value = updateList(_monthlyTasks.value).also { if (found) saveTasks(context, KEY_MONTHLY_TASKS_JSON, it) }
-        if (!found) _yearlyTasks.value = updateList(_yearlyTasks.value).also { if (found) saveTasks(context, KEY_YEARLY_TASKS_JSON, it) }
+        if (!found) _yearlyTasks.value = updateList(_yearlyTasks.value)
 
-        if (found && awardedXp > 0) {
-            addXp(context, awardedXp)
+        if (found) {
+            val updatedCompleted = _completedTaskIds.value.toMutableSet()
+            updatedCompleted.add(taskId)
+            _completedTaskIds.value = updatedCompleted
+            getPrefs(context).edit().putStringSet(KEY_COMPLETED_TASK_IDS, updatedCompleted).apply()
+
+            if (awardedXp > 0) {
+                addXp(context, awardedXp)
+            }
         }
         return found
     }
 
+    /**
+     * Consumes an appropriate Skip Key to instantly complete a task and award full XP.
+     */
     @Synchronized
     fun useSkipKeyForTask(context: Context, taskId: String): Boolean {
         init(context)
-        // Find task to know required key rarity
         val allTasks = _dailyTasks.value + _weeklyTasks.value + _monthlyTasks.value + _yearlyTasks.value
         val task = allTasks.find { it.id == taskId } ?: return false
         if (task.status != TaskStatus.PENDING) return false
@@ -474,7 +513,6 @@ object RoadmapManager {
 
         if (!hasKey) return false
 
-        // Mark task SKIPPED and award full XP
         var awardedXp = 0
         fun updateList(list: List<TaskItem>): List<TaskItem> {
             return list.map { item ->
@@ -488,7 +526,12 @@ object RoadmapManager {
         _dailyTasks.value = updateList(_dailyTasks.value).also { saveTasks(context, KEY_DAILY_TASKS_JSON, it) }
         _weeklyTasks.value = updateList(_weeklyTasks.value).also { saveTasks(context, KEY_WEEKLY_TASKS_JSON, it) }
         _monthlyTasks.value = updateList(_monthlyTasks.value).also { saveTasks(context, KEY_MONTHLY_TASKS_JSON, it) }
-        _yearlyTasks.value = updateList(_yearlyTasks.value).also { saveTasks(context, KEY_YEARLY_TASKS_JSON, it) }
+        _yearlyTasks.value = updateList(_yearlyTasks.value)
+
+        val updatedCompleted = _completedTaskIds.value.toMutableSet()
+        updatedCompleted.add(taskId)
+        _completedTaskIds.value = updatedCompleted
+        prefs.edit().putStringSet(KEY_COMPLETED_TASK_IDS, updatedCompleted).apply()
 
         if (awardedXp > 0) {
             addXp(context, awardedXp)
@@ -497,19 +540,19 @@ object RoadmapManager {
     }
 
     /**
-     * Auto-increments progress for relevant matching tasks (e.g. "daily_deflame", "daily_girl", "strike").
+     * Auto-increments progress for relevant matching tasks across active pools.
      */
     @Synchronized
     fun onActionOccurred(context: Context, actionType: String) {
         init(context)
-        var anyCompleted = false
+        val newlyCompletedIds = mutableListOf<String>()
 
         fun incrementMatching(list: List<TaskItem>): List<TaskItem> {
             return list.map { item ->
                 if (item.status == TaskStatus.PENDING && shouldIncrement(item.id, actionType)) {
                     val newCount = item.currentCount + 1
                     if (newCount >= item.targetCount) {
-                        anyCompleted = true
+                        newlyCompletedIds.add(item.id)
                         addXp(context, item.xpBounty)
                         item.copy(currentCount = newCount, status = TaskStatus.COMPLETED)
                     } else {
@@ -521,15 +564,26 @@ object RoadmapManager {
 
         _dailyTasks.value = incrementMatching(_dailyTasks.value).also { saveTasks(context, KEY_DAILY_TASKS_JSON, it) }
         _weeklyTasks.value = incrementMatching(_weeklyTasks.value).also { saveTasks(context, KEY_WEEKLY_TASKS_JSON, it) }
+        _monthlyTasks.value = incrementMatching(_monthlyTasks.value).also { saveTasks(context, KEY_MONTHLY_TASKS_JSON, it) }
+        _yearlyTasks.value = incrementMatching(_yearlyTasks.value)
+
+        if (newlyCompletedIds.isNotEmpty()) {
+            val updatedCompleted = _completedTaskIds.value.toMutableSet()
+            updatedCompleted.addAll(newlyCompletedIds)
+            _completedTaskIds.value = updatedCompleted
+            getPrefs(context).edit().putStringSet(KEY_COMPLETED_TASK_IDS, updatedCompleted).apply()
+        }
     }
 
     private fun shouldIncrement(taskId: String, actionType: String): Boolean {
         return when (actionType) {
-            "DEFLAME" -> taskId.contains("deflame") || taskId.contains("alternating")
-            "GIRL" -> taskId.contains("girl") || taskId.contains("alternating")
-            "STRIKE" -> taskId.contains("strike")
-            "SHIELD" -> taskId.contains("shield") || taskId.contains("defense")
-            "DNA" -> taskId.contains("dna")
+            "DEFLAME" -> taskId.contains("deflame") || taskId.contains("daily_4")
+            "GIRL" -> taskId.contains("girl") || taskId.contains("daily_3")
+            "STRIKE" -> taskId.contains("strike") || taskId.contains("daily_1") || taskId.contains("daily_2")
+            "SHIELD" -> taskId.contains("shield") || taskId.contains("daily_5") || taskId.contains("daily_6") || taskId.contains("daily_7")
+            "KEY" -> taskId.contains("key") || taskId.contains("daily_8")
+            "HAMMER" -> taskId.contains("hammer") || taskId.contains("daily_9")
+            "PERSON" -> taskId.contains("person") || taskId.contains("daily_10")
             else -> false
         }
     }
