@@ -16,7 +16,7 @@ import java.util.Locale
  * - 1000-Task Matrix & Progression Engine
  * - Non-Repeating Consumption Rotation Engine (Daily, Weekly, Monthly)
  * - Master Goals Interface (Everlasting Tasks)
- * - Cyber Inventory (Keys, Shields, Power Hammers with Live Coroutine Expiry Timers)
+ * - Cyber Inventory (Skip Keys & Protective Shields)
  */
 object RoadmapManager {
 
@@ -42,11 +42,6 @@ object RoadmapManager {
     private const val KEY_SHIELDS_24H = "key_shields_24h"
     private const val KEY_SHIELDS_48H = "key_shields_48h"
     private const val KEY_SHIELDS_72H = "key_shields_72h"
-
-    // Active Hammers Expiry Timestamps
-    private const val KEY_HAMMER_GIRL_EXPIRES = "key_hammer_girl_expires"
-    private const val KEY_HAMMER_DEFLAME_EXPIRES = "key_hammer_deflame_expires"
-    private const val KEY_HAMMER_THOR_EXPIRES = "key_hammer_thor_expires"
 
     // Flows
     private val _totalXp = MutableStateFlow(50L) // Default initial XP starts at Station 1
@@ -104,16 +99,6 @@ object RoadmapManager {
     private val _shields72h = MutableStateFlow(0)
     val shields72h: StateFlow<Int> = _shields72h.asStateFlow()
 
-    // Power Hammers Expiry Timestamps
-    private val _girlBoostHammerExpiresAt = MutableStateFlow<Long?>(null)
-    val girlBoostHammerExpiresAt: StateFlow<Long?> = _girlBoostHammerExpiresAt.asStateFlow()
-
-    private val _deflameBoostHammerExpiresAt = MutableStateFlow<Long?>(null)
-    val deflameBoostHammerExpiresAt: StateFlow<Long?> = _deflameBoostHammerExpiresAt.asStateFlow()
-
-    private val _thorHammerExpiresAt = MutableStateFlow<Long?>(null)
-    val thorHammerExpiresAt: StateFlow<Long?> = _thorHammerExpiresAt.asStateFlow()
-
     private var isInitialized = false
 
     private fun getPrefs(context: Context): SharedPreferences {
@@ -166,16 +151,20 @@ object RoadmapManager {
             _shields72h.value = prefs.getInt(KEY_SHIELDS_72H, 0)
         }
 
-        // Read hammers expiry
-        val now = System.currentTimeMillis()
-        val gExp = if (prefs.contains(KEY_HAMMER_GIRL_EXPIRES)) prefs.getLong(KEY_HAMMER_GIRL_EXPIRES, 0L) else null
-        _girlBoostHammerExpiresAt.value = if (gExp != null && gExp > now) gExp else null
-
-        val dExp = if (prefs.contains(KEY_HAMMER_DEFLAME_EXPIRES)) prefs.getLong(KEY_HAMMER_DEFLAME_EXPIRES, 0L) else null
-        _deflameBoostHammerExpiresAt.value = if (dExp != null && dExp > now) dExp else null
-
-        val tExp = if (prefs.contains(KEY_HAMMER_THOR_EXPIRES)) prefs.getLong(KEY_HAMMER_THOR_EXPIRES, 0L) else null
-        _thorHammerExpiresAt.value = if (tExp != null && tExp > now) tExp else null
+        // 0. Cache Versioning & Legacy Tasks Purge:
+        // Evicts legacy cached task JSONs from SharedPreferences to strictly load the 1000 new cyberpunk tasks
+        val tasksCacheVersion = prefs.getInt("key_tasks_matrix_version", 0)
+        if (tasksCacheVersion < 5) {
+            prefs.edit()
+                .remove(KEY_DAILY_TASKS_JSON)
+                .remove(KEY_WEEKLY_TASKS_JSON)
+                .remove(KEY_MONTHLY_TASKS_JSON)
+                .remove(KEY_LAST_DAILY_DATE)
+                .remove(KEY_LAST_WEEKLY_CODE)
+                .remove(KEY_LAST_MONTHLY_CODE)
+                .putInt("key_tasks_matrix_version", 5)
+                .apply()
+        }
 
         // 1. Evaluate Daily Tasks (Seeded by date & non-repeating consumption)
         val today = TaskPools.todayDateString()
@@ -409,63 +398,7 @@ object RoadmapManager {
             RewardType.REWARD_TITLE -> {
                 // ProfileManager station checks handle title unlocking
             }
-            RewardType.GIRL_BOOST_HAMMER_7D -> {
-                activateHammer(context, RewardType.GIRL_BOOST_HAMMER_7D)
-            }
-            RewardType.DEFLAME_BOOST_HAMMER_7D -> {
-                activateHammer(context, RewardType.DEFLAME_BOOST_HAMMER_7D)
-            }
-            RewardType.THOR_HAMMER_30D -> {
-                activateHammer(context, RewardType.THOR_HAMMER_30D)
-            }
         }
-    }
-
-    @Synchronized
-    fun activateHammer(context: Context, hammerType: RewardType): Long {
-        init(context)
-        val now = System.currentTimeMillis()
-        val prefs = getPrefs(context)
-
-        return when (hammerType) {
-            RewardType.GIRL_BOOST_HAMMER_7D -> {
-                val base = maxOf(now, _girlBoostHammerExpiresAt.value ?: now)
-                val exp = base + (7 * 24 * 3600 * 1000L)
-                _girlBoostHammerExpiresAt.value = exp
-                prefs.edit().putLong(KEY_HAMMER_GIRL_EXPIRES, exp).apply()
-                exp
-            }
-            RewardType.DEFLAME_BOOST_HAMMER_7D -> {
-                val base = maxOf(now, _deflameBoostHammerExpiresAt.value ?: now)
-                val exp = base + (7 * 24 * 3600 * 1000L)
-                _deflameBoostHammerExpiresAt.value = exp
-                prefs.edit().putLong(KEY_HAMMER_DEFLAME_EXPIRES, exp).apply()
-                exp
-            }
-            RewardType.THOR_HAMMER_30D -> {
-                val base = maxOf(now, _thorHammerExpiresAt.value ?: now)
-                val exp = base + (30 * 24 * 3600 * 1000L)
-                _thorHammerExpiresAt.value = exp
-                prefs.edit().putLong(KEY_HAMMER_THOR_EXPIRES, exp).apply()
-                exp
-            }
-            else -> 0L
-        }
-    }
-
-    fun isGirlBoostHammerActive(): Boolean {
-        val exp = _girlBoostHammerExpiresAt.value ?: return false
-        return System.currentTimeMillis() < exp
-    }
-
-    fun isDeflameBoostHammerActive(): Boolean {
-        val exp = _deflameBoostHammerExpiresAt.value ?: return false
-        return System.currentTimeMillis() < exp
-    }
-
-    fun isThorHammerActive(): Boolean {
-        val exp = _thorHammerExpiresAt.value ?: return false
-        return System.currentTimeMillis() < exp
     }
 
     /**
@@ -515,6 +448,7 @@ object RoadmapManager {
         val allTasks = _dailyTasks.value + _weeklyTasks.value + _monthlyTasks.value + _yearlyTasks.value
         val task = allTasks.find { it.id == taskId } ?: return false
         if (task.status != TaskStatus.PENDING) return false
+        if (!task.canBeSkipped) return false // STRICT: Annual / Yearly tasks CANNOT be skipped with keys
 
         val prefs = getPrefs(context)
         val hasKey = when (task.requiredKeyRarity) {
@@ -623,7 +557,6 @@ object RoadmapManager {
             "STRIKE" -> taskId.contains("strike") || taskId.contains("daily_1") || taskId.contains("daily_2")
             "SHIELD" -> taskId.contains("shield") || taskId.contains("daily_5") || taskId.contains("daily_6") || taskId.contains("daily_7")
             "KEY" -> taskId.contains("key") || taskId.contains("daily_8")
-            "HAMMER" -> taskId.contains("hammer") || taskId.contains("daily_9")
             "PERSON" -> taskId.contains("person") || taskId.contains("daily_10")
             else -> false
         }

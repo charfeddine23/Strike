@@ -124,7 +124,7 @@ import kotlin.math.sin
  * - Continuous scrollable sine-wave path connecting 500 progressive stations
  * - Station States: Locked, Unlocked (pulsing egg reward), Claimed (golden neon)
  * - Dynamic Task Engine (Daily, Weekly, Monthly, Yearly)
- * - Cyber Arsenal Modal (Power Hammers, Skip Keys, Shields)
+ * - Cyber Inventory Modal (Skip Keys, Shields)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -152,9 +152,9 @@ fun RoadmapScreen(
     val rareKeys by viewModel.rareKeys.collectAsStateWithLifecycle()
     val legendaryKeys by viewModel.legendaryKeys.collectAsStateWithLifecycle()
 
-    val girlBoostHammerExpiresAt by viewModel.girlBoostHammerExpiresAt.collectAsStateWithLifecycle()
-    val deflameBoostHammerExpiresAt by viewModel.deflameBoostHammerExpiresAt.collectAsStateWithLifecycle()
-    val thorHammerExpiresAt by viewModel.thorHammerExpiresAt.collectAsStateWithLifecycle()
+    val shields24h by viewModel.shields24h.collectAsStateWithLifecycle()
+    val shields48h by viewModel.shields48h.collectAsStateWithLifecycle()
+    val shields72h by viewModel.shields72h.collectAsStateWithLifecycle()
 
     var selectedMainTab by remember { mutableStateOf(0) } // 0: Wavy Roadmap, 1: Dynamic Tasks
     var selectedTaskPeriod by remember { mutableStateOf(TaskPeriod.DAILY) }
@@ -256,8 +256,8 @@ fun RoadmapScreen(
                             .testTag("btn_open_arsenal")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Gavel,
-                            contentDescription = "Arsenal",
+                            imageVector = Icons.Default.VpnKey,
+                            contentDescription = "Inventory",
                             tint = NeonAmber,
                             modifier = Modifier.size(18.dp)
                         )
@@ -593,19 +593,16 @@ fun RoadmapScreen(
         }
     }
 
-    // CYBER ARSENAL MODAL SHEET
+    // CYBER INVENTORY MODAL SHEET (KEYS & SHIELDS)
     if (showArsenalSheet) {
         CyberArsenalModalSheet(
-            girlHammerExpires = girlBoostHammerExpiresAt,
-            deflameHammerExpires = deflameBoostHammerExpiresAt,
-            thorHammerExpires = thorHammerExpiresAt,
             commonKeys = commonKeys,
             normalKeys = normalKeys,
             rareKeys = rareKeys,
             legendaryKeys = legendaryKeys,
-            onActivateHammer = { hammerType ->
-                viewModel.activateHammer(hammerType)
-            },
+            shields24h = shields24h,
+            shields48h = shields48h,
+            shields72h = shields72h,
             onDismiss = { showArsenalSheet = false }
         )
     }
@@ -922,39 +919,66 @@ fun TaskItemCard(
                     )
                 }
             } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "تُنجز بالنشاط الفعلي أو بالتجاوز",
-                        fontSize = 10.sp,
-                        color = Color(0xFF64748B),
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    OutlinedButton(
-                        onClick = onSkipWithKey,
-                        enabled = availableKeysForRarity > 0,
-                        shape = RoundedCornerShape(10.dp),
+                if (!task.canBeSkipped) {
+                    // Annual tasks CANNOT be skipped with keys — strictly require genuine completion
+                    Row(
                         modifier = Modifier
-                            .height(34.dp)
-                            .testTag("btn_skip_task_${task.id}")
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0x22F59E0B))
+                            .border(1.dp, Color(0x55F59E0B), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.VpnKey,
+                            imageVector = Icons.Default.Lock,
                             contentDescription = null,
-                            tint = if (availableKeysForRarity > 0) NeonAmber else Color.Gray,
-                            modifier = Modifier.size(13.dp)
+                            tint = NeonAmber,
+                            modifier = Modifier.size(14.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "تجاوز بمفتاح ($availableKeysForRarity)",
+                            text = "مهمة سنوية (غير قابلة للتجاوز بالمفاتيح - تتطلب إنجازاً فعلياً)",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (availableKeysForRarity > 0) NeonAmber else Color.Gray
+                            color = NeonAmber
                         )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "تُنجز بالنشاط الفعلي أو بالتجاوز",
+                            fontSize = 10.sp,
+                            color = Color(0xFF64748B),
+                            fontWeight = FontWeight.Medium
+                        )
+
+                        OutlinedButton(
+                            onClick = onSkipWithKey,
+                            enabled = availableKeysForRarity > 0,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .height(34.dp)
+                                .testTag("btn_skip_task_${task.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VpnKey,
+                                contentDescription = null,
+                                tint = if (availableKeysForRarity > 0) NeonAmber else Color.Gray,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "تجاوز بمفتاح ($availableKeysForRarity)",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (availableKeysForRarity > 0) NeonAmber else Color.Gray
+                            )
+                        }
                     }
                 }
             }
@@ -963,32 +987,21 @@ fun TaskItemCard(
 }
 
 /**
- * Cyber Arsenal & Active Power Hammers Modal Bottom Sheet
+ * Cyber Arsenal (Keys & Protective Shields Inventory) Modal Bottom Sheet
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CyberArsenalModalSheet(
-    girlHammerExpires: Long?,
-    deflameHammerExpires: Long?,
-    thorHammerExpires: Long?,
     commonKeys: Int,
     normalKeys: Int,
     rareKeys: Int,
     legendaryKeys: Int,
-    onActivateHammer: (RewardType) -> Unit,
+    shields24h: Int,
+    shields48h: Int,
+    shields72h: Int,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    fun formatRemaining(expiresAt: Long?): String {
-        if (expiresAt == null) return "غير نشطة"
-        val remaining = expiresAt - System.currentTimeMillis()
-        if (remaining <= 0) return "منتهية الصلاحية"
-        val days = remaining / (24 * 3600 * 1000L)
-        val hours = (remaining % (24 * 3600 * 1000L)) / (3600 * 1000L)
-        val mins = (remaining % (3600 * 1000L)) / (60 * 1000L)
-        return "${days}d ${hours}h ${mins}m"
-    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1015,19 +1028,19 @@ fun CyberArsenalModalSheet(
                             .background(Color(0x33F59E0B)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(imageVector = Icons.Default.Gavel, contentDescription = null, tint = NeonAmber, modifier = Modifier.size(20.dp))
+                        Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = NeonAmber, modifier = Modifier.size(20.dp))
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = stringResource(R.string.roadmap_arsenal_title),
+                            text = "مخزون المفاتيح والدروع",
                             fontWeight = FontWeight.Black,
                             fontFamily = PlusJakartaSans,
                             fontSize = 17.sp,
                             color = Color.White
                         )
                         Text(
-                            text = "المطارق الخارقة ومخزون مفاتيح التجاوز والدروع",
+                            text = "مفاتيح التجاوز المتاحة والدروع الواقية",
                             fontSize = 11.sp,
                             color = Color(0xFF94A3B8)
                         )
@@ -1040,52 +1053,7 @@ fun CyberArsenalModalSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // SECTION 1: POWER HAMMERS
-            Text(
-                text = "المطارق الخارقة (Power Hammers):",
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = NeonCyan
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 1. Girl Boost Hammer
-            HammerCard(
-                title = "مطرقة تعزيز Girl (7 أيام)",
-                description = "زيادة +50 نقطة لكل ضغطة زر Girl",
-                status = formatRemaining(girlHammerExpires),
-                isActive = (girlHammerExpires != null && girlHammerExpires > System.currentTimeMillis()),
-                badgeColor = Color(0xFFF472B6),
-                onActivate = { onActivateHammer(RewardType.GIRL_BOOST_HAMMER_7D) }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 2. Deflame Boost Hammer
-            HammerCard(
-                title = "مطرقة تعزيز Deflame (7 أيام)",
-                description = "زيادة +50 نقطة لكل ضغطة زر Deflame",
-                status = formatRemaining(deflameHammerExpires),
-                isActive = (deflameHammerExpires != null && deflameHammerExpires > System.currentTimeMillis()),
-                badgeColor = NeonCyan,
-                onActivate = { onActivateHammer(RewardType.DEFLAME_BOOST_HAMMER_7D) }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 3. Thor's Ultimate Hammer
-            HammerCard(
-                title = "مطرقة ثور الأسطورية (30 يوماً)",
-                description = "تخفيض 60% من أثر أي ضربة قادمة",
-                status = formatRemaining(thorHammerExpires),
-                isActive = (thorHammerExpires != null && thorHammerExpires > System.currentTimeMillis()),
-                badgeColor = NeonAmber,
-                onActivate = { onActivateHammer(RewardType.THOR_HAMMER_30D) }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // SECTION 2: SKIPPING KEYS INVENTORY
+            // SECTION 1: SKIPPING KEYS INVENTORY
             Text(
                 text = stringResource(R.string.roadmap_keys_inventory),
                 fontWeight = FontWeight.Bold,
@@ -1104,51 +1072,27 @@ fun CyberArsenalModalSheet(
                 KeyInventoryChip(name = "أسطوري", count = legendaryKeys, color = NeonAmber, modifier = Modifier.weight(1f))
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
+            Spacer(modifier = Modifier.height(16.dp))
 
-@Composable
-fun HammerCard(
-    title: String,
-    description: String,
-    status: String,
-    isActive: Boolean,
-    badgeColor: Color,
-    onActivate: () -> Unit
-) {
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
-                Text(text = description, fontSize = 10.sp, color = Color(0xFF94A3B8))
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = if (isActive) "نشطة (المتبقي: $status)" else "غير نشطة",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isActive) NeonEmerald else Color(0xFF64748B)
-                )
-            }
+            // SECTION 2: SHIELDS INVENTORY
+            Text(
+                text = "دروع الحماية الفورية (Protective Shields):",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = NeonCyan
+            )
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Button(
-                onClick = onActivate,
-                colors = ButtonDefaults.buttonColors(containerColor = if (isActive) Color(0x3310B981) else Color(0xFF0284C7)),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.height(32.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(text = if (isActive) "+ تمديد" else "تفعيل", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                KeyInventoryChip(name = "درع 24h", count = shields24h, color = NeonEmerald, modifier = Modifier.weight(1f))
+                KeyInventoryChip(name = "درع 48h", count = shields48h, color = NeonCyan, modifier = Modifier.weight(1f))
+                KeyInventoryChip(name = "درع 72h", count = shields72h, color = NeonAmber, modifier = Modifier.weight(1f))
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

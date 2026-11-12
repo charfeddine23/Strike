@@ -248,12 +248,12 @@
     <string name="roadmap_subtitle">500 Stations, XP Progression &amp; Egg Rewards</string>
     <string name="roadmap_tab_stations">500-Station Roadmap</string>
     <string name="roadmap_tab_tasks">Dynamic Tasks</string>
-    <string name="roadmap_arsenal_title">Cyber Arsenal &amp; Power Hammers</string>
+    <string name="roadmap_arsenal_title">Cyber Arsenal &amp; Shields</string>
     <string name="roadmap_claim_reward">Claim Reward</string>
     <string name="roadmap_jump_current">Jump to Station</string>
     <string name="roadmap_skip_with_key">Skip with Key</string>
     <string name="roadmap_task_completed">Completed</string>
-    <string name="roadmap_hammers_active">Active Power Hammers</string>
+    <string name="roadmap_shields_active">Active Protective Shields</string>
     <string name="roadmap_keys_inventory">Skipping Keys Inventory</string>
     <string name="deviations_warning_shadow_hazard">CRITICAL SHADOW HAZARD: Grip at %1$d%% • Threat: %2$s • Purify system</string>
     <string name="deviations_harmonic_resonance">CELESTIAL HARMONY: Resonance at %1$d%% • Ascending: %2$s</string>

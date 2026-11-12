@@ -346,9 +346,6 @@ class IndividualViewModel(
     val shields48h: StateFlow<Int> = RoadmapManager.shields48h
     val shields72h: StateFlow<Int> = RoadmapManager.shields72h
 
-    val girlBoostHammerExpiresAt: StateFlow<Long?> = RoadmapManager.girlBoostHammerExpiresAt
-    val deflameBoostHammerExpiresAt: StateFlow<Long?> = RoadmapManager.deflameBoostHammerExpiresAt
-    val thorHammerExpiresAt: StateFlow<Long?> = RoadmapManager.thorHammerExpiresAt
 
     init {
         FlameManager.init(application)
@@ -504,6 +501,20 @@ class IndividualViewModel(
     }
 
     fun useSkipKeyForTask(taskId: String) {
+        val allTasks = RoadmapManager.dailyTasks.value + RoadmapManager.weeklyTasks.value + RoadmapManager.monthlyTasks.value + RoadmapManager.yearlyTasks.value
+        val task = allTasks.find { it.id == taskId }
+        if (task != null && !task.canBeSkipped) {
+            viewModelScope.launch {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> "المهام السنوية لا تقبل التجاوز بالمفاتيح! تتطلب إنجازاً فعلياً."
+                    "fr" -> "Les missions annuelles ne peuvent pas être passées avec des clés !"
+                    else -> "Annual tasks cannot be skipped using keys! Real completion is required."
+                }
+                emitMessage(msg)
+            }
+            return
+        }
+
         val success = RoadmapManager.useSkipKeyForTask(getApplication(), taskId)
         viewModelScope.launch {
             if (success) {
@@ -526,18 +537,6 @@ class IndividualViewModel(
 
     fun addXp(amount: Int) {
         RoadmapManager.addXp(getApplication(), amount)
-    }
-
-    fun activateHammer(rewardType: RewardType) {
-        RoadmapManager.activateHammer(getApplication(), rewardType)
-        viewModelScope.launch {
-            val msg = when (currentLanguage.value) {
-                "ar" -> "تم تفعيل المطرقة الخارقة بنجاح! 🔨"
-                "fr" -> "Marteau de puissance activé avec succès ! 🔨"
-                else -> "Power Hammer activated successfully! 🔨"
-            }
-            emitMessage(msg)
-        }
     }
 
     // Security & Pattern Lock Operations

@@ -142,14 +142,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload APK as Workflow Artifact
-        uses: actions/upload-artifact@v4
-        continue-on-error: true
-        with:
-          name: strikepulse-apk
-          path: ${{ steps.find_apk.outputs.apk_path }}
-          retention-days: 1
-          if-no-files-found: warn
+      # Note: Artifact uploading via actions/upload-artifact is intentionally omitted
+      # to prevent "Failed to CreateArtifact: Artifact storage quota has been hit".
+      # The APK is directly published to GitHub Releases below, which does not consume workflow artifact quota.
 
       - name: Prune Old GitHub Releases & Tags (Keep Latest Only)
         run: |

@@ -248,12 +248,12 @@
     <string name="roadmap_subtitle">500 Stations, Progression XP &amp; Œufs Cyber</string>
     <string name="roadmap_tab_stations">Parcours Ondulé (500 Stations)</string>
     <string name="roadmap_tab_tasks">Moteur de Missions Dynamique</string>
-    <string name="roadmap_arsenal_title">Arsenal Cyber &amp; Marteaux de Puissance</string>
+    <string name="roadmap_arsenal_title">Arsenal Cyber &amp; Boucliers</string>
     <string name="roadmap_claim_reward">Réclamer Récompense</string>
     <string name="roadmap_jump_current">Aller à ma Station</string>
     <string name="roadmap_skip_with_key">Passer avec Clé</string>
     <string name="roadmap_task_completed">Accomplie</string>
-    <string name="roadmap_hammers_active">Marteaux de Puissance Actifs</string>
+    <string name="roadmap_shields_active">Boucliers Protecteurs Actifs</string>
     <string name="roadmap_keys_inventory">Inventaire des Clés de Passe</string>
     <string name="deviations_warning_shadow_hazard">DANGER DE L\'OMBRE : Emprise à %1$d%% • Menace : %2$s • Purifiez via Deflame</string>
     <string name="deviations_harmonic_resonance">RÉSONANCE CÉLESTE : %1$d%% • Ascension : %2$s</string>

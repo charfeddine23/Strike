@@ -19,79 +19,9 @@ object TaskPools {
     const val CATEGORY_TASKS_COUNT = 250
     const val TOTAL_XP_POOL = 434725L
 
-    // 10 Strategic Rewards mapped cyclically across the 500 stations
-    val STRATEGIC_REWARDS = listOf(
-        StationReward(
-            type = RewardType.SHIELD_24H,
-            title = "درع حماية 24 ساعة",
-            description = "إيقاف تراكم نقاط الخمول لمدة 24 ساعة وحفظ السلسلة",
-            iconName = "shield_24h",
-            quantity = 1
-        ),
-        StationReward(
-            type = RewardType.KEY_COMMON,
-            title = "مفتاح تجاوز شائع (Common Key)",
-            description = "تجاوز فوري لأي مهمة يومية شائعة مع منح نقاط الـ XP",
-            iconName = "key_common",
-            quantity = 1
-        ),
-        StationReward(
-            type = RewardType.SHIELD_48H,
-            title = "درع حماية 48 ساعة",
-            description = "حماية السلسلة لمدة يومين كاملين من الخمول",
-            iconName = "shield_48h",
-            quantity = 1
-        ),
-        StationReward(
-            type = RewardType.KEY_NORMAL,
-            title = "مفتاح تجاوز عادي (Normal Key)",
-            description = "تجاوز فوري للمهام اليومية والأسبوعية العادية",
-            iconName = "key_normal",
-            quantity = 1
-        ),
-        StationReward(
-            type = RewardType.GIRL_BOOST_HAMMER_7D,
-            title = "مطرقة تعزيز Girl (7 أيام)",
-            description = "زيادة فورية لقيمة زر Girl إلى +50 نقطة لكل ضغطة لمدة أسبوع كامل",
-            iconName = "hammer_girl",
-            quantity = 1
-        ),
-        StationReward(
-            type = RewardType.SHIELD_72H,
-            title = "درع حماية 72 ساعة (3 أيام)",
-            description = "درع دفاعي متين يوقف الخمول لمدة 3 أيام",
-            iconName = "shield_72h",
-            quantity = 1
-        ),
-        StationReward(
-            type = RewardType.KEY_RARE,
-            title = "مفتاح تجاوز نادر (Rare Key)",
-            description = "تجاوز المهام الأسبوعية والشهرية المتقدمة فورياً",
-            iconName = "key_rare",
-            quantity = 1
-        ),
-        StationReward(
-            type = RewardType.DEFLAME_BOOST_HAMMER_7D,
-            title = "مطرقة تعزيز Deflame (7 أيام)",
-            description = "تعزيز تلقائي لزر Deflame إلى +50 نقطة لكل ضغطة لمدة 7 أيام",
-            iconName = "hammer_deflame",
-            quantity = 1
-        ),
-        StationReward(
-            type = RewardType.KEY_LEGENDARY,
-            title = "مفتاح تجاوز أسطوري (Legendary Key)",
-            description = "مفتاح ذهبي خارق يتجاوز أي مهمة شهرية أو أبدية بنقاطها كاملة",
-            iconName = "key_legendary",
-            quantity = 1
-        ),
-        StationReward(
-            type = RewardType.THOR_HAMMER_30D,
-            title = "مطرقة ثور الأسطورية (Thor's Hammer 30D)",
-            description = "تخفيض بنسبة 60% من أثر أي ضربة قادمة لمدة شهر كامل (30 يوماً)",
-            iconName = "hammer_thor",
-            quantity = 1
-        )
-    )
+    // ==========================================
+    // 5-TIER REWARD MATRIX (PURGED OF HAMMERS)
+    // ==========================================
 
     // 5-Tier Reward Matrix (Tier 1: Shields, Tier 2: Skip Keys, Tier 3: Cyber Potions, Tier 4: Avatars & Titles, Tier 5: Station 500 Eternal Rebirth)
     val HIERARCHICAL_REWARDS = listOf(
@@ -244,14 +174,11 @@ object TaskPools {
                         cnt5
                     )
                 }
-                8 -> {
-                    val hammerType = if (i % 2 == 0) "Deflame" else "Girl"
-                    Triple(
-                        "استعمل مطرقة التعزيز $hammerType ($cnt5) مرات",
-                        "تفعيل مطرقة تعزيز $hammerType لتعظيم نقاط التخفيض ($cnt5 مرات)",
-                        cnt5
-                    )
-                }
+                8 -> Triple(
+                    "اضغط على زر التخفيض والتبريد بالتناوب ($cnt5) مرات",
+                    "نفذ توازناً حرارياً بالتناوب بين زر التخفيض Deflame وزر التبريد Girl ($cnt5 مرات)",
+                    cnt5
+                )
                 9 -> Triple(
                     "أضف شخصاً في اليوم ($cnt5 مرات)",
                     "سجل $cnt5 أفراد جدد في مصفوفة الاستهداف والتحليل اليوم",
@@ -316,9 +243,9 @@ object TaskPools {
                     1
                 )
                 5 -> Triple(
-                    "استعمل مطرقة ثور الأسطورية مرة في الأسبوع (النسخة #$idx)",
-                    "تفعيل مطرقة ثور الأسطورية لتقليص أثر الضربات القادمة بنسبة 60%",
-                    1
+                    "حقق انضباط التبريد الأسبوعي المكثف (الجولة #$idx)",
+                    "تنفيذ 5 دورات تبريد مركّزة في أوقات متفرقة خلال الأسبوع",
+                    5
                 )
                 6 -> Triple(
                     "أضف ($cnt1_15) أشخاص في الأسبوع",
@@ -337,7 +264,7 @@ object TaskPools {
                 )
                 else -> Triple(
                     "تجنب السقوط تحت الشعلة النورانية في الأسبوع رقم #$idx",
-                    "البقاء فوق حاجز 1000 نقطة والحفاظ على مسار الضياء طوال الأسبوع",
+                    "البقاء فوق حاجز 2000 نقطة والحفاظ على مسار الضياء طوال الأسبوع",
                     1
                 )
             }
@@ -363,8 +290,6 @@ object TaskPools {
             val cntCool = coolCounts[i % coolCounts.size]
             val cntDown = downCounts[i % downCounts.size]
             val cntPeople = 1 + (i % 20)
-            val hammerTypes = listOf("Deflame", "Girl", "ثور الأسطورية")
-            val hammerType = hammerTypes[i % hammerTypes.size]
             val xp = MONTHLY_XP_LIST[i]
 
             val (title, desc, targetCount) = when (t) {
@@ -384,8 +309,8 @@ object TaskPools {
                     cntDown
                 )
                 3 -> Triple(
-                    "استعمل مطرقة التعزيز $hammerType مرة واحدة في الشهر",
-                    "تنشيط مطرقة $hammerType الكبرى خلال الشهر لتعزيز الأداء",
+                    "حقق الاستقرار الحراري الكامل للشهر (المستوى #$idx)",
+                    "المحافظة على التوازن الشهري وتفادي قفزات الشعلة العشوائية",
                     1
                 )
                 4 -> Triple(

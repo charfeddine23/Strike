@@ -169,38 +169,34 @@ class RoadmapEngineTest {
     }
 
     @Test
-    fun testPowerHammersActivationAndBonus() {
-        assertFalse(RoadmapManager.isGirlBoostHammerActive())
-        assertFalse(RoadmapManager.isDeflameBoostHammerActive())
-        assertFalse(RoadmapManager.isThorHammerActive())
-
-        // Activate Girl Boost Hammer
-        RoadmapManager.activateHammer(app, RewardType.GIRL_BOOST_HAMMER_7D)
-        assertTrue(RoadmapManager.isGirlBoostHammerActive())
-
-        // Activate Deflame Boost Hammer
-        RoadmapManager.activateHammer(app, RewardType.DEFLAME_BOOST_HAMMER_7D)
-        assertTrue(RoadmapManager.isDeflameBoostHammerActive())
-
-        // Activate Thor Hammer
-        RoadmapManager.activateHammer(app, RewardType.THOR_HAMMER_30D)
-        assertTrue(RoadmapManager.isThorHammerActive())
+    fun test1000TasksMatrixDistribution() {
+        assertEquals(250, TaskPools.ALL_DAILY_TASKS.size)
+        assertEquals(250, TaskPools.ALL_WEEKLY_TASKS.size)
+        assertEquals(250, TaskPools.ALL_MONTHLY_TASKS.size)
+        assertEquals(250, TaskPools.ALL_EVERLASTING_TASKS.size)
+        assertEquals(1000, TaskPools.ALL_1000_TASKS.size)
     }
 
     @Test
-    fun testThorHammerMitigationOnStrikePenalty() {
-        FlameManager.setScore(app, 100.0)
+    fun testAnnualTasksStrictlyDisallowSkippingWithKeys() {
+        val everlastingTasks = RoadmapManager.yearlyTasks.value
+        assertFalse(everlastingTasks.isEmpty())
 
-        RoadmapManager.activateHammer(app, RewardType.THOR_HAMMER_30D)
-        assertTrue(RoadmapManager.isThorHammerActive())
-
-        val originalDeduction = 10.0
-        val finalDeduction = if (RoadmapManager.isThorHammerActive()) {
-            originalDeduction * 0.4
-        } else {
-            originalDeduction
+        for (task in everlastingTasks) {
+            assertFalse("Annual tasks must have canBeSkipped == false", task.canBeSkipped)
         }
-        assertEquals(4.0, finalDeduction, 0.001)
+
+        // Give player abundant keys of all rarities
+        RoadmapManager.addKey(app, KeyRarity.COMMON, 10)
+        RoadmapManager.addKey(app, KeyRarity.NORMAL, 10)
+        RoadmapManager.addKey(app, KeyRarity.RARE, 10)
+        RoadmapManager.addKey(app, KeyRarity.LEGENDARY, 10)
+
+        val targetAnnualTask = everlastingTasks.first()
+        val skipAttempt = RoadmapManager.useSkipKeyForTask(app, targetAnnualTask.id)
+
+        assertFalse("Skipping an annual task using keys must be strictly forbidden", skipAttempt)
+        assertEquals(TaskStatus.PENDING, targetAnnualTask.status)
     }
 
     @Test

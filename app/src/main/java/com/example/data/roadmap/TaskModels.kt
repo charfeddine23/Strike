@@ -46,10 +46,7 @@ enum class RewardType {
     POTION_CRYO_INFUSION,
     POTION_ETERNAL_REBIRTH,
     REWARD_AVATAR,
-    REWARD_TITLE,
-    GIRL_BOOST_HAMMER_7D,
-    DEFLAME_BOOST_HAMMER_7D,
-    THOR_HAMMER_30D
+    REWARD_TITLE
 }
 
 data class StationReward(
@@ -86,4 +83,6 @@ data class TaskItem(
 ) {
     val isCompleted: Boolean get() = status == TaskStatus.COMPLETED || status == TaskStatus.SKIPPED || currentCount >= targetCount
     val progressFraction: Float get() = (currentCount.toFloat() / targetCount.toFloat()).coerceIn(0f, 1f)
+    // Annual / Yearly tasks CANNOT be skipped with keys — genuine completion is strictly enforced
+    val canBeSkipped: Boolean get() = period != TaskPeriod.YEARLY && period != TaskPeriod.EVERLASTING
 }
