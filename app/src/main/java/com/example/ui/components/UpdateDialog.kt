@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -53,33 +52,33 @@ import com.example.data.update.GitHubReleaseInfo
 import java.io.File
 
 /**
- * Compact, floating Mandatory In-App Update Card Dialog.
+ * Compact, floating Optional In-App Update Card Dialog.
  * Matches the dark charcoal aesthetic with the circular crimson rocket emblem,
- * crisp Arabic hierarchy, and full-width vibrant red CTA pill button.
+ * crisp Arabic hierarchy, full-width vibrant red CTA pill button, and "ربما لاحقا" dismiss option.
  */
 @Composable
-fun MandatoryUpdateCardDialog(
+fun AppUpdateCardDialog(
     state: AppUpdateState,
     onUpdateClick: (GitHubReleaseInfo) -> Unit,
     onInstallClick: (File) -> Unit,
-    onRetryClick: () -> Unit
+    onRetryClick: () -> Unit,
+    onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val primaryRed = Color(0xFFD80D15)
     val subtitleRed = Color(0xFFE11D25)
     val cardBg = Color(0xFF13131A)
     val mutedText = Color(0xFF9CA3AF)
+    val isDownloading = state is AppUpdateState.Downloading
 
     Dialog(
-        onDismissRequest = { /* Mandatory update — dismissal strictly disabled */ },
+        onDismissRequest = { if (!isDownloading) onDismiss() },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
-            dismissOnBackPress = false,
-            dismissOnClickOutside = false
+            dismissOnBackPress = !isDownloading,
+            dismissOnClickOutside = !isDownloading
         )
     ) {
-        // Prevent system back button from closing the mandatory update card
-        BackHandler(enabled = true) {}
 
         Box(
             modifier = Modifier
@@ -122,9 +121,9 @@ fun MandatoryUpdateCardDialog(
                 Text(
                     text = when (state) {
                         is AppUpdateState.UpdateAvailable -> "تحديث جديد"
-                        is AppUpdateState.Downloading -> "تحديث إجباري • v${state.release.versionName}"
+                        is AppUpdateState.Downloading -> "تحديث جديد • v${state.release.versionName}"
                         is AppUpdateState.ReadyToInstall -> "v${state.release.versionName}"
-                        is AppUpdateState.Error -> "تحديث إجباري"
+                        is AppUpdateState.Error -> "تحديث جديد"
                         else -> "تحديث جديد"
                     },
                     fontSize = 15.sp,
@@ -219,7 +218,7 @@ fun MandatoryUpdateCardDialog(
 
                 Spacer(modifier = Modifier.height(26.dp))
 
-                // Full-width Vibrant Red Pill CTA Button
+                // Full-width Vibrant Red Pill CTA Button + Optional "ربما لاحقا" Button
                 when (state) {
                     is AppUpdateState.UpdateAvailable -> {
                         Button(
@@ -240,6 +239,23 @@ fun MandatoryUpdateCardDialog(
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("modal_maybe_later_btn")
+                        ) {
+                            Text(
+                                text = "ربما لاحقا",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = mutedText
                             )
                         }
                     }
@@ -285,6 +301,23 @@ fun MandatoryUpdateCardDialog(
                                 color = Color.White
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("modal_maybe_later_btn")
+                        ) {
+                            Text(
+                                text = "ربما لاحقا",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = mutedText
+                            )
+                        }
                     }
 
                     is AppUpdateState.Error -> {
@@ -315,6 +348,21 @@ fun MandatoryUpdateCardDialog(
                             Text(
                                 text = "فتح رابط التحميل على GitHub",
                                 fontSize = 12.sp,
+                                color = mutedText
+                            )
+                        }
+
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("modal_maybe_later_btn")
+                        ) {
+                            Text(
+                                text = "ربما لاحقا",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
                                 color = mutedText
                             )
                         }

@@ -84,13 +84,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.flame.ActiveShieldType
 import com.example.data.flame.FlameManager
 import com.example.data.update.AppUpdateState
+import com.example.ui.components.AppUpdateCardDialog
 import com.example.ui.components.DnaHeaderIcon
 import com.example.ui.components.DynamicStreakShieldHeaderButton
 import com.example.ui.components.FlameEnergyBanner
 import com.example.ui.components.FullscreenPatternUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
-import com.example.ui.components.MandatoryUpdateCardDialog
 import com.example.ui.components.SettingsDialog
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
@@ -194,6 +194,7 @@ fun LiquidGlassApp(
     var showShieldDropdown by remember { mutableStateOf(false) }
     var showStartDateDialog by remember { mutableStateOf(false) }
     var startedUpdateFromModal by remember { mutableStateOf(false) }
+    var updateDialogDismissed by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -440,17 +441,17 @@ fun LiquidGlassApp(
         )
     }
 
-    // Mandatory In-App Update Card Dialog (whenever a newer release is available, update is enforced)
-    val shouldShowUpdateModal = when (appUpdateState) {
+    // Optional In-App Update Card Dialog (user can update immediately or choose "ربما لاحقا")
+    val shouldShowUpdateModal = !updateDialogDismissed && !showSettingsDialog && when (appUpdateState) {
         is AppUpdateState.UpdateAvailable,
         is AppUpdateState.Downloading,
         is AppUpdateState.ReadyToInstall -> true
-        is AppUpdateState.Error -> startedUpdateFromModal && !showSettingsDialog
+        is AppUpdateState.Error -> startedUpdateFromModal
         else -> false
     }
 
     if (shouldShowUpdateModal) {
-        MandatoryUpdateCardDialog(
+        AppUpdateCardDialog(
             state = appUpdateState,
             onUpdateClick = { release ->
                 startedUpdateFromModal = true
@@ -461,6 +462,9 @@ fun LiquidGlassApp(
             },
             onRetryClick = {
                 viewModel.checkForAppUpdate(isAutoCheck = false)
+            },
+            onDismiss = {
+                updateDialogDismissed = true
             }
         )
     }
