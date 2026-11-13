@@ -79,7 +79,9 @@ data class TaskItem(
     val targetCount: Int = 1,
     val currentCount: Int = 0,
     val status: TaskStatus = TaskStatus.PENDING,
-    val requiredKeyRarity: KeyRarity = KeyRarity.COMMON
+    val requiredKeyRarity: KeyRarity = KeyRarity.COMMON,
+    val actionTag: String = "GENERAL",
+    val difficultyTier: Int = 1
 ) {
     val isCompleted: Boolean get() = status == TaskStatus.COMPLETED || status == TaskStatus.SKIPPED || currentCount >= targetCount
     val progressFraction: Float get() = (currentCount.toFloat() / targetCount.toFloat()).coerceIn(0f, 1f)

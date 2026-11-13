@@ -250,4 +250,87 @@ class RoadmapEngineTest {
         assertTrue(RoadmapManager.monthlyTasks.value.all { it.status == TaskStatus.PENDING && it.currentCount == 0 })
         assertTrue(RoadmapManager.yearlyTasks.value.all { it.status == TaskStatus.PENDING && it.currentCount == 0 })
     }
+
+    @Test
+    fun testDailyTasksEliminateImpossibleQuotasAndScaleLogically() {
+        val daily = TaskPools.ALL_DAILY_TASKS
+        assertEquals(250, daily.size)
+
+        // All daily titles must be unique
+        assertEquals(250, daily.map { it.title }.distinct().size)
+
+        // No daily task asks to activate/spam multiple shields in 24h
+        val shieldTasks = daily.filter { it.actionTag == "SHIELD" }
+        assertTrue(shieldTasks.isNotEmpty())
+        assertTrue(shieldTasks.all { it.targetCount == 1 })
+
+        // No daily task asks to spam multiple skip-keys in 24h
+        val keyTasks = daily.filter { it.actionTag == "KEY" }
+        assertTrue(keyTasks.isNotEmpty())
+        assertTrue(keyTasks.all { it.targetCount == 1 })
+
+        // Daily strike tasks never exceed 3 strikes (avoiding 6+ EXTREME_OVERLOAD contradiction)
+        val strikeTasks = daily.filter { it.actionTag == "STRIKE" }
+        assertTrue(strikeTasks.isNotEmpty())
+        assertTrue(strikeTasks.all { it.targetCount in 1..3 })
+    }
+
+    @Test
+    fun testProgressiveDifficultyAndXpOrderingAcrossAllPools() {
+        val pools = listOf(
+            TaskPools.ALL_DAILY_TASKS,
+            TaskPools.ALL_WEEKLY_TASKS,
+            TaskPools.ALL_MONTHLY_TASKS,
+            TaskPools.ALL_EVERLASTING_TASKS
+        )
+        for (pool in pools) {
+            for (i in 1 until pool.size) {
+                assertTrue(
+                    "Difficulty tier must be non-decreasing at index $i",
+                    pool[i].difficultyTier >= pool[i - 1].difficultyTier
+                )
+                assertTrue(
+                    "XP bounty must be non-decreasing at index $i",
+                    pool[i].xpBounty >= pool[i - 1].xpBounty
+                )
+            }
+        }
+
+        // Rotated slices must also appear in ascending progressive order
+        val rotatedDaily = TaskPools.getRotatedDailyTasks(emptySet(), "2026-11-13")
+        val rotatedWeekly = TaskPools.getRotatedWeeklyTasks(emptySet(), "2026_W46")
+        val rotatedMonthly = TaskPools.getRotatedMonthlyTasks(emptySet(), "2026_M11")
+
+        listOf(rotatedDaily, rotatedWeekly, rotatedMonthly).forEach { slice ->
+            for (i in 1 until slice.size) {
+                assertTrue(slice[i].difficultyTier >= slice[i - 1].difficultyTier)
+                if (slice[i].difficultyTier == slice[i - 1].difficultyTier) {
+                    assertTrue(slice[i].xpBounty >= slice[i - 1].xpBounty)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun testActionTagExactIncrementPreventsFalseMatches() {
+        RoadmapManager.onActionOccurred(app, "STRIKE")
+        val allActive = RoadmapManager.dailyTasks.value +
+            RoadmapManager.weeklyTasks.value +
+            RoadmapManager.monthlyTasks.value
+
+        allActive.forEach { task ->
+            if (task.actionTag == "STRIKE") {
+                assertTrue(
+                    "STRIKE task ${task.id} should have incremented",
+                    task.currentCount >= 1 || task.isCompleted
+                )
+            } else {
+                assertEquals(
+                    "Non-STRIKE task ${task.id} (${task.actionTag}) must NOT falsely increment on STRIKE",
+                    0,
+                    task.currentCount
+                )
+            }
+        }
+    }
 }

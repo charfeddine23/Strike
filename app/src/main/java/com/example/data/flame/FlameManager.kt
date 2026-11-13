@@ -309,6 +309,7 @@ object FlameManager {
             reason = "STREAK_SHIELD",
             details = "Manual ${days}-Day Shield activated. Protected until $expiryStr ($countdown countdown remaining)."
         )
+        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "SHIELD")
         return true
     }
 
@@ -353,6 +354,7 @@ object FlameManager {
             reason = "STREAK_SHIELD",
             details = "48-Hour Shield activated. Protected until $expiryStr ($countdown countdown remaining)."
         )
+        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "SHIELD")
         return true
     }
 
@@ -397,6 +399,7 @@ object FlameManager {
             reason = "STREAK_SHIELD",
             details = "1-Day Shield activated. Protected until $expiryStr ($countdown countdown remaining)."
         )
+        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "SHIELD")
         return true
     }
 
@@ -425,6 +428,7 @@ object FlameManager {
         }
         editor.apply()
 
+        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "SHIELD")
         return newExpires
     }
 
@@ -795,6 +799,7 @@ object FlameManager {
                     _flameLogs.value = currentLogs
                 }
 
+                com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "STRIKE")
                 StrikeRegistrationResult(penalty, "MULTI_STRIKE_COMBO", "7_DAYS_AUTO")
             }
 
@@ -826,6 +831,7 @@ object FlameManager {
                     _flameLogs.value = currentLogs
                 }
 
+                com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "STRIKE")
                 StrikeRegistrationResult(penalty, "DOUBLE_STRIKE", "3_DAYS_MANUAL")
             }
 

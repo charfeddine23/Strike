@@ -152,9 +152,9 @@ object RoadmapManager {
         }
 
         // 0. Cache Versioning & Legacy Tasks Purge:
-        // Evicts legacy cached task JSONs from SharedPreferences to strictly load the 1000 new cyberpunk tasks
+        // Evicts cached task JSONs from SharedPreferences to strictly load Update III restructured tasks
         val tasksCacheVersion = prefs.getInt("key_tasks_matrix_version", 0)
-        if (tasksCacheVersion < 5) {
+        if (tasksCacheVersion < 6) {
             prefs.edit()
                 .remove(KEY_DAILY_TASKS_JSON)
                 .remove(KEY_WEEKLY_TASKS_JSON)
@@ -162,7 +162,7 @@ object RoadmapManager {
                 .remove(KEY_LAST_DAILY_DATE)
                 .remove(KEY_LAST_WEEKLY_CODE)
                 .remove(KEY_LAST_MONTHLY_CODE)
-                .putInt("key_tasks_matrix_version", 5)
+                .putInt("key_tasks_matrix_version", 6)
                 .apply()
         }
 
@@ -363,6 +363,7 @@ object RoadmapManager {
         // Distribute reward to inventory
         applyReward(context, reward)
         com.example.data.profile.ProfileManager.onStationUnlocked(context, stationId)
+        onActionOccurred(context, "ROADMAP")
         return reward
     }
 
@@ -549,6 +550,7 @@ object RoadmapManager {
         if (awardedXp > 0) {
             addXp(context, awardedXp)
         }
+        onActionOccurred(context, "KEY")
         return true
     }
 
@@ -562,7 +564,7 @@ object RoadmapManager {
 
         fun incrementMatching(list: List<TaskItem>): List<TaskItem> {
             return list.map { item ->
-                if (item.status == TaskStatus.PENDING && shouldIncrement(item.id, actionType)) {
+                if (item.status == TaskStatus.PENDING && shouldIncrement(item, actionType)) {
                     val newCount = item.currentCount + 1
                     if (newCount >= item.targetCount) {
                         newlyCompletedIds.add(item.id)
@@ -588,14 +590,16 @@ object RoadmapManager {
         }
     }
 
-    private fun shouldIncrement(taskId: String, actionType: String): Boolean {
+    private fun shouldIncrement(item: TaskItem, actionType: String): Boolean {
         return when (actionType) {
-            "DEFLAME" -> taskId.contains("deflame") || taskId.contains("daily_4")
-            "GIRL" -> taskId.contains("girl") || taskId.contains("daily_3")
-            "STRIKE" -> taskId.contains("strike") || taskId.contains("daily_1") || taskId.contains("daily_2")
-            "SHIELD" -> taskId.contains("shield") || taskId.contains("daily_5") || taskId.contains("daily_6") || taskId.contains("daily_7")
-            "KEY" -> taskId.contains("key") || taskId.contains("daily_8")
-            "PERSON" -> taskId.contains("person") || taskId.contains("daily_10")
+            "DEFLAME" -> item.actionTag == "DEFLAME" || item.actionTag == "BALANCE"
+            "GIRL" -> item.actionTag == "GIRL" || item.actionTag == "BALANCE"
+            "STRIKE" -> item.actionTag == "STRIKE"
+            "SHIELD" -> item.actionTag == "SHIELD"
+            "KEY" -> item.actionTag == "KEY"
+            "POTION" -> item.actionTag == "POTION"
+            "PERSON" -> item.actionTag == "PERSON"
+            "ROADMAP" -> item.actionTag == "ROADMAP"
             else -> false
         }
     }
@@ -613,6 +617,8 @@ object RoadmapManager {
                 put("currentCount", item.currentCount)
                 put("status", item.status.name)
                 put("requiredKeyRarity", item.requiredKeyRarity.name)
+                put("actionTag", item.actionTag)
+                put("difficultyTier", item.difficultyTier)
             }
             array.put(obj)
         }
@@ -636,11 +642,18 @@ object RoadmapManager {
                         targetCount = obj.optInt("targetCount", 1),
                         currentCount = obj.optInt("currentCount", 0),
                         status = TaskStatus.valueOf(obj.optString("status", "PENDING")),
-                        requiredKeyRarity = KeyRarity.valueOf(obj.optString("requiredKeyRarity", "COMMON"))
+                        requiredKeyRarity = KeyRarity.valueOf(obj.optString("requiredKeyRarity", "COMMON")),
+                        actionTag = obj.optString("actionTag", "GENERAL"),
+                        difficultyTier = obj.optInt("difficultyTier", 1)
                     )
                 )
             }
-            list
+            list.sortedWith(
+                compareBy<TaskItem> { it.difficultyTier }
+                    .thenBy { it.xpBounty }
+                    .thenBy { it.targetCount }
+                    .thenBy { it.id }
+            )
         } catch (_: Exception) {
             null
         }

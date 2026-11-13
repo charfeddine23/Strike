@@ -461,13 +461,13 @@ fun RoadmapScreen(
                         onClick = { selectedTaskPeriod = TaskPeriod.MONTHLY }
                     )
                     PeriodFilterChip(
-                        label = "أهداف أبدية (250)",
+                        label = "سنوية (250)",
                         isSelected = selectedTaskPeriod == TaskPeriod.YEARLY,
                         onClick = { selectedTaskPeriod = TaskPeriod.YEARLY }
                     )
                 }
 
-                // Master Goals Header Banner (Displayed when Everlasting tab is active)
+                // Master Goals Header Banner (Displayed when Annual tab is active)
                 if (selectedTaskPeriod == TaskPeriod.YEARLY) {
                     val completedCount = yearlyTasks.count { it.isCompleted }
                     val totalEverlastingXpEarned = yearlyTasks.filter { it.isCompleted }.sumOf { it.xpBounty }
@@ -487,14 +487,14 @@ fun RoadmapScreen(
                             ) {
                                 Column {
                                     Text(
-                                        text = "مصفوفة الأهداف الأبدية (Master Goals)",
+                                        text = "المهام السنوية الكبرى (250 إنجازاً)",
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Black,
                                         fontFamily = PlusJakartaSans,
                                         color = NeonAmber
                                     )
                                     Text(
-                                        text = "250 هدفاً ملحمياً معروضة بالكامل | الإجمالي: 245,350 XP",
+                                        text = "مرتبة تصاعدياً حسب الصعوبة | دون تجاوز بالمفاتيح: 245,350 XP",
                                         fontSize = 10.sp,
                                         color = Color(0xFF94A3B8)
                                     )
@@ -852,20 +852,44 @@ fun TaskItemCard(
                     )
                 }
 
-                // XP Bounty Badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0x3310B981))
-                        .border(1.dp, NeonEmerald, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = "+${task.xpBounty} XP",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 11.sp,
-                        color = NeonEmerald
-                    )
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // XP Bounty Badge
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0x3310B981))
+                            .border(1.dp, NeonEmerald, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = "+${task.xpBounty} XP",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp,
+                            color = NeonEmerald
+                        )
+                    }
+
+                    // Difficulty Tier Indicator Pill
+                    val (tierLabel, tierColor) = when (task.difficultyTier) {
+                        1 -> "سهل" to NeonCyan
+                        2 -> "متوسط" to NeonAmber
+                        3 -> "متقدم" to Color(0xFFF97316)
+                        else -> "نخبوي" to NeonViolet
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(tierColor.copy(alpha = 0.16f))
+                            .border(0.8.dp, tierColor.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = tierLabel,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = tierColor
+                        )
+                    }
                 }
             }
 

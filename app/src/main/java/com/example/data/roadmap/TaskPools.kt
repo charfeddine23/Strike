@@ -7,11 +7,17 @@ import java.util.Locale
 import java.util.Random
 
 /**
- * 1000-Task Matrix & Exponential Roadmap XP Engine for StrikePulse:
- * - Exactly 1000 Tasks across 4 Categories (250 Daily, 250 Weekly, 250 Monthly, 250 Everlasting)
+ * 1000-Task Matrix & Exponential Roadmap XP Engine for StrikePulse (Update III Overhaul):
+ * - Exactly 1000 Tasks across 4 Categories (250 Daily, 250 Weekly, 250 Monthly, 250 Annual/Everlasting)
  * - Total XP Pool across all 1000 tasks: Exactly 434,725 XP
  * - 500 Stations Exponential Curve: Station 1 = 50 XP, Station 500 = 434,725 XP
- * - Non-repeating consumption rotation with date-seeded shuffle (00:00 reset)
+ * - Realistic Timeframe Scaling:
+ *   * Daily: Light, practical 24h micro-discipline & single-action triggers (no impossible multi-day shield or key spam)
+ *   * Weekly: 7-day consistency, streaks, strategic potions & moderate key allocation
+ *   * Monthly: Medium-term systemic progression & structured milestones
+ *   * Annual: High-tier macro-achievements (skip-keys strictly prohibited, genuine completion required)
+ * - Progressive Ordering: Catalogs and active rotated slices are strictly ordered from easiest to hardest,
+ *   with XP rewards scaling monotonically with true cognitive/procedural effort.
  */
 object TaskPools {
 
@@ -19,11 +25,19 @@ object TaskPools {
     const val CATEGORY_TASKS_COUNT = 250
     const val TOTAL_XP_POOL = 434725L
 
+    private data class TaskBlueprint(
+        val title: String,
+        val description: String,
+        val targetCount: Int,
+        val difficultyTier: Int,  // 1 = Easy, 2 = Medium, 3 = Challenging, 4 = Elite
+        val difficultyScore: Int, // Fine-grained effort score for monotonic ordering & XP mapping
+        val actionTag: String
+    )
+
     // ==========================================
     // 5-TIER REWARD MATRIX (PURGED OF HAMMERS)
     // ==========================================
 
-    // 5-Tier Reward Matrix (Tier 1: Shields, Tier 2: Skip Keys, Tier 3: Cyber Potions, Tier 4: Avatars & Titles, Tier 5: Station 500 Eternal Rebirth)
     val HIERARCHICAL_REWARDS = listOf(
         // Tier 1: Common Protective Shields
         StationReward(RewardType.SHIELD_24H, "درع حماية 24 ساعة (تفعيل فوري)", "حماية فورية وتلقائية للشعلة من غرامة الـ 3 نقاط اليومية لمدة 24 ساعة", "shield_24h", 1),
@@ -76,7 +90,6 @@ object TaskPools {
      * Exponential Wavy Roadmap XP Curve (500 Stations):
      * - Station 1: 50 XP
      * - Station 500: exactly 434,725 XP
-     * Formula: round(50.0 * ((434725.0 / 50.0) ^ ((stationId - 1) / 499.0)))
      */
     fun getRequiredXpForStation(stationId: Int): Long {
         val s = stationId.coerceIn(1, 500)
@@ -105,7 +118,7 @@ object TaskPools {
             }
             idx = (idx % (n - 2)) + 1
         }
-        return vals.toList()
+        return vals.sorted()
     }
 
     val DAILY_XP_LIST: List<Int> = generateExactXpList(250, 50, 240, 36250)
@@ -114,311 +127,933 @@ object TaskPools {
     val EVERLASTING_XP_LIST: List<Int> = generateExactXpList(250, 500, 1480, 245350)
 
     // ==========================================
-    // 1000-TASK MATRIX (FULL INVENTORY)
+    // 1. DAILY TASKS POOL (250 REALISTIC 24H TASKS)
     // ==========================================
 
+    private val dailyContexts = listOf(
+        "النبضة الصباحية", "تهدئة الظهيرة", "موازنة المساء", "بروتوكول الأمان", "تثبيت النواة",
+        "تبريد فوري", "حاجز الانضباط", "ضبط التردد", "حماية الشعلة", "تصفية الشحنات",
+        "إعادة المعايرة", "تأمين السلسلة", "التحكم الدقيق", "مراقبة الاستقرار", "ختم اليوم"
+    )
+
+    private val dailySingleShieldContexts = listOf(
+        "الحفاظ على الدرع النشط اليوم",
+        "تأمين الشعلة بدرع حماية لـ 24 ساعة",
+        "تفعيل حاجز الوقاية ضد غرامة الخمول",
+        "صيانة الدرع الواقي للنظام اليوم",
+        "إبقاء الشعلة تحت الحماية الدرعية",
+        "تغطية دورة اليوم بدرع حماية واحد",
+        "درع الثبات اليومي ضد ارتفاع الخمول",
+        "تحصين السلسلة بدرع واحد فعال",
+        "تثبيت دفاعات الشعلة لليوم الكامل",
+        "درع الوقاية الأول لصد نقاط الخمول",
+        "تفعيل خط الدفاع الدرعي اليوم",
+        "تأمين النقاط عبر درع حماية نشط",
+        "درع الاستقرار اليومي للشعلة",
+        "مراقبة الدرع الفعال وتجنب التراكم",
+        "حماية الـ 24 ساعة بدرع واحد مفعّل",
+        "تفعيل الدرع الوقائي في الفترة الصباحية",
+        "تفعيل الدرع الوقائي في الفترة المسائية",
+        "تأمين الرصيد ضد غرامة +3 نقاط اليومية",
+        "التحقق من استمرار صلاحية الدرع اليوم",
+        "تغطية اليوم بدرع السلسلة الوقائي"
+    )
+
     val ALL_DAILY_TASKS: List<TaskItem> by lazy {
-        (0 until 250).map { i ->
-            val idx = i + 1
-            val t = i % 11
-            val cnt10 = (i % 10) + 1
-            val cnt5 = (i % 5) + 1
-            val pct = 10 + (i % 10) * 10
-            val xp = DAILY_XP_LIST[i]
+        val blueprints = mutableListOf<TaskBlueprint>()
 
-            val (title, desc, targetCount) = when (t) {
-                0 -> Triple(
-                    "حقق $cnt10 سترايك في يوم واحد",
-                    "قم بتسجيل $cnt10 ضربات نشطة اليوم لتعزيز تدفق الطاقة",
-                    cnt10
-                )
-                1 -> Triple(
-                    "حقق $cnt10 سترايك في أقل من ساعة",
-                    "نفذ هجوماً سريعاً مكثفاً بواقع $cnt10 سترايك خلال 60 دقيقة",
-                    cnt10
-                )
-                2 -> Triple(
-                    "اضغط على زر التبريد Girl ($cnt10) مرات اليوم",
-                    "قم بتهدئة النظام وضغط زر التبريد Girl $cnt10 مرات لخفض حرارة الشعلة",
-                    cnt10
-                )
-                3 -> Triple(
-                    "اضغط على زر التخفيض Deflame ($cnt10) مرات اليوم",
-                    "نفذ تخفيضاً فورياً لطاقة الشعلة بالضغط على Deflame $cnt10 مرات",
-                    cnt10
-                )
-                4 -> Triple(
-                    "استعمل درع الـ 24 ساعة ($cnt5) مرات",
-                    "قم بتفعيل درع حماية الـ 24 ساعة $cnt5 مرات لحماية السلسلة من الخمول",
-                    cnt5
-                )
-                5 -> Triple(
-                    "استعمل درع الـ 48 ساعة ($cnt5) مرات",
-                    "حصّن النظام بتفعيل درع الـ 48 ساعة $cnt5 مرات",
-                    cnt5
-                )
-                6 -> Triple(
-                    "استعمل درع الـ 72 ساعة ($cnt5) مرات",
-                    "تفعيل دفاعات السلسلة عبر درع 3 أيام ($cnt5 مرات)",
-                    cnt5
-                )
-                7 -> {
-                    val rarityStr = when (i % 3) {
-                        0 -> "الشائع"
-                        1 -> "العادي"
-                        else -> "النادر"
-                    }
-                    Triple(
-                        "استعمل المفتاح $rarityStr ($cnt5) مرات",
-                        "استهلك مفتاح تجاوز $rarityStr لتسريع إنجاز المهام ($cnt5 مرات)",
-                        cnt5
-                    )
+        // 1. Deflame Micro-Discipline (60 tasks: targets 1..8)
+        val deflameDistribution = listOf(
+            1 to 15, 2 to 12, 3 to 10, 4 to 8, 5 to 6, 6 to 4, 7 to 3, 8 to 2
+        )
+        deflameDistribution.forEach { (target, count) ->
+            for (k in 0 until count) {
+                val ctx = dailyContexts[(k + target) % dailyContexts.size]
+                val tier = when {
+                    target <= 2 -> 1
+                    target <= 4 -> 2
+                    else -> 3
                 }
-                8 -> Triple(
-                    "اضغط على زر التخفيض والتبريد بالتناوب ($cnt5) مرات",
-                    "نفذ توازناً حرارياً بالتناوب بين زر التخفيض Deflame وزر التبريد Girl ($cnt5 مرات)",
-                    cnt5
-                )
-                9 -> Triple(
-                    "أضف شخصاً في اليوم ($cnt5 مرات)",
-                    "سجل $cnt5 أفراد جدد في مصفوفة الاستهداف والتحليل اليوم",
-                    cnt5
-                )
-                else -> {
-                    val hormone = if (i % 2 == 0) "استروجين" else "تيستيستيرون"
-                    Triple(
-                        "حقق مستوى $pct% $hormone اليوم",
-                        "اضبط ميزان الطاقة الحيوية للوصول إلى تركيز $pct% $hormone",
-                        1
+                val countLabel = if (target == 1) "مرة واحدة" else "$target مرات"
+                blueprints.add(
+                    TaskBlueprint(
+                        title = "تبريد Deflame ($countLabel) — $ctx",
+                        description = "اضغط على زر التخفيض Deflame $countLabel خلال اليوم للحفاظ على هدوء الشعلة ($ctx)",
+                        targetCount = target,
+                        difficultyTier = tier,
+                        difficultyScore = 10 + target * 14 + k,
+                        actionTag = "DEFLAME"
                     )
-                }
+                )
             }
+        }
 
+        // 2. Girl Cooldown Micro-Discipline (60 tasks: targets 1..8)
+        val girlDistribution = listOf(
+            1 to 15, 2 to 12, 3 to 10, 4 to 8, 5 to 6, 6 to 4, 7 to 3, 8 to 2
+        )
+        girlDistribution.forEach { (target, count) ->
+            for (k in 0 until count) {
+                val ctx = dailyContexts[(k + target + 5) % dailyContexts.size]
+                val tier = when {
+                    target <= 2 -> 1
+                    target <= 4 -> 2
+                    else -> 3
+                }
+                val countLabel = if (target == 1) "مرة واحدة" else "$target مرات"
+                blueprints.add(
+                    TaskBlueprint(
+                        title = "تبريد Girl ($countLabel) — $ctx",
+                        description = "نفّذ تبريد النظام بالضغط على زر Girl $countLabel اليوم ضمن مسار ($ctx)",
+                        targetCount = target,
+                        difficultyTier = tier,
+                        difficultyScore = 12 + target * 14 + k,
+                        actionTag = "GIRL"
+                    )
+                )
+            }
+        }
+
+        // 3. Alternating Thermal Balance (45 tasks: targets 1..6)
+        val balanceDistribution = listOf(
+            1 to 12, 2 to 10, 3 to 9, 4 to 6, 5 to 5, 6 to 3
+        )
+        balanceDistribution.forEach { (target, count) ->
+            for (k in 0 until count) {
+                val ctx = dailyContexts[(k * 2 + target) % dailyContexts.size]
+                val tier = when {
+                    target <= 2 -> 1
+                    target <= 4 -> 2
+                    else -> 3
+                }
+                val label = if (target == 1) "دورة واحدة" else "$target دورات"
+                blueprints.add(
+                    TaskBlueprint(
+                        title = "توازن حراري ($label) — $ctx",
+                        description = "نفّذ $label من التبريد والتخفيض (Deflame أو Girl) اليوم لضبط الإيقاع ($ctx)",
+                        targetCount = target,
+                        difficultyTier = tier,
+                        difficultyScore = 18 + target * 16 + k,
+                        actionTag = "BALANCE"
+                    )
+                )
+            }
+        }
+
+        // 4. Realistic Daily Strikes (35 tasks: 1..3 strikes max per day — strictly avoiding 6+ Overload!)
+        val strikeContexts = listOf(
+            "الضربة النظيفة", "تركيز الهدف", "تنفيذ دقيق", "اختراق يومي", "نبضة الحسم",
+            "انضباط المسار", "تسجيل موثق", "توقيت مثالي", "دقة الإصابة", "تثبيت السجل",
+            "ضربة الاستهلال", "ضربة الختام", "مسار الصمود", "ضربة الكفاءة", "إنجاز فوري",
+            "تحدي اليوم", "إشارة التأكيد", "مناورة سريعة"
+        )
+        for (k in 0 until 18) {
+            blueprints.add(
+                TaskBlueprint(
+                    title = "تسجيل سترايك واحد اليوم — ${strikeContexts[k]}",
+                    description = "نفّذ ضربة واحدة موثقة بالتاريخ والوقت دون تعريض الشعلة للضغط المفرط",
+                    targetCount = 1,
+                    difficultyTier = 1,
+                    difficultyScore = 22 + k,
+                    actionTag = "STRIKE"
+                )
+            )
+        }
+        for (k in 0 until 11) {
+            blueprints.add(
+                TaskBlueprint(
+                    title = "تنفيذ سترايكين (2) منضبطين اليوم — ${strikeContexts[k]}",
+                    description = "سجّل ضربتين خلال 24 ساعة مع جاهزية الدرع الوقائي للحفاظ على الاستقرار",
+                    targetCount = 2,
+                    difficultyTier = 2,
+                    difficultyScore = 68 + k * 2,
+                    actionTag = "STRIKE"
+                )
+            )
+        }
+        for (k in 0 until 6) {
+            blueprints.add(
+                TaskBlueprint(
+                    title = "ثلاثية يومية (3 سترايك) لتفعيل الدرع — ${strikeContexts[k]}",
+                    description = "سجّل 3 سترايكات اليوم لتفعيل درع الـ 7 أيام التلقائي دون تجاوز حد الحمل الأقصى",
+                    targetCount = 3,
+                    difficultyTier = 3,
+                    difficultyScore = 115 + k * 3,
+                    actionTag = "STRIKE"
+                )
+            )
+        }
+
+        // 5. Daily Protective Shield Maintenance (20 tasks: strictly 1 action)
+        dailySingleShieldContexts.forEachIndexed { idx, label ->
+            blueprints.add(
+                TaskBlueprint(
+                    title = label,
+                    description = "فعّل درع حماية واحداً أو حافظ على بقاء درعك نشطاً لحماية الشعلة من غرامة الـ +3 نقاط اليوم",
+                    targetCount = 1,
+                    difficultyTier = 1,
+                    difficultyScore = 16 + idx * 2,
+                    actionTag = "SHIELD"
+                )
+            )
+        }
+
+        // 6. Daily Profile Logging (14 tasks: 1..2 individuals)
+        for (k in 0 until 10) {
+            val ctx = dailyContexts[k]
+            blueprints.add(
+                TaskBlueprint(
+                    title = "إضافة فرد واحد للسجلات اليوم — $ctx",
+                    description = "أضف ملفاً جديداً واحداً إلى السجلات مع احتساب الحجم والتعزيز تلقائياً",
+                    targetCount = 1,
+                    difficultyTier = 1,
+                    difficultyScore = 30 + k * 2,
+                    actionTag = "PERSON"
+                )
+            )
+        }
+        for (k in 0 until 4) {
+            val ctx = dailyContexts[k + 10]
+            blueprints.add(
+                TaskBlueprint(
+                    title = "توثيق فردين (2) في السجلات اليوم — $ctx",
+                    description = "سجّل شخصين جديدين في قاعدة البيانات خلال اليوم ($ctx)",
+                    targetCount = 2,
+                    difficultyTier = 2,
+                    difficultyScore = 76 + k * 3,
+                    actionTag = "PERSON"
+                )
+            )
+        }
+
+        // 7. Single Tactical Skip-Key Use (8 tasks: strictly 1 key max, no spamming!)
+        val singleKeyLabels = listOf(
+            "استخدام مفتاح تجاوز واحد بتكتيك — فك العقدة",
+            "تخطي مهمة متوقفة بمفتاح واحد — تسريع المسار",
+            "استثمار مفتاح تجاوز فردي اليوم — كفاءة XP",
+            "تفعيل مفتاح واحد عند الحاجة — إدارة الموارد",
+            "استعمال مفتاح تجاوز منفرد — توفير الجهد",
+            "تحرير مهمة عالقة بمفتاح واحد — مرونة يومية",
+            "صرف مفتاح واحد بحكمة اليوم — خطة التقدم",
+            "استخدام مفتاح تجاوز يتيم اليوم — دعم المحطة"
+        )
+        singleKeyLabels.forEachIndexed { idx, label ->
+            blueprints.add(
+                TaskBlueprint(
+                    title = label,
+                    description = "استعمل مفتاح تجاوز واحداً فقط عند الحاجة لتحصيل نقاط XP دون هدر المخزون",
+                    targetCount = 1,
+                    difficultyTier = 2,
+                    difficultyScore = 58 + idx * 2,
+                    actionTag = "KEY"
+                )
+            )
+        }
+
+        // 8. Daily Tactical Potion / Station Claim (8 tasks: 1 action)
+        for (k in 0 until 4) {
+            blueprints.add(
+                TaskBlueprint(
+                    title = "تفعيل جرعة سيبرانية واحدة اليوم — تعزيز #${k + 1}",
+                    description = "استفد من المخزون السيبراني بتفعيل جرعة واحدة داعمة للشعلة أو التبريد",
+                    targetCount = 1,
+                    difficultyTier = 2,
+                    difficultyScore = 64 + k * 3,
+                    actionTag = "POTION"
+                )
+            )
+        }
+        for (k in 0 until 4) {
+            blueprints.add(
+                TaskBlueprint(
+                    title = "جني مكافأة محطة متاحة اليوم — محطة #${k + 1}",
+                    description = "افتح خريطة المسار واجنِ مكافأة واحدة من المحطات التي وصلت لمتطلبها",
+                    targetCount = 1,
+                    difficultyTier = 2,
+                    difficultyScore = 60 + k * 3,
+                    actionTag = "ROADMAP"
+                )
+            )
+        }
+
+        // Sort strictly from easiest to hardest before pairing ascending XP list
+        val sorted = blueprints
+            .take(CATEGORY_TASKS_COUNT)
+            .sortedWith(
+                compareBy<TaskBlueprint> { it.difficultyTier }
+                    .thenBy { it.difficultyScore }
+                    .thenBy { it.targetCount }
+                    .thenBy { it.title }
+            )
+
+        sorted.mapIndexed { i, bp ->
+            val xp = DAILY_XP_LIST[i]
             TaskItem(
-                id = "daily_$idx",
+                id = "daily_${i + 1}",
                 period = TaskPeriod.DAILY,
-                title = title,
-                description = desc,
+                title = bp.title,
+                description = bp.description,
                 xpBounty = xp,
-                targetCount = targetCount,
-                requiredKeyRarity = if (xp < 120) KeyRarity.COMMON else KeyRarity.NORMAL
+                targetCount = bp.targetCount,
+                requiredKeyRarity = if (xp < 120) KeyRarity.COMMON else KeyRarity.NORMAL,
+                actionTag = bp.actionTag,
+                difficultyTier = bp.difficultyTier
             )
         }
     }
+
+    // ==========================================
+    // 2. WEEKLY TASKS POOL (250 7-DAY CONSISTENCY TASKS)
+    // ==========================================
+
+    private val weeklyContexts = listOf(
+        "اتساق الأسبوع", "موجة الثبات", "إيقاع الـ 7 أيام", "بروتوكول الاستمرارية", "دورة الصمود",
+        "انضباط الوسط", "توازن المدى", "مناورة التراكم", "انضباط الجولات", "درع الاستقرار",
+        "خط التبريد", "حزمة الإتقان", "خطة التحصين", "استراتيجية النبض", "الذروة الأسبوعية"
+    )
 
     val ALL_WEEKLY_TASKS: List<TaskItem> by lazy {
-        (0 until 250).map { i ->
-            val idx = i + 1
-            val t = i % 10
-            val cnt4_15 = 4 + (i % 12)
-            val cnt1_15 = 1 + (i % 15)
-            val cnt1_20 = 1 + (i % 20)
-            val cnt1_10 = 1 + (i % 10)
-            val xp = WEEKLY_XP_LIST[i]
+        val blueprints = mutableListOf<TaskBlueprint>()
 
-            val (title, desc, targetCount) = when (t) {
-                0 -> Triple(
-                    "حقق سترايك واحد في الأسبوع (المتكدس #$idx)",
-                    "نفذ ضربة نظام استراتيجية ناجحة خلال هذا الأسبوع (التكرار #$idx)",
-                    1
-                )
-                1 -> Triple(
-                    "اضغط على زر التبريد ($cnt4_15) مرات في الأسبوع",
-                    "حافظ على استقرار الشعلة بالضغط على زر التبريد $cnt4_15 مرة خلال الأسبوع",
-                    cnt4_15
-                )
-                2 -> Triple(
-                    "اضغط على زر التخفيض يومياً لمدة 7 أيام (التكرار #$idx)",
-                    "انضباط يومي مستمر: خفض الشعلة كل يوم لمدة أسبوع كامل",
-                    7
-                )
-                3 -> Triple(
-                    "استعمل درع الـ 7 أيام مرة واحدة (الدورة #$idx)",
-                    "تفعيل درع الصمود الأسبوعي التلقائي أو اليدوي لحماية السلسلة",
-                    1
-                )
-                4 -> Triple(
-                    "استعمل المفتاح الأسطوري مرة واحدة (الأسبوع #$idx)",
-                    "استهلك مفتاحاً أسطورياً لتخطي المهام الأسبوعية المعقدة فورياً",
-                    1
-                )
-                5 -> Triple(
-                    "حقق انضباط التبريد الأسبوعي المكثف (الجولة #$idx)",
-                    "تنفيذ 5 دورات تبريد مركّزة في أوقات متفرقة خلال الأسبوع",
-                    5
-                )
-                6 -> Triple(
-                    "أضف ($cnt1_15) أشخاص في الأسبوع",
-                    "توسيع شبكة الاستهداف بإضافة $cnt1_15 أفراد جدد خلال هذا الأسبوع",
-                    cnt1_15
-                )
-                7 -> Triple(
-                    "حقق ($cnt1_20) سترايك خلال هذا الأسبوع",
-                    "تسجيل $cnt1_20 ضربة نشطة خلال الجولة الأسبوعية المفتوحة",
-                    cnt1_20
-                )
-                8 -> Triple(
-                    "حافظ على معدل التبريد أسبوعياً بواقع ($cnt1_10) ضغطات",
-                    "توازن ديناميكي منتظم لتبريد الشعلة عبر $cnt1_10 عمليات تبريد أسبوعية",
-                    cnt1_10
-                )
-                else -> Triple(
-                    "تجنب السقوط تحت الشعلة النورانية في الأسبوع رقم #$idx",
-                    "البقاء فوق حاجز 2000 نقطة والحفاظ على مسار الضياء طوال الأسبوع",
-                    1
-                )
+        // 1. Weekly Deflame Consistency (55 tasks: 4..21 across 7 days)
+        for (k in 0 until 55) {
+            val target = 4 + (k * 18 / 55) // smooth 4..21
+            val ctx = weeklyContexts[k % weeklyContexts.size]
+            val sub = (k / weeklyContexts.size) + 1
+            val tier = when {
+                target <= 8 -> 1
+                target <= 14 -> 2
+                else -> 3
             }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "تبريد Deflame ($target مرة أسبوعياً) — $ctx ($sub)",
+                    description = "وزّع $target عمليات تخفيض عبر زر Deflame على مدار أيام الأسبوع ($ctx)",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 15 + target * 9 + (k % 3),
+                    actionTag = "DEFLAME"
+                )
+            )
+        }
 
+        // 2. Weekly Girl Consistency (55 tasks: 4..21 across 7 days)
+        for (k in 0 until 55) {
+            val target = 4 + (k * 18 / 55)
+            val ctx = weeklyContexts[(k + 4) % weeklyContexts.size]
+            val sub = (k / weeklyContexts.size) + 1
+            val tier = when {
+                target <= 8 -> 1
+                target <= 14 -> 2
+                else -> 3
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "تبريد Girl ($target مرة أسبوعياً) — $ctx ($sub)",
+                    description = "حافظ على هدوء النظام بواقع $target ضغطات تبريد موزعة خلال 7 أيام ($ctx)",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 17 + target * 9 + (k % 3),
+                    actionTag = "GIRL"
+                )
+            )
+        }
+
+        // 3. Weekly Alternating Balance (40 tasks: 4..18 across 7 days)
+        for (k in 0 until 40) {
+            val target = 4 + (k * 15 / 40) // 4..18
+            val ctx = weeklyContexts[(k + 7) % weeklyContexts.size]
+            val sub = (k / weeklyContexts.size) + 1
+            val tier = when {
+                target <= 7 -> 1
+                target <= 12 -> 2
+                else -> 3
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "انضباط حراري أسبوعي ($target خطوة) — $ctx ($sub)",
+                    description = "نفّذ $target جولة تبريد وتخفيض متزنة خلال الأسبوع للحفاظ على مسار الشعلة",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 24 + target * 10 + (k % 2),
+                    actionTag = "BALANCE"
+                )
+            )
+        }
+
+        // 4. Weekly Balanced Strikes (40 tasks: 2..12 strikes across 7 days)
+        for (k in 0 until 40) {
+            val target = 2 + (k * 11 / 40) // 2..12
+            val ctx = weeklyContexts[(k + 2) % weeklyContexts.size]
+            val sub = (k / weeklyContexts.size) + 1
+            val tier = when {
+                target <= 4 -> 1
+                target <= 8 -> 2
+                else -> 3
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "تنفيذ $target سترايك خلال الأسبوع — $ctx ($sub)",
+                    description = "سجّل $target ضربات موزعة بذكاء على أيام الأسبوع السبعة دون إفراط يومي",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 26 + target * 15 + (k % 2),
+                    actionTag = "STRIKE"
+                )
+            )
+        }
+
+        // 5. Weekly Streak & Shield Maintenance (22 tasks: 1..3 activations/retentions)
+        for (k in 0 until 22) {
+            val target = 1 + (k * 3 / 22) // 1..3
+            val ctx = weeklyContexts[k % weeklyContexts.size]
+            val tier = if (target == 1) 1 else if (target == 2) 2 else 3
+            blueprints.add(
+                TaskBlueprint(
+                    title = "حماية السلسلة بالدرع ($target مرات أسبوعياً) — $ctx",
+                    description = "أمّن أسبوعك عبر تفعيل الدروع الوقائية ($target مرات) ومنع تراكم نقاط الخمول",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 30 + target * 40 + k,
+                    actionTag = "SHIELD"
+                )
+            )
+        }
+
+        // 6. Strategic Weekly Potions Usage (16 tasks: 1..3 potions)
+        val potionNames = listOf("إكسير النبض", "مصل قبضة الظل", "قطرة جبريل", "الحقن التجميدي")
+        for (k in 0 until 16) {
+            val target = 1 + (k * 3 / 16) // 1..3
+            val pName = potionNames[k % potionNames.size]
+            val cycle = (k / potionNames.size) + 1
+            val tier = if (target == 1) 2 else 3
+            blueprints.add(
+                TaskBlueprint(
+                    title = "توظيف الجرعات الاستراتيجي (${target}x — $pName #$cycle)",
+                    description = "فعّل $target من الجرعات السيبرانية في الأوقات الحرجة لتعظيم فائدة الأسبوع",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 70 + target * 35 + k,
+                    actionTag = "POTION"
+                )
+            )
+        }
+
+        // 7. Moderate Weekly Key Allocation (12 tasks: 1..3 keys)
+        for (k in 0 until 12) {
+            val target = 1 + (k * 3 / 12) // 1..3
+            val ctx = weeklyContexts[(k + 9) % weeklyContexts.size]
+            val tier = if (target <= 2) 2 else 3
+            blueprints.add(
+                TaskBlueprint(
+                    title = "تخصيص معتدل للمفاتيح ($target مفتاح) — $ctx",
+                    description = "وزّع استخدام $target مفاتيح تجاوز خلال الأسبوع لتجاوز المهام الصعبة بحكمة",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 60 + target * 32 + k,
+                    actionTag = "KEY"
+                )
+            )
+        }
+
+        // 8. Weekly Records & Roadmap Stations (10 tasks: 5 PERSON + 5 ROADMAP)
+        for (k in 0 until 5) {
+            val target = 2 + k // 2..6
+            blueprints.add(
+                TaskBlueprint(
+                    title = "توسيع السجلات الأسبوعي ($target أفراد)",
+                    description = "سجّل $target ملفات جديدة في السجلات خلال دورة هذا الأسبوع",
+                    targetCount = target,
+                    difficultyTier = if (target <= 3) 1 else 2,
+                    difficultyScore = 40 + target * 18,
+                    actionTag = "PERSON"
+                )
+            )
+        }
+        for (k in 0 until 5) {
+            val target = 1 + k // 1..5 stations
+            blueprints.add(
+                TaskBlueprint(
+                    title = "عبور $target محطات على المسار هذا الأسبوع",
+                    description = "افتح واجنِ مكافآت $target محطات متتالية في خريطة الـ 500 محطة",
+                    targetCount = target,
+                    difficultyTier = if (target <= 2) 2 else 3,
+                    difficultyScore = 65 + target * 22,
+                    actionTag = "ROADMAP"
+                )
+            )
+        }
+
+        val sorted = blueprints
+            .take(CATEGORY_TASKS_COUNT)
+            .sortedWith(
+                compareBy<TaskBlueprint> { it.difficultyTier }
+                    .thenBy { it.difficultyScore }
+                    .thenBy { it.targetCount }
+                    .thenBy { it.title }
+            )
+
+        sorted.mapIndexed { i, bp ->
+            val xp = WEEKLY_XP_LIST[i]
             TaskItem(
-                id = "weekly_$idx",
+                id = "weekly_${i + 1}",
                 period = TaskPeriod.WEEKLY,
-                title = title,
-                description = desc,
+                title = bp.title,
+                description = bp.description,
                 xpBounty = xp,
-                targetCount = targetCount,
-                requiredKeyRarity = if (xp < 180) KeyRarity.NORMAL else KeyRarity.RARE
+                targetCount = bp.targetCount,
+                requiredKeyRarity = if (xp < 185) KeyRarity.NORMAL else KeyRarity.RARE,
+                actionTag = bp.actionTag,
+                difficultyTier = bp.difficultyTier
             )
         }
     }
+
+    // ==========================================
+    // 3. MONTHLY TASKS POOL (250 SYSTEMIC MILESTONES)
+    // ==========================================
+
+    private val monthlyContexts = listOf(
+        "المرحلة التأسيسية", "البناء المنهجي", "التكامل الشهري", "عمق النظام", "الاستقرار الممتد",
+        "إدارة الدورة", "مسار الصمود", "هندسة الطاقة", "تحصين الشهر", "ذروة التقدم"
+    )
 
     val ALL_MONTHLY_TASKS: List<TaskItem> by lazy {
-        (0 until 250).map { i ->
-            val idx = i + 1
-            val t = i % 6
-            val coolCounts = listOf(1, 2, 3, 4, 5, 8, 12, 15)
-            val downCounts = listOf(1, 2, 3, 5, 10, 15, 20)
-            val cntCool = coolCounts[i % coolCounts.size]
-            val cntDown = downCounts[i % downCounts.size]
-            val cntPeople = 1 + (i % 20)
-            val xp = MONTHLY_XP_LIST[i]
+        val blueprints = mutableListOf<TaskBlueprint>()
 
-            val (title, desc, targetCount) = when (t) {
-                0 -> Triple(
-                    "حقق سترايك واحد في الشهر (رقم #$idx)",
-                    "إنجاز ضربة شهرية حاسمة ضمن المسار الشهري المتقدم",
-                    1
-                )
-                1 -> Triple(
-                    "اضغط على زر التبريد ($cntCool) مرات في الشهر",
-                    "تنفيذ $cntCool عمليات تبريد للشعلة خلال هذا الشهر",
-                    cntCool
-                )
-                2 -> Triple(
-                    "اضغط على زر التخفيض ($cntDown) مرة في الشهر",
-                    "خفض طاقة الشعلة التراكمية $cntDown مرة خلال هذا الشهر",
-                    cntDown
-                )
-                3 -> Triple(
-                    "حقق الاستقرار الحراري الكامل للشهر (المستوى #$idx)",
-                    "المحافظة على التوازن الشهري وتفادي قفزات الشعلة العشوائية",
-                    1
-                )
-                4 -> Triple(
-                    "أضف ($cntPeople) شخصاً خلال هذا الشهر",
-                    "إضافة $cntPeople شخصاً إلى الأرشيف السحابي والتحليلي خلال الشهر",
-                    cntPeople
-                )
-                else -> Triple(
-                    "تنفيذ التحديات الشهرية الهيكلية الكبرى (المعامل #$idx)",
-                    "الصمود والانضباط الشهري الكامل وتحقيق مستويات الاستقرار الحيوي",
-                    1
-                )
+        // 1. Monthly Deflame Progression (55 tasks: 15..85)
+        for (k in 0 until 55) {
+            val target = 15 + (k * 71 / 55) // 15..85
+            val ctx = monthlyContexts[k % monthlyContexts.size]
+            val rank = (k / monthlyContexts.size) + 1
+            val tier = when {
+                target <= 32 -> 1
+                target <= 58 -> 2
+                else -> 3
             }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "إنجاز $target عملية Deflame شهرية — $ctx ($rank)",
+                    description = "حافظ على التوازن التراكمي للشعلة بإتمام $target تخفيضاً خلال هذا الشهر",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 15 + target * 3 + (k % 2),
+                    actionTag = "DEFLAME"
+                )
+            )
+        }
 
+        // 2. Monthly Girl Progression (55 tasks: 15..85)
+        for (k in 0 until 55) {
+            val target = 15 + (k * 71 / 55)
+            val ctx = monthlyContexts[(k + 3) % monthlyContexts.size]
+            val rank = (k / monthlyContexts.size) + 1
+            val tier = when {
+                target <= 32 -> 1
+                target <= 58 -> 2
+                else -> 3
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "إنجاز $target تبريد Girl شهري — $ctx ($rank)",
+                    description = "نفّذ $target جولة تبريد منتظمة عبر زر Girl على مدار الشهر الكامل",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 17 + target * 3 + (k % 2),
+                    actionTag = "GIRL"
+                )
+            )
+        }
+
+        // 3. Monthly Balance Discipline (40 tasks: 15..75)
+        for (k in 0 until 40) {
+            val target = 15 + (k * 61 / 40)
+            val ctx = monthlyContexts[(k + 5) % monthlyContexts.size]
+            val rank = (k / monthlyContexts.size) + 1
+            val tier = when {
+                target <= 30 -> 1
+                target <= 52 -> 2
+                else -> 3
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "موازنة نظام شهرية ($target دورة) — $ctx ($rank)",
+                    description = "ارفع كفاءة التحكم الحراري عبر $target عملية موازنة بين Deflame وGirl في الشهر",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 25 + target * 4,
+                    actionTag = "BALANCE"
+                )
+            )
+        }
+
+        // 4. Monthly Strike Milestones (40 tasks: 8..40)
+        for (k in 0 until 40) {
+            val target = 8 + (k * 33 / 40) // 8..40
+            val ctx = monthlyContexts[(k + 2) % monthlyContexts.size]
+            val rank = (k / monthlyContexts.size) + 1
+            val tier = when {
+                target <= 15 -> 1
+                target <= 27 -> 2
+                else -> 3
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "تراكم $target سترايك خلال الشهر — $ctx ($rank)",
+                    description = "سجّل $target ضربات موثقة موزعة بانتظام عبر أسابيع الشهر الأربعة",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 30 + target * 6,
+                    actionTag = "STRIKE"
+                )
+            )
+        }
+
+        // 5. Monthly Shield Defense Milestones (20 tasks: 2..8 shields)
+        for (k in 0 until 20) {
+            val target = 2 + (k * 7 / 20) // 2..8
+            val ctx = monthlyContexts[k % monthlyContexts.size]
+            val tier = when {
+                target <= 3 -> 1
+                target <= 5 -> 2
+                else -> 3
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "تحصين شهري شامل ($target دروع) — $ctx #${k + 1}",
+                    description = "فعّل $target دروع حماية خلال الشهر لضمان بقاء السلسلة محمية من الخمول",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 35 + target * 28 + k,
+                    actionTag = "SHIELD"
+                )
+            )
+        }
+
+        // 6. Monthly Potion Deployment (15 tasks: 2..6 potions)
+        for (k in 0 until 15) {
+            val target = 2 + (k * 5 / 15) // 2..6
+            val ctx = monthlyContexts[k % monthlyContexts.size]
+            val tier = if (target <= 3) 2 else 3
+            blueprints.add(
+                TaskBlueprint(
+                    title = "تكتيك الجرعات الشهري ($target جرعات) — $ctx",
+                    description = "استهلك $target جرعات سيبرانية في المفاصل الزمنية للشهر لتحقيق أقصى عائد",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 110 + target * 25 + k,
+                    actionTag = "POTION"
+                )
+            )
+        }
+
+        // 7. Monthly Key Economy (10 tasks: 2..6 keys)
+        for (k in 0 until 10) {
+            val target = 2 + (k * 5 / 10) // 2..6
+            val ctx = monthlyContexts[k % monthlyContexts.size]
+            val tier = if (target <= 3) 2 else 3
+            blueprints.add(
+                TaskBlueprint(
+                    title = "إدارة مفاتيح التجاوز الشهرية ($target مفاتيح) — $ctx",
+                    description = "وظّف $target مفاتيح تجاوز خلال الشهر لفتح اختناقات التقدم وحصد الـ XP",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 100 + target * 24 + k,
+                    actionTag = "KEY"
+                )
+            )
+        }
+
+        // 8. Monthly Database Growth & Roadmap Progression (15 tasks: 8 PERSON + 7 ROADMAP)
+        for (k in 0 until 8) {
+            val target = 4 + (k * 12 / 8) // 4..15
+            blueprints.add(
+                TaskBlueprint(
+                    title = "توسعة السجلات الشهرية ($target ملفات جديدة)",
+                    description = "أضف $target أفراد جدد إلى شبكة السجلات والتحليل خلال الشهر الحالي",
+                    targetCount = target,
+                    difficultyTier = when {
+                        target <= 6 -> 1
+                        target <= 10 -> 2
+                        else -> 3
+                    },
+                    difficultyScore = 45 + target * 14,
+                    actionTag = "PERSON"
+                )
+            )
+        }
+        for (k in 0 until 7) {
+            val target = 3 + k * 3 // 3, 6, 9, 12, 15, 18, 21
+            blueprints.add(
+                TaskBlueprint(
+                    title = "الارتقاء في المسار ($target محطات شهرية)",
+                    description = "افتح واستلم مكافآت $target محطات جديدة على المسار الموجي هذا الشهر",
+                    targetCount = target,
+                    difficultyTier = if (target <= 9) 2 else 3,
+                    difficultyScore = 90 + target * 10,
+                    actionTag = "ROADMAP"
+                )
+            )
+        }
+
+        val sorted = blueprints
+            .take(CATEGORY_TASKS_COUNT)
+            .sortedWith(
+                compareBy<TaskBlueprint> { it.difficultyTier }
+                    .thenBy { it.difficultyScore }
+                    .thenBy { it.targetCount }
+                    .thenBy { it.title }
+            )
+
+        sorted.mapIndexed { i, bp ->
+            val xp = MONTHLY_XP_LIST[i]
             TaskItem(
-                id = "monthly_$idx",
+                id = "monthly_${i + 1}",
                 period = TaskPeriod.MONTHLY,
-                title = title,
-                description = desc,
+                title = bp.title,
+                description = bp.description,
                 xpBounty = xp,
-                targetCount = targetCount,
-                requiredKeyRarity = if (xp < 380) KeyRarity.RARE else KeyRarity.LEGENDARY
+                targetCount = bp.targetCount,
+                requiredKeyRarity = if (xp < 400) KeyRarity.RARE else KeyRarity.LEGENDARY,
+                actionTag = bp.actionTag,
+                difficultyTier = bp.difficultyTier
             )
         }
     }
 
+    // ==========================================
+    // 4. ANNUAL TASKS POOL (250 MACRO-ACHIEVEMENTS, NO SKIPS ALLOWED)
+    // ==========================================
+
+    private val annualTiers = listOf(
+        "الأساس السنوي", "الالتزام المستدام", "السيطرة الاستراتيجية", "المجد السيبراني", "الذروة الأبدية"
+    )
+
     val ALL_EVERLASTING_TASKS: List<TaskItem> by lazy {
-        (0 until 250).map { i ->
-            val idx = i + 1
-            val t = i % 11
-            val strikeThresholds = listOf(10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 120, 150, 200)
-            val strikeCount = strikeThresholds[i % strikeThresholds.size]
-            val xp = EVERLASTING_XP_LIST[i]
+        val blueprints = mutableListOf<TaskBlueprint>()
 
-            val (title, desc, targetCount) = when (t) {
-                0 -> Triple(
-                    "حقق سترايك واحد في السنة (الموسم #$idx)",
-                    "تسجيل ضربة أسطورية في السجل السنوي التاريخي للهدف رقم #$idx",
-                    1
-                )
-                1 -> Triple(
-                    "حقق أكثر من $strikeCount سترايك في السنة",
-                    "تجاوز حاجز $strikeCount ضربة تراكمية في السجل السنوي العام",
-                    strikeCount
-                )
-                2 -> if (i % 2 == 0) Triple(
-                    "أضف شخصاً واحداً في السنة (التوسعة #$idx)",
-                    "إضافة فرد استراتيجي جديد للأرشيف السنوي التاريخي",
-                    1
-                ) else Triple(
-                    "أضف شخصين في السنة (التوسعة المزدوجة #$idx)",
-                    "إضافة فردين استراتيجيين للأرشيف السنوي التاريخي",
-                    2
-                )
-                3 -> Triple(
-                    "أضف 50 شخصاً (الدفعة الاستراتيجية الكبرى #$idx)",
-                    "توسيع نطاق قاعدة البيانات والوصول إلى 50 شخصاً مسجلاً في النظام",
-                    50
-                )
-                4 -> Triple(
-                    "أضف 100 شخص (سيادة الشبكة الكاملة #$idx)",
-                    "بناء شبكة تحليلية عملاقة تحتوي على 100 شخص مسجل بالكامل",
-                    100
-                )
-                5 -> Triple(
-                    "احصل على لقب \"الأنثى المطلقة\" (الإنجاز الأسطوري #$idx)",
-                    "الوصول إلى قاع المؤشر الهرموني (0 PTS) وتحقيق لقب الأنثى المطلقة",
-                    1
-                )
-                6 -> Triple(
-                    "احصل على لقب \"بافوميت\" (قاع الظلام المطلق #$idx)",
-                    "ملامسة رتبة بافوميت السفلية (0 PTS) واختبار القبضة الكاملة للكيان المظلم",
-                    1
-                )
-                7 -> if (i % 2 == 0) Triple(
-                    "حقق مستوى 100% استروجين (التوازن الهرموني الأقصى #$idx)",
-                    "إتقان المؤشر الحيوي للوصول لنسبة 100% استروجين كاملة",
-                    1
-                ) else Triple(
-                    "حقق مستوى 100% تيستيستيرون (السيادة الحيوية القصوى #$idx)",
-                    "إتقان المؤشر الحيوي للوصول لنسبة 100% تيستيستيرون كاملة",
-                    1
-                )
-                8 -> Triple(
-                    "حقق النتيجة 0 للشعلة (الوصول للهاوية #$idx)",
-                    "تجميد الشعلة بالكامل عند النقطة 0 والتحكم التام في درجات البرودة المطلقة",
-                    1
-                )
-                9 -> Triple(
-                    "حقق النتيجة 10,000 للشعلة (قمة جبريل الأبدية #$idx)",
-                    "الارتقاء بالشعلة إلى الذروة المطلقة 10000 نقطة وتفعيل لمسة جبريل البيضاء الصافية",
-                    1
-                )
-                else -> Triple(
-                    "مصفوفة الأهداف الأبدية الممتدة (الإنجاز السيبراني #$idx)",
-                    "إتمام المحطات العظمى لمصفوفة الأهداف الأبدية الخالدة في تطبيق StrikePulse",
-                    1
-                )
+        // 1. Annual Macro Strikes Ladder (55 tasks: 10 -> 500 verified cumulative strikes)
+        for (k in 0 until 55) {
+            val target = 10 + (k * 490 / 54) // 10..500 progressive
+            val phase = annualTiers[(k * annualTiers.size / 55).coerceAtMost(4)]
+            val tier = when {
+                target <= 60 -> 1
+                target <= 175 -> 2
+                target <= 325 -> 3
+                else -> 4
             }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "إنجاز سنوي: $target سترايك موثق ($phase)",
+                    description = "تحقيق حاجز $target سترايك فعلي وحقيقي على مدار السنة دون أي مفتاح تجاوز",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 50 + target * 2,
+                    actionTag = "STRIKE"
+                )
+            )
+        }
 
+        // 2. Annual Macro Deflame Discipline (45 tasks: 50 -> 1000 cumulative actions)
+        for (k in 0 until 45) {
+            val target = 50 + (k * 950 / 44) // 50..1000
+            val phase = annualTiers[(k * annualTiers.size / 45).coerceAtMost(4)]
+            val tier = when {
+                target <= 180 -> 1
+                target <= 450 -> 2
+                target <= 750 -> 3
+                else -> 4
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "سيادة التبريد السنوية: $target ضغطة Deflame ($phase)",
+                    description = "إتمام $target عملية تخفيض حراري فعلية عبر زر Deflame خلال رحلة العام",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 45 + target,
+                    actionTag = "DEFLAME"
+                )
+            )
+        }
+
+        // 3. Annual Macro Girl Discipline (45 tasks: 50 -> 1000 cumulative actions)
+        for (k in 0 until 45) {
+            val target = 50 + (k * 950 / 44)
+            val phase = annualTiers[(k * annualTiers.size / 45).coerceAtMost(4)]
+            val tier = when {
+                target <= 180 -> 1
+                target <= 450 -> 2
+                target <= 750 -> 3
+                else -> 4
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "انضباط Girl السنوي: $target عملية تبريد ($phase)",
+                    description = "تسجيل $target تفعيل تبريد فعلي لزر Girl على مدار المسار السنوي",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 47 + target,
+                    actionTag = "GIRL"
+                )
+            )
+        }
+
+        // 4. Annual Thermal Balance (30 tasks: 50 -> 800 cumulative actions)
+        for (k in 0 until 30) {
+            val target = 50 + (k * 750 / 29) // 50..800
+            val phase = annualTiers[(k * annualTiers.size / 30).coerceAtMost(4)]
+            val tier = when {
+                target <= 150 -> 1
+                target <= 360 -> 2
+                target <= 600 -> 3
+                else -> 4
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "الاتزان الحراري السنوي: $target دورة ($phase)",
+                    description = "الجمع الموثق بين Deflame وGirl بواقع $target عملية متوازنة سنوياً",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 60 + target + (target / 4),
+                    actionTag = "BALANCE"
+                )
+            )
+        }
+
+        // 5. Annual Archive Expansion (25 tasks: 5 -> 120 registered profiles)
+        for (k in 0 until 25) {
+            val target = 5 + (k * 115 / 24) // 5..120
+            val phase = annualTiers[(k * annualTiers.size / 25).coerceAtMost(4)]
+            val tier = when {
+                target <= 20 -> 1
+                target <= 55 -> 2
+                target <= 90 -> 3
+                else -> 4
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "شبكة السجلات السنوية: $target ملفاً مسجلاً ($phase)",
+                    description = "بناء وتوثيق $target ملفات مكتملة البيانات داخل قاعدة بيانات التطبيق",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 80 + target * 8,
+                    actionTag = "PERSON"
+                )
+            )
+        }
+
+        // 6. Annual Shield & Potion Mastery (20 tasks: 10 SHIELD + 10 POTION)
+        for (k in 0 until 10) {
+            val target = 5 + k * 3 // 5..32 shields
+            val tier = when {
+                target <= 10 -> 1
+                target <= 18 -> 2
+                target <= 25 -> 3
+                else -> 4
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "درع الصمود السنوي: تفعيل $target دروع حماية",
+                    description = "حماية استمرارية الشعلة عبر $target تفعيلات فعلية للدروع الواقية في السنة",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 120 + target * 28,
+                    actionTag = "SHIELD"
+                )
+            )
+        }
+        for (k in 0 until 10) {
+            val target = 3 + k * 2 // 3..21 potions
+            val tier = when {
+                target <= 7 -> 2
+                target <= 15 -> 3
+                else -> 4
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "خيمياء السيبرانية السنوية: $target جرعات مفعّلة",
+                    description = "استخدام $target جرعات تكتيكية حقيقية من مخزونك لدعم الأداء السنوي",
+                    targetCount = target,
+                    difficultyTier = tier,
+                    difficultyScore = 220 + target * 40,
+                    actionTag = "POTION"
+                )
+            )
+        }
+
+        // 7. Annual Roadmap Conquest Milestones (15 tasks: Stations 10 -> 500)
+        val stationMilestones = listOf(10, 25, 50, 75, 100, 140, 180, 220, 260, 300, 350, 400, 440, 480, 500)
+        stationMilestones.forEachIndexed { idx, stationTarget ->
+            val tier = when {
+                stationTarget <= 75 -> 1
+                stationTarget <= 220 -> 2
+                stationTarget <= 400 -> 3
+                else -> 4
+            }
+            blueprints.add(
+                TaskBlueprint(
+                    title = "غزو المسار الموجي: جني مكافآت $stationTarget محطة",
+                    description = "الوصول الفعلي للمحطة #$stationTarget واستلام مكافآت خريطة الـ 500 محطة (دون أي مفاتيح تجاوز)",
+                    targetCount = stationTarget,
+                    difficultyTier = tier,
+                    difficultyScore = 100 + stationTarget * 2,
+                    actionTag = "ROADMAP"
+                )
+            )
+        }
+
+        // 8. Annual Apex Flame & Bio-Calibration Feats (15 tasks: Genuine high-tier mastery)
+        val apexFeats = listOf(
+            Triple("الاستقرار النوراني الأول: بلوغ 1,500 نقطة شعلة", "رفع رصيد الشعلة الفعلي إلى 1,500 نقطة والحفاظ على نقاء المسار", 1 to 180),
+            Triple("عتبة الشعلة النورانية: بلوغ 2,000 نقطة صافية", "تجاوز حاجز 2,000 نقطة والدخول إلى مسار النور والثبات", 1 to 240),
+            Triple("معايرة حيوية متقدمة: بلوغ 60% تيستوستيرون", "ضبط المؤشر الحيوي عبر الالتزام الحقيقي للوصول إلى 60% تيستوستيرون", 2 to 360),
+            Triple("الارتقاء النوراني: بلوغ 3,500 نقطة شعلة", "تعزيز الانضباط اليومي حتى الوصول الفعلي لـ 3,500 نقطة", 2 to 440),
+            Triple("معايرة حيوية عالية: بلوغ 75% تيستوستيرون", "الحفاظ على الانضباط المتراكم لرفع المؤشر إلى 75% تيستوستيرون", 2 to 540),
+            Triple("صمود منتصف الطريق: بلوغ 5,000 نقطة شعلة", "تحقيق نصف المسافة نحو ذروة جبريل (5,000 PTS) بجهد فعلي متواصل", 2 to 620),
+            Triple("السيادة الحيوية: بلوغ 90% تيستوستيرون", "الوصول إلى مستوى 90% تيستوستيرون في سجل التطورات الجينية", 3 to 740),
+            Triple("إشراق النخبة: بلوغ 7,500 نقطة شعلة", "بلوغ 7,500 نقطة في عداد الشعلة دون تصفير أو حمل زائد", 3 to 820),
+            Triple("نقاء الـ DNA الكامل: بلوغ 100% تيستوستيرون", "إتقان المؤشر الجيني للوصول إلى رتبة هرقل (100% تيستوستيرون)", 3 to 900),
+            Triple("قمة جبريل النورانية: بلوغ 10,000 نقطة شعلة", "الارتقاء الحقيقي بالشعلة إلى 10,000 نقطة وتفعيل لمسة جبريل البيضاء", 3 to 960),
+            Triple("الصعود الأسمى: بلوغ 12,500 نقطة شعلة", "الاستمرار في الصمود والانضباط بعد تجاوز حاجز العشرة آلاف نقطة", 4 to 1050),
+            Triple("حارس النور الأعلى: بلوغ 15,000 نقطة شعلة", "بلوغ 15,000 نقطة صافية عبر الالتزام المستدام طوال العام", 4 to 1120),
+            Triple("أفق الكمال: بلوغ 17,500 نقطة شعلة", "الاقتراب من القمة المطلقة بتجميع 17,500 نقطة موثقة", 4 to 1190),
+            Triple("سيد الجمر التائب: بلوغ 20,000 نقطة شعلة", "تحقيق الحد الأقصى التاريخي (20,000 PTS) وفتح اللقب الحصري الأسطوري", 4 to 1260),
+            Triple("الخلود السيبراني الكامل: إتمام ذروة الانبعاث الأبدي", "الوصول إلى المحطة 500 وتفعيل جرعة الانبعاث الأبدي بإنجاز فعلي خالص", 4 to 1320)
+        )
+        apexFeats.forEach { (title, desc, tierAndScore) ->
+            blueprints.add(
+                TaskBlueprint(
+                    title = title,
+                    description = desc,
+                    targetCount = 1,
+                    difficultyTier = tierAndScore.first,
+                    difficultyScore = tierAndScore.second,
+                    actionTag = "GENERAL"
+                )
+            )
+        }
+
+        val sorted = blueprints
+            .take(CATEGORY_TASKS_COUNT)
+            .sortedWith(
+                compareBy<TaskBlueprint> { it.difficultyTier }
+                    .thenBy { it.difficultyScore }
+                    .thenBy { it.targetCount }
+                    .thenBy { it.title }
+            )
+
+        sorted.mapIndexed { i, bp ->
+            val xp = EVERLASTING_XP_LIST[i]
             TaskItem(
-                id = "everlasting_$idx",
+                id = "everlasting_${i + 1}",
                 period = TaskPeriod.YEARLY,
-                title = title,
-                description = desc,
+                title = bp.title,
+                description = bp.description,
                 xpBounty = xp,
-                targetCount = targetCount,
-                requiredKeyRarity = KeyRarity.LEGENDARY
+                targetCount = bp.targetCount,
+                requiredKeyRarity = KeyRarity.LEGENDARY,
+                actionTag = bp.actionTag,
+                difficultyTier = bp.difficultyTier
             )
         }
     }
@@ -428,7 +1063,7 @@ object TaskPools {
     }
 
     // ==========================================
-    // DATE SEED & ROTATION ENGINE
+    // DATE SEED & PROGRESSIVE ROTATION ENGINE
     // ==========================================
 
     fun todayDateString(): String {
@@ -449,57 +1084,72 @@ object TaskPools {
         return "${year}_M${String.format(Locale.US, "%02d", month)}"
     }
 
+    private fun sortTasksProgressively(tasks: List<TaskItem>): List<TaskItem> {
+        return tasks.sortedWith(
+            compareBy<TaskItem> { it.difficultyTier }
+                .thenBy { it.xpBounty }
+                .thenBy { it.targetCount }
+                .thenBy { it.id }
+        )
+    }
+
     /**
      * Non-repeating consumption rotation for Daily Tasks:
      * - Filters out all tasks in [completedIds].
-     * - Shuffles remaining using date seed (00:00 reset).
-     * - Takes 5 active tasks.
+     * - Shuffles remaining using date seed (00:00 reset) & picks 5 active tasks.
+     * - Returns the 5 tasks strictly ordered from easiest to hardest.
      */
     fun getRotatedDailyTasks(completedIds: Set<String>, dateStr: String = todayDateString()): List<TaskItem> {
         val uncompleted = ALL_DAILY_TASKS.filter { it.id !in completedIds }
         if (uncompleted.isEmpty()) {
-            return ALL_DAILY_TASKS.takeLast(5).map { it.copy(status = TaskStatus.COMPLETED, currentCount = it.targetCount) }
+            return sortTasksProgressively(
+                ALL_DAILY_TASKS.takeLast(5).map { it.copy(status = TaskStatus.COMPLETED, currentCount = it.targetCount) }
+            )
         }
         val seed = dateStr.hashCode().toLong()
-        val shuffled = uncompleted.shuffled(Random(seed))
-        return shuffled.take(5)
+        val selected = uncompleted.shuffled(Random(seed)).take(5)
+        return sortTasksProgressively(selected)
     }
 
     /**
      * Non-repeating consumption rotation for Weekly Tasks:
      * - Filters out all tasks in [completedIds].
-     * - Shuffles remaining using week seed.
-     * - Takes 7 active tasks.
+     * - Shuffles remaining using week seed & picks 7 active tasks.
+     * - Returns the 7 tasks strictly ordered from easiest to hardest.
      */
     fun getRotatedWeeklyTasks(completedIds: Set<String>, weekStr: String = currentWeekString()): List<TaskItem> {
         val uncompleted = ALL_WEEKLY_TASKS.filter { it.id !in completedIds }
         if (uncompleted.isEmpty()) {
-            return ALL_WEEKLY_TASKS.takeLast(7).map { it.copy(status = TaskStatus.COMPLETED, currentCount = it.targetCount) }
+            return sortTasksProgressively(
+                ALL_WEEKLY_TASKS.takeLast(7).map { it.copy(status = TaskStatus.COMPLETED, currentCount = it.targetCount) }
+            )
         }
         val seed = weekStr.hashCode().toLong()
-        val shuffled = uncompleted.shuffled(Random(seed))
-        return shuffled.take(7)
+        val selected = uncompleted.shuffled(Random(seed)).take(7)
+        return sortTasksProgressively(selected)
     }
 
     /**
      * Non-repeating consumption rotation for Monthly Tasks:
      * - Filters out all tasks in [completedIds].
-     * - Shuffles remaining using month seed.
-     * - Takes 10 active tasks.
+     * - Shuffles remaining using month seed & picks 10 active tasks.
+     * - Returns the 10 tasks strictly ordered from easiest to hardest.
      */
     fun getRotatedMonthlyTasks(completedIds: Set<String>, monthStr: String = currentMonthString()): List<TaskItem> {
         val uncompleted = ALL_MONTHLY_TASKS.filter { it.id !in completedIds }
         if (uncompleted.isEmpty()) {
-            return ALL_MONTHLY_TASKS.takeLast(10).map { it.copy(status = TaskStatus.COMPLETED, currentCount = it.targetCount) }
+            return sortTasksProgressively(
+                ALL_MONTHLY_TASKS.takeLast(10).map { it.copy(status = TaskStatus.COMPLETED, currentCount = it.targetCount) }
+            )
         }
         val seed = monthStr.hashCode().toLong()
-        val shuffled = uncompleted.shuffled(Random(seed))
-        return shuffled.take(10)
+        val selected = uncompleted.shuffled(Random(seed)).take(10)
+        return sortTasksProgressively(selected)
     }
 
     /**
-     * Everlasting / Master Goals Tasks:
-     * - Returns all 250 everlasting tasks at once with their completion status reflected.
+     * Annual / Master Goals Tasks:
+     * - Returns all 250 annual macro-achievements ordered progressively from easiest to hardest.
      */
     fun getEverlastingTasks(completedIds: Set<String>): List<TaskItem> {
         return ALL_EVERLASTING_TASKS.map { task ->

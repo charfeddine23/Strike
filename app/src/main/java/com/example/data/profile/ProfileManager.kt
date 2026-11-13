@@ -294,6 +294,7 @@ object ProfileManager {
             .putInt(KEY_POTION_PULSE_ELIXIR, newCount)
             .putInt(KEY_PULSE_ELIXIR_USES_LEFT, 3)
             .apply()
+        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "POTION")
         return true
     }
 
@@ -325,6 +326,7 @@ object ProfileManager {
             .putInt(KEY_POTION_SHADOW_SERUM, newCount)
             .putLong(KEY_SHADOW_SERUM_EXPIRES_AT, exp)
             .apply()
+        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "POTION")
         return true
     }
 
@@ -342,6 +344,7 @@ object ProfileManager {
         getPrefs(context).edit()
             .putLong(KEY_GABRIEL_DROPLET_EXPIRES_AT, exp)
             .apply()
+        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "POTION")
     }
 
     fun isGabrielDropletActive(): Boolean {
@@ -360,6 +363,7 @@ object ProfileManager {
             .putInt(KEY_POTION_CRYO_INFUSION, newCount)
             .putBoolean(KEY_HAS_CRYO_BUFF_ARMED, true)
             .apply()
+        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "POTION")
         return true
     }
 
@@ -386,6 +390,7 @@ object ProfileManager {
             .putInt(KEY_POTION_ETERNAL_REBIRTH, newCount)
             .putBoolean(KEY_HAS_REBIRTH_ACTIVE, true)
             .apply()
+        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "POTION")
         return true
     }
 

@@ -927,6 +927,10 @@ class IndividualViewModel(
                 repository.recordHistoricalStrikes(effectiveId, formHistoricalEntries.value)
             }
 
+            if (editingId == null) {
+                RoadmapManager.onActionOccurred(getApplication(), "PERSON")
+            }
+
             val savedMsg = when (currentLanguage.value) {
                 "ar" -> "تم حفظ السجل بنجاح"
                 "fr" -> "Enregistrement sauvegardé avec succès"
