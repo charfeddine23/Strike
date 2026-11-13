@@ -178,7 +178,14 @@ object AppUpdateManager {
         currentVersion: String,
         isAutoCheck: Boolean = false
     ): AppUpdateState = withContext(Dispatchers.IO) {
-        if (_state.value is AppUpdateState.Downloading) return@withContext _state.value
+        val currentState = _state.value
+        if (currentState is AppUpdateState.Checking ||
+            currentState is AppUpdateState.Downloading ||
+            currentState is AppUpdateState.ReadyToInstall ||
+            (isAutoCheck && currentState is AppUpdateState.UpdateAvailable)
+        ) {
+            return@withContext currentState
+        }
         _state.value = AppUpdateState.Checking(isAutoCheck)
         try {
             val latestJson = fetchUrlString(GITHUB_LATEST_RELEASE_API)

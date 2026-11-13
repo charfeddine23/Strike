@@ -107,4 +107,41 @@ class AppUpdateManagerTest {
         prefs.isAutoUpdateEnabled = true
         assertTrue(prefs.isAutoUpdateEnabled)
     }
+
+    @Test
+    fun `checkForUpdates autoCheck preserves UpdateAvailable and ReadyToInstall states`() {
+        kotlinx.coroutines.runBlocking {
+            val release = com.example.data.update.GitHubReleaseInfo(
+                tagName = "v9.9.9",
+                versionName = "9.9.9",
+                releaseName = "v9.9.9",
+                releaseNotes = "",
+                htmlUrl = AppUpdateManager.GITHUB_RELEASES_URL,
+                apkDownloadUrl = null,
+                apkFileName = null,
+                apkSizeBytes = 0L
+            )
+            val stateField = AppUpdateManager::class.java.getDeclaredField("_state").apply {
+                isAccessible = true
+            }
+            @Suppress("UNCHECKED_CAST")
+            val mutableState = stateField.get(AppUpdateManager) as kotlinx.coroutines.flow.MutableStateFlow<com.example.data.update.AppUpdateState>
+
+            try {
+                val available = com.example.data.update.AppUpdateState.UpdateAvailable(release)
+                mutableState.value = available
+                val resultAvailable = AppUpdateManager.checkForUpdates(currentVersion = "1.0.0", isAutoCheck = true)
+                assertEquals(available, resultAvailable)
+
+                val fakeApk = java.io.File.createTempFile("test_update", ".apk")
+                val ready = com.example.data.update.AppUpdateState.ReadyToInstall(release, fakeApk)
+                mutableState.value = ready
+                val resultReady = AppUpdateManager.checkForUpdates(currentVersion = "1.0.0", isAutoCheck = true)
+                assertEquals(ready, resultReady)
+                fakeApk.delete()
+            } finally {
+                AppUpdateManager.resetToIdle()
+            }
+        }
+    }
 }
