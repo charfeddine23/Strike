@@ -317,8 +317,11 @@ class IndividualViewModel(
     val flameLogs: StateFlow<List<FlameLogEntry>> = FlameManager.flameLogs
     val isStreakShieldActive: StateFlow<Boolean> = FlameManager.isStreakShieldActive
     val activeShieldExpiresAt: StateFlow<Long?> = FlameManager.activeShieldExpiresAt
+    val activeShieldType: StateFlow<com.example.data.flame.ActiveShieldType> = FlameManager.activeShieldType
     val availableManualShields: StateFlow<Int> = FlameManager.availableManualShields
+    val available48hShields: StateFlow<Int> = FlameManager.available48hShields
     val available1DayShields: StateFlow<Int> = FlameManager.available1DayShields
+    val sevenDayAutoShieldCount: StateFlow<Int> = FlameManager.sevenDayAutoShieldCount
     val peakFlameScore: StateFlow<Double> = FlameManager.peakScore
     val totalPointsGained: StateFlow<Double> = FlameManager.totalPointsGained
     val totalPointsExtinguished: StateFlow<Double> = FlameManager.totalPointsExtinguished
@@ -438,12 +441,38 @@ class IndividualViewModel(
         viewModelScope.launch {
             if (success) {
                 val msg = when (currentLanguage.value) {
-                    "ar" -> "تم تفعيل درع 1 يوم بنجاح (24 ساعة حماية)"
-                    "fr" -> "Bouclier 1 jour activé avec succès (24h de protection)"
-                    else -> "1-Day Shield activated successfully (24h protection)"
+                    "ar" -> "تم تفعيل درع 24 ساعة بنجاح"
+                    "fr" -> "Bouclier 24h activé avec succès"
+                    else -> "24h Shield activated successfully"
                 }
                 emitMessage(msg)
             }
+        }
+    }
+
+    fun activate48hShield() {
+        val success = FlameManager.activate48hShield(getApplication())
+        viewModelScope.launch {
+            if (success) {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> "تم تفعيل درع 48 ساعة بنجاح"
+                    "fr" -> "Bouclier 48h activé avec succès"
+                    else -> "48h Shield activated successfully"
+                }
+                emitMessage(msg)
+            }
+        }
+    }
+
+    fun hardResetAllTaskCompletionStates() {
+        RoadmapManager.hardResetAllTaskCompletionStates(getApplication())
+        viewModelScope.launch {
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم تصفير وإعادة ضبط كافة حالات إنجاز المهام بنجاح! ⚡"
+                "fr" -> "Toutes les missions ont été réinitialisées avec succès ! ⚡"
+                else -> "All task completion states have been hard-reset! ⚡"
+            }
+            emitMessage(msg)
         }
     }
 

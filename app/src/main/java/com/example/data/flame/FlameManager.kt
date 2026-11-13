@@ -37,6 +37,14 @@ data class FlameRecalculationResult(
     val resultingScore: Double
 )
 
+enum class ActiveShieldType(val labelAr: String, val labelEn: String) {
+    NONE("لا يوجد درع نشط", "No Active Shield"),
+    SHIELD_24H("درع الـ 24 ساعة", "24h Shield"),
+    SHIELD_48H("درع الـ 48 ساعة", "48h Shield"),
+    SHIELD_72H("درع الـ 72 ساعة", "72h Shield"),
+    SHIELD_7D_AUTO("درع الـ 7 أيام التلقائي", "7-Day Auto Shield")
+}
+
 object FlameManager {
     private const val PREFS_NAME = "strikepulse_flame_prefs"
     private const val KEY_SCORE = "key_flame_score"
@@ -46,8 +54,11 @@ object FlameManager {
     private const val KEY_FLAME_LOGS = "key_flame_logs_json"
     private const val KEY_STREAK_SHIELD = "key_streak_shield_active"
     private const val KEY_ACTIVE_SHIELD_EXPIRES_AT = "key_active_shield_expires_at"
+    private const val KEY_ACTIVE_SHIELD_TYPE = "key_active_shield_type"
     private const val KEY_AVAILABLE_MANUAL_SHIELDS = "key_available_manual_shields"
+    private const val KEY_AVAILABLE_48H_SHIELDS = "key_available_48h_shields"
     private const val KEY_AVAILABLE_1DAY_SHIELDS = "key_available_1day_shields"
+    private const val KEY_SEVEN_DAY_AUTO_TRIGGERS = "key_seven_day_auto_triggers"
     private const val KEY_PEAK_SCORE = "key_peak_flame_score"
     private const val KEY_TOTAL_POINTS_GAINED = "key_total_points_gained"
     private const val KEY_TOTAL_POINTS_EXTINGUISHED = "key_total_points_extinguished"
@@ -65,11 +76,20 @@ object FlameManager {
     private val _activeShieldExpiresAt = MutableStateFlow<Long?>(null)
     val activeShieldExpiresAt: StateFlow<Long?> = _activeShieldExpiresAt.asStateFlow()
 
-    private val _availableManualShields = MutableStateFlow(0) // 3-Day Shields from Double Strike
+    private val _activeShieldType = MutableStateFlow(ActiveShieldType.NONE)
+    val activeShieldType: StateFlow<ActiveShieldType> = _activeShieldType.asStateFlow()
+
+    private val _availableManualShields = MutableStateFlow(0) // 72h (3-Day) Shields from Double Strike & Rewards
     val availableManualShields: StateFlow<Int> = _availableManualShields.asStateFlow()
 
-    private val _available1DayShields = MutableStateFlow(0) // 1-Day Shields (starts at 0, earned via tasks & rewards)
+    private val _available48hShields = MutableStateFlow(0) // 48h (2-Day) Shields earned via rewards
+    val available48hShields: StateFlow<Int> = _available48hShields.asStateFlow()
+
+    private val _available1DayShields = MutableStateFlow(0) // 24h (1-Day) Shields earned via tasks & rewards
     val available1DayShields: StateFlow<Int> = _available1DayShields.asStateFlow()
+
+    private val _sevenDayAutoShieldCount = MutableStateFlow(0) // Total 7-day automated shields triggered
+    val sevenDayAutoShieldCount: StateFlow<Int> = _sevenDayAutoShieldCount.asStateFlow()
 
     private val _peakScore = MutableStateFlow(45.0)
     val peakScore: StateFlow<Double> = _peakScore.asStateFlow()
@@ -138,27 +158,56 @@ object FlameManager {
         if (expiresAt != null && expiresAt > now) {
             _activeShieldExpiresAt.value = expiresAt
             _isStreakShieldActive.value = true
+            val savedTypeName = prefs.getString(KEY_ACTIVE_SHIELD_TYPE, ActiveShieldType.SHIELD_72H.name)
+            _activeShieldType.value = try {
+                ActiveShieldType.valueOf(savedTypeName ?: ActiveShieldType.SHIELD_72H.name)
+            } catch (_: Exception) {
+                ActiveShieldType.SHIELD_72H
+            }
         } else {
             _activeShieldExpiresAt.value = null
-            _isStreakShieldActive.value = prefs.getBoolean(KEY_STREAK_SHIELD, false)
+            val wasActive = prefs.getBoolean(KEY_STREAK_SHIELD, false)
             if (expiresAt != null && expiresAt <= now) {
                 _isStreakShieldActive.value = false
-                prefs.edit().putBoolean(KEY_STREAK_SHIELD, false).remove(KEY_ACTIVE_SHIELD_EXPIRES_AT).apply()
+                _activeShieldType.value = ActiveShieldType.NONE
+                prefs.edit()
+                    .putBoolean(KEY_STREAK_SHIELD, false)
+                    .remove(KEY_ACTIVE_SHIELD_EXPIRES_AT)
+                    .remove(KEY_ACTIVE_SHIELD_TYPE)
+                    .apply()
+            } else {
+                _isStreakShieldActive.value = wasActive
+                _activeShieldType.value = if (wasActive) {
+                    val savedTypeName = prefs.getString(KEY_ACTIVE_SHIELD_TYPE, ActiveShieldType.SHIELD_72H.name)
+                    try {
+                        ActiveShieldType.valueOf(savedTypeName ?: ActiveShieldType.SHIELD_72H.name)
+                    } catch (_: Exception) {
+                        ActiveShieldType.SHIELD_72H
+                    }
+                } else {
+                    ActiveShieldType.NONE
+                }
             }
         }
 
         val hasResetShields = prefs.getBoolean("has_reset_shields_to_zero_v2", false)
         if (!hasResetShields) {
             _availableManualShields.value = 0
+            _available48hShields.value = 0
             _available1DayShields.value = 0
+            _sevenDayAutoShieldCount.value = 0
             prefs.edit()
                 .putInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
+                .putInt(KEY_AVAILABLE_48H_SHIELDS, 0)
                 .putInt(KEY_AVAILABLE_1DAY_SHIELDS, 0)
+                .putInt(KEY_SEVEN_DAY_AUTO_TRIGGERS, 0)
                 .putBoolean("has_reset_shields_to_zero_v2", true)
                 .apply()
         } else {
             _availableManualShields.value = prefs.getInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
+            _available48hShields.value = prefs.getInt(KEY_AVAILABLE_48H_SHIELDS, 0)
             _available1DayShields.value = prefs.getInt(KEY_AVAILABLE_1DAY_SHIELDS, 0)
+            _sevenDayAutoShieldCount.value = prefs.getInt(KEY_SEVEN_DAY_AUTO_TRIGGERS, 0)
         }
         val savedPeak = prefs.getFloat(KEY_PEAK_SCORE, savedScore.toFloat()).toDouble()
         _peakScore.value = maxOf(savedScore, savedPeak)
@@ -201,10 +250,16 @@ object FlameManager {
     fun resetShieldsInventoryToZero(context: Context) {
         init(context)
         _availableManualShields.value = 0
+        _available48hShields.value = 0
         _available1DayShields.value = 0
+        _sevenDayAutoShieldCount.value = 0
+        _activeShieldType.value = ActiveShieldType.NONE
         getPrefs(context).edit()
             .putInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
+            .putInt(KEY_AVAILABLE_48H_SHIELDS, 0)
             .putInt(KEY_AVAILABLE_1DAY_SHIELDS, 0)
+            .putInt(KEY_SEVEN_DAY_AUTO_TRIGGERS, 0)
+            .remove(KEY_ACTIVE_SHIELD_TYPE)
             .apply()
     }
 
@@ -235,11 +290,13 @@ object FlameManager {
         _availableManualShields.value = newCount
         _activeShieldExpiresAt.value = newExpires
         _isStreakShieldActive.value = true
+        _activeShieldType.value = ActiveShieldType.SHIELD_72H
 
         getPrefs(context).edit()
             .putInt(KEY_AVAILABLE_MANUAL_SHIELDS, newCount)
             .putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, newExpires)
             .putBoolean(KEY_STREAK_SHIELD, true)
+            .putString(KEY_ACTIVE_SHIELD_TYPE, ActiveShieldType.SHIELD_72H.name)
             .apply()
 
         val expiryStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(newExpires))
@@ -251,6 +308,50 @@ object FlameManager {
             resultingScore = _flameScore.value,
             reason = "STREAK_SHIELD",
             details = "Manual ${days}-Day Shield activated. Protected until $expiryStr ($countdown countdown remaining)."
+        )
+        return true
+    }
+
+    @Synchronized
+    fun grant48hShield(context: Context, count: Int = 1): Int {
+        init(context)
+        val newCount = (_available48hShields.value + count).coerceAtLeast(0)
+        _available48hShields.value = newCount
+        getPrefs(context).edit().putInt(KEY_AVAILABLE_48H_SHIELDS, newCount).apply()
+        return newCount
+    }
+
+    @Synchronized
+    fun activate48hShield(context: Context): Boolean {
+        init(context)
+        if (_available48hShields.value <= 0) return false
+        val now = System.currentTimeMillis()
+        val currentExpires = _activeShieldExpiresAt.value
+        val base = if (currentExpires != null && currentExpires > now) currentExpires else now
+        val newExpires = base + 2 * 24 * 3600 * 1000L
+
+        val newCount = (_available48hShields.value - 1).coerceAtLeast(0)
+        _available48hShields.value = newCount
+        _activeShieldExpiresAt.value = newExpires
+        _isStreakShieldActive.value = true
+        _activeShieldType.value = ActiveShieldType.SHIELD_48H
+
+        getPrefs(context).edit()
+            .putInt(KEY_AVAILABLE_48H_SHIELDS, newCount)
+            .putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, newExpires)
+            .putBoolean(KEY_STREAK_SHIELD, true)
+            .putString(KEY_ACTIVE_SHIELD_TYPE, ActiveShieldType.SHIELD_48H.name)
+            .apply()
+
+        val expiryStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(newExpires))
+        val countdown = formatRemaining(newExpires - now)
+        logEvent(
+            context = context,
+            title = "48-Hour Streak Shield Activated",
+            change = 0.0,
+            resultingScore = _flameScore.value,
+            reason = "STREAK_SHIELD",
+            details = "48-Hour Shield activated. Protected until $expiryStr ($countdown countdown remaining)."
         )
         return true
     }
@@ -277,11 +378,13 @@ object FlameManager {
         _available1DayShields.value = newCount
         _activeShieldExpiresAt.value = newExpires
         _isStreakShieldActive.value = true
+        _activeShieldType.value = ActiveShieldType.SHIELD_24H
 
         getPrefs(context).edit()
             .putInt(KEY_AVAILABLE_1DAY_SHIELDS, newCount)
             .putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, newExpires)
             .putBoolean(KEY_STREAK_SHIELD, true)
+            .putString(KEY_ACTIVE_SHIELD_TYPE, ActiveShieldType.SHIELD_24H.name)
             .apply()
 
         val expiryStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(newExpires))
@@ -305,13 +408,22 @@ object FlameManager {
         val base = if (currentExpires != null && currentExpires > now) currentExpires else now
         val newExpires = base + days * 24 * 3600 * 1000L
 
+        val shieldType = if (days >= 7) ActiveShieldType.SHIELD_7D_AUTO else ActiveShieldType.SHIELD_72H
         _activeShieldExpiresAt.value = newExpires
         _isStreakShieldActive.value = true
+        _activeShieldType.value = shieldType
 
-        getPrefs(context).edit()
+        val editor = getPrefs(context).edit()
             .putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, newExpires)
             .putBoolean(KEY_STREAK_SHIELD, true)
-            .apply()
+            .putString(KEY_ACTIVE_SHIELD_TYPE, shieldType.name)
+
+        if (days >= 7) {
+            val triggered = _sevenDayAutoShieldCount.value + 1
+            _sevenDayAutoShieldCount.value = triggered
+            editor.putInt(KEY_SEVEN_DAY_AUTO_TRIGGERS, triggered)
+        }
+        editor.apply()
 
         return newExpires
     }
@@ -325,9 +437,11 @@ object FlameManager {
             val expires = base + 3 * 24 * 3600 * 1000L
             _activeShieldExpiresAt.value = expires
             _isStreakShieldActive.value = true
+            _activeShieldType.value = ActiveShieldType.SHIELD_72H
             getPrefs(context).edit()
                 .putBoolean(KEY_STREAK_SHIELD, true)
                 .putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, expires)
+                .putString(KEY_ACTIVE_SHIELD_TYPE, ActiveShieldType.SHIELD_72H.name)
                 .apply()
 
             val expiryStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(expires))
@@ -343,9 +457,11 @@ object FlameManager {
         } else {
             _isStreakShieldActive.value = false
             _activeShieldExpiresAt.value = null
+            _activeShieldType.value = ActiveShieldType.NONE
             getPrefs(context).edit()
                 .putBoolean(KEY_STREAK_SHIELD, false)
                 .remove(KEY_ACTIVE_SHIELD_EXPIRES_AT)
+                .remove(KEY_ACTIVE_SHIELD_TYPE)
                 .apply()
 
             logEvent(

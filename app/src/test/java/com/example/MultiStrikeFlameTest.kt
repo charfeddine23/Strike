@@ -2,6 +2,7 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.flame.ActiveShieldType
 import com.example.data.flame.FlameManager
 import com.example.data.model.StrikeEvent
 import org.junit.Assert.assertEquals
@@ -157,5 +158,44 @@ class MultiStrikeFlameTest {
         assertEquals(initialCount + 1, FlameManager.available1DayShields.value)
         assertTrue(FlameManager.isShieldActiveNow())
         assertTrue(FlameManager.getActiveShieldRemainingMillis() > 0)
+        assertEquals(ActiveShieldType.SHIELD_24H, FlameManager.activeShieldType.value)
+    }
+
+    @Test
+    fun `verify activeShieldType tracking for 48h and 7-day auto shield counts`() {
+        FlameManager.resetShieldsInventoryToZero(context)
+        assertEquals(0, FlameManager.available48hShields.value)
+        assertEquals(0, FlameManager.sevenDayAutoShieldCount.value)
+        assertEquals(ActiveShieldType.NONE, FlameManager.activeShieldType.value)
+
+        // 48h shield grant & activation
+        FlameManager.grant48hShield(context, 1)
+        assertEquals(1, FlameManager.available48hShields.value)
+        assertTrue(FlameManager.activate48hShield(context))
+        assertEquals(0, FlameManager.available48hShields.value)
+        assertEquals(ActiveShieldType.SHIELD_48H, FlameManager.activeShieldType.value)
+
+        // 72h manual shield grant & activation
+        FlameManager.grantManualShield(context, 1)
+        assertTrue(FlameManager.activateManualShield(context))
+        assertEquals(ActiveShieldType.SHIELD_72H, FlameManager.activeShieldType.value)
+
+        // 7-day auto shield trigger (3 strikes in one day)
+        val strikeDate = "2026-11-12"
+        val strikes = listOf(
+            StrikeEvent(id = 11L, individualId = 1L, individualName = "A", date = strikeDate, performanceValue = 10.0),
+            StrikeEvent(id = 12L, individualId = 2L, individualName = "B", date = strikeDate, performanceValue = 10.0),
+            StrikeEvent(id = 13L, individualId = 3L, individualName = "C", date = strikeDate, performanceValue = 10.0)
+        )
+        FlameManager.onStrikeRegistered(
+            context = context,
+            strikeDate = strikeDate,
+            boost = 10.0,
+            personName = "C",
+            latestDateBeforeInsert = "2026-11-11",
+            strikesToday = strikes
+        )
+        assertEquals(1, FlameManager.sevenDayAutoShieldCount.value)
+        assertEquals(ActiveShieldType.SHIELD_7D_AUTO, FlameManager.activeShieldType.value)
     }
 }

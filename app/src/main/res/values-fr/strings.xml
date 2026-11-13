@@ -2,6 +2,7 @@
     <string name="app_name">StrikePulse</string>
     <string name="nav_dashboard">Registres</string>
     <string name="nav_entry">Saisie</string>
+    <string name="nav_inventory">Inventaire</string>
     <string name="nav_strike">Strike</string>
     <string name="nav_compare">Comparaison</string>
     <string name="full_name">Nom et Prénom</string>

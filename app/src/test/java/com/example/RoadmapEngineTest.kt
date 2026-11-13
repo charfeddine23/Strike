@@ -228,4 +228,26 @@ class RoadmapEngineTest {
         assertEquals(TaskStatus.SKIPPED, updatedTask.status)
         assertTrue(RoadmapManager.completedTaskIds.value.contains(targetTask.id))
     }
+
+    @Test
+    fun testHardResetAllTaskCompletionStates() {
+        val dailyTask = RoadmapManager.dailyTasks.value.first()
+        val weeklyTask = RoadmapManager.weeklyTasks.value.first()
+
+        // Mark tasks completed / skipped
+        RoadmapManager.addKey(app, dailyTask.requiredKeyRarity, 2)
+        RoadmapManager.addKey(app, weeklyTask.requiredKeyRarity, 2)
+        assertTrue(RoadmapManager.useSkipKeyForTask(app, dailyTask.id))
+        assertTrue(RoadmapManager.useSkipKeyForTask(app, weeklyTask.id))
+        assertFalse(RoadmapManager.completedTaskIds.value.isEmpty())
+
+        // Execute 5s Profile long-press hard reset
+        RoadmapManager.hardResetAllTaskCompletionStates(app)
+
+        assertTrue(RoadmapManager.completedTaskIds.value.isEmpty())
+        assertTrue(RoadmapManager.dailyTasks.value.all { it.status == TaskStatus.PENDING && it.currentCount == 0 })
+        assertTrue(RoadmapManager.weeklyTasks.value.all { it.status == TaskStatus.PENDING && it.currentCount == 0 })
+        assertTrue(RoadmapManager.monthlyTasks.value.all { it.status == TaskStatus.PENDING && it.currentCount == 0 })
+        assertTrue(RoadmapManager.yearlyTasks.value.all { it.status == TaskStatus.PENDING && it.currentCount == 0 })
+    }
 }

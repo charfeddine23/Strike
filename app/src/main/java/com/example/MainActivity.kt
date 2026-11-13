@@ -40,27 +40,27 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
-import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.FormatListNumbered
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,11 +72,12 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.flame.ActiveShieldType
 import com.example.data.flame.FlameManager
 import com.example.ui.components.DnaHeaderIcon
 import com.example.ui.components.DynamicStreakShieldHeaderButton
@@ -85,13 +86,11 @@ import com.example.ui.components.FullscreenPatternUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.SettingsDialog
-import com.example.ui.components.StreakShieldModalSheet
-import androidx.compose.material.icons.filled.Timeline
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
-import com.example.ui.screens.DataEntryScreen
 import com.example.ui.screens.DeviationsScreen
 import com.example.ui.screens.FlameScreen
+import com.example.ui.screens.InventoryScreen
 import com.example.ui.screens.RoadmapScreen
 import com.example.ui.screens.StrikeScreen
 import com.example.ui.theme.NeonAmber
@@ -107,7 +106,7 @@ import java.util.Locale
 
 enum class AppScreen {
     DASHBOARD,
-    DATA_ENTRY,
+    INVENTORY,
     STRIKE,
     COMPARISON,
     FLAME,
@@ -186,15 +185,18 @@ fun LiquidGlassApp(
 ) {
     var currentScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
     var showSettingsDialog by remember { mutableStateOf(false) }
-    var showShieldModal by remember { mutableStateOf(false) }
+    var showShieldDropdown by remember { mutableStateOf(false) }
     var showStartDateDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
     val isStreakShieldActive by viewModel.isStreakShieldActive.collectAsStateWithLifecycle()
     val activeShieldExpiresAt by viewModel.activeShieldExpiresAt.collectAsStateWithLifecycle()
+    val activeShieldType by viewModel.activeShieldType.collectAsStateWithLifecycle()
     val availableManualShields by viewModel.availableManualShields.collectAsStateWithLifecycle()
+    val available48hShields by viewModel.available48hShields.collectAsStateWithLifecycle()
     val available1DayShields by viewModel.available1DayShields.collectAsStateWithLifecycle()
+    val sevenDayAutoShieldCount by viewModel.sevenDayAutoShieldCount.collectAsStateWithLifecycle()
     var currentShieldRemainingMillis by remember { mutableLongStateOf(FlameManager.getActiveShieldRemainingMillis()) }
 
     LaunchedEffect(isStreakShieldActive, activeShieldExpiresAt) {
@@ -202,6 +204,13 @@ fun LiquidGlassApp(
             currentShieldRemainingMillis = FlameManager.getActiveShieldRemainingMillis()
             delay(1000L)
         }
+    }
+
+    val shieldActuallyActive = isStreakShieldActive && (activeShieldExpiresAt == null || currentShieldRemainingMillis > 0L)
+    val effectiveActiveShieldType = if (shieldActuallyActive) {
+        activeShieldType.takeIf { it != ActiveShieldType.NONE } ?: ActiveShieldType.SHIELD_72H
+    } else {
+        ActiveShieldType.NONE
     }
 
     // Listen to ViewModel events (including Swipe-to-delete with Undo)
@@ -273,9 +282,18 @@ fun LiquidGlassApp(
                     LiquidGlassTopBar(
                         currentScreen = currentScreen,
                         flameScore = flameScore,
-                        isStreakShieldActive = isStreakShieldActive,
-                        onOpenShieldModal = { showShieldModal = true },
+                        isStreakShieldActive = shieldActuallyActive,
+                        activeShieldType = effectiveActiveShieldType,
+                        shieldRemainingMillis = currentShieldRemainingMillis,
+                        available24hShields = available1DayShields,
+                        available48hShields = available48hShields,
+                        available72hShields = availableManualShields,
+                        sevenDayAutoShieldCount = sevenDayAutoShieldCount,
+                        showShieldDropdown = showShieldDropdown,
+                        onOpenShieldDropdown = { showShieldDropdown = true },
+                        onDismissShieldDropdown = { showShieldDropdown = false },
                         onOpenSettings = { currentScreen = AppScreen.PROFILE },
+                        onLongPressProfile5s = { viewModel.hardResetAllTaskCompletionStates() },
                         onOpenFlame = { currentScreen = AppScreen.FLAME },
                         onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
                         onLongPressFlame = { showStartDateDialog = true },
@@ -294,9 +312,6 @@ fun LiquidGlassApp(
                 LiquidGlassBottomBar(
                     currentScreen = currentScreen,
                     onScreenSelected = { screen ->
-                        if (screen == AppScreen.DATA_ENTRY && currentScreen != AppScreen.DATA_ENTRY) {
-                            viewModel.initFormForNew()
-                        }
                         currentScreen = screen
                     }
                 )
@@ -326,7 +341,6 @@ fun LiquidGlassApp(
                 when (screen) {
                     AppScreen.DASHBOARD -> DashboardScreen(
                         viewModel = viewModel,
-                        onNavigateToEntry = { currentScreen = AppScreen.DATA_ENTRY },
                         onNavigateToStrike = { id ->
                             viewModel.selectStrikeIndividual(id)
                             currentScreen = AppScreen.STRIKE
@@ -337,9 +351,9 @@ fun LiquidGlassApp(
                         }
                     )
 
-                    AppScreen.DATA_ENTRY -> DataEntryScreen(
+                    AppScreen.INVENTORY -> InventoryScreen(
                         viewModel = viewModel,
-                        onFinished = { currentScreen = AppScreen.DASHBOARD }
+                        isDarkTheme = isDarkTheme
                     )
 
                     AppScreen.STRIKE -> StrikeScreen(
@@ -396,22 +410,6 @@ fun LiquidGlassApp(
         )
     }
 
-    // Streak Shield Modal Sheet (Settings, Inventory, 1-Day shield, and Rules)
-    if (showShieldModal) {
-        StreakShieldModalSheet(
-            isShieldActive = isStreakShieldActive && (activeShieldExpiresAt == null || currentShieldRemainingMillis > 0L),
-            activeShieldExpiresAt = activeShieldExpiresAt,
-            remainingMillis = currentShieldRemainingMillis,
-            availableManualShields = availableManualShields,
-            available1DayShields = available1DayShields,
-            onActivateManualShield = { viewModel.activateManualShield() },
-            onActivate1DayShield = { viewModel.activate1DayShield() },
-            onGrant1DayShield = { viewModel.grant1DayShield() },
-            onToggleShieldActive = { active -> viewModel.setStreakShieldActive(active) },
-            onDismiss = { showShieldModal = false }
-        )
-    }
-
     // Streak Start Date Dialog (Launched by 2-second hold on the flame icon)
     if (showStartDateDialog) {
         com.example.ui.components.StreakStartDateDialog(
@@ -427,8 +425,17 @@ fun LiquidGlassTopBar(
     currentScreen: AppScreen,
     flameScore: Double,
     isStreakShieldActive: Boolean = false,
-    onOpenShieldModal: () -> Unit = {},
+    activeShieldType: ActiveShieldType = ActiveShieldType.NONE,
+    shieldRemainingMillis: Long = 0L,
+    available24hShields: Int = 0,
+    available48hShields: Int = 0,
+    available72hShields: Int = 0,
+    sevenDayAutoShieldCount: Int = 0,
+    showShieldDropdown: Boolean = false,
+    onOpenShieldDropdown: () -> Unit = {},
+    onDismissShieldDropdown: () -> Unit = {},
     onOpenSettings: () -> Unit,
+    onLongPressProfile5s: () -> Unit = {},
     onOpenFlame: () -> Unit,
     onOpenDeviations: () -> Unit,
     onLongPressFlame: () -> Unit = {},
@@ -436,7 +443,7 @@ fun LiquidGlassTopBar(
 ) {
     val title = when (currentScreen) {
         AppScreen.DASHBOARD -> stringResource(R.string.nav_dashboard)
-        AppScreen.DATA_ENTRY -> stringResource(R.string.nav_entry)
+        AppScreen.INVENTORY -> stringResource(R.string.nav_inventory)
         AppScreen.STRIKE -> stringResource(R.string.nav_strike)
         AppScreen.COMPARISON -> stringResource(R.string.nav_compare)
         AppScreen.FLAME -> stringResource(R.string.flame_system_title)
@@ -448,8 +455,6 @@ fun LiquidGlassTopBar(
     val cyanColor = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan
     val iconBg = if (isDarkTheme) Color(0xFF0F1E36) else Color(0x2000B4D8)
     val iconBorder = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan.copy(alpha = 0.5f)
-    val buttonBg = if (isDarkTheme) Color(0x221E293B) else Color(0xCCFFFFFF)
-    val buttonBorder = if (isDarkTheme) Color(0x4038BDF8) else Color(0x5000B4D8)
 
     val equippedAvatar by com.example.data.profile.ProfileManager.equippedAvatar.collectAsStateWithLifecycle()
     val equippedTitle by com.example.data.profile.ProfileManager.equippedTitle.collectAsStateWithLifecycle()
@@ -518,23 +523,160 @@ fun LiquidGlassTopBar(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Dynamic Streak Shield Element next to the flame with plus (+) action button
-            DynamicStreakShieldHeaderButton(
-                isShieldActive = isStreakShieldActive,
-                onClick = onOpenShieldModal,
-                isDarkTheme = isDarkTheme
-            )
+            // Dynamic Streak Shield Element + Strictly Read-Only Monitoring Dropdown
+            Box {
+                DynamicStreakShieldHeaderButton(
+                    isShieldActive = isStreakShieldActive,
+                    onClick = onOpenShieldDropdown,
+                    isDarkTheme = isDarkTheme
+                )
+
+                DropdownMenu(
+                    expanded = showShieldDropdown,
+                    onDismissRequest = onDismissShieldDropdown,
+                    offset = DpOffset(x = (-12).dp, y = 8.dp),
+                    modifier = Modifier
+                        .width(250.dp)
+                        .background(Color(0xF20B1221))
+                        .border(
+                            1.2.dp,
+                            if (isStreakShieldActive) NeonEmerald.copy(alpha = 0.7f) else NeonAmber.copy(alpha = 0.6f),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .testTag("top_bar_shield_readonly_dropdown")
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Active Shield & Remaining Countdown (Strictly Read-Only)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Shield,
+                                    contentDescription = null,
+                                    tint = if (isStreakShieldActive) NeonEmerald else NeonAmber,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isStreakShieldActive) activeShieldType.labelAr else "لا يوجد درع نشط",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (isStreakShieldActive) NeonEmerald else NeonAmber
+                                )
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0x201E293B))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Timer,
+                                    contentDescription = null,
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = "الوقت المتبقي",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF94A3B8)
+                                )
+                            }
+                            Text(
+                                text = if (isStreakShieldActive && shieldRemainingMillis > 0L) {
+                                    FlameManager.formatRemaining(shieldRemainingMillis)
+                                } else {
+                                    "0s"
+                                },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black,
+                                color = if (isStreakShieldActive) NeonCyan else Color(0xFF64748B)
+                            )
+                        }
+
+                        HorizontalDivider(color = Color(0x2A38BDF8))
+
+                        // Read-only Available Inventory Counts for Each Shield Type
+                        ShieldReadOnlyCountRow(
+                            label = "درع الـ 24 ساعة",
+                            valueText = "$available24hShields",
+                            accent = NeonCyan
+                        )
+                        ShieldReadOnlyCountRow(
+                            label = "درع الـ 48 ساعة",
+                            valueText = "$available48hShields",
+                            accent = NeonEmerald
+                        )
+                        ShieldReadOnlyCountRow(
+                            label = "درع الـ 72 ساعة",
+                            valueText = "$available72hShields",
+                            accent = NeonAmber
+                        )
+                        ShieldReadOnlyCountRow(
+                            label = "درع الـ 7 أيام (تلقائي)",
+                            valueText = if (isStreakShieldActive && activeShieldType == ActiveShieldType.SHIELD_7D_AUTO) {
+                                "نشط (1)"
+                            } else {
+                                "$sevenDayAutoShieldCount"
+                            },
+                            accent = Color(0xFFFFD700)
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Dynamic Circular Profile Avatar Icon (Replaces legacy settings icon)
+            // Dynamic Circular Profile Avatar Icon (Short tap -> Profile, 5s hold -> Hard Task Reset)
             com.example.ui.components.ProfileAvatarHeaderIcon(
                 avatar = equippedAvatar,
                 title = equippedTitle,
-                onClick = onOpenSettings, // Triggers Profile Navigation
+                onClick = onOpenSettings,
+                onLongClick5s = onLongPressProfile5s,
                 size = 38.dp
             )
         }
+    }
+}
+
+@Composable
+private fun ShieldReadOnlyCountRow(
+    label: String,
+    valueText: String,
+    accent: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = Color(0xFFE2E8F0),
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = valueText,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = accent
+        )
     }
 }
 
@@ -569,12 +711,12 @@ fun LiquidGlassBottomBar(
             )
 
             BottomNavItem(
-                icon = Icons.Default.AddCircle,
-                label = stringResource(R.string.nav_entry),
-                isSelected = currentScreen == AppScreen.DATA_ENTRY,
+                icon = Icons.Default.Inventory2,
+                label = stringResource(R.string.nav_inventory),
+                isSelected = currentScreen == AppScreen.INVENTORY,
                 activeColor = NeonEmerald,
-                testTag = "nav_tab_entry",
-                onClick = { onScreenSelected(AppScreen.DATA_ENTRY) }
+                testTag = "nav_tab_inventory",
+                onClick = { onScreenSelected(AppScreen.INVENTORY) }
             )
 
             BottomNavItem(

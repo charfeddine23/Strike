@@ -2,6 +2,7 @@
     <string name="app_name">سترايك بالس</string>
     <string name="nav_dashboard">السجلات</string>
     <string name="nav_entry">إدخال البيانات</string>
+    <string name="nav_inventory">المخزون</string>
     <string name="nav_strike">الضربات</string>
     <string name="nav_compare">المقارنة</string>
     <string name="full_name">الاسم واللقب</string>

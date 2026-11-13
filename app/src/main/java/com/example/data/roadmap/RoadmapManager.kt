@@ -236,6 +236,44 @@ object RoadmapManager {
     }
 
     /**
+     * Hard reset / wipe of all task completion states across Daily, Weekly, Monthly, and Everlasting pools.
+     * Triggered by 5-second long-press on the Profile icon in the top bar.
+     */
+    @Synchronized
+    fun hardResetAllTaskCompletionStates(context: Context) {
+        init(context)
+        _completedTaskIds.value = emptySet()
+
+        val today = TaskPools.todayDateString()
+        val currentWeek = TaskPools.currentWeekString()
+        val currentMonth = TaskPools.currentMonthString()
+
+        val freshDaily = TaskPools.getRotatedDailyTasks(emptySet(), today)
+        val freshWeekly = TaskPools.getRotatedWeeklyTasks(emptySet(), currentWeek)
+        val freshMonthly = TaskPools.getRotatedMonthlyTasks(emptySet(), currentMonth)
+        val freshEverlasting = TaskPools.getEverlastingTasks(emptySet())
+
+        _dailyTasks.value = freshDaily
+        _weeklyTasks.value = freshWeekly
+        _monthlyTasks.value = freshMonthly
+        _yearlyTasks.value = freshEverlasting
+
+        getPrefs(context).edit()
+            .remove(KEY_COMPLETED_TASK_IDS)
+            .remove(KEY_DAILY_TASKS_JSON)
+            .remove(KEY_WEEKLY_TASKS_JSON)
+            .remove(KEY_MONTHLY_TASKS_JSON)
+            .putString(KEY_LAST_DAILY_DATE, today)
+            .putString(KEY_LAST_WEEKLY_CODE, currentWeek)
+            .putString(KEY_LAST_MONTHLY_CODE, currentMonth)
+            .apply()
+
+        saveTasks(context, KEY_DAILY_TASKS_JSON, freshDaily)
+        saveTasks(context, KEY_WEEKLY_TASKS_JSON, freshWeekly)
+        saveTasks(context, KEY_MONTHLY_TASKS_JSON, freshMonthly)
+    }
+
+    /**
      * Calculates the highest unlocked station (1 to 500) based on Total XP.
      * Follows the Exponential Curve: Station 1 = 50 XP, Station 500 = 434,725 XP.
      */
@@ -337,8 +375,8 @@ object RoadmapManager {
                 FlameManager.activate1DayShield(context)
             }
             RewardType.SHIELD_48H -> {
-                FlameManager.grant1DayShield(context, reward.quantity * 2)
-                FlameManager.activate1DayShield(context)
+                FlameManager.grant48hShield(context, reward.quantity)
+                FlameManager.activate48hShield(context)
             }
             RewardType.SHIELD_72H -> {
                 FlameManager.grantManualShield(context, days = 3)

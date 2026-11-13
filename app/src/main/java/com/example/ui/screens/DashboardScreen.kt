@@ -101,7 +101,6 @@ import com.example.ui.viewmodel.SortOrder
 @Composable
 fun DashboardScreen(
     viewModel: IndividualViewModel,
-    onNavigateToEntry: () -> Unit,
     onNavigateToStrike: (Long) -> Unit,
     onNavigateToCompare: (Long) -> Unit,
     modifier: Modifier = Modifier
@@ -118,6 +117,7 @@ fun DashboardScreen(
 
     var individualToDelete by remember { mutableStateOf<Individual?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var showDataEntryDialog by remember { mutableStateOf(false) }
 
     // Summary calculations
     val totalCount = allList.size
@@ -632,7 +632,7 @@ fun DashboardScreen(
                         onCompare = { onNavigateToCompare(item.id) },
                         onEdit = {
                             viewModel.initFormForEdit(item)
-                            onNavigateToEntry()
+                            showDataEntryDialog = true
                         },
                         onDelete = { individualToDelete = item }
                     )
@@ -648,7 +648,7 @@ fun DashboardScreen(
         FloatingActionButton(
             onClick = {
                 viewModel.initFormForNew()
-                onNavigateToEntry()
+                showDataEntryDialog = true
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -664,6 +664,15 @@ fun DashboardScreen(
                 modifier = Modifier.size(28.dp)
             )
         }
+    }
+
+    // Integrated Data Entry Modal Dialog (+ button & Edit action)
+    if (showDataEntryDialog) {
+        com.example.ui.components.DataEntryDialog(
+            viewModel = viewModel,
+            onDismiss = { showDataEntryDialog = false },
+            isDarkTheme = isDarkTheme
+        )
     }
 
     // Delete confirmation dialog

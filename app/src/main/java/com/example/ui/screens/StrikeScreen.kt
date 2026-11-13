@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Leaderboard
-import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Swipe
 import androidx.compose.material.icons.filled.TrendingUp
@@ -53,7 +52,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -429,63 +427,10 @@ fun StrikeScreen(
                                 fontWeight = FontWeight.Medium
                             )
                         }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // Quick Increment Bar (+1, +5, +10, Reset)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            listOf(1, 5, 10).forEach { delta ->
-                                Box(
-                                    modifier = Modifier
-                                        .padding(horizontal = 6.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(Color(0x221E293B))
-                                        .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                                        .clickable {
-                                            triggerHapticFeedback()
-                                            viewModel.triggerStrike(delta)
-                                        }
-                                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                                        .testTag("quick_strike_$delta")
-                                ) {
-                                    Text(
-                                        text = "+$delta",
-                                        fontWeight = FontWeight.ExtraBold,
-                                        fontSize = 15.sp,
-                                        color = NeonCyan
-                                    )
-                                }
-                            }
-
-                            // Reset button
-                            Box(
-                                modifier = Modifier
-                                    .padding(horizontal = 6.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(Color(0x221E293B))
-                                    .border(1.dp, NeonRose.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-                                    .clickable {
-                                        currentTarget?.let { viewModel.resetStrikes(it.id) }
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 10.dp)
-                                    .testTag("reset_strikes_btn")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.RestartAlt,
-                                    contentDescription = "Reset",
-                                    tint = NeonRose,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
                     }
                 }
 
-                // Recent Auto-Logged Strikes Activity Feed (Last 5)
+                // Recent Auto-Logged Strikes Activity Feed (Infinite Scrollable Log)
                 item {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
@@ -524,31 +469,29 @@ fun StrikeScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+                }
 
-                        if (allStrikeEvents.isEmpty()) {
-                            LiquidGlassCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(16.dp)
-                            ) {
-                                Text(
-                                    text = "اضغط على زر Strike لتسجيل أول ضربة تلقائياً بالتاريخ والوقت.",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 12.sp
-                                )
-                            }
-                        } else {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                allStrikeEvents.take(5).forEach { event ->
-                                    key(event.id) {
-                                        SwipeableStrikeLogItem(
-                                            event = event,
-                                            onDelete = { viewModel.deleteStrikeEvent(it) }
-                                        )
-                                    }
-                                }
-                            }
+                if (allStrikeEvents.isEmpty()) {
+                    item {
+                        LiquidGlassCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text(
+                                text = "اضغط على زر Strike لتسجيل أول ضربة تلقائياً بالتاريخ والوقت.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp
+                            )
                         }
+                    }
+                } else {
+                    items(allStrikeEvents, key = { "recent_${it.id}" }) { event ->
+                        SwipeableStrikeLogItem(
+                            event = event,
+                            onDelete = { viewModel.deleteStrikeEvent(it) }
+                        )
                     }
                 }
 

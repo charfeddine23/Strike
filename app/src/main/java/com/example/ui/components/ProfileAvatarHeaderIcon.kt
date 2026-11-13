@@ -4,6 +4,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -11,6 +12,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -31,20 +33,31 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.data.profile.AvatarItem
 import com.example.data.profile.TitleItem
 import com.example.data.profile.TitleRarity
+import com.example.ui.theme.NeonRose
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -52,6 +65,7 @@ import kotlin.math.sin
  * Dynamic Circular Profile Avatar Icon with fluid cyberpunk neon border/halo.
  * Intensity, brightness, and visual complexity dynamically scale up based on the
  * rarity tier of the user's currently equipped title (Common -> Uncommon -> Rare -> Legendary / Ultimate / Milestone Peak).
+ * Supports optional 5-second (5000ms) long-press for hard resetting all task completion states.
  */
 @Composable
 fun ProfileAvatarHeaderIcon(
@@ -59,9 +73,23 @@ fun ProfileAvatarHeaderIcon(
     title: TitleItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: Dp = 40.dp
+    size: Dp = 40.dp,
+    onLongClick5s: (() -> Unit)? = null
 ) {
     val rarity = title.rarity
+    val haptic = LocalHapticFeedback.current
+    val coroutineScope = rememberCoroutineScope()
+    var isHolding by remember { mutableStateOf(false) }
+
+    val holdProgress by animateFloatAsState(
+        targetValue = if (isHolding) 1f else 0f,
+        animationSpec = if (isHolding) {
+            tween(durationMillis = 5000, easing = LinearEasing)
+        } else {
+            tween(durationMillis = 150)
+        },
+        label = "profile_hold_5s_progress"
+    )
 
     // Infinite transition for fluid rotating neon halo
     val infiniteTransition = rememberInfiniteTransition(label = "halo_transition")
@@ -102,10 +130,35 @@ fun ProfileAvatarHeaderIcon(
     val haloColor2 = rarity.secondaryColor
     val glowColor = rarity.glowColor
 
+    val gestureModifier = if (onLongClick5s != null) {
+        Modifier.pointerInput(onLongClick5s, onClick) {
+            detectTapGestures(
+                onPress = {
+                    isHolding = true
+                    var triggered = false
+                    val job = coroutineScope.launch {
+                        delay(5000L)
+                        triggered = true
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onLongClick5s.invoke()
+                    }
+                    val released = tryAwaitRelease()
+                    isHolding = false
+                    job.cancel()
+                    if (released && !triggered) {
+                        onClick()
+                    }
+                }
+            )
+        }
+    } else {
+        Modifier.clickable(onClick = onClick)
+    }
+
     Box(
         modifier = modifier
             .size(size)
-            .clickable(onClick = onClick)
+            .then(gestureModifier)
             .testTag("profile_avatar_header_btn"),
         contentAlignment = Alignment.Center
     ) {
@@ -152,6 +205,17 @@ fun ProfileAvatarHeaderIcon(
                     center = androidx.compose.ui.geometry.Offset(oppX, oppY)
                 )
             }
+
+            // 5-second hard task reset hold progress ring
+            if (holdProgress > 0.01f) {
+                drawArc(
+                    color = NeonRose,
+                    startAngle = -90f,
+                    sweepAngle = holdProgress * 360f,
+                    useCenter = false,
+                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
         }
 
         // Inner Avatar Container
@@ -160,14 +224,14 @@ fun ProfileAvatarHeaderIcon(
                 .size(size - 6.dp)
                 .clip(CircleShape)
                 .background(Color(0xFF0F172A))
-                .border(1.dp, haloColor1.copy(alpha = 0.7f), CircleShape),
+                .border(1.dp, if (isHolding) NeonRose else haloColor1.copy(alpha = 0.7f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             val icon = getAvatarVector(avatar.badgeIconName)
             Icon(
                 imageVector = icon,
                 contentDescription = avatar.nameAr,
-                tint = haloColor1,
+                tint = if (isHolding) NeonRose else haloColor1,
                 modifier = Modifier
                     .size(size * 0.52f)
                     .scale(pulseScale)
