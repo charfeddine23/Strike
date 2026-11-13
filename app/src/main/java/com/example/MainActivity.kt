@@ -18,8 +18,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -265,33 +265,43 @@ fun LiquidGlassApp(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
+                val triggerThresholdPx = 42.dp.toPx()
+                val bailoutThresholdPx = 28.dp.toPx()
                 awaitPointerEventScope {
                     while (true) {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        var startX = down.position.x
-                        var startY = down.position.y
-                        var totalDragX = 0f
-                        var isEdge = startX < 180f // within ~60dp of left screen edge
+                        val down = awaitFirstDown(
+                            requireUnconsumed = false,
+                            pass = PointerEventPass.Initial
+                        )
+                        val pointerId = down.id
+                        val startX = down.position.x
+                        val startY = down.position.y
+                        val isInLeftHalf = startX <= size.width * 0.5f
 
-                        if (isEdge) {
-                            var dragOccurred = false
-                            do {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull() ?: break
-                                if (change.pressed) {
-                                    val dx = change.position.x - startX
-                                    val dy = change.position.y - startY
-                                    totalDragX = dx
+                        if (isInLeftHalf && !showSettingsDialog) {
+                            while (true) {
+                                val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                                if (!change.pressed) break
 
-                                    // Check if user swiped right from left edge by at least 40px with mostly horizontal motion
-                                    if (totalDragX > 40f && kotlin.math.abs(totalDragX) > kotlin.math.abs(dy) * 0.8f) {
-                                        showSettingsDialog = true
-                                        change.consume()
-                                        dragOccurred = true
-                                        break
-                                    }
+                                val dx = change.position.x - startX
+                                val dy = change.position.y - startY
+
+                                // Abort early if vertical scrolling or swiping left
+                                if (dx < -bailoutThresholdPx) break
+                                if (kotlin.math.abs(dy) > bailoutThresholdPx &&
+                                    kotlin.math.abs(dy) > kotlin.math.abs(dx)
+                                ) {
+                                    break
                                 }
-                            } while (event.changes.any { it.pressed })
+
+                                // Trigger Settings when swiping left-to-right across left half of screen
+                                if (dx >= triggerThresholdPx && dx > kotlin.math.abs(dy) * 1.2f) {
+                                    showSettingsDialog = true
+                                    change.consume()
+                                    break
+                                }
+                            }
                         }
                     }
                 }
@@ -410,17 +420,6 @@ fun LiquidGlassApp(
             }
         }
     }
-
-        // Cyberpunk Edge Drawer Handle on the left edge (Tap or swipe to open settings)
-        Box(
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .size(width = 12.dp, height = 70.dp)
-                .clip(RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
-                .background(NeonCyan.copy(alpha = 0.35f))
-                .border(1.dp, NeonCyan.copy(alpha = 0.8f), RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
-                .clickable { showSettingsDialog = true }
-        )
     }
 
     // Settings Dialog
