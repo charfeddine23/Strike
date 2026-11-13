@@ -347,4 +347,79 @@ class RoadmapEngineTest {
             }
         }
     }
+
+    @Test
+    fun testTotalGameResetLiterallyReturnsEverythingToZero() {
+        // 1. Accumulate progress across Roadmap, Flame, and Profile
+        RoadmapManager.addXp(app, 5000)
+        assertNotNull(RoadmapManager.claimStationReward(app, 1))
+        val dailyTask = RoadmapManager.dailyTasks.value.first()
+        assertTrue(RoadmapManager.completeTask(app, dailyTask.id))
+
+        FlameManager.setScore(app, 12500.0)
+        FlameManager.grant1DayShield(app, 3)
+        FlameManager.grant48hShield(app, 2)
+        FlameManager.grantManualShield(app, days = 3)
+        FlameManager.activate1DayShield(app)
+
+        ProfileManager.grantSkipKeys(app, SkipKeyType.WOODEN, 5)
+        ProfileManager.grantSkipKeys(app, SkipKeyType.BRONZE, 4)
+        ProfileManager.grantSkipKeys(app, SkipKeyType.SILVER, 3)
+        ProfileManager.grantPotion(app, com.example.data.profile.PotionType.PULSE_ELIXIR, 2)
+        ProfileManager.grantPotion(app, com.example.data.profile.PotionType.SHADOW_GRIP_SERUM, 1)
+        ProfileManager.usePulseElixir(app)
+        ProfileManager.unlockAvatar(app, "av_gabriel_wings")
+        ProfileManager.unlockTitle(app, 21)
+
+        // Sanity check that state is non-zero before reset
+        assertTrue(RoadmapManager.totalXp.value > 0L)
+        assertTrue(RoadmapManager.calculateUnlockedStationId(RoadmapManager.totalXp.value) > 0)
+        assertFalse(RoadmapManager.claimedStations.value.isEmpty())
+        assertFalse(RoadmapManager.completedTaskIds.value.isEmpty())
+        assertTrue(FlameManager.flameScore.value > 0.0)
+        assertTrue(FlameManager.isStreakShieldActive.value)
+
+        // 2. Trigger Total Game Reset to Zero
+        RoadmapManager.resetAllLevelsToZero(app)
+        FlameManager.resetAllLevelsToZero(app)
+        ProfileManager.resetAllProgressToZero(app)
+
+        // 3. Assert literally EVERYTHING returned to zero / initial base
+        assertEquals(0L, RoadmapManager.totalXp.value)
+        assertEquals(0, RoadmapManager.calculateUnlockedStationId(RoadmapManager.totalXp.value))
+        assertTrue(RoadmapManager.claimedStations.value.isEmpty())
+        assertTrue(RoadmapManager.completedTaskIds.value.isEmpty())
+        assertTrue(RoadmapManager.dailyTasks.value.all { it.status == TaskStatus.PENDING && it.currentCount == 0 })
+        assertTrue(RoadmapManager.weeklyTasks.value.all { it.status == TaskStatus.PENDING && it.currentCount == 0 })
+        assertTrue(RoadmapManager.monthlyTasks.value.all { it.status == TaskStatus.PENDING && it.currentCount == 0 })
+        assertTrue(RoadmapManager.yearlyTasks.value.all { it.status == TaskStatus.PENDING && it.currentCount == 0 })
+        assertEquals(0, RoadmapManager.shields24h.value)
+        assertEquals(0, RoadmapManager.shields48h.value)
+        assertEquals(0, RoadmapManager.shields72h.value)
+
+        assertEquals(0.0, FlameManager.flameScore.value, 0.001)
+        assertEquals(0.0, FlameManager.peakScore.value, 0.001)
+        assertEquals(0.0, FlameManager.totalPointsGained.value, 0.001)
+        assertEquals(0.0, FlameManager.totalPointsExtinguished.value, 0.001)
+        assertTrue(FlameManager.flameLogs.value.isEmpty())
+        assertFalse(FlameManager.isStreakShieldActive.value)
+        assertEquals(0, FlameManager.available1DayShields.value)
+        assertEquals(0, FlameManager.available48hShields.value)
+        assertEquals(0, FlameManager.availableManualShields.value)
+        assertEquals(0, FlameManager.sevenDayAutoShieldCount.value)
+
+        assertEquals(0, ProfileManager.woodenKeysCount.value)
+        assertEquals(0, ProfileManager.bronzeKeysCount.value)
+        assertEquals(0, ProfileManager.silverKeysCount.value)
+        assertEquals(0, ProfileManager.pulseElixirCount.value)
+        assertEquals(0, ProfileManager.shadowSerumCount.value)
+        assertEquals(0, ProfileManager.gabrielDropletCount.value)
+        assertEquals(0, ProfileManager.cryoInfusionCount.value)
+        assertEquals(0, ProfileManager.eternalRebirthCount.value)
+        assertEquals(0, ProfileManager.pulseElixirUsesLeft.value)
+        assertFalse(ProfileManager.hasCryoBuffArmed.value)
+        assertFalse(ProfileManager.hasRebirthImmunity.value)
+        assertEquals(setOf("av_core_node"), ProfileManager.unlockedAvatarIds.value)
+        assertEquals(setOf(1), ProfileManager.unlockedTitleIds.value)
+    }
 }

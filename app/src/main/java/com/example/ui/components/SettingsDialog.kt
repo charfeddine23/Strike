@@ -114,6 +114,7 @@ fun SettingsDialog(
     var showPatternSetupDialog by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
+    var showResetAllLevelsConfirmDialog by remember { mutableStateOf(false) }
     val isDarkTheme = isSystemInDarkTheme()
 
     val permissionsToRequest = remember {
@@ -1177,31 +1178,48 @@ fun SettingsDialog(
                     }
                 }
 
-                // 6. Sample Data & Reset
-                OutlinedButton(
-                    onClick = {
-                        viewModel.reloadSampleData()
-                        onDismiss()
-                    },
+                // 6. Total Game Levels Reset (تصفير كل المستويات إلى الصفر)
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(sensitiveRed.copy(alpha = if (isDarkTheme) 0.12f else 0.06f))
+                        .border(1.dp, sensitiveRed.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        tint = activeCyan,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = stringResource(R.string.seed_sample_data),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = descColor
+                        text = stringResource(R.string.reset_all_levels_desc),
+                        fontSize = 11.sp,
+                        color = descColor,
+                        lineHeight = 15.sp
                     )
+                    Button(
+                        onClick = { showResetAllLevelsConfirmDialog = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .testTag("reset_all_levels_btn"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = sensitiveRed,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.reset_all_levels_btn),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
 
                 // About Info Footer
@@ -1305,6 +1323,61 @@ fun SettingsDialog(
                             color = sensitiveRed
                         )
                     }
+                }
+            }
+        )
+    }
+
+    // Modal Dialog to Confirm Total Reset of All Game Levels to Zero
+    if (showResetAllLevelsConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetAllLevelsConfirmDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        tint = sensitiveRed
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.reset_all_levels_confirm_title),
+                        fontWeight = FontWeight.Bold,
+                        color = titleColor
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.reset_all_levels_confirm_msg),
+                    fontSize = 13.sp,
+                    color = descColor
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showResetAllLevelsConfirmDialog = false
+                        viewModel.resetAllGameLevelsToZero()
+                        onDismiss()
+                    },
+                    modifier = Modifier.testTag("confirm_reset_all_levels_btn"),
+                    colors = ButtonDefaults.buttonColors(containerColor = sensitiveRed)
+                ) {
+                    Text(
+                        text = stringResource(R.string.reset_all_levels_confirm_action),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showResetAllLevelsConfirmDialog = false },
+                    modifier = Modifier.testTag("cancel_reset_all_levels_btn")
+                ) {
+                    Text(stringResource(R.string.cancel), color = descColor)
                 }
             }
         )

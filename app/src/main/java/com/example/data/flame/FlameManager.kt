@@ -263,6 +263,46 @@ object FlameManager {
             .apply()
     }
 
+    /**
+     * Literally resets all Flame scores, shields, stats, dates, and history logs back to 0.
+     */
+    @Synchronized
+    fun resetAllLevelsToZero(context: Context) {
+        init(context)
+        val today = todayString()
+        _flameScore.value = 0.0
+        _peakScore.value = 0.0
+        _totalPointsGained.value = 0.0
+        _totalPointsExtinguished.value = 0.0
+        _flameLogs.value = emptyList()
+        _isStreakShieldActive.value = false
+        _activeShieldExpiresAt.value = null
+        _activeShieldType.value = ActiveShieldType.NONE
+        _availableManualShields.value = 0
+        _available48hShields.value = 0
+        _available1DayShields.value = 0
+        _sevenDayAutoShieldCount.value = 0
+
+        getPrefs(context).edit()
+            .putFloat(KEY_SCORE, 0.0f)
+            .putFloat(KEY_PEAK_SCORE, 0.0f)
+            .putFloat(KEY_TOTAL_POINTS_GAINED, 0.0f)
+            .putFloat(KEY_TOTAL_POINTS_EXTINGUISHED, 0.0f)
+            .remove(KEY_FLAME_LOGS)
+            .putBoolean(KEY_STREAK_SHIELD, false)
+            .remove(KEY_ACTIVE_SHIELD_EXPIRES_AT)
+            .remove(KEY_ACTIVE_SHIELD_TYPE)
+            .putInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
+            .putInt(KEY_AVAILABLE_48H_SHIELDS, 0)
+            .putInt(KEY_AVAILABLE_1DAY_SHIELDS, 0)
+            .putInt(KEY_SEVEN_DAY_AUTO_TRIGGERS, 0)
+            .putBoolean("has_reset_shields_to_zero_v2", true)
+            .remove(KEY_START_COUNT_DATE)
+            .remove(KEY_LAST_STRIKE_DATE)
+            .putString(KEY_LAST_INACTIVITY_DATE, today)
+            .apply()
+    }
+
     fun getScore(context: Context): Double {
         init(context)
         return _flameScore.value

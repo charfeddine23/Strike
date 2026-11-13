@@ -286,6 +286,11 @@ class IndividualRepository(
         return Pair(individuals.size, strikeEvents.size)
     }
 
+    suspend fun resetAllStrikesToZero() {
+        strikeEventDao.clearAll()
+        dao.resetAllStrikeCounts()
+    }
+
     suspend fun getIndividualsWithPhone(): List<Individual> = dao.getIndividualsWithPhone()
 
     private fun createSample(

@@ -246,6 +246,55 @@ object RoadmapManager {
     }
 
     /**
+     * Literally resets all Roadmap levels, XP (back to 0 XP / Station 0), claimed stations,
+     * completed tasks, and shield inventory counts back to zero.
+     */
+    @Synchronized
+    fun resetAllLevelsToZero(context: Context) {
+        init(context)
+        _totalXp.value = 0L
+        _claimedStations.value = emptySet()
+        _completedTaskIds.value = emptySet()
+        _shields24h.value = 0
+        _shields48h.value = 0
+        _shields72h.value = 0
+
+        val today = TaskPools.todayDateString()
+        val currentWeek = TaskPools.currentWeekString()
+        val currentMonth = TaskPools.currentMonthString()
+
+        val freshDaily = TaskPools.getRotatedDailyTasks(emptySet(), today)
+        val freshWeekly = TaskPools.getRotatedWeeklyTasks(emptySet(), currentWeek)
+        val freshMonthly = TaskPools.getRotatedMonthlyTasks(emptySet(), currentMonth)
+        val freshEverlasting = TaskPools.getEverlastingTasks(emptySet())
+
+        _dailyTasks.value = freshDaily
+        _weeklyTasks.value = freshWeekly
+        _monthlyTasks.value = freshMonthly
+        _yearlyTasks.value = freshEverlasting
+
+        getPrefs(context).edit()
+            .putLong(KEY_TOTAL_XP, 0L)
+            .remove(KEY_CLAIMED_STATIONS)
+            .remove(KEY_COMPLETED_TASK_IDS)
+            .remove(KEY_DAILY_TASKS_JSON)
+            .remove(KEY_WEEKLY_TASKS_JSON)
+            .remove(KEY_MONTHLY_TASKS_JSON)
+            .putString(KEY_LAST_DAILY_DATE, today)
+            .putString(KEY_LAST_WEEKLY_CODE, currentWeek)
+            .putString(KEY_LAST_MONTHLY_CODE, currentMonth)
+            .putInt(KEY_SHIELDS_24H, 0)
+            .putInt(KEY_SHIELDS_48H, 0)
+            .putInt(KEY_SHIELDS_72H, 0)
+            .putBoolean("has_reset_inventory_to_zero_v3", true)
+            .apply()
+
+        saveTasks(context, KEY_DAILY_TASKS_JSON, freshDaily)
+        saveTasks(context, KEY_WEEKLY_TASKS_JSON, freshWeekly)
+        saveTasks(context, KEY_MONTHLY_TASKS_JSON, freshMonthly)
+    }
+
+    /**
      * Calculates the highest unlocked station (1 to 500) based on Total XP.
      * Follows the Exponential Curve: Station 1 = 50 XP, Station 500 = 434,725 XP.
      */

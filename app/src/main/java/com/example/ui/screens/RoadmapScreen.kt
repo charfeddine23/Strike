@@ -265,7 +265,7 @@ fun RoadmapScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    val prevStationXp = TaskPools.getRequiredXpForStation(currentStationId)
+                    val prevStationXp = if (currentStationId <= 0) 0L else TaskPools.getRequiredXpForStation(currentStationId)
                     val nextStationXp = TaskPools.getRequiredXpForStation((currentStationId + 1).coerceAtMost(500))
                     val xpInLevel = (totalXp - prevStationXp).coerceAtLeast(0L)
                     val levelRange = (nextStationXp - prevStationXp).coerceAtLeast(1L)

@@ -59,4 +59,7 @@ interface IndividualDao {
 
     @Query("DELETE FROM individuals")
     suspend fun clearAll()
+
+    @Query("UPDATE individuals SET strikeCount = 0, updatedAt = :timestamp")
+    suspend fun resetAllStrikeCounts(timestamp: Long = System.currentTimeMillis())
 }

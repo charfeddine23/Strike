@@ -464,6 +464,58 @@ object ProfileManager {
             .apply()
     }
 
+    /**
+     * Literally resets all unlocked avatars, titles, potions, active potion effects, and skip-keys back to base zero state.
+     */
+    @Synchronized
+    fun resetAllProgressToZero(context: Context) {
+        init(context)
+        val defaultAvatar = ProfileMasterInventory.MASTER_AVATARS.first()
+        val defaultTitle = ProfileMasterInventory.MASTER_TITLES.first()
+
+        _unlockedAvatarIds.value = setOf(defaultAvatar.id)
+        _unlockedTitleIds.value = setOf(defaultTitle.id)
+        _equippedAvatar.value = defaultAvatar
+        _equippedTitle.value = defaultTitle
+
+        _pulseElixirCount.value = 0
+        _shadowSerumCount.value = 0
+        _gabrielDropletCount.value = 0
+        _cryoInfusionCount.value = 0
+        _eternalRebirthCount.value = 0
+
+        _pulseElixirUsesLeft.value = 0
+        _shadowSerumExpiresAt.value = null
+        _gabrielDropletExpiresAt.value = null
+        _hasCryoBuffArmed.value = false
+        _hasRebirthImmunity.value = false
+
+        _woodenKeysCount.value = 0
+        _bronzeKeysCount.value = 0
+        _silverKeysCount.value = 0
+
+        getPrefs(context).edit()
+            .putStringSet(KEY_UNLOCKED_AVATARS, setOf(defaultAvatar.id))
+            .putStringSet(KEY_UNLOCKED_TITLES, setOf(defaultTitle.id.toString()))
+            .putString(KEY_EQUIPPED_AVATAR_ID, defaultAvatar.id)
+            .putInt(KEY_EQUIPPED_TITLE_ID, defaultTitle.id)
+            .putInt(KEY_POTION_PULSE_ELIXIR, 0)
+            .putInt(KEY_POTION_SHADOW_SERUM, 0)
+            .putInt(KEY_POTION_GABRIEL_DROPLET, 0)
+            .putInt(KEY_POTION_CRYO_INFUSION, 0)
+            .putInt(KEY_POTION_ETERNAL_REBIRTH, 0)
+            .putInt(KEY_PULSE_ELIXIR_USES_LEFT, 0)
+            .remove(KEY_SHADOW_SERUM_EXPIRES_AT)
+            .remove(KEY_GABRIEL_DROPLET_EXPIRES_AT)
+            .remove(KEY_CRYO_INFUSION_AUTO_EXPIRES_AT)
+            .putBoolean(KEY_HAS_CRYO_BUFF_ARMED, false)
+            .putBoolean(KEY_HAS_REBIRTH_ACTIVE, false)
+            .putInt(KEY_KEYS_WOODEN, 0)
+            .putInt(KEY_KEYS_BRONZE, 0)
+            .putInt(KEY_KEYS_SILVER, 0)
+            .apply()
+    }
+
     @Synchronized
     fun resetForTesting(context: Context) {
         isInitialized = false
