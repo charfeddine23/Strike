@@ -49,10 +49,10 @@
     <string name="empty_records_desc">Start by adding your first individual or load sample data to explore analytics.</string>
     <string name="seed_sample_data">Load Sample Data</string>
     <string name="reset_all_levels_btn">Reset All Levels to Zero</string>
-    <string name="reset_all_levels_desc">Literally returns XP, Stations (0/500), Tasks, Flame Score, Shields, Keys, Potions, Rewards &amp; Strikes to 0</string>
-    <string name="reset_all_levels_confirm_title">Reset Everything to Zero?</string>
-    <string name="reset_all_levels_confirm_msg">All levels, XP, 500 Roadmap stations, 1000 tasks, Flame score, shields, keys, potions, unlocked titles/avatars, and strike counters will literally return to 0. This cannot be undone.</string>
-    <string name="reset_all_levels_confirm_action">Reset Everything to 0</string>
+    <string name="reset_all_levels_desc">Resets XP, Stations (0/500), Tasks, Flame Score, Shields, Keys, Potions &amp; Rewards to 0 (keeps individuals &amp; strike logs)</string>
+    <string name="reset_all_levels_confirm_title">Reset All Levels to Zero?</string>
+    <string name="reset_all_levels_confirm_msg">All game levels, XP, 500 Roadmap stations, 1000 tasks, Flame score, shields, keys, potions, and unlocked titles/avatars will return to 0. Your individuals list and strike records will NOT be touched.</string>
+    <string name="reset_all_levels_confirm_action">Reset Levels to 0</string>
     <string name="record_saved">Record saved successfully!</string>
     <string name="record_deleted">Record deleted.</string>
     <string name="strike_added">Strike registered!</string>

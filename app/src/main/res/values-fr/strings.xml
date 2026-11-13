@@ -48,11 +48,11 @@
     <string name="empty_records_title">Aucun Enregistrement</string>
     <string name="empty_records_desc">Commencez par ajouter un individu ou chargez les données d\'exemple pour explorer les métriques.</string>
     <string name="seed_sample_data">Charger Données Modèles</string>
-    <string name="reset_all_levels_btn">Tout Réinitialiser à Zéro</string>
-    <string name="reset_all_levels_desc">Remet littéralement XP, Stations, Missions, Flamme, Boucliers, Clés, Potions et Strikes à 0</string>
-    <string name="reset_all_levels_confirm_title">Tout remettre à zéro ?</string>
-    <string name="reset_all_levels_confirm_msg">Tous les niveaux, XP, 500 stations, 1000 missions, score Flamme, boucliers, clés, potions, titres/avatars débloqués et compteurs de strikes reviendront littéralement à 0. Action irréversible.</string>
-    <string name="reset_all_levels_confirm_action">Oui, tout remettre à 0</string>
+    <string name="reset_all_levels_btn">Réinitialiser les Niveaux à Zéro</string>
+    <string name="reset_all_levels_desc">Remet XP, Stations, Missions, Flamme, Boucliers, Clés et Potions à 0 (conserve individus et strikes)</string>
+    <string name="reset_all_levels_confirm_title">Réinitialiser tous les niveaux ?</string>
+    <string name="reset_all_levels_confirm_msg">Tous les niveaux, XP, 500 stations, 1000 missions, score Flamme, boucliers, clés, potions et titres/avatars reviendront à 0. Vos individus et l\'historique des strikes restent intacts.</string>
+    <string name="reset_all_levels_confirm_action">Oui, remettre à 0</string>
     <string name="record_saved">Enregistrement réussi !</string>
     <string name="record_deleted">Enregistrement supprimé.</string>
     <string name="strike_added">Strike enregistré !</string>

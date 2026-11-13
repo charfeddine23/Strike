@@ -1141,12 +1141,12 @@ class IndividualViewModel(
     fun seedSampleData() = reloadSampleData()
 
     /**
-     * Literally resets all levels and progress in the game back to zero:
+     * Literally resets all game levels and progression back to zero WITHOUT touching individuals or strike records:
      * - XP -> 0 XP & Station -> 0 / 500
      * - Claimed Stations & Completed Tasks -> 0 / 1000
      * - Flame Score, Peak, Gained/Extinguished, Active/Stored Shields, & Flame Logs -> 0
      * - Skip-Keys, Potions, Active Effects, & Unlocked Titles/Avatars -> base 0 state
-     * - All Strike Events cleared & Individual Strike Counters -> 0
+     * - Individuals & Strike Event records remain 100% intact.
      */
     fun resetAllGameLevelsToZero() {
         val app = getApplication<android.app.Application>()
@@ -1154,11 +1154,10 @@ class IndividualViewModel(
             RoadmapManager.resetAllLevelsToZero(app)
             FlameManager.resetAllLevelsToZero(app)
             ProfileManager.resetAllProgressToZero(app)
-            repository.resetAllStrikesToZero()
             val msg = when (currentLanguage.value) {
-                "ar" -> "تم تصفير كل المستويات والنقاط والمخزون إلى الصفر بنجاح!"
-                "fr" -> "Tous les niveaux, scores et inventaires ont été remis à zéro !"
-                else -> "All game levels, scores, and inventory reset to zero!"
+                "ar" -> "تم تصفير كل المستويات والمخزون إلى الصفر (مع الحفاظ على الأفراد وسجلات السترايك)!"
+                "fr" -> "Tous les niveaux et inventaires remis à zéro (individus et strikes conservés) !"
+                else -> "All game levels & inventory reset to zero (individuals and strike logs preserved)!"
             }
             emitMessage(msg)
         }

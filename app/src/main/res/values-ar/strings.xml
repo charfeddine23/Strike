@@ -49,10 +49,10 @@
     <string name="empty_records_desc">ابدأ بإضافة أول فرد أو قم بتحميل بيانات تجريبية لاستكشاف التحليلات.</string>
     <string name="seed_sample_data">تحميل بيانات نموذجية</string>
     <string name="reset_all_levels_btn">تصفير كل المستويات إلى الصفر</string>
-    <string name="reset_all_levels_desc">إرجاع الخبرة، المحطات، المهام، الشعلة، الدروع، المفاتيح، الجرعات، الجوائز والسترايكات إلى 0 حرفياً</string>
-    <string name="reset_all_levels_confirm_title">تصفير كل شيء في اللعبة؟</string>
-    <string name="reset_all_levels_confirm_msg">سيتم تصفير وإرجاع كافة المستويات، نقاط XP، الـ 500 محطة، الـ 1000 مهمة، نقاط الشعلة، الدروع، المفاتيح، الجرعات، الألقاب والأفاتار المفتوحة، وعدادات السترايك إلى الصفر حرفياً ولا يمكن التراجع عن ذلك.</string>
-    <string name="reset_all_levels_confirm_action">نعم، صفّر الكل إلى 0</string>
+    <string name="reset_all_levels_desc">إرجاع الخبرة، المحطات، المهام، الشعلة، الدروع، المفاتيح، الجرعات والجوائز إلى 0 (دون المساس بالأفراد وسجلات السترايك)</string>
+    <string name="reset_all_levels_confirm_title">تصفير كل المستويات إلى الصفر؟</string>
+    <string name="reset_all_levels_confirm_msg">سيتم تصفير وإرجاع كافة المستويات، نقاط XP، الـ 500 محطة، الـ 1000 مهمة، نقاط الشعلة، الدروع، المفاتيح، الجرعات، والألقاب والأفاتار المفتوحة إلى الصفر حرفياً. تبقى قائمة الأفراد وسجلات السترايك محفوظة ولن تُمس نهائياً.</string>
+    <string name="reset_all_levels_confirm_action">نعم، صفّر المستويات إلى 0</string>
     <string name="record_saved">تم حفظ السجل بنجاح!</string>
     <string name="record_deleted">تم حذف السجل.</string>
     <string name="strike_added">تم تسجيل الضربة بنجاح!</string>
