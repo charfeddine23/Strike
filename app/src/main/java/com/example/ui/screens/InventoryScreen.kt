@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,6 +59,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -167,8 +169,9 @@ fun InventoryScreen(
     val isShadowActive = shadowSerumExp != null && System.currentTimeMillis() < (shadowSerumExp ?: 0L)
     val isGabrielActive = gabrielDropletExp != null && System.currentTimeMillis() < (gabrielDropletExp ?: 0L)
 
-    // 2-Second Long-Press Tooltip Sheet State
+    // 2-Second Long-Press Tooltip Sheet State & Guiding Hint Dialog State
     var selectedTooltip by remember { mutableStateOf<InventoryTooltipSpec?>(null) }
+    var showLongPressGuideDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Infinite luxury animation driver
@@ -247,33 +250,6 @@ fun InventoryScreen(
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // 2-Second Long Press Instruction Pill
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(NeonViolet.copy(alpha = 0.14f))
-                        .border(1.dp, NeonViolet.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 7.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.TouchApp,
-                        contentDescription = null,
-                        tint = NeonViolet,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "اضغط مطولاً لمدة ثانيتين (2s) على أي بطاقة لعرض الآلية والقواعد التفصيلية.",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
             }
         }
 
@@ -289,7 +265,29 @@ fun InventoryScreen(
                     "لا يوجد درع نشط حالياً"
                 },
                 accentColor = NeonEmerald,
-                icon = Icons.Default.Shield
+                icon = Icons.Default.Shield,
+                trailingContent = {
+                    IconButton(
+                        onClick = {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            showLongPressGuideDialog = true
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(NeonViolet.copy(alpha = 0.16f))
+                            .border(1.2.dp, NeonViolet.copy(alpha = 0.7f), CircleShape)
+                            .testTag("inventory_longpress_hint_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TouchApp,
+                            contentDescription = "دليل الاستخدام",
+                            tint = NeonViolet,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
             )
         }
 
@@ -701,6 +699,59 @@ fun InventoryScreen(
             }
         }
     }
+
+    // Guiding Tooltip Hint Dialog
+    if (showLongPressGuideDialog) {
+        AlertDialog(
+            onDismissRequest = { showLongPressGuideDialog = false },
+            containerColor = Color(0xF50F172A),
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(NeonViolet.copy(alpha = 0.18f))
+                        .border(1.2.dp, NeonViolet.copy(alpha = 0.7f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.TouchApp,
+                        contentDescription = null,
+                        tint = NeonViolet,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            },
+            title = {
+                Text(
+                    text = "دليل الاستخدام",
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    fontFamily = PlusJakartaSans
+                )
+            },
+            text = {
+                Text(
+                    text = "اضغط لمدة ثانيتين متواصلتين على اي عنصر لمعرفة التفاصيل",
+                    fontSize = 14.sp,
+                    color = Color(0xFFE2E8F0),
+                    lineHeight = 22.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showLongPressGuideDialog = false },
+                    modifier = Modifier.testTag("inventory_guide_ok_btn")
+                ) {
+                    Text(
+                        text = "حسناً",
+                        color = NeonCyan,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -708,43 +759,54 @@ private fun SectionHeaderLabel(
     title: String,
     subtitle: String,
     accentColor: Color,
-    icon: ImageVector
+    icon: ImageVector,
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Box(
-            modifier = Modifier
-                .size(30.dp)
-                .clip(RoundedCornerShape(9.dp))
-                .background(accentColor.copy(alpha = 0.18f))
-                .border(1.dp, accentColor.copy(alpha = 0.55f), RoundedCornerShape(9.dp)),
-            contentAlignment = Alignment.Center
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(16.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(accentColor.copy(alpha = 0.18f))
+                    .border(1.dp, accentColor.copy(alpha = 0.55f), RoundedCornerShape(9.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                Text(
+                    text = title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = PlusJakartaSans,
+                    color = accentColor
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-        Spacer(modifier = Modifier.width(10.dp))
-        Column {
-            Text(
-                text = title,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.ExtraBold,
-                fontFamily = PlusJakartaSans,
-                color = accentColor
-            )
-            Text(
-                text = subtitle,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        if (trailingContent != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            trailingContent()
         }
     }
 }

@@ -12,6 +12,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_SAVED_PATTERN = "saved_pattern"
         private const val KEY_APP_LANGUAGE = "app_language"
         private const val KEY_HAPTIC_ENABLED = "haptic_feedback_enabled"
+        private const val KEY_AUTO_UPDATE_ENABLED = "auto_update_enabled"
     }
 
     var isPatternLockEnabled: Boolean
@@ -29,6 +30,10 @@ class SecurityPreferences(context: Context) {
     var isHapticFeedbackEnabled: Boolean
         get() = prefs.getBoolean(KEY_HAPTIC_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_HAPTIC_ENABLED, value).apply()
+
+    var isAutoUpdateEnabled: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_UPDATE_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_UPDATE_ENABLED, value).apply()
 
     fun verifyPattern(pattern: String): Boolean {
         val stored = savedPattern ?: return false

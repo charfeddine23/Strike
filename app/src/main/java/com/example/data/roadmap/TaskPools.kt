@@ -1,5 +1,6 @@
 package com.example.data.roadmap
 
+import com.example.data.profile.SkipKeyType
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -71,12 +72,12 @@ object TaskPools {
                 iconName = "potion_rebirth",
                 quantity = 1
             )
-            // Extra Legendary Reward every 20 levels (20, 40, 60... 480) paired with titles/avatars
+            // Extra Elite Reward every 20 levels (20, 40, 60... 480) paired with titles/avatars
             stationId % 20 == 0 -> StationReward(
-                type = RewardType.KEY_LEGENDARY,
-                title = "مكافأة أسطورية محطة #$stationId (Legendary Apex)",
-                description = "جائزة المستوى العشرين: مفتاح أسطوري مزدوج وفتح ألقاب وأفاتار حصرية في الملف الشخصي",
-                iconName = "key_legendary",
+                type = RewardType.KEY_SILVER,
+                title = "مكافأة نخبوية محطة #$stationId (Silver Apex)",
+                description = "جائزة المستوى العشرين: مفتاح فضي مزدوج لتجاوز المهام وفتح ألقاب وأفاتار حصرية في الملف الشخصي",
+                iconName = "key_silver",
                 quantity = 2
             )
             else -> {
@@ -395,7 +396,7 @@ object TaskPools {
                 description = bp.description,
                 xpBounty = xp,
                 targetCount = bp.targetCount,
-                requiredKeyRarity = if (xp < 120) KeyRarity.COMMON else KeyRarity.NORMAL,
+                requiredSkipKey = if (xp < 150) SkipKeyType.WOODEN else SkipKeyType.BRONZE,
                 actionTag = bp.actionTag,
                 difficultyTier = bp.difficultyTier
             )
@@ -602,7 +603,11 @@ object TaskPools {
                 description = bp.description,
                 xpBounty = xp,
                 targetCount = bp.targetCount,
-                requiredKeyRarity = if (xp < 185) KeyRarity.NORMAL else KeyRarity.RARE,
+                requiredSkipKey = when {
+                    xp < 155 -> SkipKeyType.WOODEN
+                    xp < 230 -> SkipKeyType.BRONZE
+                    else -> SkipKeyType.SILVER
+                },
                 actionTag = bp.actionTag,
                 difficultyTier = bp.difficultyTier
             )
@@ -814,7 +819,7 @@ object TaskPools {
                 description = bp.description,
                 xpBounty = xp,
                 targetCount = bp.targetCount,
-                requiredKeyRarity = if (xp < 400) KeyRarity.RARE else KeyRarity.LEGENDARY,
+                requiredSkipKey = if (xp < 400) SkipKeyType.BRONZE else SkipKeyType.SILVER,
                 actionTag = bp.actionTag,
                 difficultyTier = bp.difficultyTier
             )
@@ -1051,7 +1056,7 @@ object TaskPools {
                 description = bp.description,
                 xpBounty = xp,
                 targetCount = bp.targetCount,
-                requiredKeyRarity = KeyRarity.LEGENDARY,
+                requiredSkipKey = SkipKeyType.SILVER,
                 actionTag = bp.actionTag,
                 difficultyTier = bp.difficultyTier
             )

@@ -3,12 +3,13 @@ package com.example.data.roadmap
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.data.flame.FlameManager
+import com.example.data.profile.ProfileManager
+import com.example.data.profile.SkipKeyType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.Locale
 
 /**
  * Singleton state and persistence manager for:
@@ -31,12 +32,6 @@ object RoadmapManager {
     private const val KEY_DAILY_TASKS_JSON = "key_daily_tasks_json"
     private const val KEY_WEEKLY_TASKS_JSON = "key_weekly_tasks_json"
     private const val KEY_MONTHLY_TASKS_JSON = "key_monthly_tasks_json"
-
-    // Inventory Keys
-    private const val KEY_KEYS_COMMON = "key_keys_common"
-    private const val KEY_KEYS_NORMAL = "key_keys_normal"
-    private const val KEY_KEYS_RARE = "key_keys_rare"
-    private const val KEY_KEYS_LEGENDARY = "key_keys_legendary"
 
     // Shields Inventory
     private const val KEY_SHIELDS_24H = "key_shields_24h"
@@ -76,18 +71,10 @@ object RoadmapManager {
         }
     }
 
-    // Skipping Keys Inventory (Initialized to 0 - earned strictly via tasks and rewards)
-    private val _commonKeys = MutableStateFlow(0)
-    val commonKeys: StateFlow<Int> = _commonKeys.asStateFlow()
-
-    private val _normalKeys = MutableStateFlow(0)
-    val normalKeys: StateFlow<Int> = _normalKeys.asStateFlow()
-
-    private val _rareKeys = MutableStateFlow(0)
-    val rareKeys: StateFlow<Int> = _rareKeys.asStateFlow()
-
-    private val _legendaryKeys = MutableStateFlow(0)
-    val legendaryKeys: StateFlow<Int> = _legendaryKeys.asStateFlow()
+    // Inventory Skip Keys (Single source of truth via ProfileManager: Wooden, Bronze, Silver)
+    val woodenKeysCount: StateFlow<Int> get() = ProfileManager.woodenKeysCount
+    val bronzeKeysCount: StateFlow<Int> get() = ProfileManager.bronzeKeysCount
+    val silverKeysCount: StateFlow<Int> get() = ProfileManager.silverKeysCount
 
     // Shields Inventory (Initialized to 0 - earned strictly via tasks and rewards)
     private val _shields24h = MutableStateFlow(0)
@@ -108,6 +95,7 @@ object RoadmapManager {
     @Synchronized
     fun init(context: Context) {
         if (isInitialized) return
+        ProfileManager.init(context)
         val prefs = getPrefs(context)
 
         _totalXp.value = prefs.getLong(KEY_TOTAL_XP, 50L)
@@ -120,49 +108,40 @@ object RoadmapManager {
         val completedStrSet = prefs.getStringSet(KEY_COMPLETED_TASK_IDS, emptySet()) ?: emptySet()
         _completedTaskIds.value = completedStrSet
 
-        // Ensure inventory starts clean at 0 (or loads saved non-default earned inventory)
+        // Ensure shields inventory starts clean at 0 (or loads saved non-default earned inventory)
         val hasResetInventory = prefs.getBoolean("has_reset_inventory_to_zero_v3", false)
         if (!hasResetInventory) {
-            _commonKeys.value = 0
-            _normalKeys.value = 0
-            _rareKeys.value = 0
-            _legendaryKeys.value = 0
             _shields24h.value = 0
             _shields48h.value = 0
             _shields72h.value = 0
             prefs.edit()
-                .putInt(KEY_KEYS_COMMON, 0)
-                .putInt(KEY_KEYS_NORMAL, 0)
-                .putInt(KEY_KEYS_RARE, 0)
-                .putInt(KEY_KEYS_LEGENDARY, 0)
                 .putInt(KEY_SHIELDS_24H, 0)
                 .putInt(KEY_SHIELDS_48H, 0)
                 .putInt(KEY_SHIELDS_72H, 0)
                 .putBoolean("has_reset_inventory_to_zero_v3", true)
                 .apply()
         } else {
-            _commonKeys.value = prefs.getInt(KEY_KEYS_COMMON, 0)
-            _normalKeys.value = prefs.getInt(KEY_KEYS_NORMAL, 0)
-            _rareKeys.value = prefs.getInt(KEY_KEYS_RARE, 0)
-            _legendaryKeys.value = prefs.getInt(KEY_KEYS_LEGENDARY, 0)
-
             _shields24h.value = prefs.getInt(KEY_SHIELDS_24H, 0)
             _shields48h.value = prefs.getInt(KEY_SHIELDS_48H, 0)
             _shields72h.value = prefs.getInt(KEY_SHIELDS_72H, 0)
         }
 
-        // 0. Cache Versioning & Legacy Tasks Purge:
-        // Evicts cached task JSONs from SharedPreferences to strictly load Update III restructured tasks
+        // 0. Cache Versioning & Legacy Keys/Tasks Purge:
+        // Evicts cached task JSONs from SharedPreferences to load Inventory SkipKeyType tasks cleanly
         val tasksCacheVersion = prefs.getInt("key_tasks_matrix_version", 0)
-        if (tasksCacheVersion < 6) {
+        if (tasksCacheVersion < 7) {
             prefs.edit()
+                .remove("key_keys_common")
+                .remove("key_keys_normal")
+                .remove("key_keys_rare")
+                .remove("key_keys_legendary")
                 .remove(KEY_DAILY_TASKS_JSON)
                 .remove(KEY_WEEKLY_TASKS_JSON)
                 .remove(KEY_MONTHLY_TASKS_JSON)
                 .remove(KEY_LAST_DAILY_DATE)
                 .remove(KEY_LAST_WEEKLY_CODE)
                 .remove(KEY_LAST_MONTHLY_CODE)
-                .putInt("key_tasks_matrix_version", 6)
+                .putInt("key_tasks_matrix_version", 7)
                 .apply()
         }
 
@@ -217,18 +196,11 @@ object RoadmapManager {
     @Synchronized
     fun resetInventoryToZero(context: Context) {
         init(context)
-        _commonKeys.value = 0
-        _normalKeys.value = 0
-        _rareKeys.value = 0
-        _legendaryKeys.value = 0
+        ProfileManager.resetSkipKeysToZero(context)
         _shields24h.value = 0
         _shields48h.value = 0
         _shields72h.value = 0
         getPrefs(context).edit()
-            .putInt(KEY_KEYS_COMMON, 0)
-            .putInt(KEY_KEYS_NORMAL, 0)
-            .putInt(KEY_KEYS_RARE, 0)
-            .putInt(KEY_KEYS_LEGENDARY, 0)
             .putInt(KEY_SHIELDS_24H, 0)
             .putInt(KEY_SHIELDS_48H, 0)
             .putInt(KEY_SHIELDS_72H, 0)
@@ -319,31 +291,9 @@ object RoadmapManager {
     }
 
     @Synchronized
-    fun addKey(context: Context, rarity: KeyRarity, qty: Int = 1) {
+    fun addKey(context: Context, keyType: SkipKeyType, qty: Int = 1) {
         init(context)
-        val prefs = getPrefs(context)
-        when (rarity) {
-            KeyRarity.COMMON -> {
-                val newCount = _commonKeys.value + qty
-                _commonKeys.value = newCount
-                prefs.edit().putInt(KEY_KEYS_COMMON, newCount).apply()
-            }
-            KeyRarity.NORMAL -> {
-                val newCount = _normalKeys.value + qty
-                _normalKeys.value = newCount
-                prefs.edit().putInt(KEY_KEYS_NORMAL, newCount).apply()
-            }
-            KeyRarity.RARE -> {
-                val newCount = _rareKeys.value + qty
-                _rareKeys.value = newCount
-                prefs.edit().putInt(KEY_KEYS_RARE, newCount).apply()
-            }
-            KeyRarity.LEGENDARY -> {
-                val newCount = _legendaryKeys.value + qty
-                _legendaryKeys.value = newCount
-                prefs.edit().putInt(KEY_KEYS_LEGENDARY, newCount).apply()
-            }
-        }
+        ProfileManager.grantSkipKeys(context, keyType, qty)
     }
 
     @Synchronized
@@ -368,7 +318,6 @@ object RoadmapManager {
     }
 
     private fun applyReward(context: Context, reward: StationReward) {
-        val prefs = getPrefs(context)
         when (reward.type) {
             RewardType.SHIELD_24H -> {
                 // Tier 1: Mandatory and instantaneous activation upon receipt
@@ -384,52 +333,29 @@ object RoadmapManager {
                 FlameManager.activateManualShield(context, days = 3)
             }
             RewardType.KEY_WOODEN -> {
-                com.example.data.profile.ProfileManager.grantSkipKeys(context, com.example.data.profile.SkipKeyType.WOODEN, reward.quantity)
-                addKey(context, KeyRarity.COMMON, reward.quantity)
+                ProfileManager.grantSkipKeys(context, SkipKeyType.WOODEN, reward.quantity)
             }
             RewardType.KEY_BRONZE -> {
-                com.example.data.profile.ProfileManager.grantSkipKeys(context, com.example.data.profile.SkipKeyType.BRONZE, reward.quantity)
-                addKey(context, KeyRarity.NORMAL, reward.quantity)
+                ProfileManager.grantSkipKeys(context, SkipKeyType.BRONZE, reward.quantity)
             }
             RewardType.KEY_SILVER -> {
-                com.example.data.profile.ProfileManager.grantSkipKeys(context, com.example.data.profile.SkipKeyType.SILVER, reward.quantity)
-                addKey(context, KeyRarity.RARE, reward.quantity)
-            }
-            RewardType.KEY_COMMON -> {
-                val newCount = _commonKeys.value + reward.quantity
-                _commonKeys.value = newCount
-                prefs.edit().putInt(KEY_KEYS_COMMON, newCount).apply()
-            }
-            RewardType.KEY_NORMAL -> {
-                val newCount = _normalKeys.value + reward.quantity
-                _normalKeys.value = newCount
-                prefs.edit().putInt(KEY_KEYS_NORMAL, newCount).apply()
-            }
-            RewardType.KEY_RARE -> {
-                val newCount = _rareKeys.value + reward.quantity
-                _rareKeys.value = newCount
-                prefs.edit().putInt(KEY_KEYS_RARE, newCount).apply()
-            }
-            RewardType.KEY_LEGENDARY -> {
-                val newCount = _legendaryKeys.value + reward.quantity
-                _legendaryKeys.value = newCount
-                prefs.edit().putInt(KEY_KEYS_LEGENDARY, newCount).apply()
+                ProfileManager.grantSkipKeys(context, SkipKeyType.SILVER, reward.quantity)
             }
             RewardType.POTION_PULSE_ELIXIR -> {
-                com.example.data.profile.ProfileManager.grantPotion(context, com.example.data.profile.PotionType.PULSE_ELIXIR, reward.quantity)
+                ProfileManager.grantPotion(context, com.example.data.profile.PotionType.PULSE_ELIXIR, reward.quantity)
             }
             RewardType.POTION_SHADOW_SERUM -> {
-                com.example.data.profile.ProfileManager.grantPotion(context, com.example.data.profile.PotionType.SHADOW_GRIP_SERUM, reward.quantity)
+                ProfileManager.grantPotion(context, com.example.data.profile.PotionType.SHADOW_GRIP_SERUM, reward.quantity)
             }
             RewardType.POTION_GABRIEL_DROPLET -> {
                 // Instantly auto-activates upon receipt
-                com.example.data.profile.ProfileManager.grantPotion(context, com.example.data.profile.PotionType.GABRIEL_PURITY_DROPLET, reward.quantity)
+                ProfileManager.grantPotion(context, com.example.data.profile.PotionType.GABRIEL_PURITY_DROPLET, reward.quantity)
             }
             RewardType.POTION_CRYO_INFUSION -> {
-                com.example.data.profile.ProfileManager.grantPotion(context, com.example.data.profile.PotionType.ABSOLUTE_CRYO_INFUSION, reward.quantity)
+                ProfileManager.grantPotion(context, com.example.data.profile.PotionType.ABSOLUTE_CRYO_INFUSION, reward.quantity)
             }
             RewardType.POTION_ETERNAL_REBIRTH -> {
-                com.example.data.profile.ProfileManager.grantPotion(context, com.example.data.profile.PotionType.ETERNAL_REBIRTH_ELIXIR, reward.quantity)
+                ProfileManager.grantPotion(context, com.example.data.profile.PotionType.ETERNAL_REBIRTH_ELIXIR, reward.quantity)
             }
             RewardType.REWARD_AVATAR -> {
                 // ProfileManager station checks handle avatar unlocking
@@ -479,7 +405,8 @@ object RoadmapManager {
     }
 
     /**
-     * Consumes an appropriate Skip Key to instantly complete a task and award full XP.
+     * Consumes an appropriate Inventory Skip Key (Wooden, Bronze, or Silver)
+     * to instantly complete a task and award full XP.
      */
     @Synchronized
     fun useSkipKeyForTask(context: Context, taskId: String): Boolean {
@@ -489,44 +416,10 @@ object RoadmapManager {
         if (task.status != TaskStatus.PENDING) return false
         if (!task.canBeSkipped) return false // STRICT: Annual / Yearly tasks CANNOT be skipped with keys
 
-        val prefs = getPrefs(context)
-        val hasKey = when (task.requiredKeyRarity) {
-            KeyRarity.COMMON -> {
-                if (_commonKeys.value > 0) {
-                    val count = _commonKeys.value - 1
-                    _commonKeys.value = count
-                    prefs.edit().putInt(KEY_KEYS_COMMON, count).apply()
-                    true
-                } else false
-            }
-            KeyRarity.NORMAL -> {
-                if (_normalKeys.value > 0) {
-                    val count = _normalKeys.value - 1
-                    _normalKeys.value = count
-                    prefs.edit().putInt(KEY_KEYS_NORMAL, count).apply()
-                    true
-                } else false
-            }
-            KeyRarity.RARE -> {
-                if (_rareKeys.value > 0) {
-                    val count = _rareKeys.value - 1
-                    _rareKeys.value = count
-                    prefs.edit().putInt(KEY_KEYS_RARE, count).apply()
-                    true
-                } else false
-            }
-            KeyRarity.LEGENDARY -> {
-                if (_legendaryKeys.value > 0) {
-                    val count = _legendaryKeys.value - 1
-                    _legendaryKeys.value = count
-                    prefs.edit().putInt(KEY_KEYS_LEGENDARY, count).apply()
-                    true
-                } else false
-            }
-        }
-
+        val hasKey = ProfileManager.consumeSkipKey(context, task.requiredSkipKey)
         if (!hasKey) return false
 
+        val prefs = getPrefs(context)
         var awardedXp = 0
         fun updateList(list: List<TaskItem>): List<TaskItem> {
             return list.map { item ->
@@ -616,7 +509,7 @@ object RoadmapManager {
                 put("targetCount", item.targetCount)
                 put("currentCount", item.currentCount)
                 put("status", item.status.name)
-                put("requiredKeyRarity", item.requiredKeyRarity.name)
+                put("requiredSkipKey", item.requiredSkipKey.name)
                 put("actionTag", item.actionTag)
                 put("difficultyTier", item.difficultyTier)
             }
@@ -632,6 +525,8 @@ object RoadmapManager {
             val list = mutableListOf<TaskItem>()
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
+                val skipKeyName = obj.optString("requiredSkipKey", SkipKeyType.WOODEN.name)
+                val skipKey = SkipKeyType.entries.find { it.name == skipKeyName } ?: SkipKeyType.WOODEN
                 list.add(
                     TaskItem(
                         id = obj.getString("id"),
@@ -642,7 +537,7 @@ object RoadmapManager {
                         targetCount = obj.optInt("targetCount", 1),
                         currentCount = obj.optInt("currentCount", 0),
                         status = TaskStatus.valueOf(obj.optString("status", "PENDING")),
-                        requiredKeyRarity = KeyRarity.valueOf(obj.optString("requiredKeyRarity", "COMMON")),
+                        requiredSkipKey = skipKey,
                         actionTag = obj.optString("actionTag", "GENERAL"),
                         difficultyTier = obj.optInt("difficultyTier", 1)
                     )

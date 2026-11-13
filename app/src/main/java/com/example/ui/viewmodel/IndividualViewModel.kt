@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.data.backup.BackupManager
 import com.example.data.backup.BackupResult
 import com.example.data.flame.FlameLogEntry
@@ -16,10 +17,15 @@ import com.example.data.local.AppDatabase
 import com.example.data.local.SecurityPreferences
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
+import com.example.data.profile.ProfileManager
 import com.example.data.repository.IndividualRepository
 import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.RewardType
 import com.example.data.roadmap.TaskItem
+import com.example.data.update.AppUpdateManager
+import com.example.data.update.AppUpdateState
+import com.example.data.update.GitHubReleaseInfo
+import java.io.File
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -72,9 +78,11 @@ class IndividualViewModel(
     private val securityPrefs = SecurityPreferences(application)
     val backupManager = BackupManager(repository)
 
-    // Security, Pattern Lock & Haptics
+    // Security, Pattern Lock, Haptics & Auto-Update
     val isPatternLockEnabled = mutableStateOf(securityPrefs.isPatternLockEnabled)
     val isHapticFeedbackEnabled = mutableStateOf(securityPrefs.isHapticFeedbackEnabled)
+    val isAutoUpdateEnabled = mutableStateOf(securityPrefs.isAutoUpdateEnabled)
+    val appUpdateState: StateFlow<AppUpdateState> = AppUpdateManager.state
     private val _isAppUnlocked = MutableStateFlow(!securityPrefs.isPatternLockEnabled)
     val isAppUnlocked: StateFlow<Boolean> = _isAppUnlocked.asStateFlow()
 
@@ -340,10 +348,9 @@ class IndividualViewModel(
         return RoadmapManager.getRemainingPoolCount(period)
     }
 
-    val commonKeys: StateFlow<Int> = RoadmapManager.commonKeys
-    val normalKeys: StateFlow<Int> = RoadmapManager.normalKeys
-    val rareKeys: StateFlow<Int> = RoadmapManager.rareKeys
-    val legendaryKeys: StateFlow<Int> = RoadmapManager.legendaryKeys
+    val woodenKeys: StateFlow<Int> = ProfileManager.woodenKeysCount
+    val bronzeKeys: StateFlow<Int> = ProfileManager.bronzeKeysCount
+    val silverKeys: StateFlow<Int> = ProfileManager.silverKeysCount
 
     val shields24h: StateFlow<Int> = RoadmapManager.shields24h
     val shields48h: StateFlow<Int> = RoadmapManager.shields48h
@@ -352,6 +359,7 @@ class IndividualViewModel(
 
     init {
         FlameManager.init(application)
+        ProfileManager.init(application)
         RoadmapManager.init(application)
         viewModelScope.launch {
             repository.seedSampleDataIfEmpty()
@@ -625,6 +633,65 @@ class IndividualViewModel(
         viewModelScope.launch {
             emitMessage(msg)
         }
+    }
+
+    // In-App Auto-Update Operations (GitHub Releases: charfeddine23/Strike)
+    fun setAutoUpdateEnabled(enabled: Boolean) {
+        isAutoUpdateEnabled.value = enabled
+        securityPrefs.isAutoUpdateEnabled = enabled
+        viewModelScope.launch {
+            val msg = if (enabled) {
+                when (currentLanguage.value) {
+                    "ar" -> "تم تفعيل التحديث التلقائي من داخل التطبيق"
+                    "fr" -> "Mise à jour automatique activée"
+                    else -> "Automatic in-app updates enabled"
+                }
+            } else {
+                when (currentLanguage.value) {
+                    "ar" -> "تم تعطيل التحقق التلقائي من التحديثات"
+                    "fr" -> "Mise à jour automatique désactivée"
+                    else -> "Automatic update checks disabled"
+                }
+            }
+            emitMessage(msg)
+        }
+    }
+
+    fun checkForAppUpdate(isAutoCheck: Boolean = false) {
+        viewModelScope.launch {
+            AppUpdateManager.checkForUpdates(
+                currentVersion = BuildConfig.VERSION_NAME,
+                isAutoCheck = isAutoCheck
+            )
+        }
+    }
+
+    fun downloadAppUpdate(release: GitHubReleaseInfo) {
+        viewModelScope.launch {
+            AppUpdateManager.downloadUpdateInApp(getApplication(), release)
+        }
+    }
+
+    fun cancelAppUpdateDownload() {
+        AppUpdateManager.cancelDownload()
+    }
+
+    fun installAppUpdate(apkFile: File) {
+        val launched = AppUpdateManager.installDownloadedApk(getApplication(), apkFile)
+        if (!launched) {
+            viewModelScope.launch {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> "يرجى تفعيل إذن تثبيت التطبيقات ثم الضغط على «تثبيت التحديث الآن»"
+                    "fr" -> "Veuillez autoriser l'installation d'applications puis réessayer"
+                    else -> "Please allow installing apps from this source, then tap Install again"
+                }
+                emitMessage(msg)
+            }
+        }
+    }
+
+    fun dismissUpdatePrompt() {
+        AppUpdateManager.resetToIdle()
     }
 
     fun notifyContactImported(name: String, phone: String = "") {

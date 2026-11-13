@@ -418,4 +418,55 @@ object ProfileManager {
             }
         }
     }
+
+    @Synchronized
+    fun consumeSkipKey(context: Context, type: SkipKeyType): Boolean {
+        init(context)
+        val prefs = getPrefs(context)
+        return when (type) {
+            SkipKeyType.WOODEN -> {
+                if (_woodenKeysCount.value > 0) {
+                    val count = _woodenKeysCount.value - 1
+                    _woodenKeysCount.value = count
+                    prefs.edit().putInt(KEY_KEYS_WOODEN, count).apply()
+                    true
+                } else false
+            }
+            SkipKeyType.BRONZE -> {
+                if (_bronzeKeysCount.value > 0) {
+                    val count = _bronzeKeysCount.value - 1
+                    _bronzeKeysCount.value = count
+                    prefs.edit().putInt(KEY_KEYS_BRONZE, count).apply()
+                    true
+                } else false
+            }
+            SkipKeyType.SILVER -> {
+                if (_silverKeysCount.value > 0) {
+                    val count = _silverKeysCount.value - 1
+                    _silverKeysCount.value = count
+                    prefs.edit().putInt(KEY_KEYS_SILVER, count).apply()
+                    true
+                } else false
+            }
+        }
+    }
+
+    @Synchronized
+    fun resetSkipKeysToZero(context: Context) {
+        init(context)
+        _woodenKeysCount.value = 0
+        _bronzeKeysCount.value = 0
+        _silverKeysCount.value = 0
+        getPrefs(context).edit()
+            .putInt(KEY_KEYS_WOODEN, 0)
+            .putInt(KEY_KEYS_BRONZE, 0)
+            .putInt(KEY_KEYS_SILVER, 0)
+            .apply()
+    }
+
+    @Synchronized
+    fun resetForTesting(context: Context) {
+        isInitialized = false
+        init(context)
+    }
 }

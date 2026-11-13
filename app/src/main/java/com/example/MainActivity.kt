@@ -41,19 +41,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -79,6 +87,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.flame.ActiveShieldType
 import com.example.data.flame.FlameManager
+import com.example.data.update.AppUpdateManager
+import com.example.data.update.AppUpdateState
 import com.example.ui.components.DnaHeaderIcon
 import com.example.ui.components.DynamicStreakShieldHeaderButton
 import com.example.ui.components.FlameEnergyBanner
@@ -187,7 +197,24 @@ fun LiquidGlassApp(
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showShieldDropdown by remember { mutableStateOf(false) }
     var showStartDateDialog by remember { mutableStateOf(false) }
+    var hasRunStartupUpdateCheck by remember { mutableStateOf(false) }
+    var updateDialogDismissed by remember { mutableStateOf(false) }
+    var startedUpdateFromModal by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        if (viewModel.isAutoUpdateEnabled.value && !hasRunStartupUpdateCheck) {
+            hasRunStartupUpdateCheck = true
+            viewModel.checkForAppUpdate(isAutoCheck = true)
+        }
+    }
+
+    LaunchedEffect(appUpdateState) {
+        if (appUpdateState is AppUpdateState.UpdateAvailable) {
+            updateDialogDismissed = false
+        }
+    }
 
     val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
     val isStreakShieldActive by viewModel.isStreakShieldActive.collectAsStateWithLifecycle()
@@ -418,6 +445,259 @@ fun LiquidGlassApp(
             isDarkTheme = isDarkTheme
         )
     }
+
+    // In-App Auto-Update Modal Dialog (shown when update is found/downloading/ready outside Settings)
+    val shouldShowUpdateModal = !showSettingsDialog && !updateDialogDismissed && when (appUpdateState) {
+        is AppUpdateState.UpdateAvailable,
+        is AppUpdateState.Downloading,
+        is AppUpdateState.ReadyToInstall -> true
+        is AppUpdateState.Error -> startedUpdateFromModal
+        else -> false
+    }
+
+    if (shouldShowUpdateModal) {
+        InAppUpdateModalDialog(
+            state = appUpdateState,
+            onDownload = { release ->
+                startedUpdateFromModal = true
+                viewModel.downloadAppUpdate(release)
+            },
+            onCancelDownload = {
+                viewModel.cancelAppUpdateDownload()
+            },
+            onInstall = { apkFile ->
+                viewModel.installAppUpdate(apkFile)
+            },
+            onRetry = {
+                viewModel.checkForAppUpdate(isAutoCheck = false)
+            },
+            onDismiss = {
+                startedUpdateFromModal = false
+                updateDialogDismissed = true
+            }
+        )
+    }
+}
+
+@Composable
+private fun InAppUpdateModalDialog(
+    state: AppUpdateState,
+    onDownload: (com.example.data.update.GitHubReleaseInfo) -> Unit,
+    onCancelDownload: () -> Unit,
+    onInstall: (java.io.File) -> Unit,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = {
+            if (state !is AppUpdateState.Downloading) onDismiss()
+        },
+        containerColor = Color(0xF50F172A),
+        icon = {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(NeonCyan.copy(alpha = 0.16f))
+                    .border(1.2.dp, NeonCyan.copy(alpha = 0.7f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SystemUpdate,
+                    contentDescription = null,
+                    tint = NeonCyan,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        },
+        title = {
+            val titleText = when (state) {
+                is AppUpdateState.UpdateAvailable -> "يتوفر تحديث جديد (v${state.release.versionName})"
+                is AppUpdateState.Downloading -> "جاري تحميل التحديث داخل التطبيق"
+                is AppUpdateState.ReadyToInstall -> "التحديث جاهز للتثبيت"
+                is AppUpdateState.Error -> "تعذر إكمال التحديث"
+                else -> "تحديث StrikePulse"
+            }
+            Text(
+                text = titleText,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+                fontSize = 16.sp
+            )
+        },
+        text = {
+            when (state) {
+                is AppUpdateState.UpdateAvailable -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "تم العثور على إصدار أحدث من StrikePulse على GitHub ويمكنك تحميله وتثبيته مباشرة من داخل التطبيق.",
+                            fontSize = 13.sp,
+                            color = Color(0xFFE2E8F0)
+                        )
+                        if (state.release.apkSizeBytes > 0L) {
+                            Text(
+                                text = "حجم الحزمة: ${AppUpdateManager.formatBytes(state.release.apkSizeBytes)}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NeonCyan
+                            )
+                        }
+                        if (state.release.releaseNotes.isNotBlank()) {
+                            Text(
+                                text = state.release.releaseNotes.take(220),
+                                fontSize = 11.sp,
+                                color = Color(0xFF94A3B8),
+                                maxLines = 4
+                            )
+                        }
+                    }
+                }
+
+                is AppUpdateState.Downloading -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val pctText = if (state.progress >= 0f) "${(state.progress * 100).toInt()}%" else "..."
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "التقدم: $pctText",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NeonCyan
+                            )
+                            Text(
+                                text = "${AppUpdateManager.formatBytes(state.bytesDownloaded)} / ${AppUpdateManager.formatBytes(state.totalBytes)}",
+                                fontSize = 11.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                        if (state.progress >= 0f) {
+                            LinearProgressIndicator(
+                                progress = { state.progress },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = NeonCyan,
+                                trackColor = NeonCyan.copy(alpha = 0.2f)
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = NeonCyan,
+                                trackColor = NeonCyan.copy(alpha = 0.2f)
+                            )
+                        }
+                    }
+                }
+
+                is AppUpdateState.ReadyToInstall -> {
+                    Text(
+                        text = "اكتمل تحميل الإصدار v${state.release.versionName} بنجاح. اضغط على «تثبيت التحديث الآن» لتحديث التطبيق.",
+                        fontSize = 13.sp,
+                        color = Color(0xFFE2E8F0)
+                    )
+                }
+
+                is AppUpdateState.Error -> {
+                    Text(
+                        text = state.messageAr,
+                        fontSize = 13.sp,
+                        color = Color(0xFFFDA4AF)
+                    )
+                }
+
+                else -> Unit
+            }
+        },
+        confirmButton = {
+            when (state) {
+                is AppUpdateState.UpdateAvailable -> {
+                    Button(
+                        onClick = { onDownload(state.release) },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                        modifier = Modifier.testTag("modal_download_update_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = null,
+                            tint = Color(0xFF04101D),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "تحميل داخل التطبيق",
+                            color = Color(0xFF04101D),
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+
+                is AppUpdateState.ReadyToInstall -> {
+                    Button(
+                        onClick = { onInstall(state.apkFile) },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonEmerald),
+                        modifier = Modifier.testTag("modal_install_update_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.InstallMobile,
+                            contentDescription = null,
+                            tint = Color(0xFF02160F),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "تثبيت التحديث الآن",
+                            color = Color(0xFF02160F),
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                }
+
+                is AppUpdateState.Error -> {
+                    Button(
+                        onClick = onRetry,
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
+                    ) {
+                        Text(
+                            text = "إعادة المحاولة",
+                            color = Color(0xFF04101D),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                else -> Unit
+            }
+        },
+        dismissButton = {
+            when (state) {
+                is AppUpdateState.Downloading -> {
+                    TextButton(onClick = onCancelDownload) {
+                        Text("إلغاء التحميل", color = Color(0xFFFDA4AF))
+                    }
+                }
+
+                is AppUpdateState.Error -> {
+                    Row {
+                        TextButton(
+                            onClick = { AppUpdateManager.openUrlExternally(context, state.fallbackUrl) }
+                        ) {
+                            Text("فتح GitHub", color = NeonCyan)
+                        }
+                        TextButton(onClick = onDismiss) {
+                            Text("إغلاق", color = Color(0xFF94A3B8))
+                        }
+                    }
+                }
+
+                else -> {
+                    TextButton(onClick = onDismiss) {
+                        Text("لاحقاً", color = Color(0xFF94A3B8))
+                    }
+                }
+            }
+        }
+    )
 }
 
 @Composable

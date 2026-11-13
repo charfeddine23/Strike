@@ -27,8 +27,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Gesture
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
@@ -40,14 +42,20 @@ import androidx.core.content.ContextCompat
 import androidx.compose.material.icons.filled.PhoneInTalk
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Vibration
 import com.example.BuildConfig
+import com.example.data.update.AppUpdateManager
+import com.example.data.update.AppUpdateState
 import com.example.util.CallNotificationHelper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -60,6 +68,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -100,6 +109,8 @@ fun SettingsDialog(
     val context = LocalContext.current
     val isPatternLockEnabled by viewModel.isPatternLockEnabled
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
+    val isAutoUpdateEnabled by viewModel.isAutoUpdateEnabled
+    val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     var showPatternSetupDialog by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
@@ -671,6 +682,345 @@ fun SettingsDialog(
                             color = activeCyan
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    HorizontalDivider(color = cardBorder.copy(alpha = 0.6f))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Auto-Update Toggle (التحديث التلقائي من داخل التطبيق)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SystemUpdate,
+                                contentDescription = null,
+                                tint = activeCyan,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "التحديث التلقائي من داخل التطبيق",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = titleColor
+                                )
+                                Text(
+                                    text = "فحص وتنزيل الإصدارات من GitHub تلقائياً",
+                                    fontSize = 10.sp,
+                                    color = descColor
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = isAutoUpdateEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.setAutoUpdateEnabled(enabled)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = activeCyan,
+                                checkedTrackColor = activeCyan.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier.testTag("auto_update_switch")
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Live Update Status Card
+                    when (val state = appUpdateState) {
+                        is AppUpdateState.Checking -> {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(activeCyan.copy(alpha = 0.1f))
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = activeCyan
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "جاري التحقق من وجود تحديثات...",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = titleColor
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        is AppUpdateState.UpToDate -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0x1E10B981))
+                                    .border(1.dp, Color(0xFF10B981).copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = "تطبيقك محدث لأحدث إصدار (v${state.currentVersion})",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF10B981)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        is AppUpdateState.UpdateAvailable -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(activeCyan.copy(alpha = 0.12f))
+                                    .border(1.dp, activeCyan.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "يتوفر إصدار جديد: v${state.release.versionName}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = activeCyan
+                                )
+                                if (state.release.apkSizeBytes > 0L) {
+                                    Text(
+                                        text = "الحجم: ${AppUpdateManager.formatBytes(state.release.apkSizeBytes)}",
+                                        fontSize = 11.sp,
+                                        color = descColor
+                                    )
+                                }
+                                if (state.release.releaseNotes.isNotBlank()) {
+                                    Text(
+                                        text = state.release.releaseNotes.take(180),
+                                        fontSize = 10.sp,
+                                        color = descColor,
+                                        maxLines = 3
+                                    )
+                                }
+                                Button(
+                                    onClick = { viewModel.downloadAppUpdate(state.release) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp)
+                                        .testTag("settings_download_update_btn"),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = primaryActionTeal)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "تحميل التحديث داخل التطبيق",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        is AppUpdateState.Downloading -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(activeCyan.copy(alpha = 0.12f))
+                                    .border(1.dp, activeCyan.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                val pctText = if (state.progress >= 0f) {
+                                    "${(state.progress * 100).toInt()}%"
+                                } else {
+                                    "..."
+                                }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "جاري التحميل داخل التطبيق ($pctText)",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = activeCyan
+                                    )
+                                    Text(
+                                        text = "${AppUpdateManager.formatBytes(state.bytesDownloaded)} / ${AppUpdateManager.formatBytes(state.totalBytes)}",
+                                        fontSize = 10.sp,
+                                        color = descColor
+                                    )
+                                }
+                                if (state.progress >= 0f) {
+                                    LinearProgressIndicator(
+                                        progress = { state.progress },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = activeCyan,
+                                        trackColor = activeCyan.copy(alpha = 0.2f)
+                                    )
+                                } else {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = activeCyan,
+                                        trackColor = activeCyan.copy(alpha = 0.2f)
+                                    )
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.cancelAppUpdateDownload() },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(36.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, sensitiveRed.copy(alpha = 0.6f))
+                                ) {
+                                    Text(
+                                        text = "إلغاء التحميل",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = sensitiveRed
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        is AppUpdateState.ReadyToInstall -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0x1E10B981))
+                                    .border(1.dp, Color(0xFF10B981).copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "تم تحميل الإصدار v${state.release.versionName} بنجاح داخل التطبيق",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF10B981)
+                                )
+                                Button(
+                                    onClick = { viewModel.installAppUpdate(state.apkFile) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp)
+                                        .testTag("settings_install_update_btn"),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.InstallMobile,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "تثبيت التحديث الآن",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        is AppUpdateState.Error -> {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(sensitiveRed.copy(alpha = 0.1f))
+                                    .border(1.dp, sensitiveRed.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                    .padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = state.messageAr,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = sensitiveRed
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedButton(
+                                        onClick = { viewModel.checkForAppUpdate(isAutoCheck = false) },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(34.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("إعادة المحاولة", fontSize = 11.sp, color = titleColor)
+                                    }
+                                    OutlinedButton(
+                                        onClick = { AppUpdateManager.openUrlExternally(context, state.fallbackUrl) },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(34.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("فتح GitHub", fontSize = 11.sp, color = activeCyan)
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
+                        AppUpdateState.Idle -> Unit
+                    }
+
+                    // Manual Update Check Button
+                    OutlinedButton(
+                        onClick = { viewModel.checkForAppUpdate(isAutoCheck = false) },
+                        enabled = appUpdateState !is AppUpdateState.Checking && appUpdateState !is AppUpdateState.Downloading,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .testTag("check_update_btn"),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, activeCyan.copy(alpha = 0.65f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = activeCyan,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "التحقق من وجود تحديثات الآن",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = activeCyan
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "مستودع التحديثات: github.com/charfeddine23/Strike",
+                        fontSize = 10.sp,
+                        color = descColor
+                    )
 
                     Spacer(modifier = Modifier.height(10.dp))
 

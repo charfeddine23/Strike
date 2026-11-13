@@ -36,35 +36,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Egg
-import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,15 +62,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -92,41 +78,31 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
-import com.example.data.roadmap.KeyRarity
-import com.example.data.roadmap.RewardType
+import com.example.data.profile.SkipKeyType
 import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.RoadmapStation
-import com.example.data.roadmap.StationReward
 import com.example.data.roadmap.StationState
 import com.example.data.roadmap.TaskItem
 import com.example.data.roadmap.TaskPeriod
 import com.example.data.roadmap.TaskPools
 import com.example.ui.components.LiquidGlassCard
-import com.example.ui.theme.CaveatHandwriting
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
-import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.util.HapticHelper
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.PI
 import kotlin.math.sin
 
 /**
  * 500-Station Wavy Roadmap & Dynamic Randomized Task Engine:
  * - Continuous scrollable sine-wave path connecting 500 progressive stations
- * - Station States: Locked, Unlocked (pulsing egg reward), Claimed (golden neon)
- * - Dynamic Task Engine (Daily, Weekly, Monthly, Yearly)
- * - Cyber Inventory Modal (Skip Keys, Shields)
+ * - Station States: Locked, Unlocked (pulsing neon reward), Claimed (golden neon)
+ * - Dynamic Task Engine (Daily, Weekly, Monthly, Annual)
+ * - Uses Inventory Skip-Keys (Wooden, Bronze, Silver) for task skipping
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoadmapScreen(
     viewModel: IndividualViewModel,
@@ -147,18 +123,12 @@ fun RoadmapScreen(
     val monthlyTasks by viewModel.monthlyTasks.collectAsStateWithLifecycle()
     val yearlyTasks by viewModel.yearlyTasks.collectAsStateWithLifecycle()
 
-    val commonKeys by viewModel.commonKeys.collectAsStateWithLifecycle()
-    val normalKeys by viewModel.normalKeys.collectAsStateWithLifecycle()
-    val rareKeys by viewModel.rareKeys.collectAsStateWithLifecycle()
-    val legendaryKeys by viewModel.legendaryKeys.collectAsStateWithLifecycle()
-
-    val shields24h by viewModel.shields24h.collectAsStateWithLifecycle()
-    val shields48h by viewModel.shields48h.collectAsStateWithLifecycle()
-    val shields72h by viewModel.shields72h.collectAsStateWithLifecycle()
+    val woodenKeys by viewModel.woodenKeys.collectAsStateWithLifecycle()
+    val bronzeKeys by viewModel.bronzeKeys.collectAsStateWithLifecycle()
+    val silverKeys by viewModel.silverKeys.collectAsStateWithLifecycle()
 
     var selectedMainTab by remember { mutableStateOf(0) } // 0: Wavy Roadmap, 1: Dynamic Tasks
     var selectedTaskPeriod by remember { mutableStateOf(TaskPeriod.DAILY) }
-    var showArsenalSheet by remember { mutableStateOf(false) }
 
     val currentStationId = remember(totalXp) { RoadmapManager.calculateUnlockedStationId(totalXp) }
     val roadmapListState = rememberLazyListState()
@@ -236,30 +206,6 @@ fun RoadmapScreen(
                             text = stringResource(R.string.roadmap_subtitle),
                             fontSize = 11.sp,
                             color = Color(0xFF94A3B8)
-                        )
-                    }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Cyber Arsenal Button
-                    IconButton(
-                        onClick = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            showArsenalSheet = true
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color(0x33F59E0B))
-                            .border(1.dp, NeonAmber, CircleShape)
-                            .testTag("btn_open_arsenal")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.VpnKey,
-                            contentDescription = "Inventory",
-                            tint = NeonAmber,
-                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -567,6 +513,35 @@ fun RoadmapScreen(
                     }
                 }
 
+                // Inventory Skip-Keys Summary Strip (for tasks that allow skipping)
+                if (selectedTaskPeriod != TaskPeriod.YEARLY) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        KeyInventoryChip(
+                            name = SkipKeyType.WOODEN.nameAr,
+                            count = woodenKeys,
+                            color = Color(0xFFD97706),
+                            modifier = Modifier.weight(1f)
+                        )
+                        KeyInventoryChip(
+                            name = SkipKeyType.BRONZE.nameAr,
+                            count = bronzeKeys,
+                            color = Color(0xFFF59E0B),
+                            modifier = Modifier.weight(1f)
+                        )
+                        KeyInventoryChip(
+                            name = SkipKeyType.SILVER.nameAr,
+                            count = silverKeys,
+                            color = Color(0xFFE2E8F0),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 48.dp),
@@ -575,11 +550,10 @@ fun RoadmapScreen(
                     items(currentTasks, key = { it.id }) { task ->
                         TaskItemCard(
                             task = task,
-                            availableKeysForRarity = when (task.requiredKeyRarity) {
-                                KeyRarity.COMMON -> commonKeys
-                                KeyRarity.NORMAL -> normalKeys
-                                KeyRarity.RARE -> rareKeys
-                                KeyRarity.LEGENDARY -> legendaryKeys
+                            availableKeysForType = when (task.requiredSkipKey) {
+                                SkipKeyType.WOODEN -> woodenKeys
+                                SkipKeyType.BRONZE -> bronzeKeys
+                                SkipKeyType.SILVER -> silverKeys
                             },
                             onSkipWithKey = {
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -591,20 +565,6 @@ fun RoadmapScreen(
                 }
             }
         }
-    }
-
-    // CYBER INVENTORY MODAL SHEET (KEYS & SHIELDS)
-    if (showArsenalSheet) {
-        CyberArsenalModalSheet(
-            commonKeys = commonKeys,
-            normalKeys = normalKeys,
-            rareKeys = rareKeys,
-            legendaryKeys = legendaryKeys,
-            shields24h = shields24h,
-            shields48h = shields48h,
-            shields72h = shields72h,
-            onDismiss = { showArsenalSheet = false }
-        )
     }
 }
 
@@ -817,7 +777,7 @@ fun WavyStationItem(
 @Composable
 fun TaskItemCard(
     task: TaskItem,
-    availableKeysForRarity: Int,
+    availableKeysForType: Int,
     onSkipWithKey: () -> Unit
 ) {
     LiquidGlassCard(
@@ -981,142 +941,42 @@ fun TaskItemCard(
                             fontWeight = FontWeight.Medium
                         )
 
+                        val keyColor = when (task.requiredSkipKey) {
+                            SkipKeyType.WOODEN -> Color(0xFFD97706)
+                            SkipKeyType.BRONZE -> Color(0xFFF59E0B)
+                            SkipKeyType.SILVER -> Color(0xFFE2E8F0)
+                        }
+                        val hasKeyAvailable = availableKeysForType > 0
+
                         OutlinedButton(
                             onClick = onSkipWithKey,
-                            enabled = availableKeysForRarity > 0,
+                            enabled = hasKeyAvailable,
                             shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (hasKeyAvailable) keyColor.copy(alpha = 0.75f) else Color(0x3364748B)
+                            ),
                             modifier = Modifier
-                                .height(34.dp)
+                                .height(36.dp)
                                 .testTag("btn_skip_task_${task.id}")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.VpnKey,
                                 contentDescription = null,
-                                tint = if (availableKeysForRarity > 0) NeonAmber else Color.Gray,
+                                tint = if (hasKeyAvailable) keyColor else Color.Gray,
                                 modifier = Modifier.size(13.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = "تجاوز بمفتاح ($availableKeysForRarity)",
+                                text = "تجاوز بـ ${task.requiredSkipKey.nameAr} ($availableKeysForType)",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (availableKeysForRarity > 0) NeonAmber else Color.Gray
+                                color = if (hasKeyAvailable) keyColor else Color.Gray
                             )
                         }
                     }
                 }
             }
-        }
-    }
-}
-
-/**
- * Cyber Arsenal (Keys & Protective Shields Inventory) Modal Bottom Sheet
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CyberArsenalModalSheet(
-    commonKeys: Int,
-    normalKeys: Int,
-    rareKeys: Int,
-    legendaryKeys: Int,
-    shields24h: Int,
-    shields48h: Int,
-    shields72h: Int,
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = Color(0xFF0F172A),
-        tonalElevation = 12.dp,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color(0x33F59E0B)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = NeonAmber, modifier = Modifier.size(20.dp))
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "مخزون المفاتيح والدروع",
-                            fontWeight = FontWeight.Black,
-                            fontFamily = PlusJakartaSans,
-                            fontSize = 17.sp,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "مفاتيح التجاوز المتاحة والدروع الواقية",
-                            fontSize = 11.sp,
-                            color = Color(0xFF94A3B8)
-                        )
-                    }
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // SECTION 1: SKIPPING KEYS INVENTORY
-            Text(
-                text = stringResource(R.string.roadmap_keys_inventory),
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = NeonCyan
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                KeyInventoryChip(name = "شائع", count = commonKeys, color = Color(0xFF94A3B8), modifier = Modifier.weight(1f))
-                KeyInventoryChip(name = "عادي", count = normalKeys, color = NeonCyan, modifier = Modifier.weight(1f))
-                KeyInventoryChip(name = "نادر", count = rareKeys, color = Color(0xFFC084FC), modifier = Modifier.weight(1f))
-                KeyInventoryChip(name = "أسطوري", count = legendaryKeys, color = NeonAmber, modifier = Modifier.weight(1f))
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // SECTION 2: SHIELDS INVENTORY
-            Text(
-                text = "دروع الحماية الفورية (Protective Shields):",
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = NeonCyan
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                KeyInventoryChip(name = "درع 24h", count = shields24h, color = NeonEmerald, modifier = Modifier.weight(1f))
-                KeyInventoryChip(name = "درع 48h", count = shields48h, color = NeonCyan, modifier = Modifier.weight(1f))
-                KeyInventoryChip(name = "درع 72h", count = shields72h, color = NeonAmber, modifier = Modifier.weight(1f))
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

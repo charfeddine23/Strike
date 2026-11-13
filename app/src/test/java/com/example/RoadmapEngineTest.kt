@@ -3,7 +3,8 @@ package com.example
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.flame.FlameManager
-import com.example.data.roadmap.KeyRarity
+import com.example.data.profile.ProfileManager
+import com.example.data.profile.SkipKeyType
 import com.example.data.roadmap.RewardType
 import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.StationState
@@ -35,6 +36,11 @@ class RoadmapEngineTest {
         val flamePrefs = app.getSharedPreferences("strike_pulse_flame_prefs", Application.MODE_PRIVATE)
         flamePrefs.edit().clear().commit()
         FlameManager.resetForTesting(app)
+
+        val profilePrefs = app.getSharedPreferences("strikepulse_profile_prefs", Application.MODE_PRIVATE)
+        profilePrefs.edit().clear().commit()
+        ProfileManager.resetForTesting(app)
+        RoadmapManager.resetForTesting(app)
     }
 
     @Test
@@ -152,9 +158,9 @@ class RoadmapEngineTest {
         assertNotNull(reward100)
         assertNotNull(reward500)
 
-        // Station 20 and 100 have extra legendary rewards
-        assertEquals(RewardType.KEY_LEGENDARY, reward20.type)
-        assertEquals(RewardType.KEY_LEGENDARY, reward100.type)
+        // Station 20 and 100 have extra Silver Skip-Key rewards
+        assertEquals(RewardType.KEY_SILVER, reward20.type)
+        assertEquals(RewardType.KEY_SILVER, reward100.type)
 
         // Station 500 should be the ultimate Tier 5 Eternal Rebirth Elixir
         assertEquals(RewardType.POTION_ETERNAL_REBIRTH, reward500.type)
@@ -186,11 +192,10 @@ class RoadmapEngineTest {
             assertFalse("Annual tasks must have canBeSkipped == false", task.canBeSkipped)
         }
 
-        // Give player abundant keys of all rarities
-        RoadmapManager.addKey(app, KeyRarity.COMMON, 10)
-        RoadmapManager.addKey(app, KeyRarity.NORMAL, 10)
-        RoadmapManager.addKey(app, KeyRarity.RARE, 10)
-        RoadmapManager.addKey(app, KeyRarity.LEGENDARY, 10)
+        // Give player abundant Inventory skip-keys of all tiers
+        RoadmapManager.addKey(app, SkipKeyType.WOODEN, 10)
+        RoadmapManager.addKey(app, SkipKeyType.BRONZE, 10)
+        RoadmapManager.addKey(app, SkipKeyType.SILVER, 10)
 
         val targetAnnualTask = everlastingTasks.first()
         val skipAttempt = RoadmapManager.useSkipKeyForTask(app, targetAnnualTask.id)
@@ -201,10 +206,12 @@ class RoadmapEngineTest {
 
     @Test
     fun testInitialInventoryIsZero() {
-        assertEquals(0, RoadmapManager.commonKeys.value)
-        assertEquals(0, RoadmapManager.normalKeys.value)
-        assertEquals(0, RoadmapManager.rareKeys.value)
-        assertEquals(0, RoadmapManager.legendaryKeys.value)
+        assertEquals(0, RoadmapManager.woodenKeysCount.value)
+        assertEquals(0, RoadmapManager.bronzeKeysCount.value)
+        assertEquals(0, RoadmapManager.silverKeysCount.value)
+        assertEquals(0, ProfileManager.woodenKeysCount.value)
+        assertEquals(0, ProfileManager.bronzeKeysCount.value)
+        assertEquals(0, ProfileManager.silverKeysCount.value)
 
         assertEquals(0, RoadmapManager.shields24h.value)
         assertEquals(0, RoadmapManager.shields48h.value)
@@ -218,10 +225,17 @@ class RoadmapEngineTest {
         val daily = RoadmapManager.dailyTasks.value
         val targetTask = daily.first()
 
-        RoadmapManager.addKey(app, targetTask.requiredKeyRarity, 1)
+        RoadmapManager.addKey(app, targetTask.requiredSkipKey, 1)
 
         val used = RoadmapManager.useSkipKeyForTask(app, targetTask.id)
         assertTrue(used)
+
+        val remainingCount = when (targetTask.requiredSkipKey) {
+            SkipKeyType.WOODEN -> ProfileManager.woodenKeysCount.value
+            SkipKeyType.BRONZE -> ProfileManager.bronzeKeysCount.value
+            SkipKeyType.SILVER -> ProfileManager.silverKeysCount.value
+        }
+        assertEquals(0, remainingCount)
 
         val updatedDaily = RoadmapManager.dailyTasks.value
         val updatedTask = updatedDaily.first { it.id == targetTask.id }
@@ -234,9 +248,9 @@ class RoadmapEngineTest {
         val dailyTask = RoadmapManager.dailyTasks.value.first()
         val weeklyTask = RoadmapManager.weeklyTasks.value.first()
 
-        // Mark tasks completed / skipped
-        RoadmapManager.addKey(app, dailyTask.requiredKeyRarity, 2)
-        RoadmapManager.addKey(app, weeklyTask.requiredKeyRarity, 2)
+        // Mark tasks completed / skipped using Inventory skip keys
+        RoadmapManager.addKey(app, dailyTask.requiredSkipKey, 2)
+        RoadmapManager.addKey(app, weeklyTask.requiredSkipKey, 2)
         assertTrue(RoadmapManager.useSkipKeyForTask(app, dailyTask.id))
         assertTrue(RoadmapManager.useSkipKeyForTask(app, weeklyTask.id))
         assertFalse(RoadmapManager.completedTaskIds.value.isEmpty())

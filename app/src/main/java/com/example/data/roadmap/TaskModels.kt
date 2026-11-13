@@ -1,5 +1,7 @@
 package com.example.data.roadmap
 
+import com.example.data.profile.SkipKeyType
+
 /**
  * Task Categories & Data Models for the Dynamic Task Engine & XP Progression:
  * - Daily Tasks (5 randomized via date-seeded shuffle)
@@ -22,21 +24,10 @@ enum class TaskStatus {
     SKIPPED
 }
 
-enum class KeyRarity {
-    COMMON,
-    NORMAL,
-    RARE,
-    LEGENDARY
-}
-
 enum class RewardType {
     SHIELD_24H,
     SHIELD_48H,
     SHIELD_72H,
-    KEY_COMMON,
-    KEY_NORMAL,
-    KEY_RARE,
-    KEY_LEGENDARY,
     KEY_WOODEN,
     KEY_BRONZE,
     KEY_SILVER,
@@ -79,7 +70,7 @@ data class TaskItem(
     val targetCount: Int = 1,
     val currentCount: Int = 0,
     val status: TaskStatus = TaskStatus.PENDING,
-    val requiredKeyRarity: KeyRarity = KeyRarity.COMMON,
+    val requiredSkipKey: SkipKeyType = SkipKeyType.WOODEN,
     val actionTag: String = "GENERAL",
     val difficultyTier: Int = 1
 ) {
