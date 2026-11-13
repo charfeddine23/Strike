@@ -414,8 +414,7 @@ fun LiquidGlassApp(
 
                     AppScreen.PROFILE -> com.example.ui.screens.ProfileScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD },
-                        onOpenSettings = { showSettingsDialog = true }
+                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
                     )
                 }
             }

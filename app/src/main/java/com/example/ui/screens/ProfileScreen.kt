@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -35,21 +36,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Science
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.VpnKey
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Tab
@@ -74,8 +75,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.deviations.DeviationsManager
 import com.example.data.profile.AvatarItem
@@ -109,8 +113,7 @@ import java.util.Locale
 @Composable
 fun ProfileScreen(
     viewModel: IndividualViewModel,
-    onNavigateBack: () -> Unit,
-    onOpenSettings: () -> Unit = {}
+    onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -205,47 +208,6 @@ fun ProfileScreen(
                     )
                 }
             }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Settings button in Profile Screen
-                IconButton(
-                    onClick = onOpenSettings,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x221E293B))
-                        .border(1.dp, Color(0x4038BDF8), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = NeonCyan,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Edit username button
-                IconButton(
-                    onClick = {
-                        tempName = userName
-                        showEditNameDialog = true
-                    },
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x221E293B))
-                        .border(1.dp, Color(0x4038BDF8), CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit Name",
-                        tint = NeonCyan,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
         }
 
         LazyColumn(
@@ -276,14 +238,27 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.width(16.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = userName,
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Black,
-                                fontFamily = PlusJakartaSans,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        tempName = userName
+                                        showEditNameDialog = true
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 6.dp)
+                                    .testTag("profile_username_tap")
+                            ) {
+                                Text(
+                                    text = userName,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = PlusJakartaSans,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "المستوى الحالي: محطة #$unlockedStation",
                                 style = MaterialTheme.typography.labelMedium,
@@ -675,46 +650,211 @@ fun ProfileScreen(
         }
     }
 
-    // Edit username dialog
+    // Luxurious Cyberpunk Username Customization Dialog
     if (showEditNameDialog) {
-        AlertDialog(
+        val allGameTitles = remember {
+            (ProfileMasterInventory.MASTER_TITLES + ProfileMasterInventory.MILESTONE_PEAK_TITLE)
+        }
+        Dialog(
             onDismissRequest = { showEditNameDialog = false },
-            title = {
-                Text(
-                    text = "تعديل اسم المستخدم السيبراني",
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = PlusJakartaSans
-                )
-            },
-            text = {
-                OutlinedTextField(
-                    value = tempName,
-                    onValueChange = { tempName = it },
-                    label = { Text("الاسم") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NeonCyan,
-                        unfocusedBorderColor = Color(0x5538BDF8)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        ProfileManager.setUserName(context, tempName)
-                        showEditNameDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
-                ) {
-                    Text("حفظ", color = Color(0xFF0F172A), fontWeight = FontWeight.Bold)
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.90f)
+                    .widthIn(max = 400.dp)
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color(0xFF0E1526), Color(0xFF090D18))
+                        )
+                    )
+                    .border(
+                        width = 1.6.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(NeonCyan, NeonViolet, NeonAmber)
+                        ),
+                        shape = RoundedCornerShape(26.dp)
+                    )
+                    .testTag("edit_username_luxury_dialog")
+            ) {
+                // Ambient radial cyberpunk glow behind header
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(NeonViolet.copy(alpha = 0.22f), Color.Transparent),
+                            center = Offset(size.width * 0.5f, 0f),
+                            radius = size.width * 0.75f
+                        ),
+                        center = Offset(size.width * 0.5f, 0f),
+                        radius = size.width * 0.75f
+                    )
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEditNameDialog = false }) {
-                    Text("إلغاء", color = Color(0xFF94A3B8))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 22.dp, vertical = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Close icon at top-end
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(
+                            onClick = { showEditNameDialog = false },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "إغلاق",
+                                tint = Color(0xFF94A3B8),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    // Crown / Spark Emblem Badge
+                    Box(
+                        modifier = Modifier
+                            .size(58.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(NeonCyan.copy(alpha = 0.28f), Color(0xFF0B1324))
+                                )
+                            )
+                            .border(
+                                1.5.dp,
+                                Brush.linearGradient(listOf(NeonCyan, NeonAmber)),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = NeonAmber,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "تخصيص الهوية السيبرانية",
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = PlusJakartaSans,
+                        color = Color.White,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "اكتب اسمك المفضل أو ولّد اسماً فخماً من ألقاب اللعبة",
+                        fontSize = 11.sp,
+                        color = Color(0xFF94A3B8),
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    OutlinedTextField(
+                        value = tempName,
+                        onValueChange = { tempName = it },
+                        singleLine = true,
+                        label = { Text("الاسم الجديد", fontSize = 12.sp) },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = Color(0x5538BDF8),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedLabelColor = NeonCyan,
+                            unfocusedLabelColor = Color(0xFF94A3B8),
+                            cursorColor = NeonCyan
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("profile_name_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Random name generator from the game's Master Titles inventory
+                    OutlinedButton(
+                        onClick = {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            val candidates = allGameTitles.filter { it.titleAr != tempName.trim() }
+                            val picked = (if (candidates.isNotEmpty()) candidates else allGameTitles).random()
+                            tempName = picked.titleAr
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.2.dp,
+                            Brush.horizontalGradient(listOf(NeonViolet, NeonCyan))
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("profile_random_title_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Casino,
+                            contentDescription = null,
+                            tint = NeonAmber,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "توليد اسم عشوائي من الألقاب",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Confirm Button (Full-width vibrant cyber gradient look)
+                    Button(
+                        onClick = {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            ProfileManager.setUserName(context, tempName)
+                            showEditNameDialog = false
+                        },
+                        enabled = tempName.trim().isNotEmpty(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = NeonCyan,
+                            contentColor = Color(0xFF090D18),
+                            disabledContainerColor = NeonCyan.copy(alpha = 0.35f)
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("profile_confirm_name_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "تأكيد الاسم",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
                 }
             }
-        )
+        }
     }
 }
 
