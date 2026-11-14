@@ -55,10 +55,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -498,133 +495,13 @@ fun WavySnakeStationRow(
         val nodeCenterDp = maxWidthDp * nodeNormX
 
         // Layer 1: Continuous Seamless Glowing / Dashed Snake Track Canvas
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val stepsPerHalf = 20
-            val midY = size.height * 0.5f
-
-            fun drawTrackHalf(startStep: Int, endStep: Int, isGlowing: Boolean, isTailFade: Boolean) {
-                val path = Path()
-                val samplePoints = mutableListOf<Offset>()
-                for (s in startStep..endStep) {
-                    val yFrac = s.toFloat() / (stepsPerHalf * 2).toFloat()
-                    val t = (station.id - 0.5f) + yFrac
-                    val x = size.width * wavyNodeNormalizedX(t)
-                    val y = size.height * yFrac
-                    samplePoints.add(Offset(x, y))
-                    if (s == startStep) path.moveTo(x, y) else path.lineTo(x, y)
-                }
-
-                if (isGlowing) {
-                    // Wide atmospheric cyan bloom
-                    drawPath(
-                        path = path,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(NeonAqua.copy(alpha = 0.22f), ElectricMint.copy(alpha = 0.24f)),
-                            startY = 0f,
-                            endY = size.height
-                        ),
-                        style = Stroke(width = 16.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    )
-                    // Mid neon glow halo
-                    drawPath(
-                        path = path,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(NeonAqua.copy(alpha = 0.50f), ElectricMint.copy(alpha = 0.50f)),
-                            startY = 0f,
-                            endY = size.height
-                        ),
-                        style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    )
-                    // Crisp glowing core conduit
-                    drawPath(
-                        path = path,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color(0xFFBDFBFF), NeonAqua, ElectricMint),
-                            startY = 0f,
-                            endY = size.height
-                        ),
-                        style = Stroke(width = 3.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    )
-
-                    // Subtle glowing light beads along the curve (like reference screenshot)
-                    val beadIndices = listOf(stepsPerHalf / 2, endStep - stepsPerHalf / 3).distinct()
-                    beadIndices.forEach { idx ->
-                        val localIdx = idx - startStep
-                        if (localIdx in samplePoints.indices) {
-                            val pt = samplePoints[localIdx]
-                            drawCircle(
-                                color = NeonAqua.copy(alpha = 0.35f),
-                                radius = 7.dp.toPx(),
-                                center = pt
-                            )
-                            drawCircle(
-                                color = Color(0xFFE0FFFF),
-                                radius = 3.2.dp.toPx(),
-                                center = pt
-                            )
-                        }
-                    }
-                } else {
-                    // Dark underlying track shadow + dashed conduit
-                    drawPath(
-                        path = path,
-                        color = Color(0x66161F33),
-                        style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    )
-                    drawPath(
-                        path = path,
-                        color = Color(0xFF475569),
-                        style = Stroke(
-                            width = 2.4.dp.toPx(),
-                            cap = StrokeCap.Round,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(11f, 9f), 0f)
-                        )
-                    )
-
-                    // Warm amber energy tail fading below the active frontier node
-                    if (isTailFade && samplePoints.size >= 7) {
-                        val tailPath = Path()
-                        tailPath.moveTo(samplePoints[0].x, samplePoints[0].y)
-                        for (k in 1..6) {
-                            tailPath.lineTo(samplePoints[k].x, samplePoints[k].y)
-                        }
-                        val tailEndY = samplePoints[6].y
-                        drawPath(
-                            path = tailPath,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    WarmFireOrange.copy(alpha = 0.85f),
-                                    MilestoneGold.copy(alpha = 0.55f),
-                                    Color.Transparent
-                                ),
-                                startY = midY,
-                                endY = tailEndY
-                            ),
-                            style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                        )
-                    }
-                }
-            }
-
-            // Upper segment: top edge of row to node center
-            if (station.id > 1) {
-                drawTrackHalf(
-                    startStep = 0,
-                    endStep = stepsPerHalf,
-                    isGlowing = upperPathActive,
-                    isTailFade = false
-                )
-            }
-            // Lower segment: node center to bottom edge of row
-            if (station.id < 500) {
-                drawTrackHalf(
-                    startStep = stepsPerHalf,
-                    endStep = stepsPerHalf * 2,
-                    isGlowing = lowerPathActive,
-                    isTailFade = isFrontierTail
-                )
-            }
-        }
+        GlowingWavyRoadmapSegmentCanvas(
+            stationId = station.id,
+            upperPathActive = upperPathActive,
+            lowerPathActive = lowerPathActive,
+            isFrontierTail = isFrontierTail,
+            modifier = Modifier.fillMaxSize()
+        )
 
         // Layer 2: Physical LTR positioning for Node Orb + Side Frosted Card
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
