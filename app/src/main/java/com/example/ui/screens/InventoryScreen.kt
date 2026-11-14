@@ -109,15 +109,15 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 private data class InventoryTooltipSpec(
-    val titleAr: String,
-    val titleEn: String,
+    val title: String,
+    val subtitle: String,
     val rarityLabel: String,
     val accentColor: Color,
     val secondaryColor: Color,
     val icon: ImageVector,
-    val mechanicsAr: String,
-    val bonusesAr: String,
-    val expirationRulesAr: String
+    val mechanics: String,
+    val bonuses: String,
+    val expirationRules: String
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,6 +130,8 @@ fun InventoryScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val isHapticEnabled by viewModel.isHapticFeedbackEnabled
+    val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val isAr = currentLang == "ar"
 
     // Shields State
     val isShieldActive by viewModel.isStreakShieldActive.collectAsStateWithLifecycle()
@@ -236,14 +238,14 @@ fun InventoryScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "المخزون السيبراني (Inventory)",
+                                text = if (isAr) "المخزون السيبراني" else "Cyber Inventory",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontFamily = PlusJakartaSans,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "الدروع • مفاتيح التجاوز • الجرعات التكتيكية",
+                                text = if (isAr) "الدروع • مفاتيح التجاوز • الجرعات التكتيكية" else "Shields • Skip-Keys • Tactical Potions",
                                 fontSize = 11.sp,
                                 color = NeonCyan
                             )
@@ -258,11 +260,13 @@ fun InventoryScreen(
         // ============================================================
         item {
             SectionHeaderLabel(
-                title = "الدروع الوقائية (Protective Shields)",
+                title = if (isAr) "الدروع الوقائية" else "Protective Shields",
                 subtitle = if (shieldActuallyActive) {
-                    "الدرع النشط: ${activeShieldType.labelAr} (${FlameManager.formatRemaining(remainingMillis)})"
+                    val shieldLabel = if (isAr) activeShieldType.labelAr else activeShieldType.labelEn
+                    if (isAr) "الدرع النشط: $shieldLabel (${FlameManager.formatRemaining(remainingMillis)})"
+                    else "Active Shield: $shieldLabel (${FlameManager.formatRemaining(remainingMillis)})"
                 } else {
-                    "لا يوجد درع نشط حالياً"
+                    if (isAr) "لا يوجد درع نشط حالياً" else "No active shield currently"
                 },
                 accentColor = NeonEmerald,
                 icon = Icons.Default.Shield,
@@ -282,7 +286,7 @@ fun InventoryScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.TouchApp,
-                            contentDescription = "دليل الاستخدام",
+                            contentDescription = if (isAr) "دليل الاستخدام" else "Usage Guide",
                             tint = NeonViolet,
                             modifier = Modifier.size(26.dp)
                         )
@@ -295,23 +299,38 @@ fun InventoryScreen(
         item {
             val is7dActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_7D_AUTO
             Luxury7DayAutoShieldCard(
+                isAr = isAr,
                 isActiveNow = is7dActive,
                 remainingText = if (is7dActive) FlameManager.formatRemaining(remainingMillis) else null,
                 totalTriggeredCount = sevenDayAutoTriggers,
                 animAngle = animAngle,
                 pulseWave = pulseWave,
                 onLongPress2s = {
-                    selectedTooltip = InventoryTooltipSpec(
-                        titleAr = "درع الـ 7 أيام التلقائي (Luxury Auto Shield)",
-                        titleEn = "7-Day Automated Strike Shield",
-                        rarityLabel = "LUXURY TIER • تلقائي نخبوي",
-                        accentColor = Color(0xFFFFD700),
-                        secondaryColor = Color(0xFFFF007A),
-                        icon = Icons.Default.VerifiedUser,
-                        mechanicsAr = "درع وقائي أوتوماتيكي نخبوي يعمل كصمام أمان عالي المستوى عند التعرض لضربات مكثفة في يوم واحد.",
-                        bonusesAr = "يُفعّل تلقائياً وفورياً عند تسجيل 3 إلى 5 سترايكات في نفس اليوم، ليوقف إضافة +3 نقاط خمول يومية لمدة 7 أيام كاملة (168 ساعة).",
-                        expirationRulesAr = "تبدأ مدة الـ 7 أيام تلقائياً لحظة تفعيل الكومبو وتنتهي بعد انقضاء 168 ساعة، ولا يمكن تخزينه يدوياً."
-                    )
+                    selectedTooltip = if (isAr) {
+                        InventoryTooltipSpec(
+                            title = "درع الـ 7 أيام التلقائي",
+                            subtitle = "تفعيل تلقائي نخبوي",
+                            rarityLabel = "فئة نخبوية",
+                            accentColor = Color(0xFFFFD700),
+                            secondaryColor = Color(0xFFFF007A),
+                            icon = Icons.Default.VerifiedUser,
+                            mechanics = "درع وقائي أوتوماتيكي نخبوي يعمل كصمام أمان عالي المستوى عند التعرض لضربات مكثفة في يوم واحد.",
+                            bonuses = "يُفعّل تلقائياً وفورياً عند تسجيل 3 إلى 5 سترايكات في نفس اليوم، ليوقف إضافة +3 نقاط خمول يومية لمدة 7 أيام كاملة (168 ساعة).",
+                            expirationRules = "تبدأ مدة الـ 7 أيام تلقائياً لحظة تفعيل الكومبو وتنتهي بعد انقضاء 168 ساعة، ولا يمكن تخزينه يدوياً."
+                        )
+                    } else {
+                        InventoryTooltipSpec(
+                            title = "7-Day Automated Strike Shield",
+                            subtitle = "Luxury Auto Defense",
+                            rarityLabel = "LUXURY TIER",
+                            accentColor = Color(0xFFFFD700),
+                            secondaryColor = Color(0xFFFF007A),
+                            icon = Icons.Default.VerifiedUser,
+                            mechanics = "An elite automatic protective shield that acts as a high-tier safeguard during intense single-day strikes.",
+                            bonuses = "Activates instantly when 3 to 5 strikes are recorded in the same day, halting the +3 daily inactivity accrual for 7 full days (168 hours).",
+                            expirationRules = "The 7-day timer starts immediately upon combo trigger and expires after 168 hours. Cannot be stored manually."
+                        )
+                    }
                 }
             )
         }
@@ -320,8 +339,9 @@ fun InventoryScreen(
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 InventoryShieldCard(
-                    title = "درع الـ 24 ساعة (24h Shield)",
-                    rarity = "COMMON • شائع",
+                    title = if (isAr) "درع الـ 24 ساعة" else "24h Protective Shield",
+                    rarity = if (isAr) "شائع" else "COMMON",
+                    isAr = isAr,
                     count = shields24h,
                     isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_24H,
                     accentColor = NeonCyan,
@@ -332,24 +352,39 @@ fun InventoryScreen(
                         viewModel.activate1DayShield()
                     },
                     onLongPress2s = {
-                        selectedTooltip = InventoryTooltipSpec(
-                            titleAr = "درع الـ 24 ساعة",
-                            titleEn = "24-Hour Protective Shield",
-                            rarityLabel = "COMMON • شائع",
-                            accentColor = NeonCyan,
-                            secondaryColor = NeonEmerald,
-                            icon = Icons.Default.Shield,
-                            mechanicsAr = "درع تكتيكي يجمّد عداد الخمول اليومي مؤقتاً لحماية رصيد الشعلة.",
-                            bonusesAr = "يمنع إضافة +3 نقاط خمول يومية لمدة 24 ساعة متواصلة، ويُفعّل فورياً عند استلامه من المسار.",
-                            expirationRulesAr = "ينتهي مفعوله بعد 24 ساعة من لحظة التفعيل. إذا كان هناك درع نشط، تُضاف الـ 24 ساعة إلى وقت الانتهاء."
-                        )
+                        selectedTooltip = if (isAr) {
+                            InventoryTooltipSpec(
+                                title = "درع الـ 24 ساعة",
+                                subtitle = "حماية تكتيكية ليوم واحد",
+                                rarityLabel = "شائع",
+                                accentColor = NeonCyan,
+                                secondaryColor = NeonEmerald,
+                                icon = Icons.Default.Shield,
+                                mechanics = "درع تكتيكي يجمّد عداد الخمول اليومي مؤقتاً لحماية رصيد الشعلة.",
+                                bonuses = "يمنع إضافة +3 نقاط خمول يومية لمدة 24 ساعة متواصلة، ويُفعّل فورياً عند استلامه من المسار.",
+                                expirationRules = "ينتهي مفعوله بعد 24 ساعة من لحظة التفعيل. إذا كان هناك درع نشط، تُضاف الـ 24 ساعة إلى وقت الانتهاء."
+                            )
+                        } else {
+                            InventoryTooltipSpec(
+                                title = "24-Hour Protective Shield",
+                                subtitle = "1-Day Tactical Barrier",
+                                rarityLabel = "COMMON",
+                                accentColor = NeonCyan,
+                                secondaryColor = NeonEmerald,
+                                icon = Icons.Default.Shield,
+                                mechanics = "A tactical barrier that temporarily freezes daily inactivity accrual to protect your Flame score.",
+                                bonuses = "Prevents +3 daily inactivity points for 24 continuous hours and auto-activates when claimed.",
+                                expirationRules = "Expires 24 hours after activation. If a shield is already active, adds 24 hours to its remaining duration."
+                            )
+                        }
                     },
                     testTag = "inv_shield_24h"
                 )
 
                 InventoryShieldCard(
-                    title = "درع الـ 48 ساعة (48h Shield)",
-                    rarity = "UNCOMMON • غير شائع",
+                    title = if (isAr) "درع الـ 48 ساعة" else "48h Protective Shield",
+                    rarity = if (isAr) "غير شائع" else "UNCOMMON",
+                    isAr = isAr,
                     count = shields48h,
                     isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_48H,
                     accentColor = NeonEmerald,
@@ -360,24 +395,39 @@ fun InventoryScreen(
                         viewModel.activate48hShield()
                     },
                     onLongPress2s = {
-                        selectedTooltip = InventoryTooltipSpec(
-                            titleAr = "درع الـ 48 ساعة",
-                            titleEn = "48-Hour Protective Shield",
-                            rarityLabel = "UNCOMMON • غير شائع",
-                            accentColor = NeonEmerald,
-                            secondaryColor = NeonCyan,
-                            icon = Icons.Default.Shield,
-                            mechanicsAr = "حاجز سيبراني متوسط المدى يحمي استقرار الشعلة عبر يومين متتاليين.",
-                            bonusesAr = "يوقف تزايد نقاط الخمول (+3 نقاط/يوم) لمدة 48 ساعة متواصلة، مع أولوية التفعيل التلقائي عند الاستلام.",
-                            expirationRulesAr = "صلاحية الحماية تمتد لـ 48 ساعة متصلة؛ وفي حال وجود درع نشط مسبقاً تتراكم المدة تلقائياً."
-                        )
+                        selectedTooltip = if (isAr) {
+                            InventoryTooltipSpec(
+                                title = "درع الـ 48 ساعة",
+                                subtitle = "حاجز سيبراني متوسط المدى",
+                                rarityLabel = "غير شائع",
+                                accentColor = NeonEmerald,
+                                secondaryColor = NeonCyan,
+                                icon = Icons.Default.Shield,
+                                mechanics = "حاجز سيبراني متوسط المدى يحمي استقرار الشعلة عبر يومين متتاليين.",
+                                bonuses = "يوقف تزايد نقاط الخمول (+3 نقاط/يوم) لمدة 48 ساعة متواصلة، مع أولوية التفعيل التلقائي عند الاستلام.",
+                                expirationRules = "صلاحية الحماية تمتد لـ 48 ساعة متصلة؛ وفي حال وجود درع نشط مسبقاً تتراكم المدة تلقائياً."
+                            )
+                        } else {
+                            InventoryTooltipSpec(
+                                title = "48-Hour Protective Shield",
+                                subtitle = "Mid-Range Cyber Barrier",
+                                rarityLabel = "UNCOMMON",
+                                accentColor = NeonEmerald,
+                                secondaryColor = NeonCyan,
+                                icon = Icons.Default.Shield,
+                                mechanics = "A mid-range cyber barrier safeguarding Flame stability across two consecutive days.",
+                                bonuses = "Halts inactivity growth (+3 pts/day) for 48 consecutive hours.",
+                                expirationRules = "Protection lasts 48 consecutive hours and stacks onto any currently active shield."
+                            )
+                        }
                     },
                     testTag = "inv_shield_48h"
                 )
 
                 InventoryShieldCard(
-                    title = "درع الـ 72 ساعة (72h Shield)",
-                    rarity = "RARE • نادر",
+                    title = if (isAr) "درع الـ 72 ساعة" else "72h Protective Shield",
+                    rarity = if (isAr) "نادر" else "RARE",
+                    isAr = isAr,
                     count = shields72h,
                     isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_72H,
                     accentColor = NeonAmber,
@@ -388,17 +438,31 @@ fun InventoryScreen(
                         viewModel.activateManualShield()
                     },
                     onLongPress2s = {
-                        selectedTooltip = InventoryTooltipSpec(
-                            titleAr = "درع الـ 72 ساعة",
-                            titleEn = "72-Hour Protective Shield",
-                            rarityLabel = "RARE • نادر",
-                            accentColor = NeonAmber,
-                            secondaryColor = Color(0xFFEA580C),
-                            icon = Icons.Default.VerifiedUser,
-                            mechanicsAr = "درع حماية عالي التحمل يُمنح من مكافآت المحطات المتقدمة أو كتعويض عند عقوبة الضربة المزدوجة (Double Strike).",
-                            bonusesAr = "يجمّد نقاط الخمول اليومية (+3 نقاط/يوم) لمدة 3 أيام كاملة (72 ساعة).",
-                            expirationRulesAr = "يُستهلك الدرع عند التفعيل اليدوي أو الفوري ويمتد مفعوله 72 ساعة كاملة من التوقيت الحالي أو الممدد."
-                        )
+                        selectedTooltip = if (isAr) {
+                            InventoryTooltipSpec(
+                                title = "درع الـ 72 ساعة",
+                                subtitle = "درع حماية عالي التحمل",
+                                rarityLabel = "نادر",
+                                accentColor = NeonAmber,
+                                secondaryColor = Color(0xFFEA580C),
+                                icon = Icons.Default.VerifiedUser,
+                                mechanics = "درع حماية عالي التحمل يُمنح من مكافآت المحطات المتقدمة أو كتعويض عند عقوبة الضربة المزدوجة.",
+                                bonuses = "يجمّد نقاط الخمول اليومية (+3 نقاط/يوم) لمدة 3 أيام كاملة (72 ساعة).",
+                                expirationRules = "يُستهلك الدرع عند التفعيل اليدوي أو الفوري ويمتد مفعوله 72 ساعة كاملة من التوقيت الحالي أو الممدد."
+                            )
+                        } else {
+                            InventoryTooltipSpec(
+                                title = "72-Hour Protective Shield",
+                                subtitle = "Heavy-Duty Armor",
+                                rarityLabel = "RARE",
+                                accentColor = NeonAmber,
+                                secondaryColor = Color(0xFFEA580C),
+                                icon = Icons.Default.VerifiedUser,
+                                mechanics = "Heavy-duty shield earned from advanced station rewards or Double Strike compensation.",
+                                bonuses = "Freezes daily inactivity points (+3 pts/day) for 3 full days (72 hours).",
+                                expirationRules = "Consumed on manual or instant activation and extends protection for 72 full hours."
+                            )
+                        }
                     },
                     testTag = "inv_shield_72h"
                 )
@@ -411,8 +475,8 @@ fun InventoryScreen(
         item {
             Spacer(modifier = Modifier.height(4.dp))
             SectionHeaderLabel(
-                title = "مفاتيح التجاوز (Skip-Keys)",
-                subtitle = "السعة القصوى لكل فئة: 30 مفتاح (تُستثنى المهام السنوية)",
+                title = if (isAr) "مفاتيح التجاوز" else "Skip-Keys",
+                subtitle = if (isAr) "السعة القصوى لكل فئة: 30 مفتاحاً (تُستثنى المهام السنوية)" else "Max Capacity: 30 per tier (Annual tasks excluded)",
                 accentColor = NeonAmber,
                 icon = Icons.Default.VpnKey
             )
@@ -425,69 +489,111 @@ fun InventoryScreen(
             ) {
                 InventoryKeyTile(
                     modifier = Modifier.weight(1f),
-                    title = SkipKeyType.WOODEN.nameAr,
-                    rarity = "COMMON",
-                    usesLabel = "استخدام 1",
+                    title = SkipKeyType.WOODEN.getLocalizedName(currentLang),
+                    rarity = if (isAr) "شائع" else "COMMON",
+                    usesLabel = if (isAr) "استخدام واحد" else "1 Use",
                     count = woodenKeys,
                     accentColor = Color(0xFFD97706),
                     onLongPress2s = {
-                        selectedTooltip = InventoryTooltipSpec(
-                            titleAr = "المفتاح الخشبي (Wooden Key)",
-                            titleEn = "Wooden Skip-Key",
-                            rarityLabel = "COMMON • شائع",
-                            accentColor = Color(0xFFD97706),
-                            secondaryColor = Color(0xFFB45309),
-                            icon = Icons.Default.VpnKey,
-                            mechanicsAr = "مفتاح فك شيفرة قياسي لتجاوز المهام اليومية والأسبوعية البسيطة وحصد نقاط الـ XP فوراً.",
-                            bonusesAr = "يمنح استخداماً واحداً (1x) لإكمال مهمة متوافقة فوراً مع الحصول على كامل مكافأة الـ XP الخاصة بها.",
-                            expirationRulesAr = "لا تنتهي صلاحيته بالتخزين (الحد الأقصى 30 مفتاح). ملاحظة صارمة: لا يمكن استخدامه لتجاوز المهام السنوية."
-                        )
+                        selectedTooltip = if (isAr) {
+                            InventoryTooltipSpec(
+                                title = "المفتاح الخشبي",
+                                subtitle = "مفتاح تجاوز قياسي",
+                                rarityLabel = "شائع",
+                                accentColor = Color(0xFFD97706),
+                                secondaryColor = Color(0xFFB45309),
+                                icon = Icons.Default.VpnKey,
+                                mechanics = "مفتاح فك شيفرة قياسي لتجاوز المهام اليومية والأسبوعية البسيطة وحصد نقاط الخبرة فوراً.",
+                                bonuses = "يمنح استخداماً واحداً لإكمال مهمة متوافقة فوراً مع الحصول على كامل مكافأة الخبرة الخاصة بها.",
+                                expirationRules = "لا تنتهي صلاحيته بالتخزين (الحد الأقصى 30 مفتاحاً). ملاحظة صارمة: لا يمكن استخدامه لتجاوز المهام السنوية."
+                            )
+                        } else {
+                            InventoryTooltipSpec(
+                                title = "Wooden Skip-Key",
+                                subtitle = "Standard Bypass Key",
+                                rarityLabel = "COMMON",
+                                accentColor = Color(0xFFD97706),
+                                secondaryColor = Color(0xFFB45309),
+                                icon = Icons.Default.VpnKey,
+                                mechanics = "Standard decryption key to bypass basic Daily and Weekly tasks and claim XP immediately.",
+                                bonuses = "Provides 1 use to complete a compatible task immediately with full XP bounty.",
+                                expirationRules = "Never expires in storage (Max 30 keys). Strictly prohibited on Annual tasks."
+                            )
+                        }
                     },
                     testTag = "inv_key_wooden"
                 )
 
                 InventoryKeyTile(
                     modifier = Modifier.weight(1f),
-                    title = SkipKeyType.BRONZE.nameAr,
-                    rarity = "UNCOMMON",
-                    usesLabel = "استخدامان",
+                    title = SkipKeyType.BRONZE.getLocalizedName(currentLang),
+                    rarity = if (isAr) "غير شائع" else "UNCOMMON",
+                    usesLabel = if (isAr) "استخدامان" else "2 Uses",
                     count = bronzeKeys,
                     accentColor = Color(0xFFF59E0B),
                     onLongPress2s = {
-                        selectedTooltip = InventoryTooltipSpec(
-                            titleAr = "المفتاح البرونزي (Bronze Key)",
-                            titleEn = "Bronze Skip-Key",
-                            rarityLabel = "UNCOMMON • غير شائع",
-                            accentColor = Color(0xFFF59E0B),
-                            secondaryColor = Color(0xFFEA580C),
-                            icon = Icons.Default.VpnKey,
-                            mechanicsAr = "مفتاح مطوّر يسمح بتخطي المهام ذات الصعوبة المتوسطة ضمن المهام اليومية والأسبوعية والشهرية.",
-                            bonusesAr = "يملك قدرة استخدامين (2x) لتمرير المهام المؤهلة وحصد نقاط الـ XP دون تأخير.",
-                            expirationRulesAr = "دائم في المخزون حتى استهلاكه (السعة القصوى 30 مفتاح). ممنوع استخدامه في المهام السنوية."
-                        )
+                        selectedTooltip = if (isAr) {
+                            InventoryTooltipSpec(
+                                title = "المفتاح البرونزي",
+                                subtitle = "مفتاح تجاوز مطوّر",
+                                rarityLabel = "غير شائع",
+                                accentColor = Color(0xFFF59E0B),
+                                secondaryColor = Color(0xFFEA580C),
+                                icon = Icons.Default.VpnKey,
+                                mechanics = "مفتاح مطوّر يسمح بتخطي المهام ذات الصعوبة المتوسطة ضمن المهام اليومية والأسبوعية والشهرية.",
+                                bonuses = "يملك قدرة استخدامين لتمرير المهام المؤهلة وحصد نقاط الخبرة دون تأخير.",
+                                expirationRules = "دائم في المخزون حتى استهلاكه (السعة القصوى 30 مفتاحاً). ممنوع استخدامه في المهام السنوية."
+                            )
+                        } else {
+                            InventoryTooltipSpec(
+                                title = "Bronze Skip-Key",
+                                subtitle = "Upgraded Bypass Key",
+                                rarityLabel = "UNCOMMON",
+                                accentColor = Color(0xFFF59E0B),
+                                secondaryColor = Color(0xFFEA580C),
+                                icon = Icons.Default.VpnKey,
+                                mechanics = "Upgraded key capable of bypassing medium-difficulty tasks in Daily, Weekly, and Monthly pools.",
+                                bonuses = "Provides 2 uses to clear eligible tasks and harvest XP without delay.",
+                                expirationRules = "Permanent in inventory until consumed (Max 30 keys). Cannot skip Annual tasks."
+                            )
+                        }
                     },
                     testTag = "inv_key_bronze"
                 )
 
                 InventoryKeyTile(
                     modifier = Modifier.weight(1f),
-                    title = SkipKeyType.SILVER.nameAr,
-                    rarity = "RARE",
-                    usesLabel = "3 استخدامات",
+                    title = SkipKeyType.SILVER.getLocalizedName(currentLang),
+                    rarity = if (isAr) "نادر" else "RARE",
+                    usesLabel = if (isAr) "3 استخدامات" else "3 Uses",
                     count = silverKeys,
                     accentColor = Color(0xFFE2E8F0),
                     onLongPress2s = {
-                        selectedTooltip = InventoryTooltipSpec(
-                            titleAr = "المفتاح الفضي (Silver Key)",
-                            titleEn = "Silver Skip-Key",
-                            rarityLabel = "RARE • نادر",
-                            accentColor = Color(0xFFE2E8F0),
-                            secondaryColor = NeonCyan,
-                            icon = Icons.Default.VpnKey,
-                            mechanicsAr = "مفتاح اختراق رفيع المستوى قادر على تجاوز المهام عالية المتطلبات في القوائم الدورية.",
-                            bonusesAr = "يمتلك 3 استخدامات (3x) مع أقصى كفاءة لحصد مكافآت الـ XP العالية فوراً.",
-                            expirationRulesAr = "يبقى محفوظاً حتى استنفاد شحناته (الحد الأقصى 30 مفتاح). لا يشمل المهام السنوية التي تتطلب إنجازاً فعلياً."
-                        )
+                        selectedTooltip = if (isAr) {
+                            InventoryTooltipSpec(
+                                title = "المفتاح الفضي",
+                                subtitle = "مفتاح اختراق رفيع المستوى",
+                                rarityLabel = "نادر",
+                                accentColor = Color(0xFFE2E8F0),
+                                secondaryColor = NeonCyan,
+                                icon = Icons.Default.VpnKey,
+                                mechanics = "مفتاح اختراق رفيع المستوى قادر على تجاوز المهام عالية المتطلبات في القوائم الدورية.",
+                                bonuses = "يمتلك 3 استخدامات مع أقصى كفاءة لحصد مكافآت الخبرة العالية فوراً.",
+                                expirationRules = "يبقى محفوظاً حتى استنفاد شحناته (الحد الأقصى 30 مفتاحاً). لا يشمل المهام السنوية التي تتطلب إنجازاً فعلياً."
+                            )
+                        } else {
+                            InventoryTooltipSpec(
+                                title = "Silver Skip-Key",
+                                subtitle = "High-Tier Breach Key",
+                                rarityLabel = "RARE",
+                                accentColor = Color(0xFFE2E8F0),
+                                secondaryColor = NeonCyan,
+                                icon = Icons.Default.VpnKey,
+                                mechanics = "High-tier breach key capable of bypassing high-requirement recurring tasks.",
+                                bonuses = "Carries 3 uses for maximum efficiency in harvesting high XP bounties.",
+                                expirationRules = "Retained until charges are exhausted (Max 30 keys). Excludes Annual tasks."
+                            )
+                        }
                     },
                     testTag = "inv_key_silver"
                 )
@@ -500,8 +606,8 @@ fun InventoryScreen(
         item {
             Spacer(modifier = Modifier.height(4.dp))
             SectionHeaderLabel(
-                title = "الجرعات السيبرانية (Cybernetic Potions)",
-                subtitle = "السعة القصوى: 3 جرعات لكل فئة • التفاعلات الكيميائية الحيوية",
+                title = if (isAr) "الجرعات السيبرانية" else "Cybernetic Potions",
+                subtitle = if (isAr) "السعة القصوى: 3 جرعات لكل فئة • التفاعلات الكيميائية الحيوية" else "Max Capacity: 3 per tier • Biochemical Enhancers",
                 accentColor = NeonCyan,
                 icon = Icons.Default.Science
             )
@@ -511,11 +617,14 @@ fun InventoryScreen(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // 1. Pulse Elixir
                 InventoryPotionCard(
-                    title = PotionType.PULSE_ELIXIR.nameAr,
-                    subtitleEn = "Pulse Elixir",
-                    rarity = "COMMON • الفئة 1",
+                    title = PotionType.PULSE_ELIXIR.getLocalizedName(currentLang),
+                    subtitle = if (isAr) "الفئة الأولى" else "Tier 1",
+                    rarity = if (isAr) "شائع" else "COMMON",
+                    isAr = isAr,
                     count = pulseElixirCount,
-                    statusBadge = if (pulseUsesLeft > 0) "نشط ($pulseUsesLeft استخدامات)" else null,
+                    statusBadge = if (pulseUsesLeft > 0) {
+                        if (isAr) "نشط ($pulseUsesLeft استخدامات)" else "Active ($pulseUsesLeft uses)"
+                    } else null,
                     accentColor = PotionType.PULSE_ELIXIR.color,
                     icon = Icons.Default.Bolt,
                     canActivate = pulseElixirCount > 0,
@@ -525,28 +634,45 @@ fun InventoryScreen(
                         ProfileManager.usePulseElixir(context)
                     },
                     onLongPress2s = {
-                        selectedTooltip = InventoryTooltipSpec(
-                            titleAr = PotionType.PULSE_ELIXIR.nameAr,
-                            titleEn = "Pulse Elixir",
-                            rarityLabel = "COMMON • الفئة الأولى",
-                            accentColor = PotionType.PULSE_ELIXIR.color,
-                            secondaryColor = NeonEmerald,
-                            icon = Icons.Default.Bolt,
-                            mechanicsAr = "منشط نبضي يضاعف فاعلية زر التبريد (Deflame) لخفض طاقة الشعلة بسرعة أكبر.",
-                            bonusesAr = "يضيف +5 نقاط خصم إضافية لكل ضغطة على زر Deflame خلال الـ 3 تفعيلات القادمة.",
-                            expirationRulesAr = "ينتهي تأثيره تلقائياً بمجرد استهلاك الـ 3 تفعيلات المتتالية لزر Deflame."
-                        )
+                        selectedTooltip = if (isAr) {
+                            InventoryTooltipSpec(
+                                title = PotionType.PULSE_ELIXIR.nameAr,
+                                subtitle = "الفئة الأولى",
+                                rarityLabel = "شائع",
+                                accentColor = PotionType.PULSE_ELIXIR.color,
+                                secondaryColor = NeonEmerald,
+                                icon = Icons.Default.Bolt,
+                                mechanics = "منشّط نبضي يضاعف فاعلية زر التبريد لخفض طاقة الشعلة بسرعة أكبر.",
+                                bonuses = "يضيف +5 نقاط خصم إضافية لكل ضغطة على زر التبريد خلال التفعيلات الثلاث القادمة.",
+                                expirationRules = "ينتهي تأثيره تلقائياً بمجرد استهلاك التفعيلات الثلاث المتتالية."
+                            )
+                        } else {
+                            InventoryTooltipSpec(
+                                title = PotionType.PULSE_ELIXIR.nameEn,
+                                subtitle = "Tier 1 Enhancer",
+                                rarityLabel = "COMMON",
+                                accentColor = PotionType.PULSE_ELIXIR.color,
+                                secondaryColor = NeonEmerald,
+                                icon = Icons.Default.Bolt,
+                                mechanics = "Pulse booster that amplifies the Deflame cooldown button for faster Flame reduction.",
+                                bonuses = "Adds +5 bonus deduction points per Deflame press for the next 3 activations.",
+                                expirationRules = "Automatically expires once the 3 consecutive Deflame uses are consumed."
+                            )
+                        }
                     },
                     testTag = "inv_potion_pulse"
                 )
 
                 // 2. Shadow-Grip Serum
                 InventoryPotionCard(
-                    title = PotionType.SHADOW_GRIP_SERUM.nameAr,
-                    subtitleEn = "Shadow-Grip Serum",
-                    rarity = "UNCOMMON • الفئة 2",
+                    title = PotionType.SHADOW_GRIP_SERUM.getLocalizedName(currentLang),
+                    subtitle = if (isAr) "الفئة الثانية" else "Tier 2",
+                    rarity = if (isAr) "غير شائع" else "UNCOMMON",
+                    isAr = isAr,
                     count = shadowSerumCount,
-                    statusBadge = if (isShadowActive) "نشط (تبطيء 50%)" else null,
+                    statusBadge = if (isShadowActive) {
+                        if (isAr) "نشط (تبطيء 50%)" else "Active (50% Slowdown)"
+                    } else null,
                     accentColor = PotionType.SHADOW_GRIP_SERUM.color,
                     icon = Icons.Default.Science,
                     canActivate = shadowSerumCount > 0 && !isShadowActive,
@@ -556,55 +682,91 @@ fun InventoryScreen(
                         ProfileManager.useShadowSerum(context)
                     },
                     onLongPress2s = {
-                        selectedTooltip = InventoryTooltipSpec(
-                            titleAr = PotionType.SHADOW_GRIP_SERUM.nameAr,
-                            titleEn = "Shadow-Grip Serum",
-                            rarityLabel = "UNCOMMON • الفئة الثانية",
-                            accentColor = PotionType.SHADOW_GRIP_SERUM.color,
-                            secondaryColor = Color(0xFF7E22CE),
-                            icon = Icons.Default.Science,
-                            mechanicsAr = "مصل كابح للانجراف الحراري يقوم بتهدئة تسارع نقاط الخمول اليومي في النظام.",
-                            bonusesAr = "يقلل وتيرة صعود نقاط الشعلة الناتجة عن الخمول اليومي بنسبة 50% لمدة 3 أيام متتالية.",
-                            expirationRulesAr = "يبدأ العد التنازلي لمدة 72 ساعة لحظة الحقن، ويعود معدل الخمول إلى طبيعته بعد انتهاء المدة."
-                        )
+                        selectedTooltip = if (isAr) {
+                            InventoryTooltipSpec(
+                                title = PotionType.SHADOW_GRIP_SERUM.nameAr,
+                                subtitle = "الفئة الثانية",
+                                rarityLabel = "غير شائع",
+                                accentColor = PotionType.SHADOW_GRIP_SERUM.color,
+                                secondaryColor = Color(0xFF7E22CE),
+                                icon = Icons.Default.Science,
+                                mechanics = "مصل كابح للانجراف الحراري يقوم بتهدئة تسارع نقاط الخمول اليومي في النظام.",
+                                bonuses = "يقلّل وتيرة صعود نقاط الشعلة الناتجة عن الخمول اليومي بنسبة 50% لمدة 3 أيام متتالية.",
+                                expirationRules = "يبدأ العد التنازلي لمدة 72 ساعة لحظة الحقن، ويعود معدل الخمول إلى طبيعته بعد انتهاء المدة."
+                            )
+                        } else {
+                            InventoryTooltipSpec(
+                                title = PotionType.SHADOW_GRIP_SERUM.nameEn,
+                                subtitle = "Tier 2 Stabilizer",
+                                rarityLabel = "UNCOMMON",
+                                accentColor = PotionType.SHADOW_GRIP_SERUM.color,
+                                secondaryColor = Color(0xFF7E22CE),
+                                icon = Icons.Default.Science,
+                                mechanics = "Thermal-drift suppressor that calms daily inactivity point acceleration.",
+                                bonuses = "Reduces Flame daily inactivity climb rate by 50% for 3 consecutive days.",
+                                expirationRules = "72-hour countdown begins immediately on injection and reverts automatically upon expiry."
+                            )
+                        }
                     },
                     testTag = "inv_potion_shadow"
                 )
 
                 // 3. Gabriel's Purity Droplet
                 InventoryPotionCard(
-                    title = PotionType.GABRIEL_PURITY_DROPLET.nameAr,
-                    subtitleEn = "Gabriel's Purity Droplet",
-                    rarity = "RARE • الفئة 3",
+                    title = PotionType.GABRIEL_PURITY_DROPLET.getLocalizedName(currentLang),
+                    subtitle = if (isAr) "الفئة الثالثة" else "Tier 3",
+                    rarity = if (isAr) "نادر" else "RARE",
+                    isAr = isAr,
                     count = gabrielDropletCount,
-                    statusBadge = if (isGabrielActive) "نشط تلقائياً (+50% نمو)" else "تفعيل تلقائي عند الكسب",
+                    statusBadge = if (isGabrielActive) {
+                        if (isAr) "نشط تلقائياً (+50% نمو)" else "Auto-Active (+50% Growth)"
+                    } else {
+                        if (isAr) "تفعيل تلقائي عند الكسب" else "Auto-Activates on Receipt"
+                    },
                     accentColor = PotionType.GABRIEL_PURITY_DROPLET.color,
                     icon = Icons.Default.WaterDrop,
                     canActivate = false,
                     onActivate = {},
                     onLongPress2s = {
-                        selectedTooltip = InventoryTooltipSpec(
-                            titleAr = PotionType.GABRIEL_PURITY_DROPLET.nameAr,
-                            titleEn = "Gabriel's Purity Droplet",
-                            rarityLabel = "RARE • الفئة الثالثة",
-                            accentColor = PotionType.GABRIEL_PURITY_DROPLET.color,
-                            secondaryColor = NeonAmber,
-                            icon = Icons.Default.WaterDrop,
-                            mechanicsAr = "قطرة نقاء نورانية تتفاعل تلقائياً مع الحمض النووي فور استلامها من مكافآت المسار.",
-                            bonusesAr = "تسرّع وتيرة نمو نقاط الشعلة بنسبة +50% خلال احتساب الخمول لدفع التقدم نحو المسار الملائكي.",
-                            expirationRulesAr = "تُفعّل تلقائياً وفورياً عند الجني دون تخزين وتستمر فعاليتها لمدة 7 أيام كاملة (168 ساعة)."
-                        )
+                        selectedTooltip = if (isAr) {
+                            InventoryTooltipSpec(
+                                title = PotionType.GABRIEL_PURITY_DROPLET.nameAr,
+                                subtitle = "الفئة الثالثة",
+                                rarityLabel = "نادر",
+                                accentColor = PotionType.GABRIEL_PURITY_DROPLET.color,
+                                secondaryColor = NeonAmber,
+                                icon = Icons.Default.WaterDrop,
+                                mechanics = "قطرة نقاء نورانية تتفاعل تلقائياً مع النظام فور استلامها من مكافآت المسار.",
+                                bonuses = "تُسرّع وتيرة نمو نقاط الشعلة بنسبة +50% خلال احتساب الخمول لدفع التقدم نحو المسار الملائكي.",
+                                expirationRules = "تُفعّل تلقائياً وفورياً عند الجني دون تخزين وتستمر فعاليتها لمدة 7 أيام كاملة (168 ساعة)."
+                            )
+                        } else {
+                            InventoryTooltipSpec(
+                                title = PotionType.GABRIEL_PURITY_DROPLET.nameEn,
+                                subtitle = "Tier 3 Catalyst",
+                                rarityLabel = "RARE",
+                                accentColor = PotionType.GABRIEL_PURITY_DROPLET.color,
+                                secondaryColor = NeonAmber,
+                                icon = Icons.Default.WaterDrop,
+                                mechanics = "Radiant purity droplet that reacts automatically upon being claimed from Roadmap rewards.",
+                                bonuses = "Accelerates Flame growth by +50% during inactivity calculation toward the Angelic path.",
+                                expirationRules = "Auto-activates immediately on receipt for 7 full days (168 hours)."
+                            )
+                        }
                     },
                     testTag = "inv_potion_gabriel"
                 )
 
                 // 4. Absolute Cryo-Infusion
                 InventoryPotionCard(
-                    title = PotionType.ABSOLUTE_CRYO_INFUSION.nameAr,
-                    subtitleEn = "Absolute Cryo-Infusion",
-                    rarity = "EPIC • الفئة 4",
+                    title = PotionType.ABSOLUTE_CRYO_INFUSION.getLocalizedName(currentLang),
+                    subtitle = if (isAr) "الفئة الرابعة" else "Tier 4",
+                    rarity = if (isAr) "ملحمي" else "EPIC",
+                    isAr = isAr,
                     count = cryoInfusionCount,
-                    statusBadge = if (hasCryoArmed) "مسلّح للستريك القادم (+100)" else null,
+                    statusBadge = if (hasCryoArmed) {
+                        if (isAr) "مسلّح للستريك القادم (+100)" else "Armed for Next Strike (+100)"
+                    } else null,
                     accentColor = PotionType.ABSOLUTE_CRYO_INFUSION.color,
                     icon = Icons.Default.AcUnit,
                     canActivate = cryoInfusionCount > 0 && !hasCryoArmed,
@@ -614,17 +776,31 @@ fun InventoryScreen(
                         ProfileManager.useCryoInfusion(context)
                     },
                     onLongPress2s = {
-                        selectedTooltip = InventoryTooltipSpec(
-                            titleAr = PotionType.ABSOLUTE_CRYO_INFUSION.nameAr,
-                            titleEn = "Absolute Cryo-Infusion",
-                            rarityLabel = "EPIC / RARE • الفئة الرابعة",
-                            accentColor = PotionType.ABSOLUTE_CRYO_INFUSION.color,
-                            secondaryColor = Color(0xFF0284C7),
-                            icon = Icons.Default.AcUnit,
-                            mechanicsAr = "حقنة تبريد كريوجينية مطلقة تسلّح الستريك القادم بطاقة تعزيز استثنائية.",
-                            bonusesAr = "تمنح +100 نقطة بونص لتعزيز قوة وتأثير الستريك القادم.",
-                            expirationRulesAr = "اختيارية التفعيل من المخزون؛ وتتفعل تلقائياً إذا مرّ 30 يوماً دون استخدامها، وتُستهلك بضربة واحدة."
-                        )
+                        selectedTooltip = if (isAr) {
+                            InventoryTooltipSpec(
+                                title = PotionType.ABSOLUTE_CRYO_INFUSION.nameAr,
+                                subtitle = "الفئة الرابعة",
+                                rarityLabel = "ملحمي",
+                                accentColor = PotionType.ABSOLUTE_CRYO_INFUSION.color,
+                                secondaryColor = Color(0xFF0284C7),
+                                icon = Icons.Default.AcUnit,
+                                mechanics = "حقنة تبريد مطلقة تسلّح الستريك القادم بطاقة تعزيز استثنائية.",
+                                bonuses = "تمنح +100 نقطة مكافأة لتعزيز قوة وتأثير الستريك القادم.",
+                                expirationRules = "اختيارية التفعيل من المخزون؛ وتتفعل تلقائياً إذا مرّ 30 يوماً دون استخدامها، وتُستهلك بضربة واحدة."
+                            )
+                        } else {
+                            InventoryTooltipSpec(
+                                title = PotionType.ABSOLUTE_CRYO_INFUSION.nameEn,
+                                subtitle = "Tier 4 Cryogenic",
+                                rarityLabel = "EPIC",
+                                accentColor = PotionType.ABSOLUTE_CRYO_INFUSION.color,
+                                secondaryColor = Color(0xFF0284C7),
+                                icon = Icons.Default.AcUnit,
+                                mechanics = "Cryogenic infusion that arms your upcoming strike with exceptional boost power.",
+                                bonuses = "Grants +100 bonus points to amplify your next strike.",
+                                expirationRules = "Manual activation from Inventory; auto-activates after 30 days if unused and consumes on one strike."
+                            )
+                        }
                     },
                     testTag = "inv_potion_cryo"
                 )
@@ -637,8 +813,8 @@ fun InventoryScreen(
         item {
             Spacer(modifier = Modifier.height(4.dp))
             SectionHeaderLabel(
-                title = "الإكسير الأسطوري الفائق (Legendary Tier 5)",
-                subtitle = "الجائزة الكبرى النهائية في نظام StrikePulse",
+                title = if (isAr) "الإكسير الأسطوري الفائق (الفئة 5)" else "Legendary Tier 5 Elixir",
+                subtitle = if (isAr) "الجائزة الكبرى النهائية في النظام" else "The Ultimate Grand Reward",
                 accentColor = Color(0xFFFF007A),
                 icon = Icons.Default.LocalFireDepartment
             )
@@ -646,6 +822,7 @@ fun InventoryScreen(
 
         item {
             EternalResurgenceLegendaryCard(
+                isAr = isAr,
                 count = eternalRebirthCount,
                 isActiveImmunity = hasRebirthImmunity,
                 animAngle = animAngle,
@@ -656,17 +833,31 @@ fun InventoryScreen(
                     ProfileManager.useEternalRebirth(context)
                 },
                 onLongPress2s = {
-                    selectedTooltip = InventoryTooltipSpec(
-                        titleAr = "جرعة الانبعاث الأبدي (Eternal Resurgence Potion)",
-                        titleEn = "Eternal Resurgence Potion • Tier 5",
-                        rarityLabel = "LEGENDARY TIER 5 • أسطوري مطلق",
-                        accentColor = Color(0xFFFF007A),
-                        secondaryColor = Color(0xFFFFD700),
-                        icon = Icons.Default.AutoAwesome,
-                        mechanicsAr = "أندر وأقوى جوهرة كيميائية في StrikePulse؛ تُمنح حصرياً كجائزة ختامية عند الوصول للمحطة 500.",
-                        bonusesAr = "تمنح درع مناعة أبدي ضد التصفير الكامل للنظام، وتفتح فوراً اللقب الأسمى «سيد النقوشة (Gary Master)».",
-                        expirationRulesAr = "أبدية المفعول (Permanent / Infinite)؛ بمجرد تفعيلها تظل حصانتها ومجدها مفعّلين للأبد."
-                    )
+                    selectedTooltip = if (isAr) {
+                        InventoryTooltipSpec(
+                            title = PotionType.ETERNAL_REBIRTH_ELIXIR.nameAr,
+                            subtitle = "الفئة الخامسة الأسطورية",
+                            rarityLabel = "أسطوري مطلق",
+                            accentColor = Color(0xFFFF007A),
+                            secondaryColor = Color(0xFFFFD700),
+                            icon = Icons.Default.AutoAwesome,
+                            mechanics = "أندر وأقوى جوهرة كيميائية في النظام؛ تُمنح حصرياً كجائزة ختامية عند الوصول للمحطة 500.",
+                            bonuses = "تمنح درع مناعة أبدي ضد التصفير الكامل للنظام، وتفتح فوراً اللقب الأسمى «سيد النقوشة».",
+                            expirationRules = "أبدية المفعول؛ بمجرد تفعيلها تظل حصانتها ومجدها مفعّلين للأبد."
+                        )
+                    } else {
+                        InventoryTooltipSpec(
+                            title = PotionType.ETERNAL_REBIRTH_ELIXIR.nameEn,
+                            subtitle = "Legendary Tier 5",
+                            rarityLabel = "ULTIMATE LEGENDARY",
+                            accentColor = Color(0xFFFF007A),
+                            secondaryColor = Color(0xFFFFD700),
+                            icon = Icons.Default.AutoAwesome,
+                            mechanics = "The rarest pinnacle potion in StrikePulse, awarded exclusively at Station 500.",
+                            bonuses = "Grants eternal immunity against system flame resets and unlocks the Gary Master title.",
+                            expirationRules = "Permanent & infinite duration once activated."
+                        )
+                    }
                 }
             )
         }
@@ -694,6 +885,7 @@ fun InventoryScreen(
             ) {
                 InventoryTooltipSheetContent(
                     spec = spec,
+                    isAr = isAr,
                     onClose = { selectedTooltip = null }
                 )
             }
@@ -724,7 +916,7 @@ fun InventoryScreen(
             },
             title = {
                 Text(
-                    text = "دليل الاستخدام",
+                    text = if (isAr) "دليل الاستخدام" else "Usage Guide",
                     fontWeight = FontWeight.ExtraBold,
                     color = Color.White,
                     fontFamily = PlusJakartaSans
@@ -732,7 +924,11 @@ fun InventoryScreen(
             },
             text = {
                 Text(
-                    text = "اضغط لمدة ثانيتين متواصلتين على اي عنصر لمعرفة التفاصيل",
+                    text = if (isAr) {
+                        "اضغط لمدة ثانيتين متواصلتين على اي عنصر لمعرفة التفاصيل"
+                    } else {
+                        "Press and hold any item for 2 seconds to view full details."
+                    },
                     fontSize = 14.sp,
                     color = Color(0xFFE2E8F0),
                     lineHeight = 22.sp
@@ -744,7 +940,7 @@ fun InventoryScreen(
                     modifier = Modifier.testTag("inventory_guide_ok_btn")
                 ) {
                     Text(
-                        text = "حسناً",
+                        text = if (isAr) "حسناً" else "Got It",
                         color = NeonCyan,
                         fontWeight = FontWeight.Bold
                     )
@@ -868,6 +1064,7 @@ private fun LongPressTooltipContainer(
 
 @Composable
 private fun Luxury7DayAutoShieldCard(
+    isAr: Boolean,
     isActiveNow: Boolean,
     remainingText: String?,
     totalTriggeredCount: Int,
@@ -945,7 +1142,7 @@ private fun Luxury7DayAutoShieldCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.VerifiedUser,
-                                contentDescription = "7-Day Auto Shield",
+                                contentDescription = if (isAr) "درع الـ 7 أيام التلقائي" else "7-Day Auto Shield",
                                 tint = goldColor,
                                 modifier = Modifier.size(26.dp)
                             )
@@ -954,7 +1151,7 @@ private fun Luxury7DayAutoShieldCard(
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "درع الـ 7 أيام التلقائي",
+                                    text = if (isAr) "درع الـ 7 أيام التلقائي" else "7-Day Automated Shield",
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = PlusJakartaSans,
@@ -962,7 +1159,7 @@ private fun Luxury7DayAutoShieldCard(
                                 )
                             }
                             Text(
-                                text = "LUXURY AUTO TIER • 3-5 سترايكات يومياً",
+                                text = if (isAr) "فئة نخبوية تلقائية • 3-5 سترايكات يومياً" else "LUXURY AUTO TIER • 3-5 Strikes/Day",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFFFDA4AF)
@@ -985,7 +1182,11 @@ private fun Luxury7DayAutoShieldCard(
                             .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Text(
-                            text = if (isActiveNow) "مفعّل الآن" else "تفعيل تلقائي",
+                            text = if (isActiveNow) {
+                                if (isAr) "مفعّل الآن" else "Active Now"
+                            } else {
+                                if (isAr) "تفعيل تلقائي" else "Auto Trigger"
+                            },
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = if (isActiveNow) NeonEmerald else goldColor
@@ -1002,9 +1203,10 @@ private fun Luxury7DayAutoShieldCard(
                 ) {
                     Text(
                         text = if (isActiveNow && remainingText != null) {
-                            "العد التنازلي المتبقي: $remainingText"
+                            if (isAr) "العد التنازلي المتبقي: $remainingText" else "Remaining countdown: $remainingText"
                         } else {
-                            "يُمنح ويتفعل تلقائياً عند تسجيل 3 إلى 5 ضربات في يوم واحد"
+                            if (isAr) "يُمنح ويُفعّل تلقائياً عند تسجيل 3 إلى 5 ضربات في يوم واحد"
+                            else "Granted & activated automatically upon recording 3–5 strikes in a single day"
                         },
                         fontSize = 11.sp,
                         color = if (isActiveNow) NeonEmerald else Color(0xFFE2E8F0),
@@ -1013,7 +1215,7 @@ private fun Luxury7DayAutoShieldCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "مرات التفعيل: $totalTriggeredCount",
+                        text = if (isAr) "مرات التفعيل: $totalTriggeredCount" else "Triggers: $totalTriggeredCount",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = goldColor
@@ -1038,6 +1240,7 @@ private fun Luxury7DayAutoShieldCard(
 private fun InventoryShieldCard(
     title: String,
     rarity: String,
+    isAr: Boolean,
     count: Int,
     isCurrentlyActive: Boolean,
     accentColor: Color,
@@ -1103,7 +1306,7 @@ private fun InventoryShieldCard(
                             if (isCurrentlyActive) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "• نشط",
+                                    text = if (isAr) "• نشط" else "• Active",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = NeonEmerald
@@ -1141,7 +1344,11 @@ private fun InventoryShieldCard(
                             ),
                             modifier = Modifier.height(36.dp)
                         ) {
-                            Text("تفعيل", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(
+                                if (isAr) "تفعيل" else "Activate",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
                         }
                     }
                 }
@@ -1258,8 +1465,9 @@ private fun InventoryKeyTile(
 @Composable
 private fun InventoryPotionCard(
     title: String,
-    subtitleEn: String,
+    subtitle: String,
     rarity: String,
+    isAr: Boolean,
     count: Int,
     statusBadge: String?,
     accentColor: Color,
@@ -1322,7 +1530,7 @@ private fun InventoryPotionCard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "$subtitleEn • $rarity",
+                            text = "$subtitle • $rarity",
                             fontSize = 10.sp,
                             color = accentColor,
                             fontWeight = FontWeight.Bold
@@ -1367,7 +1575,11 @@ private fun InventoryPotionCard(
                             ),
                             modifier = Modifier.height(36.dp)
                         ) {
-                            Text("استعمال", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(
+                                if (isAr) "استعمال" else "Use",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
                         }
                     }
                 }
@@ -1388,6 +1600,7 @@ private fun InventoryPotionCard(
 
 @Composable
 private fun EternalResurgenceLegendaryCard(
+    isAr: Boolean,
     count: Int,
     isActiveImmunity: Boolean,
     animAngle: Float,
@@ -1468,7 +1681,7 @@ private fun EternalResurgenceLegendaryCard(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = "Eternal Resurgence Potion",
+                                contentDescription = if (isAr) "جرعة الانبعاث الأبدي" else "Eternal Resurgence Potion",
                                 tint = gold,
                                 modifier = Modifier.size(28.dp)
                             )
@@ -1476,14 +1689,14 @@ private fun EternalResurgenceLegendaryCard(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "جرعة الانبعاث الأبدي",
+                                text = if (isAr) "جرعة الانبعاث الأبدي" else "Eternal Resurgence Potion",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = PlusJakartaSans,
                                 color = Color.White
                             )
                             Text(
-                                text = "Eternal Resurgence Potion • LEGENDARY TIER 5",
+                                text = if (isAr) "الفئة الخامسة الأسطورية" else "LEGENDARY TIER 5",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = gold
@@ -1499,7 +1712,9 @@ private fun EternalResurgenceLegendaryCard(
                             .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Text(
-                            text = if (isActiveImmunity) "أبدي مفعل ✓" else "$count / 3",
+                            text = if (isActiveImmunity) {
+                                if (isAr) "أبدي مفعّل ✓" else "Eternal Active ✓"
+                            } else "$count / 3",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Black,
                             color = gold
@@ -1510,7 +1725,11 @@ private fun EternalResurgenceLegendaryCard(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "جائزة المحطة 500 الكبرى: مناعة أبدية ضد تصفير الشعلة وفتح لقب سيد النقوشة (Gary Master).",
+                    text = if (isAr) {
+                        "جائزة المحطة 500 الكبرى: مناعة أبدية ضد تصفير الشعلة وفتح لقب «سيد النقوشة»."
+                    } else {
+                        "Grand Reward of Station 500: Grants eternal immunity against Flame resets and unlocks the Gary Master title."
+                    },
                     fontSize = 11.sp,
                     color = Color(0xFFFBCFE8),
                     lineHeight = 16.sp
@@ -1531,7 +1750,11 @@ private fun EternalResurgenceLegendaryCard(
                     ) {
                         Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("تفعيل الانبعاث الأبدي", fontWeight = FontWeight.Black, fontSize = 13.sp)
+                        Text(
+                            if (isAr) "تفعيل الانبعاث الأبدي" else "Activate Eternal Resurgence",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 13.sp
+                        )
                     }
                 }
             }
@@ -1552,6 +1775,7 @@ private fun EternalResurgenceLegendaryCard(
 @Composable
 private fun InventoryTooltipSheetContent(
     spec: InventoryTooltipSpec,
+    isAr: Boolean,
     onClose: () -> Unit
 ) {
     Column(
@@ -1582,7 +1806,7 @@ private fun InventoryTooltipSheetContent(
                 ) {
                     Icon(
                         imageVector = spec.icon,
-                        contentDescription = spec.titleAr,
+                        contentDescription = spec.title,
                         tint = spec.accentColor,
                         modifier = Modifier.size(24.dp)
                     )
@@ -1590,13 +1814,13 @@ private fun InventoryTooltipSheetContent(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = spec.titleAr,
+                        text = spec.title,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.White
                     )
                     Text(
-                        text = "${spec.titleEn} • ${spec.rarityLabel}",
+                        text = "${spec.subtitle} • ${spec.rarityLabel}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = spec.accentColor
@@ -1607,7 +1831,7 @@ private fun InventoryTooltipSheetContent(
             IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
+                    contentDescription = if (isAr) "إغلاق" else "Close",
                     tint = Color(0xFF94A3B8)
                 )
             }
@@ -1616,8 +1840,8 @@ private fun InventoryTooltipSheetContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         TooltipRuleBlock(
-            label = "آلية العمل الدقيقة (Exact Mechanics)",
-            body = spec.mechanicsAr,
+            label = if (isAr) "آلية العمل الدقيقة" else "Exact Mechanics",
+            body = spec.mechanics,
             icon = Icons.Default.Info,
             color = spec.accentColor
         )
@@ -1625,8 +1849,8 @@ private fun InventoryTooltipSheetContent(
         Spacer(modifier = Modifier.height(10.dp))
 
         TooltipRuleBlock(
-            label = "المزايا والمكافآت (Bonuses)",
-            body = spec.bonusesAr,
+            label = if (isAr) "المزايا والمكافآت" else "Bonuses & Effects",
+            body = spec.bonuses,
             icon = Icons.Default.AutoAwesome,
             color = NeonEmerald
         )
@@ -1634,8 +1858,8 @@ private fun InventoryTooltipSheetContent(
         Spacer(modifier = Modifier.height(10.dp))
 
         TooltipRuleBlock(
-            label = "قواعد الصلاحية والاستهلاك (Expiration Rules)",
-            body = spec.expirationRulesAr,
+            label = if (isAr) "قواعد الصلاحية والاستهلاك" else "Expiration & Usage Rules",
+            body = spec.expirationRules,
             icon = Icons.Default.Timer,
             color = NeonAmber
         )

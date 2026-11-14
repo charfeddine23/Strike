@@ -146,6 +146,8 @@ fun FlameScreen(
     val view = LocalView.current
     val coroutineScope = rememberCoroutineScope()
     val isHapticEnabled by viewModel.isHapticFeedbackEnabled
+    val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val isAr = currentLang == "ar"
 
     val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
     val flameLogs by viewModel.flameLogs.collectAsStateWithLifecycle()
@@ -293,6 +295,7 @@ fun FlameScreen(
             stageBadgeColor = stageBadgeColor,
             isStreakShieldActive = isStreakShieldActive,
             isHapticEnabled = isHapticEnabled,
+            currentLang = currentLang,
             onDismiss = { showSettingsModal = false },
             onClearLogs = { showClearConfirmDialog = true }
         )
@@ -328,7 +331,8 @@ fun FlameScreen(
                 viewModel.setStreakShieldActive(active)
             },
             onDismiss = { showShieldModal = false },
-            isHapticEnabled = isHapticEnabled
+            isHapticEnabled = isHapticEnabled,
+            currentLang = currentLang
         )
     }
 
@@ -341,7 +345,8 @@ fun FlameScreen(
                 viewModel.girl(penaltyPoints)
             },
             isHapticEnabled = isHapticEnabled,
-            isGirlMode = true
+            isGirlMode = true,
+            currentLang = currentLang
         )
     }
 
@@ -383,7 +388,7 @@ fun FlameScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
+                                contentDescription = if (isAr) "رجوع" else "Back",
                                 tint = NeonCyan,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -421,7 +426,7 @@ fun FlameScreen(
                                     if (isShieldActive) {
                                         Icon(
                                             imageVector = Icons.Default.Shield,
-                                            contentDescription = "Shield Active",
+                                            contentDescription = if (isAr) "الدرع مفعل" else "Shield Active",
                                             tint = NeonEmerald,
                                             modifier = Modifier.size(13.dp)
                                         )
@@ -436,15 +441,19 @@ fun FlameScreen(
                                         val totalAvail = available1DayShields + availableManualShields
                                         Icon(
                                             imageVector = Icons.Default.Shield,
-                                            contentDescription = "Shield Available",
+                                            contentDescription = if (isAr) "درع متاح" else "Shield Available",
                                             tint = Color(0xFF38BDF8),
                                             modifier = Modifier.size(13.dp)
                                         )
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Text(
-                                            text = if (available1DayShields > 0 && availableManualShields == 0) "${available1DayShields}x 1D"
-                                            else if (availableManualShields > 0 && available1DayShields == 0) "${availableManualShields}x 3D"
-                                            else "${totalAvail} Shields",
+                                            text = if (available1DayShields > 0 && availableManualShields == 0) {
+                                                if (isAr) "${available1DayShields}× 1 يوم" else "${available1DayShields}x 1D"
+                                            } else if (availableManualShields > 0 && available1DayShields == 0) {
+                                                if (isAr) "${availableManualShields}× 3 أيام" else "${availableManualShields}x 3D"
+                                            } else {
+                                                if (isAr) "$totalAvail دروع" else "$totalAvail Shields"
+                                            },
                                             fontWeight = FontWeight.ExtraBold,
                                             fontSize = 11.sp,
                                             color = Color(0xFF38BDF8)
@@ -452,7 +461,7 @@ fun FlameScreen(
                                     } else {
                                         Icon(
                                             imageVector = Icons.Default.Add,
-                                            contentDescription = "Unprotected Streak",
+                                            contentDescription = if (isAr) "غير محمي" else "Unprotected Streak",
                                             tint = Color(0xFFFB7185),
                                             modifier = Modifier.size(13.dp)
                                         )
@@ -686,7 +695,7 @@ fun FlameScreen(
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
-                                    text = "-3 PTS",
+                                    text = if (isAr) "-3 نقطة" else "-3 PTS",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Black,
                                     color = Color(0xFF38BDF8)
@@ -753,7 +762,7 @@ fun FlameScreen(
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = "-3 PTS",
+                                        text = if (isAr) "-3 نقطة" else "-3 PTS",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Black,
                                         color = Color(0xFFFB7185)
@@ -762,7 +771,7 @@ fun FlameScreen(
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(
                                     imageVector = Icons.Default.Tune,
-                                    contentDescription = "Adjust points (Hold)",
+                                    contentDescription = if (isAr) "تعديل النقاط (ضغط مطوّل)" else "Adjust points (Hold)",
                                     tint = Color(0xFFFB7185),
                                     modifier = Modifier.size(12.dp)
                                 )
@@ -965,7 +974,7 @@ fun FlameScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "${(extRatio * 100).toInt()}% Control Rate",
+                            text = if (isAr) "معدل السيطرة ${(extRatio * 100).toInt()}%" else "${(extRatio * 100).toInt()}% Control Rate",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = NeonCyan
@@ -1140,7 +1149,7 @@ fun FlameScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "${filteredLogs.size} of ${flameLogs.size} events",
+                                    text = if (isAr) "${filteredLogs.size} من ${flameLogs.size} حدث" else "${filteredLogs.size} of ${flameLogs.size} events",
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1242,7 +1251,7 @@ fun FlameScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             filteredLogs.forEach { entry ->
-                                FlameAuditLogItemCard(entry)
+                                FlameAuditLogItemCard(entry, currentLang = currentLang)
                             }
                         }
                     }
@@ -1264,9 +1273,11 @@ private fun FlameSettingsAndSimulatorSheet(
     stageBadgeColor: Color,
     isStreakShieldActive: Boolean,
     isHapticEnabled: Boolean,
+    currentLang: String = "ar",
     onDismiss: () -> Unit,
     onClearLogs: () -> Unit
 ) {
+    val isAr = currentLang == "ar"
     val context = LocalContext.current
     val view = LocalView.current
     val focusManager = LocalFocusManager.current
@@ -1382,7 +1393,11 @@ private fun FlameSettingsAndSimulatorSheet(
                             )
                         }
                         Text(
-                            text = "${String.format(Locale.US, "%.1f", currentScore)} pts",
+                            text = if (isAr) {
+                                "${String.format(Locale.US, "%.1f", currentScore)} نقطة"
+                            } else {
+                                "${String.format(Locale.US, "%.1f", currentScore)} pts"
+                            },
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 14.sp,
                             color = stageBadgeColor
@@ -1391,7 +1406,7 @@ private fun FlameSettingsAndSimulatorSheet(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Direct Numeric Input up to 10,000
+                    // Direct Numeric Input up to 20,000
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1413,7 +1428,7 @@ private fun FlameSettingsAndSimulatorSheet(
                             },
                             placeholder = {
                                 Text(
-                                    text = "0 - 10000",
+                                    text = "0 - 20000",
                                     fontSize = 12.sp,
                                     color = Color.Gray
                                 )
@@ -1426,14 +1441,14 @@ private fun FlameSettingsAndSimulatorSheet(
                             keyboardActions = KeyboardActions(
                                 onDone = {
                                     val num = customScoreInput.toDoubleOrNull()
-                                    if (num != null && num in 0.0..10000.0) {
+                                    if (num != null && num in 0.0..20000.0) {
                                         viewModel.setFlameScore(num)
                                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         focusManager.clearFocus()
                                         inputError = null
                                     } else {
-                                        inputError = "0 - 10000"
+                                        inputError = "0 - 20000"
                                     }
                                 }
                             ),
@@ -1452,14 +1467,14 @@ private fun FlameSettingsAndSimulatorSheet(
                         Button(
                             onClick = {
                                 val num = customScoreInput.toDoubleOrNull()
-                                if (num != null && num in 0.0..10000.0) {
+                                if (num != null && num in 0.0..20000.0) {
                                     viewModel.setFlameScore(num)
                                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
                                     focusManager.clearFocus()
                                     inputError = null
                                 } else {
-                                    inputError = "0 - 10000"
+                                    inputError = "0 - 20000"
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
@@ -1478,7 +1493,7 @@ private fun FlameSettingsAndSimulatorSheet(
 
                     if (inputError != null) {
                         Text(
-                            text = stringResource(R.string.flame_simulator_range_error),
+                            text = if (isAr) "أدخل قيمة بين 0 و 20,000" else "Enter value between 0 and 20,000",
                             fontSize = 11.sp,
                             color = NeonRose,
                             modifier = Modifier.padding(top = 4.dp, start = 4.dp)
@@ -1487,14 +1502,14 @@ private fun FlameSettingsAndSimulatorSheet(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Continuous Slider up to 10,000 pts
+                    // Continuous Slider up to 20,000 pts
                     Slider(
-                        value = currentScore.toFloat().coerceIn(0f, 10000f),
+                        value = currentScore.toFloat().coerceIn(0f, 20000f),
                         onValueChange = {
                             viewModel.setFlameScore(it.toDouble())
                             customScoreInput = String.format(Locale.US, "%.0f", it)
                         },
-                        valueRange = 0f..10000f,
+                        valueRange = 0f..20000f,
                         colors = SliderDefaults.colors(
                             thumbColor = stageBadgeColor,
                             activeTrackColor = stageBadgeColor,
@@ -1511,9 +1526,10 @@ private fun FlameSettingsAndSimulatorSheet(
                         Pair("45", 45.0),
                         Pair("180", 180.0),
                         Pair("350", 350.0),
-                        Pair("750 (Supernova)", 750.0),
+                        Pair(if (isAr) "750 (مستعر أعظم)" else "750 (Supernova)", 750.0),
                         Pair("2,000", 2000.0),
-                        Pair("10,000", 10000.0)
+                        Pair("10,000", 10000.0),
+                        Pair("20,000", 20000.0)
                     )
 
                     Row(
@@ -1563,7 +1579,7 @@ private fun FlameSettingsAndSimulatorSheet(
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "System Preferences",
+                        text = if (isAr) "تفضيلات النظام" else "System Preferences",
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         color = NeonCyan,
@@ -1591,13 +1607,13 @@ private fun FlameSettingsAndSimulatorSheet(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "Tactile Haptic Feedback",
+                                    text = if (isAr) "الاهتزاز اللمسي التفاعلي" else "Tactile Haptic Feedback",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "Vibrations on buttons and state transitions",
+                                    text = if (isAr) "اهتزازات خفيفة عند الضغط على الأزرار وتبدّل المراحل" else "Vibrations on buttons and state transitions",
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1716,7 +1732,11 @@ private fun FlameTierBar(
  * Liquid Glass audit card for each recorded Flame event
  */
 @Composable
-private fun FlameAuditLogItemCard(entry: FlameLogEntry) {
+private fun FlameAuditLogItemCard(
+    entry: FlameLogEntry,
+    currentLang: String = "ar"
+) {
+    val isAr = currentLang == "ar"
     val timeFormat = remember { SimpleDateFormat("yyyy-MM-dd • HH:mm:ss", Locale.getDefault()) }
     val timeStr = remember(entry.timestamp) { timeFormat.format(Date(entry.timestamp)) }
 
@@ -1853,7 +1873,12 @@ private fun FlameAuditLogItemCard(entry: FlameLogEntry) {
                         .padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {
                     Text(
-                        text = if (isZero) "0.0 PROTECTED" else "$deltaSign${String.format(Locale.US, "%.1f", entry.change)} PTS",
+                        text = if (isZero) {
+                            if (isAr) "0.0 محمي" else "0.0 PROTECTED"
+                        } else {
+                            if (isAr) "$deltaSign${String.format(Locale.US, "%.1f", entry.change)} نقطة"
+                            else "$deltaSign${String.format(Locale.US, "%.1f", entry.change)} PTS"
+                        },
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = PlusJakartaSans,
@@ -1890,7 +1915,11 @@ private fun FlameAuditLogItemCard(entry: FlameLogEntry) {
                         .padding(horizontal = 7.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "Total: ${String.format(Locale.US, "%.1f", entry.resultingScore)} pts",
+                        text = if (isAr) {
+                            "الإجمالي: ${String.format(Locale.US, "%.1f", entry.resultingScore)} نقطة"
+                        } else {
+                            "Total: ${String.format(Locale.US, "%.1f", entry.resultingScore)} pts"
+                        },
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFFE2E8F0)

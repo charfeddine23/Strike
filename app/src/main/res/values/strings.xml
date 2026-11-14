@@ -49,9 +49,9 @@
     <string name="empty_records_desc">Start by adding your first individual or load sample data to explore analytics.</string>
     <string name="seed_sample_data">Load Sample Data</string>
     <string name="reset_all_levels_btn">Reset All Levels to Zero</string>
-    <string name="reset_all_levels_desc">Resets XP, Stations (0/500), Tasks, Flame Score, Shields, Keys, Potions &amp; Rewards to 0 (keeps individuals &amp; strike logs)</string>
+    <string name="reset_all_levels_desc">Resets XP, Stations (0/500), Tasks, Flame Score, Shields, Keys &amp; Potions to 0 (preserves individuals, strikes &amp; permanent titles/avatars)</string>
     <string name="reset_all_levels_confirm_title">Reset All Levels to Zero?</string>
-    <string name="reset_all_levels_confirm_msg">All game levels, XP, 500 Roadmap stations, 1000 tasks, Flame score, shields, keys, potions, and unlocked titles/avatars will return to 0. Your individuals list and strike records will NOT be touched.</string>
+    <string name="reset_all_levels_confirm_msg">All game levels, XP, 500 Roadmap stations, 1000 tasks, Flame score, shields, keys, and potions will return to 0. Your individuals, strike logs, and permanently unlocked titles &amp; avatars will NEVER be deleted.</string>
     <string name="reset_all_levels_confirm_action">Reset Levels to 0</string>
     <string name="record_saved">Record saved successfully!</string>
     <string name="record_deleted">Record deleted.</string>
@@ -184,9 +184,9 @@
     <string name="flame_activity_log_title">Flame Activity &amp; Audit Log</string>
     <string name="flame_activity_empty">No flame events recorded yet.</string>
     <string name="flame_simulator_title">Interactive Score Simulator</string>
-    <string name="flame_simulator_input_label">Custom Score (0 - 10,000)</string>
+    <string name="flame_simulator_input_label">Custom Score (0 - 20,000)</string>
     <string name="flame_simulator_apply">Apply</string>
-    <string name="flame_simulator_range_error">Score must be between 0 and 10,000</string>
+    <string name="flame_simulator_range_error">Score must be between 0 and 20,000</string>
     <string name="flame_clear_history">Clear History</string>
     <string name="flame_clear_confirm_title">Clear Activity Log?</string>
     <string name="flame_clear_confirm_msg">This will clear all recorded flame audit events. Current flame score remains unaffected.</string>
@@ -240,8 +240,8 @@
     <string name="shield_settings_toggle_desc">Pause daily inactivity points manually or via inventory shields</string>
     <string name="deviations_title">Deviations</string>
     <string name="deviations_subtitle">Biological DNA &amp; Dual-Track Entity Evolution</string>
-    <string name="deviations_dark_track">Cyber-Shadow Track (Score 0 - 1000)</string>
-    <string name="deviations_light_track">Cyber-Angel Track (Score 1001 - 10000)</string>
+    <string name="deviations_dark_track">Cyber-Shadow Track (Score 0 - 2,000)</string>
+    <string name="deviations_light_track">Cyber-Angel Track (Score 2,001 - 20,000)</string>
     <string name="deviations_estrogen">Estrogen (Femininity)</string>
     <string name="deviations_testosterone">Testosterone (Masculinity)</string>
     <string name="deviations_grip_status">Shadow Grip: %1$d%%</string>

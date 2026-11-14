@@ -62,14 +62,23 @@ fun AppUpdateCardDialog(
     onUpdateClick: (GitHubReleaseInfo) -> Unit,
     onInstallClick: (File) -> Unit,
     onRetryClick: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    currentLang: String = "ar"
 ) {
     val context = LocalContext.current
+    val isAr = currentLang == "ar"
+    val isFr = currentLang == "fr"
     val primaryRed = Color(0xFFD80D15)
     val subtitleRed = Color(0xFFE11D25)
     val cardBg = Color(0xFF13131A)
     val mutedText = Color(0xFF9CA3AF)
     val isDownloading = state is AppUpdateState.Downloading
+
+    val laterLabel = when {
+        isAr -> "ربما لاحقا"
+        isFr -> "Plus tard"
+        else -> "Maybe Later"
+    }
 
     Dialog(
         onDismissRequest = { if (!isDownloading) onDismiss() },
@@ -104,10 +113,26 @@ fun AppUpdateCardDialog(
                 // Main Title
                 Text(
                     text = when (state) {
-                        is AppUpdateState.Downloading -> "جاري تحميل التحديث"
-                        is AppUpdateState.ReadyToInstall -> "التحديث جاهز للتثبيت"
-                        is AppUpdateState.Error -> "تعذر إكمال التحديث"
-                        else -> "تحديث جديد متاح"
+                        is AppUpdateState.Downloading -> when {
+                            isAr -> "جاري تحميل التحديث"
+                            isFr -> "Téléchargement de la mise à jour"
+                            else -> "Downloading Update"
+                        }
+                        is AppUpdateState.ReadyToInstall -> when {
+                            isAr -> "التحديث جاهز للتثبيت"
+                            isFr -> "Mise à jour prête à installer"
+                            else -> "Update Ready to Install"
+                        }
+                        is AppUpdateState.Error -> when {
+                            isAr -> "تعذر إكمال التحديث"
+                            isFr -> "Échec de la mise à jour"
+                            else -> "Update Failed"
+                        }
+                        else -> when {
+                            isAr -> "تحديث جديد متاح"
+                            isFr -> "Nouvelle mise à jour disponible"
+                            else -> "New Update Available"
+                        }
                     },
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,
@@ -120,11 +145,27 @@ fun AppUpdateCardDialog(
                 // Red Accent Subtitle
                 Text(
                     text = when (state) {
-                        is AppUpdateState.UpdateAvailable -> "تحديث جديد"
-                        is AppUpdateState.Downloading -> "تحديث جديد • v${state.release.versionName}"
+                        is AppUpdateState.UpdateAvailable -> when {
+                            isAr -> "تحديث جديد • v${state.release.versionName}"
+                            isFr -> "Nouvelle version • v${state.release.versionName}"
+                            else -> "New Version • v${state.release.versionName}"
+                        }
+                        is AppUpdateState.Downloading -> when {
+                            isAr -> "تحديث جديد • v${state.release.versionName}"
+                            isFr -> "Téléchargement • v${state.release.versionName}"
+                            else -> "Downloading • v${state.release.versionName}"
+                        }
                         is AppUpdateState.ReadyToInstall -> "v${state.release.versionName}"
-                        is AppUpdateState.Error -> "تحديث جديد"
-                        else -> "تحديث جديد"
+                        is AppUpdateState.Error -> when {
+                            isAr -> "تحديث جديد"
+                            isFr -> "Nouvelle mise à jour"
+                            else -> "New Update"
+                        }
+                        else -> when {
+                            isAr -> "تحديث جديد"
+                            isFr -> "Nouvelle mise à jour"
+                            else -> "New Update"
+                        }
                     },
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
@@ -138,7 +179,11 @@ fun AppUpdateCardDialog(
                 when (state) {
                     is AppUpdateState.UpdateAvailable -> {
                         Text(
-                            text = "تحديث جديد متاح",
+                            text = when {
+                                isAr -> "تحديث جديد متاح على GitHub"
+                                isFr -> "Une nouvelle mise à jour est disponible sur GitHub"
+                                else -> "A new version is available from GitHub"
+                            },
                             fontSize = 14.sp,
                             color = mutedText,
                             textAlign = TextAlign.Center
@@ -197,7 +242,11 @@ fun AppUpdateCardDialog(
 
                     is AppUpdateState.ReadyToInstall -> {
                         Text(
-                            text = "تم التحميل بنجاح، اضغط لتثبيت الإصدار الجديد",
+                            text = when {
+                                isAr -> "تم التحميل بنجاح، اضغط لتثبيت الإصدار الجديد"
+                                isFr -> "Téléchargé avec succès. Appuyez pour installer la nouvelle version."
+                                else -> "Downloaded successfully. Tap below to install the new version."
+                            },
                             fontSize = 13.sp,
                             color = mutedText,
                             textAlign = TextAlign.Center
@@ -206,7 +255,7 @@ fun AppUpdateCardDialog(
 
                     is AppUpdateState.Error -> {
                         Text(
-                            text = state.messageAr,
+                            text = state.getLocalizedMessage(currentLang),
                             fontSize = 13.sp,
                             color = mutedText,
                             textAlign = TextAlign.Center
@@ -218,7 +267,7 @@ fun AppUpdateCardDialog(
 
                 Spacer(modifier = Modifier.height(26.dp))
 
-                // Full-width Vibrant Red Pill CTA Button + Optional "ربما لاحقا" Button
+                // Full-width Vibrant Red Pill CTA Button + Optional Later Button
                 when (state) {
                     is AppUpdateState.UpdateAvailable -> {
                         Button(
@@ -235,7 +284,11 @@ fun AppUpdateCardDialog(
                                 .testTag("modal_download_update_btn")
                         ) {
                             Text(
-                                text = "تحديث",
+                                text = when {
+                                    isAr -> "تحديث"
+                                    isFr -> "Mettre à jour"
+                                    else -> "Update Now"
+                                },
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
@@ -252,7 +305,7 @@ fun AppUpdateCardDialog(
                                 .testTag("modal_maybe_later_btn")
                         ) {
                             Text(
-                                text = "ربما لاحقا",
+                                text = laterLabel,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = mutedText
@@ -274,7 +327,11 @@ fun AppUpdateCardDialog(
                                 .height(50.dp)
                         ) {
                             Text(
-                                text = "جاري التحميل...",
+                                text = when {
+                                    isAr -> "جاري التحميل..."
+                                    isFr -> "Téléchargement..."
+                                    else -> "Downloading..."
+                                },
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -295,7 +352,11 @@ fun AppUpdateCardDialog(
                                 .testTag("modal_install_update_btn")
                         ) {
                             Text(
-                                text = "تثبيت التحديث الآن",
+                                text = when {
+                                    isAr -> "تثبيت التحديث الآن"
+                                    isFr -> "Installer maintenant"
+                                    else -> "Install Update Now"
+                                },
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
@@ -312,7 +373,7 @@ fun AppUpdateCardDialog(
                                 .testTag("modal_maybe_later_btn")
                         ) {
                             Text(
-                                text = "ربما لاحقا",
+                                text = laterLabel,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = mutedText
@@ -333,7 +394,11 @@ fun AppUpdateCardDialog(
                                 .height(50.dp)
                         ) {
                             Text(
-                                text = "إعادة المحاولة",
+                                text = when {
+                                    isAr -> "إعادة المحاولة"
+                                    isFr -> "Réessayer"
+                                    else -> "Retry"
+                                },
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
@@ -346,7 +411,11 @@ fun AppUpdateCardDialog(
                             onClick = { AppUpdateManager.openUrlExternally(context, state.fallbackUrl) }
                         ) {
                             Text(
-                                text = "فتح رابط التحميل على GitHub",
+                                text = when {
+                                    isAr -> "فتح رابط التحميل على GitHub"
+                                    isFr -> "Ouvrir le lien sur GitHub"
+                                    else -> "Open GitHub Download Link"
+                                },
                                 fontSize = 12.sp,
                                 color = mutedText
                             )
@@ -360,7 +429,7 @@ fun AppUpdateCardDialog(
                                 .testTag("modal_maybe_later_btn")
                         ) {
                             Text(
-                                text = "ربما لاحقا",
+                                text = laterLabel,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = mutedText

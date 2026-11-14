@@ -62,7 +62,6 @@ object FlameManager {
     private const val KEY_PEAK_SCORE = "key_peak_flame_score"
     private const val KEY_TOTAL_POINTS_GAINED = "key_total_points_gained"
     private const val KEY_TOTAL_POINTS_EXTINGUISHED = "key_total_points_extinguished"
-    private const val MAX_LOGS_CAPACITY = 150
 
     private val _flameScore = MutableStateFlow(45.0) // Initial starting score
     val flameScore: StateFlow<Double> = _flameScore.asStateFlow()
@@ -235,7 +234,10 @@ object FlameManager {
                 }
                 _flameLogs.value = list
             } catch (_: Exception) {
+                _flameLogs.value = emptyList()
             }
+        } else {
+            _flameLogs.value = emptyList()
         }
         isInitialized = true
     }
@@ -1014,7 +1016,8 @@ object FlameManager {
     fun recalculateFromStartDate(
         context: Context,
         startDateStr: String,
-        strikeEvents: List<com.example.data.model.StrikeEvent>
+        strikeEvents: List<com.example.data.model.StrikeEvent>,
+        lang: String = "ar"
     ): FlameRecalculationResult {
         init(context)
         val result = previewRecalculation(startDateStr, strikeEvents)
@@ -1044,10 +1047,14 @@ object FlameManager {
             .putString(KEY_LAST_INACTIVITY_DATE, result.todayDate)
             .apply()
 
-        val details = "تاريخ البداية: $startDateStr | الأيام المنقضية: ${result.daysElapsed} (+${result.inactivityPointsAdded.toInt()} نقطة) | السترايكات: ${result.totalStrikesCount} (-${format(result.totalDeductions)} نقطة)"
+        val details = if (lang == "ar") {
+            "تاريخ البداية: $startDateStr | الأيام المنقضية: ${result.daysElapsed} (+${result.inactivityPointsAdded.toInt()} نقطة) | السترايكات: ${result.totalStrikesCount} (-${format(result.totalDeductions)} نقطة)"
+        } else {
+            "Start Date: $startDateStr | Days Elapsed: ${result.daysElapsed} (+${result.inactivityPointsAdded.toInt()} pts) | Strikes: ${result.totalStrikesCount} (-${format(result.totalDeductions)} pts)"
+        }
         logEvent(
             context = context,
-            title = "إعادة حساب تاريخ بداية العد",
+            title = if (lang == "ar") "إعادة حساب تاريخ بداية العد" else "Start Date Recalculation",
             change = diff,
             resultingScore = newScore,
             reason = "START_DATE_RECALCULATION",
@@ -1088,25 +1095,169 @@ object FlameManager {
         )
         val current = _flameLogs.value.toMutableList()
         current.add(0, entry)
-        val trimmed = current.take(MAX_LOGS_CAPACITY)
-        _flameLogs.value = trimmed
+        _flameLogs.value = current
+        persistLogs(context, current)
+    }
 
+    private fun persistLogs(context: Context, logs: List<FlameLogEntry>) {
         try {
-            val array = JSONArray()
-            for (item in trimmed) {
-                val obj = JSONObject().apply {
-                    put("id", item.id)
-                    put("timestamp", item.timestamp)
-                    put("title", item.title)
-                    put("change", item.change)
-                    put("resultingScore", item.resultingScore)
-                    put("reason", item.reason)
-                    put("details", item.details)
-                }
-                array.put(obj)
-            }
+            val array = logsToJsonArray(logs)
             getPrefs(context).edit().putString(KEY_FLAME_LOGS, array.toString()).apply()
         } catch (_: Exception) {
         }
+    }
+
+    private fun logsToJsonArray(logs: List<FlameLogEntry>): JSONArray {
+        val array = JSONArray()
+        for (item in logs) {
+            val obj = JSONObject().apply {
+                put("id", item.id)
+                put("timestamp", item.timestamp)
+                put("title", item.title)
+                put("change", item.change)
+                put("resultingScore", item.resultingScore)
+                put("reason", item.reason)
+                put("details", item.details)
+            }
+            array.put(obj)
+        }
+        return array
+    }
+
+    @Synchronized
+    fun exportSnapshot(context: Context): JSONObject {
+        init(context)
+        val prefs = getPrefs(context)
+        return JSONObject().apply {
+            put("score", _flameScore.value)
+            put("peakScore", _peakScore.value)
+            put("totalPointsGained", _totalPointsGained.value)
+            put("totalPointsExtinguished", _totalPointsExtinguished.value)
+            put("isStreakShieldActive", _isStreakShieldActive.value)
+            put("activeShieldExpiresAt", _activeShieldExpiresAt.value ?: 0L)
+            put("activeShieldType", _activeShieldType.value.name)
+            put("availableManualShields", _availableManualShields.value)
+            put("available48hShields", _available48hShields.value)
+            put("available1DayShields", _available1DayShields.value)
+            put("sevenDayAutoShieldCount", _sevenDayAutoShieldCount.value)
+            put("startCountDate", prefs.getString(KEY_START_COUNT_DATE, "") ?: "")
+            put("lastInactivityDate", prefs.getString(KEY_LAST_INACTIVITY_DATE, "") ?: "")
+            put("lastStrikeDate", prefs.getString(KEY_LAST_STRIKE_DATE, "") ?: "")
+            put("logs", logsToJsonArray(_flameLogs.value))
+        }
+    }
+
+    @Synchronized
+    fun restoreSnapshot(context: Context, json: JSONObject, replaceExisting: Boolean) {
+        init(context)
+        val prefs = getPrefs(context)
+        val now = System.currentTimeMillis()
+
+        val importedScore = json.optDouble("score", _flameScore.value).coerceIn(0.0, MAX_SCORE)
+        val importedPeak = json.optDouble("peakScore", importedScore).coerceIn(0.0, MAX_SCORE)
+        val importedGained = json.optDouble("totalPointsGained", 0.0).coerceAtLeast(0.0)
+        val importedExt = json.optDouble("totalPointsExtinguished", 0.0).coerceAtLeast(0.0)
+
+        val finalScore = if (replaceExisting) importedScore else maxOf(_flameScore.value, importedScore)
+        val finalPeak = if (replaceExisting) maxOf(importedScore, importedPeak) else maxOf(_peakScore.value, importedPeak, finalScore)
+        val finalGained = if (replaceExisting) importedGained else (_totalPointsGained.value + importedGained)
+        val finalExt = if (replaceExisting) importedExt else (_totalPointsExtinguished.value + importedExt)
+
+        val rawExpires = json.optLong("activeShieldExpiresAt", 0L)
+        val finalExpires: Long? = if (replaceExisting) {
+            if (rawExpires > now) rawExpires else null
+        } else {
+            val best = maxOf(_activeShieldExpiresAt.value ?: 0L, rawExpires)
+            if (best > now) best else null
+        }
+
+        val importedShieldActive = json.optBoolean("isStreakShieldActive", false)
+        val finalShieldActive = if (finalExpires != null) {
+            true
+        } else if (replaceExisting) {
+            importedShieldActive && rawExpires == 0L
+        } else {
+            _isStreakShieldActive.value || (importedShieldActive && rawExpires == 0L)
+        }
+
+        val importedTypeName = json.optString("activeShieldType", ActiveShieldType.NONE.name)
+        val importedType = ActiveShieldType.entries.find { it.name == importedTypeName } ?: ActiveShieldType.NONE
+        val finalType = if (finalShieldActive) {
+            if (importedType != ActiveShieldType.NONE) importedType else _activeShieldType.value
+        } else {
+            ActiveShieldType.NONE
+        }
+
+        val s72 = if (replaceExisting) json.optInt("availableManualShields", 0) else (_availableManualShields.value + json.optInt("availableManualShields", 0))
+        val s48 = if (replaceExisting) json.optInt("available48hShields", 0) else (_available48hShields.value + json.optInt("available48hShields", 0))
+        val s24 = if (replaceExisting) json.optInt("available1DayShields", 0) else (_available1DayShields.value + json.optInt("available1DayShields", 0))
+        val autoCount = if (replaceExisting) json.optInt("sevenDayAutoShieldCount", 0) else (_sevenDayAutoShieldCount.value + json.optInt("sevenDayAutoShieldCount", 0))
+
+        val importedLogs = mutableListOf<FlameLogEntry>()
+        json.optJSONArray("logs")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                importedLogs.add(
+                    FlameLogEntry(
+                        id = obj.optLong("id", System.currentTimeMillis()),
+                        timestamp = obj.optLong("timestamp", System.currentTimeMillis()),
+                        title = obj.optString("title", ""),
+                        change = obj.optDouble("change", 0.0),
+                        resultingScore = obj.optDouble("resultingScore", 0.0),
+                        reason = obj.optString("reason", "EVENT"),
+                        details = obj.optString("details", "")
+                    )
+                )
+            }
+        }
+        val finalLogs = if (replaceExisting) {
+            importedLogs
+        } else {
+            (importedLogs + _flameLogs.value)
+                .distinctBy { "${it.id}_${it.timestamp}_${it.reason}" }
+                .sortedByDescending { it.timestamp }
+        }
+
+        _flameScore.value = finalScore
+        _peakScore.value = finalPeak
+        _totalPointsGained.value = finalGained
+        _totalPointsExtinguished.value = finalExt
+        _isStreakShieldActive.value = finalShieldActive
+        _activeShieldExpiresAt.value = finalExpires
+        _activeShieldType.value = finalType
+        _availableManualShields.value = s72.coerceAtLeast(0)
+        _available48hShields.value = s48.coerceAtLeast(0)
+        _available1DayShields.value = s24.coerceAtLeast(0)
+        _sevenDayAutoShieldCount.value = autoCount.coerceAtLeast(0)
+        _flameLogs.value = finalLogs
+
+        val startDate = json.optString("startCountDate", "").trim()
+        val lastInact = json.optString("lastInactivityDate", "").trim()
+        val lastStrike = json.optString("lastStrikeDate", "").trim()
+
+        prefs.edit().apply {
+            putFloat(KEY_SCORE, finalScore.toFloat())
+            putFloat(KEY_PEAK_SCORE, finalPeak.toFloat())
+            putFloat(KEY_TOTAL_POINTS_GAINED, finalGained.toFloat())
+            putFloat(KEY_TOTAL_POINTS_EXTINGUISHED, finalExt.toFloat())
+            putBoolean(KEY_STREAK_SHIELD, finalShieldActive)
+            if (finalExpires != null) putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, finalExpires) else remove(KEY_ACTIVE_SHIELD_EXPIRES_AT)
+            if (finalShieldActive && finalType != ActiveShieldType.NONE) {
+                putString(KEY_ACTIVE_SHIELD_TYPE, finalType.name)
+            } else {
+                remove(KEY_ACTIVE_SHIELD_TYPE)
+            }
+            putInt(KEY_AVAILABLE_MANUAL_SHIELDS, _availableManualShields.value)
+            putInt(KEY_AVAILABLE_48H_SHIELDS, _available48hShields.value)
+            putInt(KEY_AVAILABLE_1DAY_SHIELDS, _available1DayShields.value)
+            putInt(KEY_SEVEN_DAY_AUTO_TRIGGERS, _sevenDayAutoShieldCount.value)
+            putBoolean("has_reset_shields_to_zero_v2", true)
+            putString(KEY_FLAME_LOGS, logsToJsonArray(finalLogs).toString())
+            if (startDate.isNotEmpty()) putString(KEY_START_COUNT_DATE, startDate) else if (replaceExisting) remove(KEY_START_COUNT_DATE)
+            if (lastInact.isNotEmpty()) putString(KEY_LAST_INACTIVITY_DATE, lastInact) else if (replaceExisting) remove(KEY_LAST_INACTIVITY_DATE)
+            if (lastStrike.isNotEmpty()) putString(KEY_LAST_STRIKE_DATE, lastStrike) else if (replaceExisting) remove(KEY_LAST_STRIKE_DATE)
+            apply()
+        }
+        isInitialized = true
     }
 }

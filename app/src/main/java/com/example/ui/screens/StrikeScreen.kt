@@ -106,6 +106,8 @@ fun StrikeScreen(
     val yearlyStats by viewModel.yearlyStrikeStats.collectAsStateWithLifecycle()
     val allTimeStrikes by viewModel.allTimeStrikesCount.collectAsStateWithLifecycle()
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
+    val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val isAr = currentLang == "ar"
 
     // Screen Sub-tab: 0 = Arena, 1 = Yearly Dashboard
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -256,7 +258,7 @@ fun StrikeScreen(
                                                     fontSize = 13.sp
                                                 )
                                                 Text(
-                                                    text = "${individual.strikeCount} strikes",
+                                                    text = if (isAr) "${individual.strikeCount} ضربة" else "${individual.strikeCount} strikes",
                                                     fontSize = 11.sp,
                                                     color = if (isSelected) NeonAmber else MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -314,7 +316,7 @@ fun StrikeScreen(
                                                 StrikerStatusBadge(status = targetStatus)
                                             }
                                             Text(
-                                                text = "Type ${target.type} • Size: ${target.size}",
+                                                text = if (isAr) "الفئة ${target.type} • الحجم: ${target.size}" else "Type ${target.type} • Size: ${target.size}",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -337,7 +339,7 @@ fun StrikeScreen(
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(
-                                                text = "BOOST ${target.boost}",
+                                                text = if (isAr) "التعزيز ${target.boost}" else "BOOST ${target.boost}",
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = NeonEmerald
@@ -361,7 +363,7 @@ fun StrikeScreen(
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = "SCORE: ",
+                                            text = if (isAr) "النتيجة: " else "SCORE: ",
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -480,7 +482,11 @@ fun StrikeScreen(
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             Text(
-                                text = "اضغط على زر Strike لتسجيل أول ضربة تلقائياً بالتاريخ والوقت.",
+                                text = if (isAr) {
+                                    "اضغط على زر الضربة لتسجيل أول ضربة تلقائياً بالتاريخ والوقت."
+                                } else {
+                                    "Tap the Strike button to automatically record your first strike with date & time."
+                                },
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp
                             )
@@ -535,7 +541,7 @@ fun StrikeScreen(
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
-                                            text = "إحصائيات الضربات مجمعة حسب كل سنة",
+                                            text = if (isAr) "إحصائيات الضربات مجمّعة حسب كل سنة" else "Strike statistics grouped by year",
                                             fontSize = 11.sp,
                                             color = NeonEmerald
                                         )
@@ -568,7 +574,11 @@ fun StrikeScreen(
                             shape = RoundedCornerShape(16.dp)
                         ) {
                             Text(
-                                text = "لا توجد ضربات مسجلة بعد في قاعدة البيانات.",
+                                text = if (isAr) {
+                                    "لا توجد ضربات مسجّلة بعد في قاعدة البيانات."
+                                } else {
+                                    "No strikes recorded yet in the database."
+                                },
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 13.sp
                             )
@@ -576,7 +586,7 @@ fun StrikeScreen(
                     }
                 } else {
                     items(yearlyStats) { stat ->
-                        YearlyStatCard(stat = stat)
+                        YearlyStatCard(stat = stat, isAr = isAr)
                     }
                 }
 
@@ -589,7 +599,7 @@ fun StrikeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "سجل الضربات التاريخي المفصل",
+                            text = if (isAr) "سجل الضربات التاريخي المفصّل" else "Detailed Historical Strike Log",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -621,7 +631,8 @@ fun StrikeScreen(
 @Composable
 fun YearlyStatCard(
     stat: YearlyStrikeStat,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    isAr: Boolean = true
 ) {
     val yearBadgeBg = if (darkTheme) Color(0xFF0F2537) else Color(0x2200B4D8)
     val yearBadgeBorder = if (darkTheme) NeonCyan else DayCyan
@@ -667,14 +678,14 @@ fun YearlyStatCard(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "${stat.totalStrikes} ضربة",
+                            text = if (isAr) "${stat.totalStrikes} ضربة" else "${stat.totalStrikes} strikes",
                             fontWeight = FontWeight.ExtraBold,
                             fontFamily = PlusJakartaSans,
                             fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "${stat.eventCount} عملية تسجيل في السنة",
+                            text = if (isAr) "${stat.eventCount} عملية تسجيل في السنة" else "${stat.eventCount} recorded events this year",
                             fontSize = 11.sp,
                             fontFamily = PlusJakartaSans,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -734,13 +745,21 @@ fun YearlyStatCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "الحصة من الإجمالي: ${(stat.percentageOfAllTime * 100).toInt()}%",
+                    text = if (isAr) {
+                        "الحصة من الإجمالي: ${(stat.percentageOfAllTime * 100).toInt()}%"
+                    } else {
+                        "Share of total: ${(stat.percentageOfAllTime * 100).toInt()}%"
+                    },
                     fontSize = 10.sp,
                     fontFamily = PlusJakartaSans,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "المتصدر: ${stat.topIndividualStrikes} ضربة",
+                    text = if (isAr) {
+                        "المتصدر: ${stat.topIndividualStrikes} ضربة"
+                    } else {
+                        "Leader: ${stat.topIndividualStrikes} strikes"
+                    },
                     fontSize = 10.sp,
                     fontFamily = PlusJakartaSans,
                     color = if (darkTheme) NeonEmerald else DayEmerald,

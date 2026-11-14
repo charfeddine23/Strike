@@ -114,6 +114,8 @@ fun RoadmapScreen(
     val view = LocalView.current
     val coroutineScope = rememberCoroutineScope()
     val isHapticEnabled by viewModel.isHapticFeedbackEnabled
+    val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val isAr = currentLang == "ar"
 
     val totalXp by viewModel.totalXp.collectAsStateWithLifecycle()
     val claimedStations by viewModel.claimedStations.collectAsStateWithLifecycle()
@@ -186,7 +188,7 @@ fun RoadmapScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = if (isAr) "رجوع" else "Back",
                             tint = NeonCyan,
                             modifier = Modifier.size(18.dp)
                         )
@@ -230,16 +232,19 @@ fun RoadmapScreen(
                     ) {
                         Column {
                             Text(
-                                text = "المحطة الحالية: $currentStationId / 500",
+                                text = if (isAr) "المحطة الحالية: $currentStationId / 500" else "Current Station: $currentStationId / 500",
                                 fontWeight = FontWeight.Black,
                                 fontFamily = PlusJakartaSans,
                                 fontSize = 15.sp,
                                 color = NeonCyan
                             )
-                            val reqCurrent = TaskPools.getRequiredXpForStation(currentStationId)
                             val reqNext = TaskPools.getRequiredXpForStation((currentStationId + 1).coerceAtMost(500))
                             Text(
-                                text = "المجموع التراكمي: $totalXp / ${TaskPools.TOTAL_XP_POOL} XP (المحطة التالية: $reqNext XP)",
+                                text = if (isAr) {
+                                    "المجموع التراكمي: $totalXp / ${TaskPools.TOTAL_XP_POOL} XP (التالية: $reqNext XP)"
+                                } else {
+                                    "Cumulative XP: $totalXp / ${TaskPools.TOTAL_XP_POOL} XP (Next: $reqNext XP)"
+                                },
                                 fontSize = 11.sp,
                                 color = Color(0xFFCBD5E1)
                             )
@@ -259,7 +264,12 @@ fun RoadmapScreen(
                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                             modifier = Modifier.height(28.dp)
                         ) {
-                            Text(text = "قفزة لمحطتي", fontSize = 10.sp, color = NeonCyan, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = if (isAr) "قفز لمحطتي" else "Jump to Mine",
+                                fontSize = 10.sp,
+                                color = NeonCyan,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
 
@@ -363,6 +373,7 @@ fun RoadmapScreen(
                     items(stations, key = { it.id }) { station ->
                         WavyStationItem(
                             station = station,
+                            currentLang = currentLang,
                             pulseScale = pulseScale,
                             onClaim = {
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -384,7 +395,7 @@ fun RoadmapScreen(
             ) {
                 var everlastingFilter by remember { mutableStateOf(0) } // 0: All, 1: Pending, 2: Completed
 
-                // Period Selector Chips (Daily, Weekly, Monthly, Everlasting)
+                // Period Selector Chips (Daily, Weekly, Monthly, Annual)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -392,22 +403,22 @@ fun RoadmapScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     PeriodFilterChip(
-                        label = "يومية (5)",
+                        label = if (isAr) "يومية (5)" else "Daily (5)",
                         isSelected = selectedTaskPeriod == TaskPeriod.DAILY,
                         onClick = { selectedTaskPeriod = TaskPeriod.DAILY }
                     )
                     PeriodFilterChip(
-                        label = "أسبوعية (7)",
+                        label = if (isAr) "أسبوعية (7)" else "Weekly (7)",
                         isSelected = selectedTaskPeriod == TaskPeriod.WEEKLY,
                         onClick = { selectedTaskPeriod = TaskPeriod.WEEKLY }
                     )
                     PeriodFilterChip(
-                        label = "شهرية (10)",
+                        label = if (isAr) "شهرية (10)" else "Monthly (10)",
                         isSelected = selectedTaskPeriod == TaskPeriod.MONTHLY,
                         onClick = { selectedTaskPeriod = TaskPeriod.MONTHLY }
                     )
                     PeriodFilterChip(
-                        label = "سنوية (250)",
+                        label = if (isAr) "سنوية (250)" else "Annual (250)",
                         isSelected = selectedTaskPeriod == TaskPeriod.YEARLY,
                         onClick = { selectedTaskPeriod = TaskPeriod.YEARLY }
                     )
@@ -416,7 +427,6 @@ fun RoadmapScreen(
                 // Master Goals Header Banner (Displayed when Annual tab is active)
                 if (selectedTaskPeriod == TaskPeriod.YEARLY) {
                     val completedCount = yearlyTasks.count { it.isCompleted }
-                    val totalEverlastingXpEarned = yearlyTasks.filter { it.isCompleted }.sumOf { it.xpBounty }
                     val progressFraction = (completedCount.toFloat() / yearlyTasks.size.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
 
                     LiquidGlassCard(
@@ -433,14 +443,18 @@ fun RoadmapScreen(
                             ) {
                                 Column {
                                     Text(
-                                        text = "المهام السنوية الكبرى (250 إنجازاً)",
+                                        text = if (isAr) "المهام السنوية الكبرى (250 إنجازاً)" else "Grand Annual Milestones (250 Goals)",
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.Black,
                                         fontFamily = PlusJakartaSans,
                                         color = NeonAmber
                                     )
                                     Text(
-                                        text = "مرتبة تصاعدياً حسب الصعوبة | دون تجاوز بالمفاتيح: 245,350 XP",
+                                        text = if (isAr) {
+                                            "مرتبة تصاعدياً حسب الصعوبة | دون تجاوز بالمفاتيح: 245,350 XP"
+                                        } else {
+                                            "Sorted by ascending difficulty | No skip-keys allowed: 245,350 XP"
+                                        },
                                         fontSize = 10.sp,
                                         color = Color(0xFF94A3B8)
                                     )
@@ -483,17 +497,17 @@ fun RoadmapScreen(
                             // Sub-filter chips for 250 master goals
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 FilterChipTiny(
-                                    label = "الكل (250)",
+                                    label = if (isAr) "الكل (250)" else "All (250)",
                                     selected = everlastingFilter == 0,
                                     onClick = { everlastingFilter = 0 }
                                 )
                                 FilterChipTiny(
-                                    label = "قيد الإنجاز (${yearlyTasks.count { !it.isCompleted }})",
+                                    label = if (isAr) "قيد الإنجاز (${yearlyTasks.count { !it.isCompleted }})" else "Pending (${yearlyTasks.count { !it.isCompleted }})",
                                     selected = everlastingFilter == 1,
                                     onClick = { everlastingFilter = 1 }
                                 )
                                 FilterChipTiny(
-                                    label = "المكتملة ($completedCount)",
+                                    label = if (isAr) "المكتملة ($completedCount)" else "Completed ($completedCount)",
                                     selected = everlastingFilter == 2,
                                     onClick = { everlastingFilter = 2 }
                                 )
@@ -522,19 +536,19 @@ fun RoadmapScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         KeyInventoryChip(
-                            name = SkipKeyType.WOODEN.nameAr,
+                            name = SkipKeyType.WOODEN.getLocalizedName(currentLang),
                             count = woodenKeys,
                             color = Color(0xFFD97706),
                             modifier = Modifier.weight(1f)
                         )
                         KeyInventoryChip(
-                            name = SkipKeyType.BRONZE.nameAr,
+                            name = SkipKeyType.BRONZE.getLocalizedName(currentLang),
                             count = bronzeKeys,
                             color = Color(0xFFF59E0B),
                             modifier = Modifier.weight(1f)
                         )
                         KeyInventoryChip(
-                            name = SkipKeyType.SILVER.nameAr,
+                            name = SkipKeyType.SILVER.getLocalizedName(currentLang),
                             count = silverKeys,
                             color = Color(0xFFE2E8F0),
                             modifier = Modifier.weight(1f)
@@ -550,6 +564,7 @@ fun RoadmapScreen(
                     items(currentTasks, key = { it.id }) { task ->
                         TaskItemCard(
                             task = task,
+                            currentLang = currentLang,
                             availableKeysForType = when (task.requiredSkipKey) {
                                 SkipKeyType.WOODEN -> woodenKeys
                                 SkipKeyType.BRONZE -> bronzeKeys
@@ -574,9 +589,11 @@ fun RoadmapScreen(
 @Composable
 fun WavyStationItem(
     station: RoadmapStation,
+    currentLang: String,
     pulseScale: Float,
     onClaim: () -> Unit
 ) {
+    val isAr = currentLang == "ar"
     // Horizontal Sine-Wave oscillation: -60.dp to +60.dp
     val phase = (station.id * 0.42f)
     val horizontalOffsetDp = (sin(phase) * 60f).dp
@@ -658,7 +675,7 @@ fun WavyStationItem(
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "محطة #${station.id}",
+                                text = if (isAr) "محطة #${station.id}" else "Station #${station.id}",
                                 fontWeight = FontWeight.Black,
                                 fontSize = 11.sp,
                                 color = when (station.state) {
@@ -713,13 +730,13 @@ fun WavyStationItem(
 
                     // Reward Title & Description
                     Text(
-                        text = station.reward.title,
+                        text = station.reward.getLocalizedTitle(currentLang),
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         color = Color.White
                     )
                     Text(
-                        text = station.reward.description,
+                        text = station.reward.getLocalizedDescription(currentLang),
                         fontSize = 10.sp,
                         color = Color(0xFF94A3B8),
                         maxLines = 2
@@ -742,12 +759,17 @@ fun WavyStationItem(
                             ) {
                                 Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF0F172A), modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "جني المكافأة السيبرانية", fontSize = 11.sp, color = Color(0xFF0F172A), fontWeight = FontWeight.Black)
+                                Text(
+                                    text = if (isAr) "جني المكافأة السيبرانية" else "Claim Cyber Reward",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF0F172A),
+                                    fontWeight = FontWeight.Black
+                                )
                             }
                         }
                         StationState.CLAIMED -> {
                             Text(
-                                text = "تم جني المكافأة بنجاح ✓",
+                                text = if (isAr) "تم جني المكافأة بنجاح ✓" else "Reward Claimed ✓",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = NeonAmber,
@@ -757,7 +779,7 @@ fun WavyStationItem(
                         }
                         StationState.LOCKED -> {
                             Text(
-                                text = "مقفلة • تتطلب ${station.requiredTotalXp} XP",
+                                text = if (isAr) "مقفلة • تتطلب ${station.requiredTotalXp} XP" else "Locked • Requires ${station.requiredTotalXp} XP",
                                 fontSize = 10.sp,
                                 color = Color(0xFF64748B),
                                 textAlign = TextAlign.Center,
@@ -777,9 +799,11 @@ fun WavyStationItem(
 @Composable
 fun TaskItemCard(
     task: TaskItem,
+    currentLang: String = "ar",
     availableKeysForType: Int,
     onSkipWithKey: () -> Unit
 ) {
+    val isAr = currentLang == "ar"
     LiquidGlassCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -798,14 +822,14 @@ fun TaskItemCard(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = task.title,
+                        text = task.getLocalizedTitle(currentLang),
                         fontWeight = FontWeight.Bold,
                         fontFamily = PlusJakartaSans,
                         fontSize = 14.sp,
                         color = Color.White
                     )
                     Text(
-                        text = task.description,
+                        text = task.getLocalizedDescription(currentLang),
                         fontSize = 11.sp,
                         color = Color(0xFF94A3B8),
                         modifier = Modifier.padding(top = 2.dp)
@@ -831,10 +855,10 @@ fun TaskItemCard(
 
                     // Difficulty Tier Indicator Pill
                     val (tierLabel, tierColor) = when (task.difficultyTier) {
-                        1 -> "سهل" to NeonCyan
-                        2 -> "متوسط" to NeonAmber
-                        3 -> "متقدم" to Color(0xFFF97316)
-                        else -> "نخبوي" to NeonViolet
+                        1 -> (if (isAr) "سهل" else "Easy") to NeonCyan
+                        2 -> (if (isAr) "متوسط" else "Medium") to NeonAmber
+                        3 -> (if (isAr) "متقدم" else "Hard") to Color(0xFFF97316)
+                        else -> (if (isAr) "نخبوي" else "Elite") to NeonViolet
                     }
                     Box(
                         modifier = Modifier
@@ -896,7 +920,7 @@ fun TaskItemCard(
                     Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = NeonEmerald, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "مكتملة (+${task.xpBounty} XP حُصدت بنجاح)",
+                        text = if (isAr) "مكتملة (+${task.xpBounty} XP حُصدت بنجاح)" else "Completed (+${task.xpBounty} XP Claimed)",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = NeonEmerald
@@ -922,7 +946,11 @@ fun TaskItemCard(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "مهمة سنوية (غير قابلة للتجاوز بالمفاتيح - تتطلب إنجازاً فعلياً)",
+                            text = if (isAr) {
+                                "مهمة سنوية (غير قابلة للتجاوز بالمفاتيح - تتطلب إنجازاً فعلياً)"
+                            } else {
+                                "Annual Milestone (Cannot be skipped with keys — genuine completion required)"
+                            },
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = NeonAmber
@@ -935,7 +963,7 @@ fun TaskItemCard(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "تُنجز بالنشاط الفعلي أو بالتجاوز",
+                            text = if (isAr) "تُنجز بالنشاط الفعلي أو بالتجاوز" else "Complete via activity or skip-key",
                             fontSize = 10.sp,
                             color = Color(0xFF64748B),
                             fontWeight = FontWeight.Medium
@@ -968,7 +996,11 @@ fun TaskItemCard(
                             )
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = "تجاوز بـ ${task.requiredSkipKey.nameAr} ($availableKeysForType)",
+                                text = if (isAr) {
+                                    "تجاوز بـ ${task.requiredSkipKey.getLocalizedName(currentLang)} ($availableKeysForType)"
+                                } else {
+                                    "Skip w/ ${task.requiredSkipKey.getLocalizedName(currentLang)} ($availableKeysForType)"
+                                },
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (hasKeyAvailable) keyColor else Color.Gray

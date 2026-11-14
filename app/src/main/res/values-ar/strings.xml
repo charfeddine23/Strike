@@ -49,9 +49,9 @@
     <string name="empty_records_desc">ابدأ بإضافة أول فرد أو قم بتحميل بيانات تجريبية لاستكشاف التحليلات.</string>
     <string name="seed_sample_data">تحميل بيانات نموذجية</string>
     <string name="reset_all_levels_btn">تصفير كل المستويات إلى الصفر</string>
-    <string name="reset_all_levels_desc">إرجاع الخبرة، المحطات، المهام، الشعلة، الدروع، المفاتيح، الجرعات والجوائز إلى 0 (دون المساس بالأفراد وسجلات السترايك)</string>
+    <string name="reset_all_levels_desc">إرجاع الخبرة، المحطات، المهام، الشعلة، الدروع، المفاتيح والجرعات إلى 0 (دون المساس بالأفراد، سجلات السترايك، أو الألقاب والأفاتارات الدائمة)</string>
     <string name="reset_all_levels_confirm_title">تصفير كل المستويات إلى الصفر؟</string>
-    <string name="reset_all_levels_confirm_msg">سيتم تصفير وإرجاع كافة المستويات، نقاط XP، الـ 500 محطة، الـ 1000 مهمة، نقاط الشعلة، الدروع، المفاتيح، الجرعات، والألقاب والأفاتار المفتوحة إلى الصفر حرفياً. تبقى قائمة الأفراد وسجلات السترايك محفوظة ولن تُمس نهائياً.</string>
+    <string name="reset_all_levels_confirm_msg">سيتم تصفير كافة المستويات، نقاط XP، الـ 500 محطة، الـ 1000 مهمة، نقاط الشعلة، الدروع، المفاتيح، والجرعات إلى الصفر حرفياً. تبقى قائمة الأفراد وسجلات السترايك والألقاب والأفاتارات المفتوحة محفوظة للأبد ولن تُمس نهائياً.</string>
     <string name="reset_all_levels_confirm_action">نعم، صفّر المستويات إلى 0</string>
     <string name="record_saved">تم حفظ السجل بنجاح!</string>
     <string name="record_deleted">تم حذف السجل.</string>
@@ -91,7 +91,7 @@
     <string name="version_information">معلومات الإصدار</string>
     <string name="app_version">إصدار التطبيق</string>
     <string name="build_number">رقم البناء</string>
-    <string name="developer_credit">Developed by Charfeddine Kahlessenane</string>
+    <string name="developer_credit">تطوير: شرف الدين كحلسنان</string>
     <string name="strike_deleted">تم حذف تسجيل الضربة</string>
     <string name="undo">تراجع</string>
     <string name="strike_restored">تمت استعادة الضربة بنجاح</string>
@@ -184,9 +184,9 @@
     <string name="flame_activity_log_title">سجل تدقيق ونشاط الشعلة</string>
     <string name="flame_activity_empty">لا توجد أحداث شعلة مسجلة بعد.</string>
     <string name="flame_simulator_title">محاكي النقاط التفاعلي</string>
-    <string name="flame_simulator_input_label">قيمة النقاط (0 - 10,000)</string>
+    <string name="flame_simulator_input_label">قيمة النقاط (0 - 20,000)</string>
     <string name="flame_simulator_apply">تطبيق</string>
-    <string name="flame_simulator_range_error">يجب أن تكون القيمة بين 0 و 10,000</string>
+    <string name="flame_simulator_range_error">يجب أن تكون القيمة بين 0 و 20,000</string>
     <string name="flame_clear_history">مسح السجل</string>
     <string name="flame_clear_confirm_title">مسح سجل النشاط؟</string>
     <string name="flame_clear_confirm_msg">سيؤدي هذا إلى مسح أحداث سجل الشعلة. ستبقى النقاط الحالية كما هي.</string>
@@ -240,8 +240,8 @@
     <string name="shield_settings_toggle_desc">إيقاف نقاط الخمول اليومية يدوياً أو عبر تفعيل الدروع المتاحة</string>
     <string name="deviations_title">الانحرافات</string>
     <string name="deviations_subtitle">تطور الشيفرة الجينية ومسار الكيانات المزدوج</string>
-    <string name="deviations_dark_track">مسار الظلال الرقمية (0 - 1000 نقطة)</string>
-    <string name="deviations_light_track">مسار النور الملائكي (1001 - 10000 نقطة)</string>
+    <string name="deviations_dark_track">مسار الظلال الرقمية (0 - 2,000 نقطة)</string>
+    <string name="deviations_light_track">مسار النور الملائكي (2,001 - 20,000 نقطة)</string>
     <string name="deviations_estrogen">إستروجين (أنوثة)</string>
     <string name="deviations_testosterone">تيستوستيرون (رجولة)</string>
     <string name="deviations_grip_status">قبضة الظلال: %1$d%%</string>

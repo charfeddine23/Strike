@@ -33,7 +33,7 @@ class RoadmapEngineTest {
         prefs.edit().clear().commit()
         RoadmapManager.resetForTesting(app)
 
-        val flamePrefs = app.getSharedPreferences("strike_pulse_flame_prefs", Application.MODE_PRIVATE)
+        val flamePrefs = app.getSharedPreferences("strikepulse_flame_prefs", Application.MODE_PRIVATE)
         flamePrefs.edit().clear().commit()
         FlameManager.resetForTesting(app)
 
@@ -238,9 +238,88 @@ class RoadmapEngineTest {
         assertEquals(0, remainingCount)
 
         val updatedDaily = RoadmapManager.dailyTasks.value
-        val updatedTask = updatedDaily.first { it.id == targetTask.id }
-        assertEquals(TaskStatus.SKIPPED, updatedTask.status)
+        assertFalse("Skipped Daily task must disappear immediately from active list", updatedDaily.any { it.id == targetTask.id })
         assertTrue(RoadmapManager.completedTaskIds.value.contains(targetTask.id))
+    }
+
+    @Test
+    fun testCarryOverPendingTasksAndDynamicRefillAcrossCycles() {
+        val initialDaily = RoadmapManager.dailyTasks.value
+        assertEquals(5, initialDaily.size)
+
+        // 1. Complete 1 daily task and skip another
+        val completedId = initialDaily.first().id
+        assertTrue(RoadmapManager.completeTask(app, completedId))
+
+        val skippedTask = RoadmapManager.dailyTasks.value.first()
+        RoadmapManager.addKey(app, skippedTask.requiredSkipKey, 1)
+        assertTrue(RoadmapManager.useSkipKeyForTask(app, skippedTask.id))
+
+        // If any remaining daily task requires >1 step, increment it once so we verify partial progress carry-over too
+        val partialCandidate = RoadmapManager.dailyTasks.value.firstOrNull { it.targetCount > 1 }
+        if (partialCandidate != null) {
+            RoadmapManager.onActionOccurred(app, partialCandidate.actionTag)
+        }
+
+        val carriedOverTasks = RoadmapManager.dailyTasks.value
+        assertTrue("Expected pending tasks to carry over, size=${carriedOverTasks.size}", carriedOverTasks.size in 1..3)
+        val carriedCounts = carriedOverTasks.associate { it.id to it.currentCount }
+
+        // 2. Simulate next calendar day / week / month rollover
+        val prefs = app.getSharedPreferences("strikepulse_roadmap_prefs", Application.MODE_PRIVATE)
+        prefs.edit()
+            .putString("key_last_daily_date", "2020-01-01")
+            .putString("key_last_weekly_code", "2020_W01")
+            .putString("key_last_monthly_code", "2020_M01")
+            .apply()
+
+        RoadmapManager.resetForTesting(app)
+
+        val nextDayDaily = RoadmapManager.dailyTasks.value
+        assertEquals(5, nextDayDaily.size)
+        // Pending tasks from previous day must carry over intact with partial progress preserved
+        carriedCounts.forEach { (cid, count) ->
+            val reloaded = nextDayDaily.find { it.id == cid }
+            assertNotNull("Carried-over task $cid must stay active across cycle", reloaded)
+            assertEquals(count, reloaded!!.currentCount)
+        }
+        // Completed/skipped tasks must NEVER reappear
+        assertFalse(nextDayDaily.any { it.id == completedId || it.id == skippedTask.id })
+        // Weekly and Monthly capacities remain 7 and 10
+        assertEquals(7, RoadmapManager.weeklyTasks.value.size)
+        assertEquals(10, RoadmapManager.monthlyTasks.value.size)
+    }
+
+    @Test
+    fun testAnnualBatchPersistenceAndBottomArchive() {
+        val initialYearly = RoadmapManager.yearlyTasks.value
+        assertEquals(250, initialYearly.size)
+        assertTrue(initialYearly.all { it.status == TaskStatus.PENDING })
+
+        // Pick a STRIKE task with targetCount > 1 to test partial persistence, and complete another annual task
+        val multiStepStrike = initialYearly.first { it.actionTag == "STRIKE" && it.targetCount > 1 }
+        val completedAnnual = initialYearly.first { it.id != multiStepStrike.id }
+
+        RoadmapManager.onActionOccurred(app, "STRIKE")
+        assertTrue(RoadmapManager.completeTask(app, completedAnnual.id))
+
+        // Re-initialize from SharedPreferences JSON
+        RoadmapManager.resetForTesting(app)
+
+        val reloadedYearly = RoadmapManager.yearlyTasks.value
+        assertEquals(250, reloadedYearly.size)
+
+        // Completed task remains visible and sits at the bottom archive (all pending before all completed)
+        val firstCompletedIdx = reloadedYearly.indexOfFirst { it.isCompleted }
+        assertTrue("At least one annual task should be archived as completed", firstCompletedIdx >= 0)
+        assertTrue(reloadedYearly.drop(firstCompletedIdx).all { it.isCompleted })
+        assertTrue(reloadedYearly.take(firstCompletedIdx).all { !it.isCompleted })
+        assertEquals(completedAnnual.id, reloadedYearly.last().id)
+
+        // Partial progress on pending multi-step annual task persisted across restart
+        val reloadedStrike = reloadedYearly.first { it.id == multiStepStrike.id }
+        assertEquals(1, reloadedStrike.currentCount)
+        assertEquals(TaskStatus.PENDING, reloadedStrike.status)
     }
 
     @Test
@@ -419,7 +498,9 @@ class RoadmapEngineTest {
         assertEquals(0, ProfileManager.pulseElixirUsesLeft.value)
         assertFalse(ProfileManager.hasCryoBuffArmed.value)
         assertFalse(ProfileManager.hasRebirthImmunity.value)
-        assertEquals(setOf("av_core_node"), ProfileManager.unlockedAvatarIds.value)
-        assertEquals(setOf(1), ProfileManager.unlockedTitleIds.value)
+
+        // Permanent Unlock Persistence Rule: unlocked Titles & Avatars NEVER get wiped on reset
+        assertTrue(ProfileManager.unlockedAvatarIds.value.containsAll(setOf("av_core_node", "av_gabriel_wings")))
+        assertTrue(ProfileManager.unlockedTitleIds.value.containsAll(setOf(1, 21)))
     }
 }

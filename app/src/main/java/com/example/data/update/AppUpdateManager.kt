@@ -47,7 +47,13 @@ sealed class AppUpdateState {
         val totalBytes: Long
     ) : AppUpdateState()
     data class ReadyToInstall(val release: GitHubReleaseInfo, val apkFile: File) : AppUpdateState()
-    data class Error(val messageAr: String, val fallbackUrl: String = AppUpdateManager.GITHUB_RELEASES_URL) : AppUpdateState()
+    data class Error(
+        val messageAr: String,
+        val fallbackUrl: String = AppUpdateManager.GITHUB_RELEASES_URL,
+        val messageEn: String = messageAr
+    ) : AppUpdateState() {
+        fun getLocalizedMessage(lang: String): String = if (lang == "ar") messageAr else messageEn
+    }
 }
 
 /**
@@ -194,7 +200,10 @@ object AppUpdateManager {
                 val err = if (isAutoCheck) {
                     AppUpdateState.Idle
                 } else {
-                    AppUpdateState.Error("تعذر الاتصال بخادم GitHub أو لا توجد إصدارات منشورة بعد")
+                    AppUpdateState.Error(
+                        messageAr = "تعذر الاتصال بخادم GitHub أو لا توجد إصدارات منشورة بعد",
+                        messageEn = "Unable to reach GitHub or no releases have been published yet"
+                    )
                 }
                 _state.value = err
                 return@withContext err
@@ -220,7 +229,10 @@ object AppUpdateManager {
             val err = if (isAutoCheck) {
                 AppUpdateState.Idle
             } else {
-                AppUpdateState.Error("تعذر التحقق من التحديثات: تحقق من اتصال الإنترنت")
+                AppUpdateState.Error(
+                    messageAr = "تعذر التحقق من التحديثات: تحقق من اتصال الإنترنت",
+                    messageEn = "Unable to check for updates: please verify your internet connection"
+                )
             }
             _state.value = err
             err
@@ -235,7 +247,8 @@ object AppUpdateManager {
         if (downloadUrl.isNullOrBlank()) {
             val err = AppUpdateState.Error(
                 messageAr = "لا يوجد ملف APK مرفق في هذا الإصدار؛ يمكنك الفتح من GitHub",
-                fallbackUrl = release.htmlUrl
+                fallbackUrl = release.htmlUrl,
+                messageEn = "No APK asset attached to this release; you can open GitHub instead"
             )
             _state.value = err
             return@withContext err
@@ -266,14 +279,19 @@ object AppUpdateManager {
                 if (!response.isSuccessful) {
                     val err = AppUpdateState.Error(
                         messageAr = "فشل تحميل التحديث من الخادم (HTTP ${response.code})",
-                        fallbackUrl = release.htmlUrl
+                        fallbackUrl = release.htmlUrl,
+                        messageEn = "Failed to download update from server (HTTP ${response.code})"
                     )
                     _state.value = err
                     return@withContext err
                 }
 
                 val body = response.body ?: run {
-                    val err = AppUpdateState.Error("ملف التحديث فارغ أو غير صالح", release.htmlUrl)
+                    val err = AppUpdateState.Error(
+                        messageAr = "ملف التحديث فارغ أو غير صالح",
+                        fallbackUrl = release.htmlUrl,
+                        messageEn = "Update package is empty or invalid"
+                    )
                     _state.value = err
                     return@withContext err
                 }
@@ -337,7 +355,8 @@ object AppUpdateManager {
         } catch (e: Exception) {
             val err = AppUpdateState.Error(
                 messageAr = "انقطع التحميل: تحقق من الاتصال وحاول مجدداً",
-                fallbackUrl = release.htmlUrl
+                fallbackUrl = release.htmlUrl,
+                messageEn = "Download interrupted: check your connection and try again"
             )
             _state.value = err
             err

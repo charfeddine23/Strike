@@ -72,8 +72,10 @@ fun DeflameAdjustmentDialog(
     onDismiss: () -> Unit,
     onApply: (Double) -> Unit,
     isHapticEnabled: Boolean = true,
-    isGirlMode: Boolean = true
+    isGirlMode: Boolean = true,
+    currentLang: String = "ar"
 ) {
+    val isAr = currentLang == "ar"
     val context = LocalContext.current
     val view = LocalView.current
     val focusManager = LocalFocusManager.current
@@ -143,7 +145,7 @@ fun DeflameAdjustmentDialog(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
+                        contentDescription = if (isAr) "إغلاق" else "Close",
                         tint = Color.Gray,
                         modifier = Modifier.size(16.dp)
                     )
@@ -176,7 +178,11 @@ fun DeflameAdjustmentDialog(
                             color = Color(0xFFCBD5E1)
                         )
                         Text(
-                            text = "${String.format(Locale.US, "%.1f", currentFlameScore)} PTS",
+                            text = if (isAr) {
+                                "${String.format(Locale.US, "%.1f", currentFlameScore)} نقطة"
+                            } else {
+                                "${String.format(Locale.US, "%.1f", currentFlameScore)} PTS"
+                            },
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Black,
                             fontFamily = PlusJakartaSans,
@@ -204,7 +210,7 @@ fun DeflameAdjustmentDialog(
                 ) {
                     presets.forEach { presetVal ->
                         val isSelected = (selectedPreset == presetVal)
-                        val chipText = "-${presetVal.toInt()} PTS"
+                        val chipText = if (isAr) "-${presetVal.toInt()} نقطة" else "-${presetVal.toInt()} PTS"
 
                         Box(
                             modifier = Modifier
@@ -261,7 +267,7 @@ fun DeflameAdjustmentDialog(
                                 selectedPreset = parsed
                                 inputError = null
                             } else if (input.isNotEmpty()) {
-                                inputError = "Enter value > 0"
+                                inputError = if (isAr) "أدخل قيمة أكبر من 0" else "Enter value > 0"
                             }
                         }
                     },
@@ -324,7 +330,7 @@ fun DeflameAdjustmentDialog(
                         onApply(points)
                         onDismiss()
                     } else {
-                        inputError = "Enter value > 0"
+                        inputError = if (isAr) "أدخل قيمة أكبر من 0" else "Enter value > 0"
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = buttonBgColor),

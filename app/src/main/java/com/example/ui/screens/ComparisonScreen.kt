@@ -71,6 +71,8 @@ fun ComparisonScreen(
     val personA by viewModel.personA.collectAsStateWithLifecycle()
     val personB by viewModel.personB.collectAsStateWithLifecycle()
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
+    val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val isAr = currentLang == "ar"
 
     var showMenuA by remember { mutableStateOf(false) }
     var showMenuB by remember { mutableStateOf(false) }
@@ -99,7 +101,7 @@ fun ComparisonScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Head-to-head metrics analysis",
+                            text = if (isAr) "تحليل المقارنة المباشرة بين المقاييس" else "Head-to-head metrics analysis",
                             style = MaterialTheme.typography.bodySmall,
                             color = NeonCyan
                         )
@@ -138,7 +140,8 @@ fun ComparisonScreen(
                         status = personA?.let { viewModel.getStatusForIndividual(it, lastStrikeMap) },
                         accentColor = NeonCyan,
                         onClick = { showMenuA = true },
-                        testTag = "selector_person_a"
+                        testTag = "selector_person_a",
+                        isAr = isAr
                     )
 
                     DropdownMenu(
@@ -181,7 +184,8 @@ fun ComparisonScreen(
                         status = personB?.let { viewModel.getStatusForIndividual(it, lastStrikeMap) },
                         accentColor = NeonViolet,
                         onClick = { showMenuB = true },
-                        testTag = "selector_person_b"
+                        testTag = "selector_person_b",
+                        isAr = isAr
                     )
 
                     DropdownMenu(
@@ -325,7 +329,7 @@ fun ComparisonScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Text(
-                            text = "METRIC BREAKDOWN",
+                            text = if (isAr) "تفصيل المؤشرات والمقاييس" else "METRIC BREAKDOWN",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -334,7 +338,7 @@ fun ComparisonScreen(
 
                         // 0. TOTAL SCORE (BOOST × Strikes)
                         SmartMetricComparisonBar(
-                            title = "TOTAL SCORE (BOOST × Strikes)",
+                            title = if (isAr) "النتيجة الإجمالية (التعزيز × الضربات)" else "TOTAL SCORE (BOOST × Strikes)",
                             valueA = a.totalScore,
                             valueB = b.totalScore,
                             labelA = a.fullName.take(8),
@@ -343,7 +347,7 @@ fun ComparisonScreen(
 
                         // 1. BOOST
                         SmartMetricComparisonBar(
-                            title = "BOOST (Dynamic Formula)",
+                            title = if (isAr) "التعزيز (المعادلة الديناميكية)" else "BOOST (Dynamic Formula)",
                             valueA = a.boost,
                             valueB = b.boost,
                             labelA = a.fullName.take(8),
@@ -352,7 +356,7 @@ fun ComparisonScreen(
 
                         // 2. Size (Length * Width)
                         SmartMetricComparisonBar(
-                            title = "Size (Length × Width)",
+                            title = if (isAr) "الحجم (الطول × العرض)" else "Size (Length × Width)",
                             valueA = a.size,
                             valueB = b.size,
                             labelA = a.fullName.take(8),
@@ -361,7 +365,7 @@ fun ComparisonScreen(
 
                         // 3. Strike Count
                         SmartMetricComparisonBar(
-                            title = "Strike Count (عدد المرات)",
+                            title = if (isAr) "عدد الضربات" else "Strike Count",
                             valueA = a.strikeCount.toDouble(),
                             valueB = b.strikeCount.toDouble(),
                             labelA = a.fullName.take(8),
@@ -370,7 +374,7 @@ fun ComparisonScreen(
 
                         // 4. S SCORE
                         SmartMetricComparisonBar(
-                            title = "S SCORE",
+                            title = if (isAr) "نقاط S" else "S SCORE",
                             valueA = a.sScore,
                             valueB = b.sScore,
                             labelA = a.fullName.take(8),
@@ -379,7 +383,7 @@ fun ComparisonScreen(
 
                         // 5. F SCORE
                         SmartMetricComparisonBar(
-                            title = "F SCORE",
+                            title = if (isAr) "نقاط F" else "F SCORE",
                             valueA = a.fScore,
                             valueB = b.fScore,
                             labelA = a.fullName.take(8),
@@ -388,7 +392,7 @@ fun ComparisonScreen(
 
                         // 6. C SCORE
                         SmartMetricComparisonBar(
-                            title = "C SCORE",
+                            title = if (isAr) "نقاط C" else "C SCORE",
                             valueA = a.cScore,
                             valueB = b.cScore,
                             labelA = a.fullName.take(8),
@@ -416,7 +420,7 @@ fun ComparisonScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = "STRIKE ${a.fullName.take(8)}",
+                                text = if (isAr) "ضربة ${a.fullName.take(8)}" else "STRIKE ${a.fullName.take(8)}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = NeonCyan
@@ -452,7 +456,7 @@ fun ComparisonScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = "STRIKE ${b.fullName.take(8)}",
+                                text = if (isAr) "ضربة ${b.fullName.take(8)}" else "STRIKE ${b.fullName.take(8)}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = NeonViolet
@@ -484,7 +488,11 @@ fun ComparisonScreen(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(
-                        text = "Please add at least two individuals to perform analytical comparison.",
+                        text = if (isAr) {
+                            "يرجى إضافة شخصين على الأقل لإجراء المقارنة التحليلية."
+                        } else {
+                            "Please add at least two individuals to perform analytical comparison."
+                        },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 13.sp
                     )
@@ -506,7 +514,8 @@ fun PersonSelectorCard(
     accentColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    testTag: String? = null
+    testTag: String? = null,
+    isAr: Boolean = true
 ) {
     if (person != null && status != null) {
         DynamicAnimatedProfileCard(
@@ -545,7 +554,7 @@ fun PersonSelectorCard(
                     GlassTypeBadge(type = person.type)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "BOOST ${person.boost}",
+                        text = if (isAr) "التعزيز ${person.boost}" else "BOOST ${person.boost}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = NeonEmerald
@@ -571,7 +580,7 @@ fun PersonSelectorCard(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Select…",
+                    text = if (isAr) "اختر…" else "Select…",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

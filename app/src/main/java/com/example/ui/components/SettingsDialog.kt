@@ -110,6 +110,7 @@ fun SettingsDialog(
     val isPatternLockEnabled by viewModel.isPatternLockEnabled
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
     val isAutoUpdateEnabled by viewModel.isAutoUpdateEnabled
+    val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     var showPatternSetupDialog by remember { mutableStateOf(false) }
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
@@ -561,7 +562,6 @@ fun SettingsDialog(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val currentLang = viewModel.currentLanguage.value
                     val languages = listOf(
                         Triple("ar", "العربية (Arabic - RTL)", "AR"),
                         Triple("fr", "Français (French)", "FR"),
@@ -708,13 +708,21 @@ fun SettingsDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 Text(
-                                    text = "التحديث التلقائي من داخل التطبيق",
+                                    text = when (currentLang) {
+                                        "ar" -> "التحديث التلقائي من داخل التطبيق"
+                                        "fr" -> "Mise à jour automatique intégrée"
+                                        else -> "In-App Auto-Update"
+                                    },
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = titleColor
                                 )
                                 Text(
-                                    text = "فحص وتنزيل الإصدارات من GitHub تلقائياً",
+                                    text = when (currentLang) {
+                                        "ar" -> "فحص وتنزيل الإصدارات من GitHub تلقائياً"
+                                        "fr" -> "Vérifier et télécharger automatiquement depuis GitHub"
+                                        else -> "Automatically check & download releases from GitHub"
+                                    },
                                     fontSize = 10.sp,
                                     color = descColor
                                 )
@@ -754,7 +762,11 @@ fun SettingsDialog(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "جاري التحقق من وجود تحديثات...",
+                                    text = when (currentLang) {
+                                        "ar" -> "جاري التحقق من وجود تحديثات..."
+                                        "fr" -> "Recherche de mises à jour..."
+                                        else -> "Checking for updates..."
+                                    },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = titleColor
@@ -773,7 +785,11 @@ fun SettingsDialog(
                                     .padding(horizontal = 10.dp, vertical = 8.dp)
                             ) {
                                 Text(
-                                    text = "تطبيقك محدث لأحدث إصدار (v${state.currentVersion})",
+                                    text = when (currentLang) {
+                                        "ar" -> "تطبيقك محدث لأحدث إصدار (v${state.currentVersion})"
+                                        "fr" -> "Votre application est à jour (v${state.currentVersion})"
+                                        else -> "Your app is up to date (v${state.currentVersion})"
+                                    },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF10B981)
@@ -793,14 +809,22 @@ fun SettingsDialog(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = "يتوفر إصدار جديد: v${state.release.versionName}",
+                                    text = when (currentLang) {
+                                        "ar" -> "يتوفر إصدار جديد: v${state.release.versionName}"
+                                        "fr" -> "Nouvelle version disponible : v${state.release.versionName}"
+                                        else -> "New version available: v${state.release.versionName}"
+                                    },
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = activeCyan
                                 )
                                 if (state.release.apkSizeBytes > 0L) {
                                     Text(
-                                        text = "الحجم: ${AppUpdateManager.formatBytes(state.release.apkSizeBytes)}",
+                                        text = when (currentLang) {
+                                            "ar" -> "الحجم: ${AppUpdateManager.formatBytes(state.release.apkSizeBytes)}"
+                                            "fr" -> "Taille : ${AppUpdateManager.formatBytes(state.release.apkSizeBytes)}"
+                                            else -> "Size: ${AppUpdateManager.formatBytes(state.release.apkSizeBytes)}"
+                                        },
                                         fontSize = 11.sp,
                                         color = descColor
                                     )
@@ -830,7 +854,11 @@ fun SettingsDialog(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "تحميل التحديث داخل التطبيق",
+                                        text = when (currentLang) {
+                                            "ar" -> "تحميل التحديث داخل التطبيق"
+                                            "fr" -> "Télécharger la mise à jour"
+                                            else -> "Download Update In-App"
+                                        },
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -860,7 +888,11 @@ fun SettingsDialog(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = "جاري التحميل داخل التطبيق ($pctText)",
+                                        text = when (currentLang) {
+                                            "ar" -> "جاري التحميل داخل التطبيق ($pctText)"
+                                            "fr" -> "Téléchargement ($pctText)"
+                                            else -> "Downloading In-App ($pctText)"
+                                        },
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = activeCyan
@@ -894,7 +926,11 @@ fun SettingsDialog(
                                     border = androidx.compose.foundation.BorderStroke(1.dp, sensitiveRed.copy(alpha = 0.6f))
                                 ) {
                                     Text(
-                                        text = "إلغاء التحميل",
+                                        text = when (currentLang) {
+                                            "ar" -> "إلغاء التحميل"
+                                            "fr" -> "Annuler le téléchargement"
+                                            else -> "Cancel Download"
+                                        },
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = sensitiveRed
@@ -915,7 +951,11 @@ fun SettingsDialog(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    text = "تم تحميل الإصدار v${state.release.versionName} بنجاح داخل التطبيق",
+                                    text = when (currentLang) {
+                                        "ar" -> "تم تحميل الإصدار v${state.release.versionName} بنجاح داخل التطبيق"
+                                        "fr" -> "Version v${state.release.versionName} téléchargée avec succès"
+                                        else -> "Version v${state.release.versionName} downloaded successfully"
+                                    },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF10B981)
@@ -937,7 +977,11 @@ fun SettingsDialog(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "تثبيت التحديث الآن",
+                                        text = when (currentLang) {
+                                            "ar" -> "تثبيت التحديث الآن"
+                                            "fr" -> "Installer maintenant"
+                                            else -> "Install Update Now"
+                                        },
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -958,7 +1002,7 @@ fun SettingsDialog(
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = state.messageAr,
+                                    text = state.getLocalizedMessage(currentLang),
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = sensitiveRed
@@ -971,7 +1015,15 @@ fun SettingsDialog(
                                             .height(34.dp),
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
-                                        Text("إعادة المحاولة", fontSize = 11.sp, color = titleColor)
+                                        Text(
+                                            text = when (currentLang) {
+                                                "ar" -> "إعادة المحاولة"
+                                                "fr" -> "Réessayer"
+                                                else -> "Retry"
+                                            },
+                                            fontSize = 11.sp,
+                                            color = titleColor
+                                        )
                                     }
                                     OutlinedButton(
                                         onClick = { AppUpdateManager.openUrlExternally(context, state.fallbackUrl) },
@@ -980,7 +1032,15 @@ fun SettingsDialog(
                                             .height(34.dp),
                                         shape = RoundedCornerShape(8.dp)
                                     ) {
-                                        Text("فتح GitHub", fontSize = 11.sp, color = activeCyan)
+                                        Text(
+                                            text = when (currentLang) {
+                                                "ar" -> "فتح GitHub"
+                                                "fr" -> "Ouvrir GitHub"
+                                                else -> "Open GitHub"
+                                            },
+                                            fontSize = 11.sp,
+                                            color = activeCyan
+                                        )
                                     }
                                 }
                             }
@@ -1009,7 +1069,11 @@ fun SettingsDialog(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "التحقق من وجود تحديثات الآن",
+                            text = when (currentLang) {
+                                "ar" -> "التحقق من وجود تحديثات الآن"
+                                "fr" -> "Vérifier les mises à jour"
+                                else -> "Check for Updates Now"
+                            },
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = activeCyan
@@ -1018,7 +1082,11 @@ fun SettingsDialog(
 
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "مستودع التحديثات: github.com/charfeddine23/Strike",
+                        text = when (currentLang) {
+                            "ar" -> "مستودع التحديثات: github.com/charfeddine23/Strike"
+                            "fr" -> "Dépôt des mises à jour : github.com/charfeddine23/Strike"
+                            else -> "Update Repository: github.com/charfeddine23/Strike"
+                        },
                         fontSize = 10.sp,
                         color = descColor
                     )

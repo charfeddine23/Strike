@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.flame.FlameRecalculationResult
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
@@ -82,6 +83,8 @@ fun StreakStartDateDialog(
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
+    val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val isAr = currentLang == "ar"
 
     val initialDate = remember {
         viewModel.getStreakStartDate() ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(
@@ -201,14 +204,14 @@ fun StreakStartDateDialog(
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "تاريخ بداية العد",
+                                text = if (isAr) "تاريخ بداية العد" else "Streak Start Date",
                                 fontSize = 17.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White,
                                 fontFamily = PlusJakartaSans
                             )
                             Text(
-                                text = "Streak Start Date Recalculation",
+                                text = if (isAr) "إعادة احتساب نقاط الشعلة تلقائياً" else "Streak Start Date Recalculation",
                                 fontSize = 11.sp,
                                 color = NeonCyan,
                                 fontWeight = FontWeight.SemiBold
@@ -225,7 +228,7 @@ fun StreakStartDateDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
+                            contentDescription = if (isAr) "إغلاق" else "Close",
                             tint = Color.White.copy(alpha = 0.7f),
                             modifier = Modifier.size(18.dp)
                         )
@@ -236,7 +239,11 @@ fun StreakStartDateDialog(
 
                 // Explanatory Subtitle
                 Text(
-                    text = "أدخل تاريخ بدء السلسلة لحساب الشعلة تلقائياً. يتم إضافة +3 نقاط لكل يوم خمول مضى، وخصم نقاط كافة السترايكات المسجلة خلال هذه المدة تلقائياً.",
+                    text = if (isAr) {
+                        "أدخل تاريخ بدء السلسلة لحساب الشعلة تلقائياً. تُضاف +3 نقاط لكل يوم خمول مضى، وتُخصم نقاط كافة الضربات المسجّلة خلال هذه المدة تلقائياً."
+                    } else {
+                        "Enter your streak start date to calculate your flame automatically. +3 pts are added for each elapsed clean day, and all recorded strikes during this period are automatically deducted."
+                    },
                     fontSize = 12.sp,
                     color = Color.White.copy(alpha = 0.75f),
                     lineHeight = 18.sp
@@ -248,8 +255,19 @@ fun StreakStartDateDialog(
                 OutlinedTextField(
                     value = dateInput,
                     onValueChange = { dateInput = it },
-                    label = { Text("تاريخ البداية (YYYY-MM-DD)", color = NeonCyan.copy(alpha = 0.8f), fontSize = 12.sp) },
-                    placeholder = { Text("مثال: 2026-10-15", color = Color(0x66FFFFFF)) },
+                    label = {
+                        Text(
+                            text = if (isAr) "تاريخ البداية (YYYY-MM-DD)" else "Start Date (YYYY-MM-DD)",
+                            color = NeonCyan.copy(alpha = 0.8f),
+                            fontSize = 12.sp
+                        )
+                    },
+                    placeholder = {
+                        Text(
+                            text = if (isAr) "مثال: 2026-10-15" else "e.g. 2026-10-15",
+                            color = Color(0x66FFFFFF)
+                        )
+                    },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyMedium.copy(
                         color = Color.White,
@@ -264,7 +282,7 @@ fun StreakStartDateDialog(
                         IconButton(onClick = { openCalendarPicker() }) {
                             Icon(
                                 imageVector = Icons.Default.CalendarMonth,
-                                contentDescription = "Pick Date",
+                                contentDescription = if (isAr) "اختيار التاريخ" else "Pick Date",
                                 tint = NeonCyan
                             )
                         }
@@ -289,7 +307,11 @@ fun StreakStartDateDialog(
                 if (!isValidDate) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "الرجاء إدخال تاريخ صحيح بصيغة YYYY-MM-DD وليس في المستقبل",
+                        text = if (isAr) {
+                            "الرجاء إدخال تاريخ صحيح بصيغة YYYY-MM-DD وليس في المستقبل"
+                        } else {
+                            "Please enter a valid date (YYYY-MM-DD) not in the future"
+                        },
                         fontSize = 11.sp,
                         color = NeonRose,
                         modifier = Modifier.align(Alignment.Start)
@@ -305,12 +327,12 @@ fun StreakStartDateDialog(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    PresetDateChip("اليوم (0d)", onClick = { setQuickPreset(0) })
-                    PresetDateChip("منذ أسبوع (7d)", onClick = { setQuickPreset(7) })
-                    PresetDateChip("منذ 15 يوماً", onClick = { setQuickPreset(15) })
-                    PresetDateChip("منذ شهر (30d)", onClick = { setQuickPreset(30) })
-                    PresetDateChip("منذ شهرين (60d)", onClick = { setQuickPreset(60) })
-                    PresetDateChip("منذ 3 أشهر (90d)", onClick = { setQuickPreset(90) })
+                    PresetDateChip(if (isAr) "اليوم (0ي)" else "Today (0d)", onClick = { setQuickPreset(0) })
+                    PresetDateChip(if (isAr) "منذ أسبوع (7ي)" else "1 Week (7d)", onClick = { setQuickPreset(7) })
+                    PresetDateChip(if (isAr) "منذ 15 يوماً" else "15 Days", onClick = { setQuickPreset(15) })
+                    PresetDateChip(if (isAr) "منذ شهر (30ي)" else "1 Month (30d)", onClick = { setQuickPreset(30) })
+                    PresetDateChip(if (isAr) "منذ شهرين (60ي)" else "2 Months (60d)", onClick = { setQuickPreset(60) })
+                    PresetDateChip(if (isAr) "منذ 3 أشهر (90ي)" else "3 Months (90d)", onClick = { setQuickPreset(90) })
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))
@@ -332,7 +354,7 @@ fun StreakStartDateDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "المعاينة الحسابية التلقائية",
+                                    text = if (isAr) "المعاينة الحسابية التلقائية" else "Automatic Calculation Preview",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = NeonCyan,
@@ -345,7 +367,7 @@ fun StreakStartDateDialog(
                                         .padding(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = "تلقائي وبدون تلاعب",
+                                        text = if (isAr) "تلقائي ودقيق" else "Auto & Verified",
                                         fontSize = 10.sp,
                                         color = NeonEmerald,
                                         fontWeight = FontWeight.Bold
@@ -370,13 +392,17 @@ fun StreakStartDateDialog(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "الأيام المنقضية (${res.daysElapsed} يوم):",
+                                        text = if (isAr) "الأيام المنقضية (${res.daysElapsed} يوم):" else "Elapsed Days (${res.daysElapsed}d):",
                                         fontSize = 12.sp,
                                         color = Color.White.copy(alpha = 0.9f)
                                     )
                                 }
                                 Text(
-                                    text = "+${res.inactivityPointsAdded.toInt()} PTS (+3/يوم)",
+                                    text = if (isAr) {
+                                        "+${res.inactivityPointsAdded.toInt()} نقطة (+3/يوم)"
+                                    } else {
+                                        "+${res.inactivityPointsAdded.toInt()} PTS (+3/day)"
+                                    },
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = NeonAmber
@@ -400,13 +426,21 @@ fun StreakStartDateDialog(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "السترايكات المكتشفة (${res.totalStrikesCount} سترايك):",
+                                        text = if (isAr) {
+                                            "الضربات المكتشفة (${res.totalStrikesCount}):"
+                                        } else {
+                                            "Detected Strikes (${res.totalStrikesCount}):"
+                                        },
                                         fontSize = 12.sp,
                                         color = Color.White.copy(alpha = 0.9f)
                                     )
                                 }
                                 Text(
-                                    text = "-${String.format(Locale.US, "%.1f", res.totalDeductions)} PTS",
+                                    text = if (isAr) {
+                                        "-${String.format(Locale.US, "%.1f", res.totalDeductions)} نقطة"
+                                    } else {
+                                        "-${String.format(Locale.US, "%.1f", res.totalDeductions)} PTS"
+                                    },
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = NeonRose
@@ -429,16 +463,20 @@ fun StreakStartDateDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "النتيجة النهائية للشعلة:",
+                                    text = if (isAr) "النتيجة النهائية للشعلة:" else "Resulting Flame Score:",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = Color.White
                                 )
                                 Text(
-                                    text = "${String.format(Locale.US, "%.1f", res.resultingScore)} PTS",
+                                    text = if (isAr) {
+                                        "${String.format(Locale.US, "%.1f", res.resultingScore)} نقطة"
+                                    } else {
+                                        "${String.format(Locale.US, "%.1f", res.resultingScore)} PTS"
+                                    },
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = if (res.resultingScore > 1000.0) NeonCyan else NeonAmber,
+                                    color = if (res.resultingScore > 2000.0) NeonCyan else NeonAmber,
                                     fontFamily = PlusJakartaSans
                                 )
                             }
@@ -462,7 +500,11 @@ fun StreakStartDateDialog(
                         shape = RoundedCornerShape(12.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x4038BDF8))
                     ) {
-                        Text(text = "إلغاء", color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp)
+                        Text(
+                            text = if (isAr) "إلغاء" else "Cancel",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 13.sp
+                        )
                     }
 
                     Button(
@@ -491,7 +533,7 @@ fun StreakStartDateDialog(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "تطبيق وإعادة الحساب",
+                            text = if (isAr) "تطبيق وإعادة الحساب" else "Apply & Recalculate",
                             color = Color.Black,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 13.sp,

@@ -114,6 +114,8 @@ fun DashboardScreen(
     val isDarkTheme = isSystemInDarkTheme()
     val context = LocalContext.current
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
+    val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val isAr = currentLang == "ar"
 
     var individualToDelete by remember { mutableStateOf<Individual?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -220,7 +222,11 @@ fun DashboardScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "تتبع إجمالي الضربات لكل سنة • اضغط للعرض",
+                                    text = if (isAr) {
+                                        "تتبع إجمالي الضربات لكل سنة • اضغط للعرض"
+                                    } else {
+                                        "Track total strikes by year • Tap to view"
+                                    },
                                     fontSize = 11.sp,
                                     color = NeonEmerald
                                 )
@@ -235,7 +241,7 @@ fun DashboardScreen(
                                 .padding(horizontal = 10.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "عرض الداش بورد",
+                                text = if (isAr) "عرض اللوحة" else "View Board",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = NeonCyan
@@ -376,7 +382,7 @@ fun DashboardScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "FILTER BY TYPE",
+                                text = if (isAr) "تصفية حسب النوع" else "FILTER BY TYPE",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -386,7 +392,7 @@ fun DashboardScreen(
 
                         if (filterType != "ALL" || searchQuery.isNotEmpty()) {
                             Text(
-                                text = "Clear All",
+                                text = if (isAr) "مسح الكل" else "Clear All",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = NeonRose,
@@ -486,9 +492,15 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Found ${individuals.size} of $totalCount individuals" +
-                                    (if (filterType != "ALL") " • Type: $filterType" else "") +
-                                    (if (searchQuery.isNotBlank()) " • Query: \"$searchQuery\"" else ""),
+                            text = if (isAr) {
+                                "تم العثور على ${individuals.size} من أصل $totalCount" +
+                                        (if (filterType != "ALL") " • النوع: $filterType" else "") +
+                                        (if (searchQuery.isNotBlank()) " • البحث: \"$searchQuery\"" else "")
+                            } else {
+                                "Found ${individuals.size} of $totalCount individuals" +
+                                        (if (filterType != "ALL") " • Type: $filterType" else "") +
+                                        (if (searchQuery.isNotBlank()) " • Query: \"$searchQuery\"" else "")
+                            },
                             fontSize = 11.sp,
                             color = NeonCyan,
                             fontWeight = FontWeight.Medium
@@ -586,14 +598,18 @@ fun DashboardScreen(
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "No Individuals Found",
+                                text = if (isAr) "لم يتم العثور على نتائج" else "No Individuals Found",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "No records matched your search \"$searchQuery\" or selected filter ($filterType).",
+                                text = if (isAr) {
+                                    "لا توجد سجلات تطابق بحثك \"$searchQuery\" أو التصفية ($filterType)."
+                                } else {
+                                    "No records matched your search \"$searchQuery\" or selected filter ($filterType)."
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -609,7 +625,7 @@ fun DashboardScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
-                                    text = "Reset Filters & Search",
+                                    text = if (isAr) "إعادة ضبط التصفية والبحث" else "Reset Filters & Search",
                                     color = NeonCyan,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
@@ -634,7 +650,8 @@ fun DashboardScreen(
                             viewModel.initFormForEdit(item)
                             showDataEntryDialog = true
                         },
-                        onDelete = { individualToDelete = item }
+                        onDelete = { individualToDelete = item },
+                        isAr = isAr
                     )
                 }
             }
@@ -712,7 +729,8 @@ fun IndividualRecordCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    isAr: Boolean = true
 ) {
     DynamicAnimatedProfileCard(
         status = status,
@@ -786,7 +804,7 @@ fun IndividualRecordCard(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "BOOST: ",
+                            text = if (isAr) "التعزيز: " else "BOOST: ",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             fontFamily = PlusJakartaSans,
@@ -909,7 +927,11 @@ fun IndividualRecordCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     Column {
                         Text(
-                            text = "TOTAL SCORE (BOOST × STRIKES)",
+                            text = if (isAr) {
+                                "النتيجة الإجمالية (التعزيز × الضربات)"
+                            } else {
+                                "TOTAL SCORE (BOOST × STRIKES)"
+                            },
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = PlusJakartaSans,

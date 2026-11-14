@@ -87,8 +87,10 @@ fun StreakShieldModalSheet(
     onGrant1DayShield: () -> Unit,
     onToggleShieldActive: (Boolean) -> Unit,
     onDismiss: () -> Unit,
-    isHapticEnabled: Boolean = true
+    isHapticEnabled: Boolean = true,
+    currentLang: String = "ar"
 ) {
+    val isAr = currentLang == "ar"
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val view = LocalView.current
@@ -105,13 +107,17 @@ fun StreakShieldModalSheet(
     )
 
     fun formatDetailedCountdown(millis: Long): String {
-        if (millis <= 0) return "00d 00h 00m 00s"
+        if (millis <= 0) return if (isAr) "00ي 00س 00د 00ث" else "00d 00h 00m 00s"
         val totalSecs = millis / 1000
         val days = totalSecs / (24 * 3600)
         val hours = (totalSecs % (24 * 3600)) / 3600
         val mins = (totalSecs % 3600) / 60
         val secs = totalSecs % 60
-        return String.format(Locale.US, "%02dd %02dh %02dm %02ds", days, hours, mins, secs)
+        return if (isAr) {
+            String.format(Locale.US, "%02dي %02dس %02dد %02dث", days, hours, mins, secs)
+        } else {
+            String.format(Locale.US, "%02dd %02dh %02dm %02ds", days, hours, mins, secs)
+        }
     }
 
     ModalBottomSheet(
@@ -172,7 +178,7 @@ fun StreakShieldModalSheet(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Close",
+                        contentDescription = if (isAr) "إغلاق" else "Close",
                         tint = Color.Gray,
                         modifier = Modifier.size(20.dp)
                     )
@@ -231,7 +237,7 @@ fun StreakShieldModalSheet(
                             val expiryStr = SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.getDefault())
                                 .format(Date(activeShieldExpiresAt))
                             Text(
-                                text = "Expires on: $expiryStr",
+                                text = if (isAr) "ينتهي في: $expiryStr" else "Expires on: $expiryStr",
                                 fontSize = 11.sp,
                                 color = Color(0xFFCBD5E1),
                                 modifier = Modifier.padding(top = 4.dp)
@@ -273,7 +279,11 @@ fun StreakShieldModalSheet(
 
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Daily inactivity accrual (+3 pts/day) is active. Protect your flame by activating a shield below or toggling protection on.",
+                            text = if (isAr) {
+                                "الزيادة اليومية عند الخمول (+3 نقاط/يوم) نشطة حالياً. احمِ شعلتك بتفعيل أحد الدروع أدناه أو تشغيل الحماية."
+                            } else {
+                                "Daily inactivity accrual (+3 pts/day) is active. Protect your flame by activating a shield below or toggling protection on."
+                            },
                             fontSize = 12.sp,
                             color = Color(0xFFCBD5E1),
                             fontWeight = FontWeight.Normal
@@ -624,7 +634,7 @@ fun StreakShieldModalSheet(
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
-                                text = "AUTO",
+                                text = if (isAr) "تلقائي" else "AUTO",
                                 fontWeight = FontWeight.Black,
                                 fontSize = 10.sp,
                                 color = Color(0xFFF472B6)

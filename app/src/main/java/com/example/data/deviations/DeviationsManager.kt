@@ -58,6 +58,29 @@ object DeviationsManager {
         "بافوميت"
     )
 
+    val DARK_RANKS_EN = listOf(
+        "The Drifter",
+        "The Oscillating",
+        "Strayed from Path",
+        "Prisoner of Hesitation",
+        "Digital Eroder",
+        "Cipher Corrupter",
+        "Shadow Walker",
+        "Abyss Captive",
+        "Exiled from Light",
+        "Lord of Fractures",
+        "System Phantom",
+        "Chaos Architect",
+        "Steeped in Shadow",
+        "Collapse Engineer",
+        "Prince of Fading",
+        "Root Incinerator",
+        "Void Envoy",
+        "Priest of the Curse",
+        "Eternal Dark Lord",
+        "Baphomet"
+    )
+
     val LIGHT_RANKS = listOf(
         "التائب",
         "السالك في النور",
@@ -79,6 +102,29 @@ object DeviationsManager {
         "سفير النور",
         "نور السماوات والأرض",
         "جبريل"
+    )
+
+    val LIGHT_RANKS_EN = listOf(
+        "The Penitent",
+        "Walker in Light",
+        "The Purified",
+        "The Ascending",
+        "Covenant Keeper",
+        "Radiance Strider",
+        "Pure of Heart",
+        "Devoted Sentinel",
+        "Dawn Guardian",
+        "The Illuminator",
+        "Sky Crosser",
+        "The Righteous",
+        "The Revered",
+        "Torchbearer",
+        "Horizon Star",
+        "White-Winged One",
+        "Realm Protector",
+        "Envoy of Light",
+        "Heaven & Earth Radiance",
+        "Gabriel"
     )
 
     val BIOLOGICAL_50_TIERS = listOf(
@@ -134,6 +180,59 @@ object DeviationsManager {
         "هرقل"
     )
 
+    val BIOLOGICAL_50_TIERS_EN = listOf(
+        "Absolute Feminine",
+        "Soft Wraith",
+        "Gentle Breeze",
+        "Shade Dweller",
+        "Quiet Passer",
+        "Morning Dewdrop",
+        "Echo of Words",
+        "Lightly Swaying",
+        "Meek & Idle",
+        "Resting Yielder",
+        "Faint Traveler",
+        "Dormant Dreamer",
+        "Lost in Stillness",
+        "Cool Whisper",
+        "Hesitant Drifter",
+        "Still Surface",
+        "Soft Retreat",
+        "Fading Shadow",
+        "Low Resonance",
+        "Equilibrium Point",
+        "Newly Awakened",
+        "Steady Seeker",
+        "Motion Pulse",
+        "Current Resistor",
+        "Call-Ready",
+        "Vow Keeper",
+        "Steeled Frame",
+        "Vigilant Warden",
+        "Initiate Warrior",
+        "Resolute Will",
+        "Will Forger",
+        "Force Charger",
+        "Field Knight",
+        "Spark Maker",
+        "Solid Monolith",
+        "Horizon Falcon",
+        "Victorious Conqueror",
+        "Standing Colossus",
+        "Sharp Enforcer",
+        "Savanna Lion",
+        "Fierce Sovereign",
+        "Arena Master",
+        "Eternal Vanquisher",
+        "Mighty Titan",
+        "Towering Peak",
+        "Living Legend",
+        "King of Titans",
+        "Absolute Power",
+        "Eternal Giant",
+        "Hercules"
+    )
+
     const val MAX_FLAME = 20000.0
     const val DARK_THRESHOLD = 2000.0
 
@@ -142,12 +241,9 @@ object DeviationsManager {
      * As score drops from 2000 down to 0, rank ascends from 1 (المتغير) to 20 (بافوميت).
      * Grip progress goes from 0.0 at 2000 up to 1.0 at 0.
      */
-    fun getDarkRank(score: Double): DarkRank {
+    fun getDarkRank(score: Double, lang: String = "ar"): DarkRank {
         val clamped = score.coerceIn(0.0, DARK_THRESHOLD)
-        // 2000 -> 0 rank index 0..19
-        // At 2000: index = 0 ("المتغير")
-        // At 0: index = 19 ("بافوميت")
-        val fraction = (DARK_THRESHOLD - clamped) / DARK_THRESHOLD // 0.0 at 2000, 1.0 at 0
+        val fraction = (DARK_THRESHOLD - clamped) / DARK_THRESHOLD
         val rawIndex = (fraction * 19.999).toInt().coerceIn(0, 19)
         val rankNumber = rawIndex + 1
         val step = DARK_THRESHOLD / 20.0
@@ -156,7 +252,7 @@ object DeviationsManager {
 
         return DarkRank(
             index = rankNumber,
-            title = DARK_RANKS[rawIndex],
+            title = if (lang == "ar") DARK_RANKS[rawIndex] else DARK_RANKS_EN[rawIndex],
             minScore = minSc,
             maxScore = maxSc,
             gripProgress = fraction.toFloat()
@@ -166,11 +262,10 @@ object DeviationsManager {
     /**
      * Light Ranks (Score 2001 to 20000):
      * As score rises from 2001 to 20000, rank ascends from 1 (التائب) to 20 (جبريل).
-     * Approach progress goes from 0.0 at 2001 up to 1.0 at 20000 (transforming into pure white).
      */
-    fun getLightRank(score: Double): LightRank {
+    fun getLightRank(score: Double, lang: String = "ar"): LightRank {
         val clamped = score.coerceIn(2001.0, MAX_FLAME)
-        val fraction = (clamped - 2001.0) / (MAX_FLAME - 2001.0) // 0.0 to 1.0
+        val fraction = (clamped - 2001.0) / (MAX_FLAME - 2001.0)
         val rawIndex = (fraction * 19.999).toInt().coerceIn(0, 19)
         val rankNumber = rawIndex + 1
         val step = (MAX_FLAME - 2001.0) / 20.0
@@ -179,7 +274,7 @@ object DeviationsManager {
 
         return LightRank(
             index = rankNumber,
-            title = LIGHT_RANKS[rawIndex],
+            title = if (lang == "ar") LIGHT_RANKS[rawIndex] else LIGHT_RANKS_EN[rawIndex],
             minScore = minSc,
             maxScore = maxSc,
             approachProgress = fraction.toFloat()
@@ -188,14 +283,10 @@ object DeviationsManager {
 
     /**
      * Biological 50-Tier Progression System (Score 0 to 20000):
-     * Tier 1: الأنثى المطلقة (0 pts, 100% Estrogen, 0% Testosterone)
-     * Tier 20: نقطة التعادل (Score ~8000 pts, 50% Estrogen / 50% Testosterone equilibrium)
-     * Tier 50: هرقل (20000 pts, 0% Estrogen, 100% Testosterone)
      */
-    fun getBiologicalTier(score: Double): BiologicalTier {
+    fun getBiologicalTier(score: Double, lang: String = "ar"): BiologicalTier {
         val clamped = score.coerceIn(0.0, MAX_FLAME)
-        // 50 tiers: each tier spans 400 points
-        val step = MAX_FLAME / 50.0 // 400.0 pts per tier
+        val step = MAX_FLAME / 50.0
         val rawIndex = (clamped / step).toInt().coerceIn(0, 49)
         val tierNumber = rawIndex + 1
         val minSc = rawIndex * step
@@ -206,7 +297,7 @@ object DeviationsManager {
 
         return BiologicalTier(
             index = tierNumber,
-            title = BIOLOGICAL_50_TIERS[rawIndex],
+            title = if (lang == "ar") BIOLOGICAL_50_TIERS[rawIndex] else BIOLOGICAL_50_TIERS_EN[rawIndex],
             minScore = minSc,
             maxScore = maxSc,
             testosteronePercent = tPercent,

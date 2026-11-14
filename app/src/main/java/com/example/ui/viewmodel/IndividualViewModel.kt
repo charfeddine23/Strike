@@ -401,7 +401,8 @@ class IndividualViewModel(
     }
 
     fun setFlameScore(score: Double) {
-        FlameManager.setScore(getApplication(), score, "SIMULATION", "Score Simulator")
+        val label = if (currentLanguage.value == "ar") "محاكي النقاط التفاعلي" else "Interactive Score Simulator"
+        FlameManager.setScore(getApplication(), score, "SIMULATION", label)
     }
 
     fun clearFlameLogs() {
@@ -417,7 +418,12 @@ class IndividualViewModel(
     }
 
     fun recalculateFlameScoreFromStartDate(startDateStr: String): com.example.data.flame.FlameRecalculationResult {
-        val result = FlameManager.recalculateFromStartDate(getApplication(), startDateStr, allStrikeEvents.value)
+        val result = FlameManager.recalculateFromStartDate(
+            context = getApplication(),
+            startDateStr = startDateStr,
+            strikeEvents = allStrikeEvents.value,
+            lang = currentLanguage.value
+        )
         viewModelScope.launch {
             val formattedScore = if (result.resultingScore % 1.0 == 0.0) "${result.resultingScore.toInt()}" else String.format(Locale.US, "%.1f", result.resultingScore)
             val msg = when (currentLanguage.value) {
@@ -508,15 +514,21 @@ class IndividualViewModel(
         }
     }
 
+    fun refreshTaskCycles() {
+        RoadmapManager.refreshCyclesIfNeeded(getApplication())
+    }
+
     // 500-Station Wavy Roadmap & Task Actions
     fun claimStation(stationId: Int) {
         val reward = RoadmapManager.claimStationReward(getApplication(), stationId)
         if (reward != null) {
+            val lang = currentLanguage.value
+            val localizedTitle = reward.getLocalizedTitle(lang)
             viewModelScope.launch {
-                val msg = when (currentLanguage.value) {
-                    "ar" -> "تم جني مكافأة المحطة $stationId: ${reward.title} 🎉"
-                    "fr" -> "Récompense de la station $stationId réclamée : ${reward.title} 🎉"
-                    else -> "Station $stationId Reward Claimed: ${reward.title} 🎉"
+                val msg = when (lang) {
+                    "ar" -> "تم جني مكافأة المحطة $stationId: $localizedTitle"
+                    "fr" -> "Récompense de la station $stationId réclamée : $localizedTitle"
+                    else -> "Station $stationId Reward Claimed: $localizedTitle"
                 }
                 emitMessage(msg)
             }
@@ -865,7 +877,11 @@ class IndividualViewModel(
                             else -> "Extreme System Overload! Flame score reset to 0 & flame frozen"
                         }
                     }
-                    else -> "Strike +$delta"
+                    else -> when (currentLanguage.value) {
+                        "ar" -> "تم تسجيل ضربة +$delta"
+                        "fr" -> "Strike +$delta"
+                        else -> "Strike +$delta"
+                    }
                 }
                 emitMessage(msg)
             }
@@ -875,7 +891,12 @@ class IndividualViewModel(
     fun resetStrikes(id: Long) {
         viewModelScope.launch {
             repository.setStrikeCount(id, 0)
-            emitMessage("Strikes reset")
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم تصفير عداد الضربات"
+                "fr" -> "Compteur de strikes réinitialisé"
+                else -> "Strikes reset"
+            }
+            emitMessage(msg)
         }
     }
 
@@ -991,7 +1012,7 @@ class IndividualViewModel(
             val effectiveId = if (editingId != null && editingId != 0L) editingId!! else savedId
 
             if (formHistoricalEntries.value.isNotEmpty()) {
-                repository.recordHistoricalStrikes(effectiveId, formHistoricalEntries.value)
+                repository.recordHistoricalStrikes(effectiveId, formHistoricalEntries.value, currentLanguage.value)
             }
 
             if (editingId == null) {
@@ -1141,12 +1162,8 @@ class IndividualViewModel(
     fun seedSampleData() = reloadSampleData()
 
     /**
-     * Literally resets all game levels and progression back to zero WITHOUT touching individuals or strike records:
-     * - XP -> 0 XP & Station -> 0 / 500
-     * - Claimed Stations & Completed Tasks -> 0 / 1000
-     * - Flame Score, Peak, Gained/Extinguished, Active/Stored Shields, & Flame Logs -> 0
-     * - Skip-Keys, Potions, Active Effects, & Unlocked Titles/Avatars -> base 0 state
-     * - Individuals & Strike Event records remain 100% intact.
+     * Literally resets all game levels and consumables back to zero WITHOUT touching individuals,
+     * strike records, or permanent unlocked Titles & Avatars.
      */
     fun resetAllGameLevelsToZero() {
         val app = getApplication<android.app.Application>()
@@ -1155,9 +1172,9 @@ class IndividualViewModel(
             FlameManager.resetAllLevelsToZero(app)
             ProfileManager.resetAllProgressToZero(app)
             val msg = when (currentLanguage.value) {
-                "ar" -> "تم تصفير كل المستويات والمخزون إلى الصفر (مع الحفاظ على الأفراد وسجلات السترايك)!"
-                "fr" -> "Tous les niveaux et inventaires remis à zéro (individus et strikes conservés) !"
-                else -> "All game levels & inventory reset to zero (individuals and strike logs preserved)!"
+                "ar" -> "تم تصفير كافة المستويات والمخزون إلى الصفر (مع الحفاظ على الأفراد، سجلات السترايك، والألقاب والأفاتارات الدائمة)!"
+                "fr" -> "Tous les niveaux et consommables remis à zéro (individus, strikes et déblocages permanents conservés) !"
+                else -> "All game levels & consumables reset to zero (individuals, strike logs & permanent unlocks preserved)!"
             }
             emitMessage(msg)
         }
@@ -1165,21 +1182,9 @@ class IndividualViewModel(
 
     fun exportBackup(context: Context, destinationUri: Uri, onResult: ((BackupResult) -> Unit)? = null) {
         viewModelScope.launch {
-            val result = backupManager.exportBackup(context, destinationUri)
-            val msg = if (result.success) {
-                when (currentLanguage.value) {
-                    "ar" -> "تم حفظ النسخة الاحتياطية بنجاح (${result.individualsCount} سجل و ${result.strikeEventsCount} ضربة)"
-                    "fr" -> "Sauvegarde réussie (${result.individualsCount} enregistrements, ${result.strikeEventsCount} strikes)"
-                    else -> "Backup successful (${result.individualsCount} records, ${result.strikeEventsCount} strikes)"
-                }
-            } else {
-                when (currentLanguage.value) {
-                    "ar" -> result.message
-                    "fr" -> "Échec de la sauvegarde"
-                    else -> "Backup failed"
-                }
-            }
-            emitMessage(msg)
+            val lang = currentLanguage.value
+            val result = backupManager.exportBackup(context, destinationUri, lang)
+            emitMessage(result.message)
             onResult?.invoke(result)
         }
     }
@@ -1191,21 +1196,16 @@ class IndividualViewModel(
         onResult: ((BackupResult) -> Unit)? = null
     ) {
         viewModelScope.launch {
-            val result = backupManager.importBackup(context, sourceUri, replaceExisting)
-            val msg = if (result.success) {
-                when (currentLanguage.value) {
-                    "ar" -> "تم استرجاع البيانات بنجاح: ${result.individualsCount} سجل و ${result.strikeEventsCount} ضربة"
-                    "fr" -> "Restauration réussie : ${result.individualsCount} enregistrements, ${result.strikeEventsCount} strikes"
-                    else -> "Restore successful: ${result.individualsCount} records, ${result.strikeEventsCount} strikes"
-                }
-            } else {
-                when (currentLanguage.value) {
-                    "ar" -> result.message
-                    "fr" -> "Fichier invalide ou erreur de lecture"
-                    else -> "Invalid file or error reading backup"
-                }
+            val lang = currentLanguage.value
+            val result = backupManager.importBackup(context, sourceUri, replaceExisting, lang)
+            if (result.success) {
+                _currentLanguage.value = securityPrefs.selectedLanguage
+                isPatternLockEnabled.value = securityPrefs.isPatternLockEnabled
+                isHapticFeedbackEnabled.value = securityPrefs.isHapticFeedbackEnabled
+                isAutoUpdateEnabled.value = securityPrefs.isAutoUpdateEnabled
+                _isAppUnlocked.value = true
             }
-            emitMessage(msg)
+            emitMessage(result.message)
             onResult?.invoke(result)
         }
     }

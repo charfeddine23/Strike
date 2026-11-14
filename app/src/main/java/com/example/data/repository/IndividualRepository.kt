@@ -104,7 +104,11 @@ class IndividualRepository(
     /**
      * Stores past/historical strikes per year for an individual.
      */
-    suspend fun recordHistoricalStrikes(individualId: Long, historicalEntries: List<Pair<Int, Int>>) {
+    suspend fun recordHistoricalStrikes(
+        individualId: Long,
+        historicalEntries: List<Pair<Int, Int>>,
+        lang: String = "ar"
+    ) {
         val individual = dao.getIndividualById(individualId)
         val name = individual?.fullName ?: "Target #$individualId"
         val events = historicalEntries.filter { it.second > 0 }.map { (year, count) ->
@@ -117,7 +121,11 @@ class IndividualRepository(
                 count = count,
                 strikeType = "Historical Entry",
                 performanceValue = individual?.boost ?: 0.0,
-                notes = "سجلات سابقة لسنة $year ($count ضربة)",
+                notes = if (lang == "ar") {
+                    "سجلات سابقة لسنة $year ($count ضربة)"
+                } else {
+                    "Historical records for $year ($count strikes)"
+                },
                 timestamp = System.currentTimeMillis() - ((Calendar.getInstance().get(Calendar.YEAR) - year).coerceAtLeast(0) * 31536000000L)
             )
         }

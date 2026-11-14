@@ -45,8 +45,13 @@ data class StationReward(
     val title: String,
     val description: String,
     val iconName: String,
-    val quantity: Int = 1
-)
+    val quantity: Int = 1,
+    val titleEn: String = title,
+    val descriptionEn: String = description
+) {
+    fun getLocalizedTitle(lang: String): String = if (lang == "ar") title else titleEn
+    fun getLocalizedDescription(lang: String): String = if (lang == "ar") description else descriptionEn
+}
 
 enum class StationState {
     LOCKED,
@@ -72,10 +77,14 @@ data class TaskItem(
     val status: TaskStatus = TaskStatus.PENDING,
     val requiredSkipKey: SkipKeyType = SkipKeyType.WOODEN,
     val actionTag: String = "GENERAL",
-    val difficultyTier: Int = 1
+    val difficultyTier: Int = 1,
+    val titleEn: String = title,
+    val descriptionEn: String = description
 ) {
     val isCompleted: Boolean get() = status == TaskStatus.COMPLETED || status == TaskStatus.SKIPPED || currentCount >= targetCount
     val progressFraction: Float get() = (currentCount.toFloat() / targetCount.toFloat()).coerceIn(0f, 1f)
     // Annual / Yearly tasks CANNOT be skipped with keys — genuine completion is strictly enforced
     val canBeSkipped: Boolean get() = period != TaskPeriod.YEARLY && period != TaskPeriod.EVERLASTING
+    fun getLocalizedTitle(lang: String): String = if (lang == "ar") title else titleEn
+    fun getLocalizedDescription(lang: String): String = if (lang == "ar") description else descriptionEn
 }

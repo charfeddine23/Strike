@@ -142,14 +142,14 @@ class MainActivity : ComponentActivity() {
                 "fr" -> Locale("fr")
                 else -> Locale("en")
             }
-            // Keep layout direction strictly LTR across all languages to prevent UI mirroring
-            val layoutDirection = LayoutDirection.Ltr
+            // Mirror layout automatically: RTL for Arabic, LTR for English/French
+            val layoutDirection = if (currentLang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
 
             val currentContext = LocalContext.current
             val localizedContext = remember(currentLang) {
                 val config = Configuration(currentContext.resources.configuration)
                 config.setLocale(locale)
-                config.setLayoutDirection(Locale.ENGLISH)
+                config.setLayoutDirection(locale)
                 currentContext.createConfigurationContext(config)
             }
 
@@ -199,10 +199,11 @@ fun LiquidGlassApp(
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Check for updates automatically every single time the user enters or returns to the app
+    // Check for updates & refresh dynamic task cycles every time the user enters or returns to the app
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshTaskCycles()
                 viewModel.checkForAppUpdate(isAutoCheck = true)
             }
         }
@@ -330,6 +331,7 @@ fun LiquidGlassApp(
                         onOpenFlame = { currentScreen = AppScreen.FLAME },
                         onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
                         onLongPressFlame = { showStartDateDialog = true },
+                        currentLang = currentLang,
                         isDarkTheme = isDarkTheme
                     )
                     if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
@@ -452,6 +454,7 @@ fun LiquidGlassApp(
     if (shouldShowUpdateModal) {
         AppUpdateCardDialog(
             state = appUpdateState,
+            currentLang = currentLang,
             onUpdateClick = { release ->
                 startedUpdateFromModal = true
                 viewModel.downloadAppUpdate(release)
@@ -488,6 +491,7 @@ fun LiquidGlassTopBar(
     onOpenFlame: () -> Unit,
     onOpenDeviations: () -> Unit,
     onLongPressFlame: () -> Unit = {},
+    currentLang: String = "ar",
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
     val title = when (currentScreen) {
@@ -498,7 +502,11 @@ fun LiquidGlassTopBar(
         AppScreen.FLAME -> stringResource(R.string.flame_system_title)
         AppScreen.DEVIATIONS -> stringResource(R.string.deviations_title)
         AppScreen.ROADMAP -> stringResource(R.string.roadmap_title)
-        AppScreen.PROFILE -> "الملف الشخصي"
+        AppScreen.PROFILE -> when (currentLang) {
+            "ar" -> "الملف الشخصي"
+            "fr" -> "Profil"
+            else -> "Profile"
+        }
     }
 
     val cyanColor = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan
@@ -543,7 +551,7 @@ fun LiquidGlassTopBar(
                     letterSpacing = 0.5.sp
                 )
                 Text(
-                    text = if (currentScreen == AppScreen.PROFILE) "الملف الشخصي" else title,
+                    text = title,
                     style = MaterialTheme.typography.labelSmall,
                     color = cyanColor,
                     fontFamily = com.example.ui.theme.CaveatHandwriting,
@@ -615,7 +623,11 @@ fun LiquidGlassTopBar(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (isStreakShieldActive) activeShieldType.labelAr else "لا يوجد درع نشط",
+                                    text = if (isStreakShieldActive) {
+                                        if (currentLang == "ar") activeShieldType.labelAr else activeShieldType.labelEn
+                                    } else {
+                                        if (currentLang == "ar") "لا يوجد درع نشط" else "No Active Shield"
+                                    },
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     color = if (isStreakShieldActive) NeonEmerald else NeonAmber
@@ -641,7 +653,7 @@ fun LiquidGlassTopBar(
                                 )
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Text(
-                                    text = "الوقت المتبقي",
+                                    text = if (currentLang == "ar") "الوقت المتبقي" else "Time Remaining",
                                     fontSize = 11.sp,
                                     color = Color(0xFF94A3B8)
                                 )
@@ -662,24 +674,24 @@ fun LiquidGlassTopBar(
 
                         // Read-only Available Inventory Counts for Each Shield Type
                         ShieldReadOnlyCountRow(
-                            label = "درع الـ 24 ساعة",
+                            label = if (currentLang == "ar") "درع الـ 24 ساعة" else "24h Shield",
                             valueText = "$available24hShields",
                             accent = NeonCyan
                         )
                         ShieldReadOnlyCountRow(
-                            label = "درع الـ 48 ساعة",
+                            label = if (currentLang == "ar") "درع الـ 48 ساعة" else "48h Shield",
                             valueText = "$available48hShields",
                             accent = NeonEmerald
                         )
                         ShieldReadOnlyCountRow(
-                            label = "درع الـ 72 ساعة",
+                            label = if (currentLang == "ar") "درع الـ 72 ساعة" else "72h Shield",
                             valueText = "$available72hShields",
                             accent = NeonAmber
                         )
                         ShieldReadOnlyCountRow(
-                            label = "درع الـ 7 أيام (تلقائي)",
+                            label = if (currentLang == "ar") "درع الـ 7 أيام (تلقائي)" else "7-Day Shield (Auto)",
                             valueText = if (isStreakShieldActive && activeShieldType == ActiveShieldType.SHIELD_7D_AUTO) {
-                                "نشط (1)"
+                                if (currentLang == "ar") "نشط (1)" else "Active (1)"
                             } else {
                                 "$sevenDayAutoShieldCount"
                             },

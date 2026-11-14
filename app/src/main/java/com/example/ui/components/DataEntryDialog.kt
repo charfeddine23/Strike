@@ -105,6 +105,8 @@ fun DataEntryDialog(
 
     val isEditing = viewModel.editingId != null
     val context = LocalContext.current
+    val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val isAr = currentLang == "ar"
 
     val pickContactLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickContact()
@@ -225,7 +227,11 @@ fun DataEntryDialog(
                                     .padding(horizontal = 10.dp, vertical = 5.dp)
                             ) {
                                 Text(
-                                    text = if (isEditing) "EDIT MODE" else "NEW ENTRY",
+                                    text = if (isEditing) {
+                                        if (isAr) "وضع التعديل" else "EDIT MODE"
+                                    } else {
+                                        if (isAr) "إدخال جديد" else "NEW ENTRY"
+                                    },
                                     color = if (isEditing) NeonViolet else NeonCyan,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 11.sp
@@ -489,7 +495,7 @@ fun DataEntryDialog(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "الأبعاد الفيزيائية (Physical Dimensions)",
+                                            text = if (isAr) "الأبعاد الفيزيائية" else "Physical Dimensions",
                                             style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -561,7 +567,7 @@ fun DataEntryDialog(
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = "CALCULATED SIZE (L × W)",
+                                                text = if (isAr) "الحجم المحسوب (الطول × العرض)" else "CALCULATED SIZE (L × W)",
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface
@@ -688,7 +694,7 @@ fun DataEntryDialog(
                                                 )
                                                 Spacer(modifier = Modifier.width(8.dp))
                                                 Text(
-                                                    text = "DYNAMIC BOOST",
+                                                    text = if (isAr) "التعزيز الديناميكي" else "DYNAMIC BOOST",
                                                     fontWeight = FontWeight.Bold,
                                                     fontSize = 14.sp,
                                                     color = MaterialTheme.colorScheme.onSurface
@@ -713,7 +719,11 @@ fun DataEntryDialog(
                                         val sizeBonus = ((calculatedSize / 100.0) * 100.0).toLong() / 100.0
 
                                         Text(
-                                            text = "($sumScores sum) + ($sizeBonus size/100) = $calculatedBoost",
+                                            text = if (isAr) {
+                                                "($sumScores المجموع) + ($sizeBonus الحجم/100) = $calculatedBoost"
+                                            } else {
+                                                "($sumScores sum) + ($sizeBonus size/100) = $calculatedBoost"
+                                            },
                                             fontSize = 11.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -759,7 +769,7 @@ fun DataEntryDialog(
                                                     .padding(horizontal = 8.dp, vertical = 2.dp)
                                             ) {
                                                 Text(
-                                                    text = "إجمالي: $totalHistoricalStrikes",
+                                                    text = if (isAr) "الإجمالي: $totalHistoricalStrikes" else "Total: $totalHistoricalStrikes",
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = NeonAmber
@@ -880,13 +890,13 @@ fun DataEntryDialog(
                                                 ) {
                                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                                         Text(
-                                                            text = "سنة $yr : ",
+                                                            text = if (isAr) "سنة $yr : " else "Year $yr : ",
                                                             fontWeight = FontWeight.Bold,
                                                             fontSize = 13.sp,
                                                             color = NeonCyan
                                                         )
                                                         Text(
-                                                            text = "$cnt ضربة",
+                                                            text = if (isAr) "$cnt ضربة" else "$cnt strikes",
                                                             fontWeight = FontWeight.ExtraBold,
                                                             fontSize = 13.sp,
                                                             color = NeonEmerald
@@ -899,7 +909,7 @@ fun DataEntryDialog(
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Default.Close,
-                                                            contentDescription = "Remove",
+                                                            contentDescription = if (isAr) "حذف" else "Remove",
                                                             tint = NeonRose,
                                                             modifier = Modifier.size(16.dp)
                                                         )

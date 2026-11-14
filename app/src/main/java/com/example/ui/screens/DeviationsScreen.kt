@@ -138,6 +138,8 @@ fun DeviationsScreen(
     val isHapticEnabled by viewModel.isHapticFeedbackEnabled
 
     val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
+    val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val isAr = currentLang == "ar"
 
     var showInfoDialog by remember { mutableStateOf(false) }
     var showAllTiersSheet by remember { mutableStateOf(false) }
@@ -205,9 +207,9 @@ fun DeviationsScreen(
 
     // Derived Deviations Models
     val isDarkTrack = DeviationsManager.isDarkTrack(flameScore)
-    val darkRank = remember(flameScore) { DeviationsManager.getDarkRank(flameScore) }
-    val lightRank = remember(flameScore) { DeviationsManager.getLightRank(flameScore) }
-    val bioTier = remember(flameScore) { DeviationsManager.getBiologicalTier(flameScore) }
+    val darkRank = remember(flameScore, currentLang) { DeviationsManager.getDarkRank(flameScore, currentLang) }
+    val lightRank = remember(flameScore, currentLang) { DeviationsManager.getLightRank(flameScore, currentLang) }
+    val bioTier = remember(flameScore, currentLang) { DeviationsManager.getBiologicalTier(flameScore, currentLang) }
 
     // Smooth animated flame score for fluid gauges and entities
     val animatedScore by animateFloatAsState(
@@ -250,7 +252,7 @@ fun DeviationsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            contentDescription = if (isAr) "رجوع" else "Back",
                             tint = NeonCyan,
                             modifier = Modifier.size(18.dp)
                         )
@@ -289,7 +291,7 @@ fun DeviationsScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
-                            contentDescription = "Info",
+                            contentDescription = if (isAr) "معلومات" else "Info",
                             tint = NeonCyan,
                             modifier = Modifier.size(18.dp)
                         )
@@ -414,7 +416,7 @@ fun DeviationsScreen(
                             drawCyberGrid(w, h, isDarkTrack, haloPulse)
 
                             // 1. RENDER BACKGROUND ENTITY (Demonic Claws & Wings OR Angelic Ethereal Wings)
-                            if (currentScore <= 1000.0) {
+                            if (currentScore <= DeviationsManager.DARK_THRESHOLD) {
                                 // CYBER-SHADOW ENTITY & CLAWS WRAPPING DNA
                                 val grip = darkRank.gripProgress
                                 drawCyberShadowClawsAndDemon(
@@ -429,7 +431,7 @@ fun DeviationsScreen(
                             } else {
                                 // CYBER-ANGEL ENTITY WITH RADIANT WINGS & HALO
                                 val approach = lightRank.approachProgress
-                                val isPureWhiteTouch = currentScore >= 9990.0
+                                val isPureWhiteTouch = currentScore >= 19990.0
                                 drawCyberAngelEntity(
                                     approach = approach,
                                     isPureWhite = isPureWhiteTouch,
@@ -442,9 +444,9 @@ fun DeviationsScreen(
                             }
 
                             // 2. RENDER 3D VOLUMETRIC NEON DNA STRUCTURE
-                            val isPureWhite = currentScore >= 9990.0
+                            val isPureWhite = currentScore >= 19990.0
                             val isShadowGripped = currentScore <= 50.0
-                            val gripProgress = if (currentScore <= 1000.0) darkRank.gripProgress else 0f
+                            val gripProgress = if (currentScore <= DeviationsManager.DARK_THRESHOLD) darkRank.gripProgress else 0f
 
                             drawVolumetricNeonDnaStructure(
                                 rotationAngle = totalDnaAngle,
@@ -488,7 +490,11 @@ fun DeviationsScreen(
                     ) {
                         Column {
                             Text(
-                                text = if (isDarkTrack) "الرتبة المظلمة الحالية:" else "الرتبة الملائكية الحالية:",
+                                text = if (isDarkTrack) {
+                                    if (isAr) "الرتبة المظلمة الحالية:" else "Current Dark Rank:"
+                                } else {
+                                    if (isAr) "الرتبة الملائكية الحالية:" else "Current Light Rank:"
+                                },
                                 fontSize = 11.sp,
                                 color = Color(0xFF94A3B8)
                             )
@@ -551,7 +557,7 @@ fun DeviationsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "مؤشر التوازن البيولوجي (الطاقة الحيوية)",
+                            text = if (isAr) "مؤشر التوازن البيولوجي (الطاقة الحيوية)" else "Biological Energy Equilibrium Gauge",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             color = Color.White
@@ -629,18 +635,18 @@ fun DeviationsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "${(ePercent * 100).toInt()}% Estrogen",
+                            text = if (isAr) "${(ePercent * 100).toInt()}% إستروجين" else "${(ePercent * 100).toInt()}% Estrogen",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFFB7185)
                         )
                         Text(
-                            text = "نقطة التوازن: 50% / 50%",
+                            text = if (isAr) "نقطة التوازن: 50% / 50%" else "Equilibrium: 50% / 50%",
                             fontSize = 10.sp,
                             color = Color(0xFF94A3B8)
                         )
                         Text(
-                            text = "${(tPercent * 100).toInt()}% Testosterone",
+                            text = if (isAr) "${(tPercent * 100).toInt()}% تيستوستيرون" else "${(tPercent * 100).toInt()}% Testosterone",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = NeonCyan
@@ -655,6 +661,7 @@ fun DeviationsScreen(
             LuxuryCyberRankFrame(
                 tier = bioTier,
                 currentScore = flameScore,
+                currentLang = currentLang,
                 onInspectAllTiers = {
                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                     showAllTiersSheet = true
@@ -691,14 +698,22 @@ fun DeviationsScreen(
                             color = Color.White
                         )
                         Text(
-                            text = "تدرج المستويات البيولوجية من الأنثى المطلقة (1) إلى هرقل (50)",
+                            text = if (isAr) {
+                                "تدرّج المستويات البيولوجية من الأنثى المطلقة (1) إلى هرقل (50)"
+                            } else {
+                                "Progression from Absolute Feminine (1) to Hercules (50)"
+                            },
                             fontSize = 11.sp,
                             color = Color(0xFF94A3B8)
                         )
                     }
 
                     IconButton(onClick = { showAllTiersSheet = false }) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.Gray)
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = if (isAr) "إغلاق" else "Close",
+                            tint = Color.Gray
+                        )
                     }
                 }
 
@@ -712,10 +727,11 @@ fun DeviationsScreen(
                         .height(460.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    itemsIndexed(DeviationsManager.BIOLOGICAL_50_TIERS) { idx, name ->
+                    val tierList = if (isAr) DeviationsManager.BIOLOGICAL_50_TIERS else DeviationsManager.BIOLOGICAL_50_TIERS_EN
+                    itemsIndexed(tierList) { idx, name ->
                         val tierNum = idx + 1
                         val isCurrent = tierNum == bioTier.index
-                        val step = 10000.0 / 50.0
+                        val step = DeviationsManager.MAX_FLAME / 50.0
                         val minSc = (idx * step).toInt()
                         val maxSc = ((idx + 1) * step).toInt()
 
@@ -757,7 +773,7 @@ fun DeviationsScreen(
                                         color = if (isCurrent) NeonCyan else Color.White
                                     )
                                     Text(
-                                        text = "$minSc - $maxSc PTS",
+                                        text = if (isAr) "$minSc - $maxSc نقطة" else "$minSc - $maxSc PTS",
                                         fontSize = 10.sp,
                                         color = Color(0xFF94A3B8)
                                     )
@@ -773,7 +789,7 @@ fun DeviationsScreen(
                                         .padding(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = "المستوى الحالي",
+                                        text = if (isAr) "المستوى الحالي" else "Current Tier",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.ExtraBold,
                                         color = NeonCyan
@@ -801,23 +817,35 @@ fun DeviationsScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "نظام الانحرافات والشيفرة الجينية المزدوجة:",
+                        text = if (isAr) "نظام الانحرافات والشيفرة الجينية المزدوجة:" else "Deviations System & Dual Genetic Matrix:",
                         fontWeight = FontWeight.Bold,
                         color = NeonCyan,
                         fontSize = 13.sp
                     )
                     Text(
-                        text = "1. مسار الظلال (0 - 1000 نقطة): يقترب كيان الظل السيبراني كلما انخفضت النقاط نحو الصفر حتى يمسك بالـ DNA بالكامل عند الصفر مع 20 رتبة مظلمة تنتهي بـ 'بافوميت'.",
+                        text = if (isAr) {
+                            "1. مسار الظلال (0 - 2000 نقطة): يقترب كيان الظل السيبراني كلما انخفضت النقاط نحو الصفر حتى يمسك بالـ DNA بالكامل عند الصفر مع 20 رتبة مظلمة تنتهي بـ «بافوميت»."
+                        } else {
+                            "1. Shadow Track (0 - 2,000 pts): The cyber-shadow entity closes in as your score drops toward 0, gripping the DNA completely across 20 dark ranks ending with Baphomet."
+                        },
                         fontSize = 12.sp,
                         color = Color(0xFFCBD5E1)
                     )
                     Text(
-                        text = "2. مسار النور الملائكي (1001 - 10000 نقطة): يقترب الملاك السيبراني بأجنحته النورانية ويتحول الـ DNA إلى الأبيض الخالص عند بلوغ 10,000 نقطة مع 20 رتبة نورانية تنتهي بـ 'جبريل'.",
+                        text = if (isAr) {
+                            "2. مسار النور الملائكي (2001 - 20000 نقطة): يقترب الملاك السيبراني بأجنحته النورانية ويتحوّل الـ DNA إلى الأبيض الخالص عند بلوغ 20,000 نقطة مع 20 رتبة نورانية تنتهي بـ «جبريل»."
+                        } else {
+                            "2. Angelic Light Track (2,001 - 20,000 pts): The cyber-angel approaches with radiant wings and turns the DNA pure white at 20,000 pts across 20 light ranks ending with Gabriel."
+                        },
                         fontSize = 12.sp,
                         color = Color(0xFFCBD5E1)
                     )
                     Text(
-                        text = "3. مقياس الطاقة البيولوجية و50 مستوى: يتأرجح بين الأنوثة (إستروجين) والرجولة (تيستوستيرون) عبر 50 رتبة من 'الأنثى المطلقة' إلى 'هرقل'.",
+                        text = if (isAr) {
+                            "3. مقياس الطاقة البيولوجية و50 مستوى: يتأرجح بين الإستروجين والتيستوستيرون عبر 50 رتبة من «الأنثى المطلقة» إلى «هرقل»."
+                        } else {
+                            "3. Biological Energy & 50 Tiers: Shifts between Estrogen and Testosterone across 50 tiers from Absolute Feminine to Hercules."
+                        },
                         fontSize = 12.sp,
                         color = Color(0xFFCBD5E1)
                     )
@@ -825,7 +853,7 @@ fun DeviationsScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showInfoDialog = false }) {
-                    Text("حسناً", fontWeight = FontWeight.Bold)
+                    Text(if (isAr) "حسناً" else "OK", fontWeight = FontWeight.Bold)
                 }
             },
             containerColor = Color(0xFF0F172A),
@@ -861,7 +889,7 @@ fun PulsingCyberWarningBar(
             (gripProgress * 100).toInt(),
             darkRankTitle
         )
-        flameScore >= 9990.0 -> stringResource(R.string.deviations_gabriel_ascension)
+        flameScore >= 19990.0 -> stringResource(R.string.deviations_gabriel_ascension)
         else -> stringResource(
             R.string.deviations_harmonic_resonance,
             (approachProgress * 100).toInt(),
@@ -1528,8 +1556,10 @@ private fun DrawScope.drawVolumetricNode(
 fun LuxuryCyberRankFrame(
     tier: com.example.data.deviations.BiologicalTier,
     currentScore: Double,
+    currentLang: String = "ar",
     onInspectAllTiers: () -> Unit
 ) {
+    val isAr = currentLang == "ar"
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1568,7 +1598,7 @@ fun LuxuryCyberRankFrame(
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "TIER ${tier.index} / 50",
+                        text = if (isAr) "المستوى ${tier.index} / 50" else "TIER ${tier.index} / 50",
                         fontWeight = FontWeight.Black,
                         fontSize = 11.sp,
                         color = NeonCyan,
@@ -1585,13 +1615,18 @@ fun LuxuryCyberRankFrame(
                 ) {
                     Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(13.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = "كافة المستويات", fontSize = 10.sp, color = NeonCyan, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (isAr) "كافة المستويات" else "All Tiers",
+                        fontSize = 10.sp,
+                        color = NeonCyan,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Large Majestic Arabic Rank Title
+            // Large Majestic Rank Title
             Text(
                 text = tier.title,
                 fontSize = 32.sp,
@@ -1607,7 +1642,11 @@ fun LuxuryCyberRankFrame(
             val nextScore = tier.maxScore
             val ptsToNext = (nextScore - currentScore).coerceAtLeast(0.0)
             Text(
-                text = if (ptsToNext > 0) "المستوى التالي بعد ${ptsToNext.toInt()} نقطة" else "وصلت إلى القمة المطلقة!",
+                text = if (ptsToNext > 0) {
+                    if (isAr) "المستوى التالي بعد ${ptsToNext.toInt()} نقطة" else "Next tier in ${ptsToNext.toInt()} pts"
+                } else {
+                    if (isAr) "وصلت إلى القمة المطلقة!" else "Absolute peak reached!"
+                },
                 fontSize = 11.sp,
                 color = Color(0xFF94A3B8)
             )

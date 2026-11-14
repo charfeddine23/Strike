@@ -2,6 +2,7 @@ package com.example.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import org.json.JSONObject
 
 class SecurityPreferences(context: Context) {
     private val prefs: SharedPreferences =
@@ -45,5 +46,32 @@ class SecurityPreferences(context: Context) {
             .remove(KEY_SAVED_PATTERN)
             .putBoolean(KEY_PATTERN_LOCK_ENABLED, false)
             .apply()
+    }
+
+    fun exportSnapshot(): JSONObject {
+        return JSONObject().apply {
+            put("isPatternLockEnabled", isPatternLockEnabled)
+            put("savedPattern", savedPattern ?: "")
+            put("selectedLanguage", selectedLanguage)
+            put("isHapticFeedbackEnabled", isHapticFeedbackEnabled)
+            put("isAutoUpdateEnabled", isAutoUpdateEnabled)
+        }
+    }
+
+    fun restoreSnapshot(json: JSONObject) {
+        val lang = json.optString("selectedLanguage", selectedLanguage).ifBlank { "ar" }
+        val patternEnabled = json.optBoolean("isPatternLockEnabled", isPatternLockEnabled)
+        val pattern = json.optString("savedPattern", "").ifBlank { null }
+        val haptic = json.optBoolean("isHapticFeedbackEnabled", isHapticFeedbackEnabled)
+        val autoUpdate = json.optBoolean("isAutoUpdateEnabled", isAutoUpdateEnabled)
+
+        prefs.edit().apply {
+            putString(KEY_APP_LANGUAGE, lang)
+            putBoolean(KEY_PATTERN_LOCK_ENABLED, patternEnabled && pattern != null)
+            if (pattern != null) putString(KEY_SAVED_PATTERN, pattern) else remove(KEY_SAVED_PATTERN)
+            putBoolean(KEY_HAPTIC_ENABLED, haptic)
+            putBoolean(KEY_AUTO_UPDATE_ENABLED, autoUpdate)
+            apply()
+        }
     }
 }

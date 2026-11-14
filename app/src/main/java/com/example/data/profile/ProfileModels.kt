@@ -32,18 +32,25 @@ data class TitleItem(
     val rarity: TitleRarity,
     val unlockStation: Int? = null,
     val isMilestone: Boolean = false,
-    val description: String = ""
-)
+    val description: String = "",
+    val descriptionEn: String = description
+) {
+    fun getLocalizedTitle(lang: String): String = if (lang == "ar") titleAr else titleEn
+    fun getLocalizedDescription(lang: String): String = if (lang == "ar") description else descriptionEn
+}
 
 enum class AvatarRarity(
     val labelAr: String,
+    val labelEn: String,
     val primaryColor: Color,
     val glowColor: Color
 ) {
-    COMMON("شائع", Color(0xFF94A3B8), Color(0x6694A3B8)),
-    UNCOMMON("غير شائع", NeonEmerald, Color(0x8810B981)),
-    RARE("نادر", NeonCyan, Color(0xAA00E5FF)),
-    LEGENDARY("أسطوري", NeonAmber, Color(0xCCF59E0B))
+    COMMON("شائع", "Common", Color(0xFF94A3B8), Color(0x6694A3B8)),
+    UNCOMMON("غير شائع", "Uncommon", NeonEmerald, Color(0x8810B981)),
+    RARE("نادر", "Rare", NeonCyan, Color(0xAA00E5FF)),
+    LEGENDARY("أسطوري", "Legendary", NeonAmber, Color(0xCCF59E0B));
+
+    fun getLocalizedLabel(lang: String): String = if (lang == "ar") labelAr else labelEn
 }
 
 data class AvatarItem(
@@ -53,61 +60,88 @@ data class AvatarItem(
     val rarity: AvatarRarity,
     val unlockStation: Int = 1,
     val badgeIconName: String = "bolt"
-)
+) {
+    fun getLocalizedName(lang: String): String = if (lang == "ar") nameAr else nameEn
+}
 
 enum class PotionType(
     val id: String,
     val nameAr: String,
+    val nameEn: String,
     val descriptionAr: String,
+    val descriptionEn: String,
     val durationLabelAr: String,
+    val durationLabelEn: String,
     val color: Color
 ) {
     PULSE_ELIXIR(
         id = "potion_pulse_elixir",
         nameAr = "إكسير النبض",
+        nameEn = "Pulse Elixir",
         descriptionAr = "يمنح +5 نقاط إضافية لزر التبريد (Deflame) للـ 3 تفعيلات القادمة، ثم يختفي تلقائياً.",
+        descriptionEn = "Grants +5 bonus points to the Deflame cooldown button for the next 3 activations, then expires automatically.",
         durationLabelAr = "3 استخدامات",
+        durationLabelEn = "3 Uses",
         color = Color(0xFF38BDF8)
     ),
     SHADOW_GRIP_SERUM(
         id = "potion_shadow_serum",
         nameAr = "مصل قبضة الظل",
+        nameEn = "Shadow-Grip Serum",
         descriptionAr = "يقلل وتيرة صعود نقاط الشعلة بنسبة 50% لمدة 3 أيام.",
+        descriptionEn = "Reduces Flame score daily climb rate by 50% for 3 consecutive days.",
         durationLabelAr = "3 أيام",
+        durationLabelEn = "3 Days",
         color = Color(0xFFA855F7)
     ),
     GABRIEL_PURITY_DROPLET(
         id = "potion_gabriel_droplet",
         nameAr = "قطرة نقاء جبريل",
-        descriptionAr = "تسارع نمو نقاط الشعلة بنسبة 50% لمدة 7 أيام (تفعيل تلقائي وفوري عند الاستلام).",
+        nameEn = "Gabriel's Purity Droplet",
+        descriptionAr = "تُسرّع نمو نقاط الشعلة بنسبة 50% لمدة 7 أيام (تفعيل تلقائي وفوري عند الاستلام).",
+        descriptionEn = "Accelerates Flame score growth by 50% for 7 days (instant automatic activation upon receipt).",
         durationLabelAr = "7 أيام",
+        durationLabelEn = "7 Days",
         color = Color(0xFFFACC15)
     ),
     ABSOLUTE_CRYO_INFUSION(
         id = "potion_cryo_infusion",
         nameAr = "الحقن التجميدي المطلق",
-        descriptionAr = "يضيف +100 نقطة بونص لتعزيز الستريك التالي (اختياري، يتفعل تلقائياً بعد 30 يوم إذا لم يُستخدم).",
+        nameEn = "Absolute Cryo-Infusion",
+        descriptionAr = "يضيف +100 نقطة مكافأة لتعزيز الستريك التالي (اختياري، ويتفعل تلقائياً بعد 30 يوماً إذا لم يُستخدم).",
+        descriptionEn = "Adds +100 bonus points to amplify your next strike (optional activation; auto-triggers after 30 days if unused).",
         durationLabelAr = "استخدام فردي",
+        durationLabelEn = "Single Use",
         color = Color(0xFF00E5FF)
     ),
     ETERNAL_REBIRTH_ELIXIR(
         id = "potion_eternal_rebirth",
         nameAr = "جرعة الانبعاث الأبدي",
+        nameEn = "Eternal Resurgence Potion",
         descriptionAr = "الجائزة الكبرى للمحطة 500: تمنح درع مناعة أبدي ضد التصفير ولقب سيد النقوشة (Gary Master).",
+        descriptionEn = "Grand Reward of Station 500: grants eternal immunity against system resets and unlocks the Gary Master title.",
         durationLabelAr = "أبدي",
+        durationLabelEn = "Eternal",
         color = Color(0xFFFF007A)
-    )
+    );
+
+    fun getLocalizedName(lang: String): String = if (lang == "ar") nameAr else nameEn
+    fun getLocalizedDescription(lang: String): String = if (lang == "ar") descriptionAr else descriptionEn
+    fun getLocalizedDuration(lang: String): String = if (lang == "ar") durationLabelAr else durationLabelEn
 }
 
 enum class SkipKeyType(
     val id: String,
     val nameAr: String,
+    val nameEn: String,
     val maxUses: Int,
     val color: Color
 ) {
-    WOODEN("key_wooden", "مفتاح خشبي", 1, Color(0xFFB45309)),
-    BRONZE("key_bronze", "مفتاح برونزي", 2, Color(0xFFD97706)),
-    SILVER("key_silver", "مفتاح فضي", 3, Color(0xFFCBD5E1))
+    WOODEN("key_wooden", "مفتاح خشبي", "Wooden Key", 1, Color(0xFFB45309)),
+    BRONZE("key_bronze", "مفتاح برونزي", "Bronze Key", 2, Color(0xFFD97706)),
+    SILVER("key_silver", "مفتاح فضي", "Silver Key", 3, Color(0xFFCBD5E1));
+
+    fun getLocalizedName(lang: String): String = if (lang == "ar") nameAr else nameEn
 }
 
 object ProfileMasterInventory {
@@ -120,7 +154,8 @@ object ProfileMasterInventory {
         rarity = TitleRarity.MILESTONE_PEAK,
         unlockStation = null,
         isMilestone = true,
-        description = "يُفتح حصرياً عند بلوغ رصيد الشعلة الأقصى 20,000 نقطة. يحمل هالة نارية سائلة ذهبية وحمراء ديناميكية."
+        description = "يُفتح حصرياً عند بلوغ رصيد الشعلة الأقصى 20,000 نقطة. يحمل هالة نارية سائلة ذهبية وحمراء ديناميكية.",
+        descriptionEn = "Unlocked exclusively upon reaching the maximum 20,000 PTS Flame Score. Features a dynamic molten gold and crimson halo."
     )
 
     // 50 MASTER TITLES
@@ -183,7 +218,15 @@ object ProfileMasterInventory {
         TitleItem(49, "أسطورة الستريك الخالدة", "Immortal Streak Legend", TitleRarity.LEGENDARY, 499),
 
         // ULTIMATE / RANK 50 (STATION 500)
-        TitleItem(50, "سيد النقوشة (Gary Master)", "Gary Master", TitleRarity.ULTIMATE, 500, description = "اللقب الأسمى والأعلى في التطبيق. يُفتح عند إتمام المحطة 500 واستخدام جرعة الانبعاث الأبدي.")
+        TitleItem(
+            id = 50,
+            titleAr = "سيد النقوشة (Gary Master)",
+            titleEn = "Gary Master",
+            rarity = TitleRarity.ULTIMATE,
+            unlockStation = 500,
+            description = "اللقب الأسمى والأعلى في التطبيق. يُفتح عند إتمام المحطة 500 واستخدام جرعة الانبعاث الأبدي.",
+            descriptionEn = "The supreme apex title in StrikePulse. Unlocked by reaching Station 500 and activating the Eternal Resurgence Potion."
+        )
     )
 
     // 20 PROFILE AVATARS (5 COMMON, 5 UNCOMMON, 5 RARE, 5 LEGENDARY)

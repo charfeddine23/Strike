@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * State & Persistence Manager for User Profile, Equipped Avatars, Active Titles,
@@ -465,18 +467,14 @@ object ProfileManager {
     }
 
     /**
-     * Literally resets all unlocked avatars, titles, potions, active potion effects, and skip-keys back to base zero state.
+     * Resets consumables (potions, active potion effects, and skip-keys) to zero.
+     * PERMANENT UNLOCK PERSISTENCE RULE:
+     * Unlocked Titles and Avatars (plus currently equipped title/avatar & username) are immutable
+     * player legacy collectibles and are STRICTLY EXEMPT from any reset or wipe.
      */
     @Synchronized
     fun resetAllProgressToZero(context: Context) {
         init(context)
-        val defaultAvatar = ProfileMasterInventory.MASTER_AVATARS.first()
-        val defaultTitle = ProfileMasterInventory.MASTER_TITLES.first()
-
-        _unlockedAvatarIds.value = setOf(defaultAvatar.id)
-        _unlockedTitleIds.value = setOf(defaultTitle.id)
-        _equippedAvatar.value = defaultAvatar
-        _equippedTitle.value = defaultTitle
 
         _pulseElixirCount.value = 0
         _shadowSerumCount.value = 0
@@ -495,10 +493,6 @@ object ProfileManager {
         _silverKeysCount.value = 0
 
         getPrefs(context).edit()
-            .putStringSet(KEY_UNLOCKED_AVATARS, setOf(defaultAvatar.id))
-            .putStringSet(KEY_UNLOCKED_TITLES, setOf(defaultTitle.id.toString()))
-            .putString(KEY_EQUIPPED_AVATAR_ID, defaultAvatar.id)
-            .putInt(KEY_EQUIPPED_TITLE_ID, defaultTitle.id)
             .putInt(KEY_POTION_PULSE_ELIXIR, 0)
             .putInt(KEY_POTION_SHADOW_SERUM, 0)
             .putInt(KEY_POTION_GABRIEL_DROPLET, 0)
@@ -514,6 +508,140 @@ object ProfileManager {
             .putInt(KEY_KEYS_BRONZE, 0)
             .putInt(KEY_KEYS_SILVER, 0)
             .apply()
+    }
+
+    @Synchronized
+    fun exportSnapshot(context: Context): JSONObject {
+        init(context)
+        val prefs = getPrefs(context)
+        return JSONObject().apply {
+            put("userName", _userName.value)
+            put("equippedAvatarId", _equippedAvatar.value.id)
+            put("equippedTitleId", _equippedTitle.value.id)
+            put("unlockedAvatarIds", JSONArray(_unlockedAvatarIds.value.sorted()))
+            put("unlockedTitleIds", JSONArray(_unlockedTitleIds.value.sorted()))
+
+            put("pulseElixirCount", _pulseElixirCount.value)
+            put("shadowSerumCount", _shadowSerumCount.value)
+            put("gabrielDropletCount", _gabrielDropletCount.value)
+            put("cryoInfusionCount", _cryoInfusionCount.value)
+            put("eternalRebirthCount", _eternalRebirthCount.value)
+
+            put("pulseElixirUsesLeft", _pulseElixirUsesLeft.value)
+            put("shadowSerumExpiresAt", _shadowSerumExpiresAt.value ?: 0L)
+            put("gabrielDropletExpiresAt", _gabrielDropletExpiresAt.value ?: 0L)
+            put("cryoInfusionAutoExpiresAt", prefs.getLong(KEY_CRYO_INFUSION_AUTO_EXPIRES_AT, 0L))
+            put("hasCryoBuffArmed", _hasCryoBuffArmed.value)
+            put("hasRebirthImmunity", _hasRebirthImmunity.value)
+
+            put("woodenKeysCount", _woodenKeysCount.value)
+            put("bronzeKeysCount", _bronzeKeysCount.value)
+            put("silverKeysCount", _silverKeysCount.value)
+        }
+    }
+
+    @Synchronized
+    fun restoreSnapshot(context: Context, json: JSONObject, replaceExisting: Boolean) {
+        init(context)
+        val prefs = getPrefs(context)
+        val now = System.currentTimeMillis()
+
+        val importedName = json.optString("userName", "").trim().ifBlank { _userName.value }
+        val importedAvatarsArr = json.optJSONArray("unlockedAvatarIds")
+        val importedAvatars = mutableSetOf("av_core_node")
+        if (importedAvatarsArr != null) {
+            for (i in 0 until importedAvatarsArr.length()) {
+                importedAvatarsArr.optString(i).takeIf { it.isNotBlank() }?.let { importedAvatars.add(it) }
+            }
+        }
+        val importedTitlesArr = json.optJSONArray("unlockedTitleIds")
+        val importedTitles = mutableSetOf(1)
+        if (importedTitlesArr != null) {
+            for (i in 0 until importedTitlesArr.length()) {
+                val tid = importedTitlesArr.optInt(i, -1)
+                if (tid > 0) importedTitles.add(tid)
+            }
+        }
+
+        val finalAvatars = if (replaceExisting) importedAvatars else (_unlockedAvatarIds.value + importedAvatars)
+        val finalTitles = if (replaceExisting) importedTitles else (_unlockedTitleIds.value + importedTitles)
+
+        val eqAvId = json.optString("equippedAvatarId", _equippedAvatar.value.id)
+        val resolvedAvatar = ProfileMasterInventory.MASTER_AVATARS.find { it.id == eqAvId && finalAvatars.contains(it.id) }
+            ?: ProfileMasterInventory.MASTER_AVATARS.first()
+
+        val eqTitleId = json.optInt("equippedTitleId", _equippedTitle.value.id)
+        val resolvedTitle = if (eqTitleId == ProfileMasterInventory.MILESTONE_PEAK_TITLE.id && finalTitles.contains(eqTitleId)) {
+            ProfileMasterInventory.MILESTONE_PEAK_TITLE
+        } else {
+            ProfileMasterInventory.MASTER_TITLES.find { it.id == eqTitleId && finalTitles.contains(it.id) }
+                ?: ProfileMasterInventory.MASTER_TITLES.first()
+        }
+
+        val pulse = if (replaceExisting) json.optInt("pulseElixirCount", 0) else (_pulseElixirCount.value + json.optInt("pulseElixirCount", 0))
+        val shadow = if (replaceExisting) json.optInt("shadowSerumCount", 0) else (_shadowSerumCount.value + json.optInt("shadowSerumCount", 0))
+        val gabriel = if (replaceExisting) json.optInt("gabrielDropletCount", 0) else (_gabrielDropletCount.value + json.optInt("gabrielDropletCount", 0))
+        val cryo = if (replaceExisting) json.optInt("cryoInfusionCount", 0) else (_cryoInfusionCount.value + json.optInt("cryoInfusionCount", 0))
+        val eternal = if (replaceExisting) json.optInt("eternalRebirthCount", 0) else (_eternalRebirthCount.value + json.optInt("eternalRebirthCount", 0))
+
+        val pulseUses = if (replaceExisting) json.optInt("pulseElixirUsesLeft", 0) else maxOf(_pulseElixirUsesLeft.value, json.optInt("pulseElixirUsesLeft", 0))
+        val rawShadowExp = json.optLong("shadowSerumExpiresAt", 0L)
+        val shadowExp = if (replaceExisting) rawShadowExp else maxOf(_shadowSerumExpiresAt.value ?: 0L, rawShadowExp)
+        val rawGabrielExp = json.optLong("gabrielDropletExpiresAt", 0L)
+        val gabrielExp = if (replaceExisting) rawGabrielExp else maxOf(_gabrielDropletExpiresAt.value ?: 0L, rawGabrielExp)
+        val cryoAutoExp = json.optLong("cryoInfusionAutoExpiresAt", 0L)
+
+        val cryoArmed = if (replaceExisting) json.optBoolean("hasCryoBuffArmed", false) else (_hasCryoBuffArmed.value || json.optBoolean("hasCryoBuffArmed", false))
+        val rebirthImmune = if (replaceExisting) json.optBoolean("hasRebirthImmunity", false) else (_hasRebirthImmunity.value || json.optBoolean("hasRebirthImmunity", false))
+
+        val wooden = if (replaceExisting) json.optInt("woodenKeysCount", 0) else (_woodenKeysCount.value + json.optInt("woodenKeysCount", 0))
+        val bronze = if (replaceExisting) json.optInt("bronzeKeysCount", 0) else (_bronzeKeysCount.value + json.optInt("bronzeKeysCount", 0))
+        val silver = if (replaceExisting) json.optInt("silverKeysCount", 0) else (_silverKeysCount.value + json.optInt("silverKeysCount", 0))
+
+        _userName.value = importedName
+        _unlockedAvatarIds.value = finalAvatars
+        _unlockedTitleIds.value = finalTitles
+        _equippedAvatar.value = resolvedAvatar
+        _equippedTitle.value = resolvedTitle
+
+        _pulseElixirCount.value = pulse.coerceIn(0, 3)
+        _shadowSerumCount.value = shadow.coerceIn(0, 3)
+        _gabrielDropletCount.value = gabriel.coerceIn(0, 3)
+        _cryoInfusionCount.value = cryo.coerceIn(0, 3)
+        _eternalRebirthCount.value = eternal.coerceIn(0, 3)
+
+        _pulseElixirUsesLeft.value = pulseUses.coerceAtLeast(0)
+        _shadowSerumExpiresAt.value = if (shadowExp > now) shadowExp else null
+        _gabrielDropletExpiresAt.value = if (gabrielExp > now) gabrielExp else null
+        _hasCryoBuffArmed.value = cryoArmed
+        _hasRebirthImmunity.value = rebirthImmune
+
+        _woodenKeysCount.value = wooden.coerceIn(0, 30)
+        _bronzeKeysCount.value = bronze.coerceIn(0, 30)
+        _silverKeysCount.value = silver.coerceIn(0, 30)
+
+        prefs.edit().apply {
+            putString(KEY_USER_NAME, _userName.value)
+            putStringSet(KEY_UNLOCKED_AVATARS, _unlockedAvatarIds.value)
+            putStringSet(KEY_UNLOCKED_TITLES, _unlockedTitleIds.value.map { it.toString() }.toSet())
+            putString(KEY_EQUIPPED_AVATAR_ID, resolvedAvatar.id)
+            putInt(KEY_EQUIPPED_TITLE_ID, resolvedTitle.id)
+            putInt(KEY_POTION_PULSE_ELIXIR, _pulseElixirCount.value)
+            putInt(KEY_POTION_SHADOW_SERUM, _shadowSerumCount.value)
+            putInt(KEY_POTION_GABRIEL_DROPLET, _gabrielDropletCount.value)
+            putInt(KEY_POTION_CRYO_INFUSION, _cryoInfusionCount.value)
+            putInt(KEY_POTION_ETERNAL_REBIRTH, _eternalRebirthCount.value)
+            putInt(KEY_PULSE_ELIXIR_USES_LEFT, _pulseElixirUsesLeft.value)
+            if (_shadowSerumExpiresAt.value != null) putLong(KEY_SHADOW_SERUM_EXPIRES_AT, _shadowSerumExpiresAt.value!!) else remove(KEY_SHADOW_SERUM_EXPIRES_AT)
+            if (_gabrielDropletExpiresAt.value != null) putLong(KEY_GABRIEL_DROPLET_EXPIRES_AT, _gabrielDropletExpiresAt.value!!) else remove(KEY_GABRIEL_DROPLET_EXPIRES_AT)
+            if (cryoAutoExp > 0L) putLong(KEY_CRYO_INFUSION_AUTO_EXPIRES_AT, cryoAutoExp) else remove(KEY_CRYO_INFUSION_AUTO_EXPIRES_AT)
+            putBoolean(KEY_HAS_CRYO_BUFF_ARMED, _hasCryoBuffArmed.value)
+            putBoolean(KEY_HAS_REBIRTH_ACTIVE, _hasRebirthImmunity.value)
+            putInt(KEY_KEYS_WOODEN, _woodenKeysCount.value)
+            putInt(KEY_KEYS_BRONZE, _bronzeKeysCount.value)
+            putInt(KEY_KEYS_SILVER, _silverKeysCount.value)
+            apply()
+        }
     }
 
     @Synchronized

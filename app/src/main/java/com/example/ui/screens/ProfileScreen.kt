@@ -118,6 +118,8 @@ fun ProfileScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val isHapticEnabled by viewModel.isHapticFeedbackEnabled
+    val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val isAr = currentLang == "ar"
 
     // Profile state flows
     val userName by ProfileManager.userName.collectAsStateWithLifecycle()
@@ -130,7 +132,7 @@ fun ProfileScreen(
     val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
     val totalXp by viewModel.totalXp.collectAsStateWithLifecycle()
     val unlockedStation = remember(totalXp) { RoadmapManager.calculateUnlockedStationId(totalXp) }
-    val darkRank = remember(flameScore) { DeviationsManager.getDarkRank(flameScore) }
+    val darkRank = remember(flameScore, currentLang) { DeviationsManager.getDarkRank(flameScore, currentLang) }
     val shadowGripPercent = (darkRank.gripProgress * 100f).coerceIn(0f, 100f)
 
     // Arsenal flows
@@ -187,21 +189,21 @@ fun ProfileScreen(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = if (isAr) "رجوع" else "Back",
                         tint = NeonCyan
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "الملف الشخصي والعتاد",
+                        text = if (isAr) "الملف الشخصي والعتاد" else "Profile & Arsenal",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.ExtraBold,
                         fontFamily = PlusJakartaSans,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Cyber Profile & Arsenal Matrix",
+                        text = if (isAr) "العتاد السيبراني ومصفوفة القدرات" else "Cyber Profile & Arsenal Matrix",
                         style = MaterialTheme.typography.labelSmall,
                         color = NeonCyan,
                         fontSize = 11.sp
@@ -260,7 +262,7 @@ fun ProfileScreen(
                             }
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "المستوى الحالي: محطة #$unlockedStation",
+                                text = if (isAr) "المستوى الحالي: محطة #$unlockedStation" else "Current Level: Station #$unlockedStation",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = NeonAmber,
                                 fontWeight = FontWeight.Bold
@@ -309,7 +311,7 @@ fun ProfileScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "اللقب المجهز (${rarity.labelAr})",
+                                    text = if (isAr) "اللقب المجهّز (${rarity.labelAr})" else "Equipped Title (${rarity.labelEn})",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = rarity.primaryColor
@@ -324,7 +326,7 @@ fun ProfileScreen(
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
-                                    text = rarity.labelEn.uppercase(),
+                                    text = (if (isAr) rarity.labelAr else rarity.labelEn).uppercase(Locale.US),
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Black,
                                     color = rarity.primaryColor
@@ -335,23 +337,18 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = equippedTitle.titleAr,
+                            text = equippedTitle.getLocalizedTitle(currentLang),
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
                             fontFamily = PlusJakartaSans,
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
-                        Text(
-                            text = equippedTitle.titleEn,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        if (equippedTitle.description.isNotBlank()) {
+                        val localizedDesc = equippedTitle.getLocalizedDescription(currentLang)
+                        if (localizedDesc.isNotBlank()) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = equippedTitle.description,
+                                text = localizedDesc,
                                 fontSize = 11.sp,
                                 color = NeonCyan.copy(alpha = 0.8f)
                             )
@@ -380,7 +377,7 @@ fun ProfileScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "مؤشرات وتيليمتري اللاعب (Strikers Metrics)",
+                                text = if (isAr) "مؤشرات وقياس أداء اللاعب" else "Strikers Metrics Telemetry",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -396,7 +393,7 @@ fun ProfileScreen(
                             // Flame Score / 20000
                             MetricTile(
                                 modifier = Modifier.weight(1f),
-                                label = "نقاط الشعلة",
+                                label = if (isAr) "نقاط الشعلة" else "Flame Score",
                                 value = "${String.format(Locale.US, "%.0f", flameScore)} / 20k",
                                 sub = "${String.format(Locale.US, "%.1f", (flameScore / 20000.0) * 100)}%",
                                 icon = Icons.Default.LocalFireDepartment,
@@ -406,7 +403,7 @@ fun ProfileScreen(
                             // Shadow Grip %
                             MetricTile(
                                 modifier = Modifier.weight(1f),
-                                label = "قبضة الظل",
+                                label = if (isAr) "قبضة الظل" else "Shadow Grip",
                                 value = "${String.format(Locale.US, "%.1f", shadowGripPercent)}%",
                                 sub = darkRank.title,
                                 icon = Icons.Default.Shield,
@@ -423,9 +420,9 @@ fun ProfileScreen(
                             // Total XP
                             MetricTile(
                                 modifier = Modifier.weight(1f),
-                                label = "إجمالي الـ XP",
+                                label = if (isAr) "إجمالي نقاط الخبرة" else "Total XP",
                                 value = "$totalXp XP",
-                                sub = "من 434,725 XP",
+                                sub = if (isAr) "من 434,725 نقطة خبرة" else "of 434,725 XP",
                                 icon = Icons.Default.Bolt,
                                 color = NeonCyan
                             )
@@ -433,9 +430,9 @@ fun ProfileScreen(
                             // Active Station
                             MetricTile(
                                 modifier = Modifier.weight(1f),
-                                label = "المحطة النشطة",
-                                value = "محطة #$unlockedStation",
-                                sub = "من 500 محطة",
+                                label = if (isAr) "المحطة النشطة" else "Active Station",
+                                value = if (isAr) "محطة #$unlockedStation" else "Station #$unlockedStation",
+                                sub = if (isAr) "من 500 محطة" else "of 500 Stations",
                                 icon = Icons.Default.AutoAwesome,
                                 color = NeonViolet
                             )
@@ -466,7 +463,7 @@ fun ProfileScreen(
                         onClick = { selectedTab = 0 },
                         text = {
                             Text(
-                                "الأفاتار (${unlockedAvatars.size}/20)",
+                                if (isAr) "الأفاتار (${unlockedAvatars.size}/20)" else "Avatars (${unlockedAvatars.size}/20)",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
                             )
@@ -477,7 +474,7 @@ fun ProfileScreen(
                         onClick = { selectedTab = 1 },
                         text = {
                             Text(
-                                "الألقاب (${unlockedTitles.size}/50)",
+                                if (isAr) "الألقاب (${unlockedTitles.size}/50)" else "Titles (${unlockedTitles.size}/50)",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
                             )
@@ -488,7 +485,7 @@ fun ProfileScreen(
                         onClick = { selectedTab = 2 },
                         text = {
                             Text(
-                                "الجرعات والمفاتيح",
+                                if (isAr) "الجرعات والمفاتيح" else "Potions & Keys",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 12.sp
                             )
@@ -506,6 +503,7 @@ fun ProfileScreen(
                             val isEquipped = equippedAvatar.id == avatar.id
                             AvatarItemCard(
                                 avatar = avatar,
+                                currentLang = currentLang,
                                 isUnlocked = isUnlocked,
                                 isEquipped = isEquipped,
                                 onEquip = {
@@ -527,6 +525,7 @@ fun ProfileScreen(
                     val isEquipped = equippedTitle.id == ProfileMasterInventory.MILESTONE_PEAK_TITLE.id
                     TitleItemCard(
                         title = ProfileMasterInventory.MILESTONE_PEAK_TITLE,
+                        currentLang = currentLang,
                         isUnlocked = isMilestoneUnlocked,
                         isEquipped = isEquipped,
                         onEquip = {
@@ -542,6 +541,7 @@ fun ProfileScreen(
                     val isEquipped = equippedTitle.id == title.id
                     TitleItemCard(
                         title = title,
+                        currentLang = currentLang,
                         isUnlocked = isUnlocked,
                         isEquipped = isEquipped,
                         onEquip = {
@@ -558,7 +558,7 @@ fun ProfileScreen(
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            text = "الجرعات السيبرانية (Cybernetic Potions - الحد الأقصى: 3 لكل نوع)",
+                            text = if (isAr) "الجرعات السيبرانية (الحد الأقصى: 3 لكل نوع)" else "Cybernetic Potions (Max Capacity: 3 each)",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = NeonAmber
@@ -566,12 +566,15 @@ fun ProfileScreen(
 
                         // 1. Pulse Elixir
                         PotionCard(
-                            name = "إكسير النبض (Pulse Elixir)",
-                            desc = "+5 نقاط إضافية لزر Deflame للـ 3 تفعيلات القادمة",
+                            name = com.example.data.profile.PotionType.PULSE_ELIXIR.getLocalizedName(currentLang),
+                            desc = com.example.data.profile.PotionType.PULSE_ELIXIR.getLocalizedDescription(currentLang),
                             count = pulseElixirCount,
-                            statusNote = if (pulseUsesLeft > 0) "نشط حالياً ($pulseUsesLeft استخدامات متبقية)" else "",
-                            color = Color(0xFF38BDF8),
+                            statusNote = if (pulseUsesLeft > 0) {
+                                if (isAr) "نشط حالياً ($pulseUsesLeft استخدامات متبقية)" else "Currently active ($pulseUsesLeft uses left)"
+                            } else "",
+                            color = com.example.data.profile.PotionType.PULSE_ELIXIR.color,
                             canUse = pulseElixirCount > 0,
+                            currentLang = currentLang,
                             onUse = {
                                 ProfileManager.usePulseElixir(context)
                             }
@@ -579,12 +582,15 @@ fun ProfileScreen(
 
                         // 2. Shadow-Grip Serum
                         PotionCard(
-                            name = "مصل قبضة الظل (Shadow-Grip Serum)",
-                            desc = "يقلل وتيرة صعود نقاط الشعلة بنسبة 50% لمدة 3 أيام",
+                            name = com.example.data.profile.PotionType.SHADOW_GRIP_SERUM.getLocalizedName(currentLang),
+                            desc = com.example.data.profile.PotionType.SHADOW_GRIP_SERUM.getLocalizedDescription(currentLang),
                             count = shadowSerumCount,
-                            statusNote = if (isShadowActive) "نشط حالياً (حماية 50% لمدة 3 أيام)" else "",
-                            color = Color(0xFFA855F7),
+                            statusNote = if (isShadowActive) {
+                                if (isAr) "نشط حالياً (حماية 50% لمدة 3 أيام)" else "Currently active (50% protection for 3 days)"
+                            } else "",
+                            color = com.example.data.profile.PotionType.SHADOW_GRIP_SERUM.color,
                             canUse = shadowSerumCount > 0 && !isShadowActive,
+                            currentLang = currentLang,
                             onUse = {
                                 ProfileManager.useShadowSerum(context)
                             }
@@ -592,23 +598,31 @@ fun ProfileScreen(
 
                         // 3. Gabriel's Purity Droplet
                         PotionCard(
-                            name = "قطرة نقاء جبريل (Gabriel's Droplet)",
-                            desc = "تسارع نمو نقاط الشعلة بنسبة 50% لمدة 7 أيام (تفعيل تلقائي وفوري)",
+                            name = com.example.data.profile.PotionType.GABRIEL_PURITY_DROPLET.getLocalizedName(currentLang),
+                            desc = com.example.data.profile.PotionType.GABRIEL_PURITY_DROPLET.getLocalizedDescription(currentLang),
                             count = gabrielDropletCount,
-                            statusNote = if (isGabrielActive) "نشط تلقائياً (تسارع 50% لمدة 7 أيام)" else "خامل",
-                            color = Color(0xFFFACC15),
+                            statusNote = if (isGabrielActive) {
+                                if (isAr) "نشط تلقائياً (تسارع 50% لمدة 7 أيام)" else "Auto-active (+50% growth for 7 days)"
+                            } else {
+                                if (isAr) "خامل" else "Inactive"
+                            },
+                            color = com.example.data.profile.PotionType.GABRIEL_PURITY_DROPLET.color,
                             canUse = false,
+                            currentLang = currentLang,
                             onUse = {}
                         )
 
                         // 4. Absolute Cryo-Infusion
                         PotionCard(
-                            name = "الحقن التجميدي المطلق (Cryo-Infusion)",
-                            desc = "+100 نقطة بونص لتعزيز الستريك التالي (تفعيل اختياري)",
+                            name = com.example.data.profile.PotionType.ABSOLUTE_CRYO_INFUSION.getLocalizedName(currentLang),
+                            desc = com.example.data.profile.PotionType.ABSOLUTE_CRYO_INFUSION.getLocalizedDescription(currentLang),
                             count = cryoInfusionCount,
-                            statusNote = if (ProfileManager.hasCryoBuffArmed.value) "جاهز ومسلح للستريك القادم (+100)" else "",
-                            color = Color(0xFF00E5FF),
+                            statusNote = if (ProfileManager.hasCryoBuffArmed.value) {
+                                if (isAr) "جاهز ومسلّح للستريك القادم (+100)" else "Armed for next strike (+100)"
+                            } else "",
+                            color = com.example.data.profile.PotionType.ABSOLUTE_CRYO_INFUSION.color,
                             canUse = cryoInfusionCount > 0 && !ProfileManager.hasCryoBuffArmed.value,
+                            currentLang = currentLang,
                             onUse = {
                                 ProfileManager.useCryoInfusion(context)
                             }
@@ -616,12 +630,15 @@ fun ProfileScreen(
 
                         // 5. Eternal Rebirth Elixir
                         PotionCard(
-                            name = "جرعة الانبعاث الأبدي (Eternal Rebirth)",
-                            desc = "جائزة المحطة 500: مناعة أبدية ضد التصفير وفتح لقب Gary Master",
+                            name = com.example.data.profile.PotionType.ETERNAL_REBIRTH_ELIXIR.getLocalizedName(currentLang),
+                            desc = com.example.data.profile.PotionType.ETERNAL_REBIRTH_ELIXIR.getLocalizedDescription(currentLang),
                             count = eternalRebirthCount,
-                            statusNote = if (ProfileManager.hasRebirthImmunity.value) "مفعل: مناعة أبدية وسيد النقوشة" else "",
-                            color = Color(0xFFFF007A),
+                            statusNote = if (ProfileManager.hasRebirthImmunity.value) {
+                                if (isAr) "مفعّل: مناعة أبدية وسيد النقوشة" else "Activated: Eternal immunity & Gary Master"
+                            } else "",
+                            color = com.example.data.profile.PotionType.ETERNAL_REBIRTH_ELIXIR.color,
                             canUse = eternalRebirthCount > 0 && !ProfileManager.hasRebirthImmunity.value,
+                            currentLang = currentLang,
                             onUse = {
                                 ProfileManager.useEternalRebirth(context)
                             }
@@ -630,7 +647,7 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.height(10.dp))
 
                         Text(
-                            text = "مفاتيح تجاوز المهام (Skip Keys - السعة القصوى: 30 مفتاح)",
+                            text = if (isAr) "مفاتيح تجاوز المهام (السعة القصوى: 30 مفتاحاً)" else "Skip Keys (Max Capacity: 30 Keys)",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = NeonCyan
@@ -640,9 +657,27 @@ fun ProfileScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            KeyTile(modifier = Modifier.weight(1f), label = "خشبي", uses = "استخدام 1", count = woodenKeys, color = Color(0xFFB45309))
-                            KeyTile(modifier = Modifier.weight(1f), label = "برونزي", uses = "استخدامين", count = bronzeKeys, color = Color(0xFFD97706))
-                            KeyTile(modifier = Modifier.weight(1f), label = "فضي", uses = "3 استخدامات", count = silverKeys, color = Color(0xFFCBD5E1))
+                            KeyTile(
+                                modifier = Modifier.weight(1f),
+                                label = com.example.data.profile.SkipKeyType.WOODEN.getLocalizedName(currentLang),
+                                uses = if (isAr) "استخدام واحد" else "1 Use",
+                                count = woodenKeys,
+                                color = Color(0xFFB45309)
+                            )
+                            KeyTile(
+                                modifier = Modifier.weight(1f),
+                                label = com.example.data.profile.SkipKeyType.BRONZE.getLocalizedName(currentLang),
+                                uses = if (isAr) "استخدامان" else "2 Uses",
+                                count = bronzeKeys,
+                                color = Color(0xFFD97706)
+                            )
+                            KeyTile(
+                                modifier = Modifier.weight(1f),
+                                label = com.example.data.profile.SkipKeyType.SILVER.getLocalizedName(currentLang),
+                                uses = if (isAr) "3 استخدامات" else "3 Uses",
+                                count = silverKeys,
+                                color = Color(0xFFCBD5E1)
+                            )
                         }
                     }
                 }
@@ -708,7 +743,7 @@ fun ProfileScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "إغلاق",
+                                contentDescription = if (isAr) "إغلاق" else "Close",
                                 tint = Color(0xFF94A3B8),
                                 modifier = Modifier.size(18.dp)
                             )
@@ -743,7 +778,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
-                        text = "تخصيص الهوية السيبرانية",
+                        text = if (isAr) "تخصيص الهوية السيبرانية" else "Customize Cyber Identity",
                         fontSize = 19.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = PlusJakartaSans,
@@ -754,7 +789,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "اكتب اسمك المفضل أو ولّد اسماً فخماً من ألقاب اللعبة",
+                        text = if (isAr) "اكتب اسمك المفضّل أو ولّد اسماً فخماً من ألقاب اللعبة" else "Enter your preferred name or generate one from game titles",
                         fontSize = 11.sp,
                         color = Color(0xFF94A3B8),
                         textAlign = TextAlign.Center
@@ -766,7 +801,7 @@ fun ProfileScreen(
                         value = tempName,
                         onValueChange = { tempName = it },
                         singleLine = true,
-                        label = { Text("الاسم الجديد", fontSize = 12.sp) },
+                        label = { Text(if (isAr) "الاسم الجديد" else "New Name", fontSize = 12.sp) },
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = NeonCyan,
@@ -789,9 +824,9 @@ fun ProfileScreen(
                         onClick = {
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             view.playSoundEffect(SoundEffectConstants.CLICK)
-                            val candidates = allGameTitles.filter { it.titleAr != tempName.trim() }
+                            val candidates = allGameTitles.filter { it.getLocalizedTitle(currentLang) != tempName.trim() }
                             val picked = (if (candidates.isNotEmpty()) candidates else allGameTitles).random()
-                            tempName = picked.titleAr
+                            tempName = picked.getLocalizedTitle(currentLang)
                         },
                         shape = RoundedCornerShape(14.dp),
                         border = androidx.compose.foundation.BorderStroke(
@@ -811,7 +846,7 @@ fun ProfileScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "توليد اسم عشوائي من الألقاب",
+                            text = if (isAr) "توليد اسم عشوائي من الألقاب" else "Generate Random Title Name",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -847,7 +882,7 @@ fun ProfileScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "تأكيد الاسم",
+                            text = if (isAr) "تأكيد الاسم" else "Confirm Name",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
@@ -890,10 +925,12 @@ private fun MetricTile(
 @Composable
 private fun AvatarItemCard(
     avatar: AvatarItem,
+    currentLang: String,
     isUnlocked: Boolean,
     isEquipped: Boolean,
     onEquip: () -> Unit
 ) {
+    val isAr = currentLang == "ar"
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -928,14 +965,14 @@ private fun AvatarItemCard(
                     if (isUnlocked) {
                         Icon(
                             imageVector = getAvatarVector(avatar.badgeIconName),
-                            contentDescription = avatar.nameAr,
+                            contentDescription = avatar.getLocalizedName(currentLang),
                             tint = avatar.rarity.primaryColor,
                             modifier = Modifier.size(24.dp)
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Default.Lock,
-                            contentDescription = "Locked",
+                            contentDescription = if (isAr) "مقفل" else "Locked",
                             tint = Color(0xFF64748B),
                             modifier = Modifier.size(20.dp)
                         )
@@ -947,7 +984,7 @@ private fun AvatarItemCard(
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = avatar.nameAr,
+                            text = avatar.getLocalizedName(currentLang),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isUnlocked) MaterialTheme.colorScheme.onSurface else Color(0xFF64748B)
@@ -960,7 +997,7 @@ private fun AvatarItemCard(
                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                         ) {
                             Text(
-                                text = avatar.rarity.labelAr,
+                                text = avatar.rarity.getLocalizedLabel(currentLang),
                                 fontSize = 8.sp,
                                 color = avatar.rarity.primaryColor,
                                 fontWeight = FontWeight.Bold
@@ -968,7 +1005,11 @@ private fun AvatarItemCard(
                         }
                     }
                     Text(
-                        text = if (isUnlocked) avatar.nameEn else "يُفتح عند المحطة #${avatar.unlockStation}",
+                        text = if (isUnlocked) {
+                            if (isAr) "مفتوح وجاهز للتجهيز" else "Unlocked & Ready"
+                        } else {
+                            if (isAr) "يُفتح عند المحطة #${avatar.unlockStation}" else "Unlocks at Station #${avatar.unlockStation}"
+                        },
                         fontSize = 10.sp,
                         color = if (isUnlocked) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
                     )
@@ -983,10 +1024,15 @@ private fun AvatarItemCard(
                         .border(1.dp, avatar.rarity.primaryColor, RoundedCornerShape(8.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Text("مجهز ✓", fontSize = 10.sp, fontWeight = FontWeight.Black, color = avatar.rarity.primaryColor)
+                    Text(
+                        if (isAr) "مجهّز ✓" else "Equipped ✓",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        color = avatar.rarity.primaryColor
+                    )
                 }
             } else if (isUnlocked) {
-                Text("تجهيز", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NeonCyan)
+                Text(if (isAr) "تجهيز" else "Equip", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NeonCyan)
             }
         }
     }
@@ -995,10 +1041,12 @@ private fun AvatarItemCard(
 @Composable
 private fun TitleItemCard(
     title: TitleItem,
+    currentLang: String,
     isUnlocked: Boolean,
     isEquipped: Boolean,
     onEquip: () -> Unit
 ) {
+    val isAr = currentLang == "ar"
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1020,7 +1068,7 @@ private fun TitleItemCard(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = title.titleAr,
+                        text = title.getLocalizedTitle(currentLang),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isUnlocked) title.rarity.primaryColor else Color(0xFF64748B)
@@ -1033,21 +1081,24 @@ private fun TitleItemCard(
                             .padding(horizontal = 5.dp, vertical = 1.dp)
                     ) {
                         Text(
-                            text = title.rarity.labelAr,
+                            text = if (isAr) title.rarity.labelAr else title.rarity.labelEn,
                             fontSize = 8.sp,
                             color = title.rarity.primaryColor,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
-                Text(
-                    text = title.titleEn,
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                val titleDesc = title.getLocalizedDescription(currentLang)
+                if (titleDesc.isNotBlank()) {
+                    Text(
+                        text = titleDesc,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (!isUnlocked && title.unlockStation != null) {
                     Text(
-                        text = "يُفتح عند إتمام المحطة #${title.unlockStation}",
+                        text = if (isAr) "يُفتح عند إتمام المحطة #${title.unlockStation}" else "Unlocks at Station #${title.unlockStation}",
                         fontSize = 9.sp,
                         color = NeonAmber
                     )
@@ -1062,12 +1113,22 @@ private fun TitleItemCard(
                         .border(1.dp, title.rarity.primaryColor, RoundedCornerShape(6.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Text("مجهز ✓", fontSize = 10.sp, fontWeight = FontWeight.Black, color = title.rarity.primaryColor)
+                    Text(
+                        if (isAr) "مجهّز ✓" else "Equipped ✓",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        color = title.rarity.primaryColor
+                    )
                 }
             } else if (isUnlocked) {
-                Text("تجهيز", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NeonCyan)
+                Text(if (isAr) "تجهيز" else "Equip", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NeonCyan)
             } else {
-                Icon(imageVector = Icons.Default.Lock, contentDescription = "Locked", tint = Color(0xFF64748B), modifier = Modifier.size(16.dp))
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = if (isAr) "مقفل" else "Locked",
+                    tint = Color(0xFF64748B),
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }
@@ -1081,8 +1142,10 @@ private fun PotionCard(
     statusNote: String,
     color: Color,
     canUse: Boolean,
+    currentLang: String,
     onUse: () -> Unit
 ) {
+    val isAr = currentLang == "ar"
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1111,7 +1174,12 @@ private fun PotionCard(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(text = name, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        Text(text = "المخزون: $count / 3", fontSize = 10.sp, color = color, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (isAr) "المخزون: $count / 3" else "Stock: $count / 3",
+                            fontSize = 10.sp,
+                            color = color,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
 
@@ -1122,7 +1190,12 @@ private fun PotionCard(
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                     ) {
-                        Text("تفعيل", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F172A))
+                        Text(
+                            if (isAr) "تفعيل" else "Activate",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
                     }
                 }
             }
