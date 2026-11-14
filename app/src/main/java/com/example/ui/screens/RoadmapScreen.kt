@@ -1,17 +1,12 @@
 package com.example.ui.screens
 
 import android.view.SoundEffectConstants
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,33 +20,26 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.VpnKey
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -62,18 +50,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -81,11 +64,15 @@ import com.example.R
 import com.example.data.profile.SkipKeyType
 import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.RoadmapStation
-import com.example.data.roadmap.StationState
 import com.example.data.roadmap.TaskItem
 import com.example.data.roadmap.TaskPeriod
 import com.example.data.roadmap.TaskPools
+import com.example.ui.components.ElectricMint
 import com.example.ui.components.LiquidGlassCard
+import com.example.ui.components.NeonAqua
+import com.example.ui.components.RoadmapAmbientBackground
+import com.example.ui.components.RoadmapProgressHudCard
+import com.example.ui.components.WavySnakeStationRow
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -94,14 +81,14 @@ import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.util.HapticHelper
 import kotlinx.coroutines.launch
-import kotlin.math.sin
 
 /**
  * 500-Station Wavy Roadmap & Dynamic Randomized Task Engine:
- * - Continuous scrollable sine-wave path connecting 500 progressive stations
- * - Station States: Locked, Unlocked (pulsing neon reward), Claimed (golden neon)
- * - Dynamic Task Engine (Daily, Weekly, Monthly, Annual)
- * - Uses Inventory Skip-Keys (Wooden, Bronze, Silver) for task skipping
+ * - Continuous scrollable Bezier/sine-wave snake path connecting 500 progressive stations
+ * - Deep OLED dark background (#0B0F19 -> #121826) with ambient floating glow dots
+ * - Frosted glassmorphism HUD & station cards with glowing cyan (#00F0FF), electric mint (#00FF88),
+ *   and warm fire orange (#FF8800) milestone accents
+ * - Dynamic Task Engine (Daily, Weekly, Monthly, Annual) using Inventory Skip-Keys
  */
 @Composable
 fun RoadmapScreen(
@@ -129,6 +116,11 @@ fun RoadmapScreen(
     val bronzeKeys by viewModel.bronzeKeys.collectAsStateWithLifecycle()
     val silverKeys by viewModel.silverKeys.collectAsStateWithLifecycle()
 
+    val shields24h by viewModel.available1DayShields.collectAsStateWithLifecycle()
+    val shields48h by viewModel.available48hShields.collectAsStateWithLifecycle()
+    val shields72h by viewModel.availableManualShields.collectAsStateWithLifecycle()
+    val totalShieldsCount = shields24h + shields48h + shields72h
+
     var selectedMainTab by remember { mutableStateOf(0) } // 0: Wavy Roadmap, 1: Dynamic Tasks
     var selectedTaskPeriod by remember { mutableStateOf(TaskPeriod.DAILY) }
 
@@ -147,234 +139,182 @@ fun RoadmapScreen(
 
     val infiniteTransition = rememberInfiniteTransition(label = "roadmap_pulse")
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.94f,
+        initialValue = 0.95f,
         targetValue = 1.06f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400, easing = LinearEasing),
+            animation = tween(durationMillis = 1350, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "egg_pulse"
     )
+    val orbitRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 16000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "orbit_rotation"
+    )
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .testTag("roadmap_screen")
     ) {
-        // TOP HEADER & HUD
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        // Deep OLED background & floating subtle glow dots
+        RoadmapAmbientBackground(modifier = Modifier.fillMaxSize())
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            // TOP HEADER & NAVIGATION PILLS
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            onNavigateBack()
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(Color(0x221E293B))
-                            .border(1.dp, Color(0x3338BDF8), CircleShape)
-                            .testTag("roadmap_back_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = if (isAr) "رجوع" else "Back",
-                            tint = NeonCyan,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Column {
-                        Text(
-                            text = stringResource(R.string.roadmap_title),
-                            fontWeight = FontWeight.Black,
-                            fontFamily = PlusJakartaSans,
-                            fontSize = 18.sp,
-                            color = Color.White
-                        )
-                        Text(
-                            text = stringResource(R.string.roadmap_subtitle),
-                            fontSize = 11.sp,
-                            color = Color(0xFF94A3B8)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // TOP HUD STATS CARD: Station #, Total XP & Next Station Progress
-            LiquidGlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Column {
-                            Text(
-                                text = if (isAr) "المحطة الحالية: $currentStationId / 500" else "Current Station: $currentStationId / 500",
-                                fontWeight = FontWeight.Black,
-                                fontFamily = PlusJakartaSans,
-                                fontSize = 15.sp,
-                                color = NeonCyan
-                            )
-                            val reqNext = TaskPools.getRequiredXpForStation((currentStationId + 1).coerceAtMost(500))
-                            Text(
-                                text = if (isAr) {
-                                    "المجموع التراكمي: $totalXp / ${TaskPools.TOTAL_XP_POOL} XP (التالية: $reqNext XP)"
-                                } else {
-                                    "Cumulative XP: $totalXp / ${TaskPools.TOTAL_XP_POOL} XP (Next: $reqNext XP)"
-                                },
-                                fontSize = 11.sp,
-                                color = Color(0xFFCBD5E1)
+                        IconButton(
+                            onClick = {
+                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                onNavigateBack()
+                            },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xBB161E31))
+                                .border(1.dp, Color(0x40FFFFFF), CircleShape)
+                                .testTag("roadmap_back_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = if (isAr) "رجوع" else "Back",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 
-                        // Quick Jump to Current Station
-                        Button(
-                            onClick = {
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                coroutineScope.launch {
-                                    val targetIdx = (currentStationId - 2).coerceAtLeast(0)
-                                    roadmapListState.animateScrollToItem(targetIdx)
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x330284C7)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp)
-                        ) {
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column {
                             Text(
-                                text = if (isAr) "قفز لمحطتي" else "Jump to Mine",
-                                fontSize = 10.sp,
-                                color = NeonCyan,
-                                fontWeight = FontWeight.Bold
+                                text = stringResource(R.string.roadmap_title),
+                                fontWeight = FontWeight.Black,
+                                fontFamily = PlusJakartaSans,
+                                fontSize = 18.sp,
+                                color = Color.White
+                            )
+                            Text(
+                                text = stringResource(R.string.roadmap_subtitle),
+                                fontSize = 11.sp,
+                                color = Color(0xFF94A3B8)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    val prevStationXp = if (currentStationId <= 0) 0L else TaskPools.getRequiredXpForStation(currentStationId)
-                    val nextStationXp = TaskPools.getRequiredXpForStation((currentStationId + 1).coerceAtMost(500))
-                    val xpInLevel = (totalXp - prevStationXp).coerceAtLeast(0L)
-                    val levelRange = (nextStationXp - prevStationXp).coerceAtLeast(1L)
-                    val progressFraction = (xpInLevel.toFloat() / levelRange.toFloat()).coerceIn(0f, 1f)
-
-                    Box(
+                    // Top-Right Frosted Shield Pill Badge
+                    Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(Color(0x331E293B))
+                            .clip(RoundedCornerShape(50))
+                            .background(Color(0xAA0E1929))
+                            .border(1.2.dp, NeonAqua.copy(alpha = 0.75f), RoundedCornerShape(50))
+                            .padding(horizontal = 11.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(progressFraction)
-                                .height(6.dp)
-                                .background(
-                                    Brush.horizontalGradient(listOf(NeonCyan, NeonEmerald))
-                                )
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = null,
+                            tint = NeonAqua,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = "$totalShieldsCount",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = PlusJakartaSans,
+                            color = Color.White
                         )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-            // MAIN TABS: Roadmap vs Dynamic Tasks
-            TabRow(
-                selectedTabIndex = selectedMainTab,
-                containerColor = Color.Transparent,
-                contentColor = NeonCyan,
-                indicator = { tabPositions ->
-                    TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[selectedMainTab]),
-                        color = NeonCyan,
-                        height = 2.5.dp
+                // MAIN SEGMENTED GLASS PILL TABS: Wavy Snake Road vs Dynamic Tasks
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    RoadmapPillTabButton(
+                        label = stringResource(R.string.roadmap_tab_stations),
+                        icon = Icons.Default.Timeline,
+                        selected = selectedMainTab == 0,
+                        onClick = {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            selectedMainTab = 0
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    RoadmapPillTabButton(
+                        label = stringResource(R.string.roadmap_tab_tasks),
+                        icon = Icons.Default.Bolt,
+                        selected = selectedMainTab == 1,
+                        onClick = {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            selectedMainTab = 1
+                        },
+                        modifier = Modifier.weight(1f)
                     )
                 }
-            ) {
-                Tab(
-                    selected = selectedMainTab == 0,
-                    onClick = {
-                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                        selectedMainTab = 0
-                    },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Timeline, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = stringResource(R.string.roadmap_tab_stations),
-                                fontWeight = if (selectedMainTab == 0) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                )
-                Tab(
-                    selected = selectedMainTab == 1,
-                    onClick = {
-                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                        selectedMainTab = 1
-                    },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = stringResource(R.string.roadmap_tab_tasks),
-                                fontWeight = if (selectedMainTab == 1) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                )
-            }
-        }
 
-        // CONTENT SECTION: TAB 0 (ROADMAP) OR TAB 1 (TASKS)
-        if (selectedMainTab == 0) {
-            // ==========================================
-            // TAB 0: 500-STATION WAVY ROADMAP
-            // ==========================================
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 8.dp)
-            ) {
+                if (selectedMainTab == 0) {
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // TOP FROSTED GLASS PROGRESS HUD CARD WITH QUICK JUMP CHIPS
+                    RoadmapProgressHudCard(
+                        currentStationId = currentStationId,
+                        totalXp = totalXp,
+                        isAr = isAr,
+                        onJumpToStation = { targetStation ->
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            coroutineScope.launch {
+                                val targetIdx = (targetStation - 2).coerceIn(0, stations.lastIndex)
+                                roadmapListState.animateScrollToItem(targetIdx)
+                            }
+                        }
+                    )
+                }
+            }
+
+            // CONTENT SECTION: TAB 0 (CONTINUOUS WAVY SNAKE ROAD) OR TAB 1 (TASKS)
+            if (selectedMainTab == 0) {
                 LazyColumn(
                     state = roadmapListState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 16.dp, bottom = 48.dp),
-                    verticalArrangement = Arrangement.spacedBy(28.dp)
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 72.dp),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    items(stations, key = { it.id }) { station ->
-                        WavyStationItem(
+                    itemsIndexed(stations, key = { _, station -> station.id }) { index, station ->
+                        val prevState = stations.getOrNull(index - 1)?.state
+                        val nextState = stations.getOrNull(index + 1)?.state
+                        val isFrontierStation = station.id == currentStationId.coerceAtLeast(1)
+
+                        WavySnakeStationRow(
                             station = station,
+                            prevStationState = prevState,
+                            nextStationState = nextState,
+                            isCurrentMilestone = isFrontierStation,
                             currentLang = currentLang,
                             pulseScale = pulseScale,
+                            orbitRotation = orbitRotation,
                             onClaim = {
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -383,199 +323,199 @@ fun RoadmapScreen(
                         )
                     }
                 }
-            }
-        } else {
-            // ==========================================
-            // TAB 1: DYNAMIC TASK ENGINE
-            // ==========================================
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp)
-            ) {
-                var everlastingFilter by remember { mutableStateOf(0) } // 0: All, 1: Pending, 2: Completed
-
-                // Period Selector Chips (Daily, Weekly, Monthly, Annual)
-                Row(
+            } else {
+                // ==========================================
+                // TAB 1: DYNAMIC TASK ENGINE
+                // ==========================================
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
                 ) {
-                    PeriodFilterChip(
-                        label = if (isAr) "يومية (5)" else "Daily (5)",
-                        isSelected = selectedTaskPeriod == TaskPeriod.DAILY,
-                        onClick = { selectedTaskPeriod = TaskPeriod.DAILY }
-                    )
-                    PeriodFilterChip(
-                        label = if (isAr) "أسبوعية (7)" else "Weekly (7)",
-                        isSelected = selectedTaskPeriod == TaskPeriod.WEEKLY,
-                        onClick = { selectedTaskPeriod = TaskPeriod.WEEKLY }
-                    )
-                    PeriodFilterChip(
-                        label = if (isAr) "شهرية (10)" else "Monthly (10)",
-                        isSelected = selectedTaskPeriod == TaskPeriod.MONTHLY,
-                        onClick = { selectedTaskPeriod = TaskPeriod.MONTHLY }
-                    )
-                    PeriodFilterChip(
-                        label = if (isAr) "سنوية (250)" else "Annual (250)",
-                        isSelected = selectedTaskPeriod == TaskPeriod.YEARLY,
-                        onClick = { selectedTaskPeriod = TaskPeriod.YEARLY }
-                    )
-                }
+                    var everlastingFilter by remember { mutableStateOf(0) } // 0: All, 1: Pending, 2: Completed
 
-                // Master Goals Header Banner (Displayed when Annual tab is active)
-                if (selectedTaskPeriod == TaskPeriod.YEARLY) {
-                    val completedCount = yearlyTasks.count { it.isCompleted }
-                    val progressFraction = (completedCount.toFloat() / yearlyTasks.size.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
-
-                    LiquidGlassCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = if (isAr) "المهام السنوية الكبرى (250 إنجازاً)" else "Grand Annual Milestones (250 Goals)",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Black,
-                                        fontFamily = PlusJakartaSans,
-                                        color = NeonAmber
-                                    )
-                                    Text(
-                                        text = if (isAr) {
-                                            "مرتبة تصاعدياً حسب الصعوبة | دون تجاوز بالمفاتيح: 245,350 XP"
-                                        } else {
-                                            "Sorted by ascending difficulty | No skip-keys allowed: 245,350 XP"
-                                        },
-                                        fontSize = 10.sp,
-                                        color = Color(0xFF94A3B8)
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0x33F59E0B))
-                                        .border(1.dp, NeonAmber, RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text(
-                                        text = "$completedCount / ${yearlyTasks.size}",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = NeonAmber
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(Color(0x331E293B))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(progressFraction)
-                                        .height(6.dp)
-                                        .background(Brush.horizontalGradient(listOf(NeonAmber, Color(0xFFF97316))))
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            // Sub-filter chips for 250 master goals
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                FilterChipTiny(
-                                    label = if (isAr) "الكل (250)" else "All (250)",
-                                    selected = everlastingFilter == 0,
-                                    onClick = { everlastingFilter = 0 }
-                                )
-                                FilterChipTiny(
-                                    label = if (isAr) "قيد الإنجاز (${yearlyTasks.count { !it.isCompleted }})" else "Pending (${yearlyTasks.count { !it.isCompleted }})",
-                                    selected = everlastingFilter == 1,
-                                    onClick = { everlastingFilter = 1 }
-                                )
-                                FilterChipTiny(
-                                    label = if (isAr) "المكتملة ($completedCount)" else "Completed ($completedCount)",
-                                    selected = everlastingFilter == 2,
-                                    onClick = { everlastingFilter = 2 }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                val currentTasks = when (selectedTaskPeriod) {
-                    TaskPeriod.DAILY -> dailyTasks
-                    TaskPeriod.WEEKLY -> weeklyTasks
-                    TaskPeriod.MONTHLY -> monthlyTasks
-                    TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> when (everlastingFilter) {
-                        1 -> yearlyTasks.filter { !it.isCompleted }
-                        2 -> yearlyTasks.filter { it.isCompleted }
-                        else -> yearlyTasks
-                    }
-                }
-
-                // Inventory Skip-Keys Summary Strip (for tasks that allow skipping)
-                if (selectedTaskPeriod != TaskPeriod.YEARLY) {
+                    // Period Selector Chips (Daily, Weekly, Monthly, Annual)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 10.dp),
+                            .padding(vertical = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        KeyInventoryChip(
-                            name = SkipKeyType.WOODEN.getLocalizedName(currentLang),
-                            count = woodenKeys,
-                            color = Color(0xFFD97706),
-                            modifier = Modifier.weight(1f)
+                        PeriodFilterChip(
+                            label = if (isAr) "يومية (5)" else "Daily (5)",
+                            isSelected = selectedTaskPeriod == TaskPeriod.DAILY,
+                            onClick = { selectedTaskPeriod = TaskPeriod.DAILY }
                         )
-                        KeyInventoryChip(
-                            name = SkipKeyType.BRONZE.getLocalizedName(currentLang),
-                            count = bronzeKeys,
-                            color = Color(0xFFF59E0B),
-                            modifier = Modifier.weight(1f)
+                        PeriodFilterChip(
+                            label = if (isAr) "أسبوعية (7)" else "Weekly (7)",
+                            isSelected = selectedTaskPeriod == TaskPeriod.WEEKLY,
+                            onClick = { selectedTaskPeriod = TaskPeriod.WEEKLY }
                         )
-                        KeyInventoryChip(
-                            name = SkipKeyType.SILVER.getLocalizedName(currentLang),
-                            count = silverKeys,
-                            color = Color(0xFFE2E8F0),
-                            modifier = Modifier.weight(1f)
+                        PeriodFilterChip(
+                            label = if (isAr) "شهرية (10)" else "Monthly (10)",
+                            isSelected = selectedTaskPeriod == TaskPeriod.MONTHLY,
+                            onClick = { selectedTaskPeriod = TaskPeriod.MONTHLY }
+                        )
+                        PeriodFilterChip(
+                            label = if (isAr) "سنوية (250)" else "Annual (250)",
+                            isSelected = selectedTaskPeriod == TaskPeriod.YEARLY,
+                            onClick = { selectedTaskPeriod = TaskPeriod.YEARLY }
                         )
                     }
-                }
 
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 48.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(currentTasks, key = { it.id }) { task ->
-                        TaskItemCard(
-                            task = task,
-                            currentLang = currentLang,
-                            availableKeysForType = when (task.requiredSkipKey) {
-                                SkipKeyType.WOODEN -> woodenKeys
-                                SkipKeyType.BRONZE -> bronzeKeys
-                                SkipKeyType.SILVER -> silverKeys
-                            },
-                            onSkipWithKey = {
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                viewModel.useSkipKeyForTask(task.id)
+                    // Master Goals Header Banner (Displayed when Annual tab is active)
+                    if (selectedTaskPeriod == TaskPeriod.YEARLY) {
+                        val completedCount = yearlyTasks.count { it.isCompleted }
+                        val progressFraction = (completedCount.toFloat() / yearlyTasks.size.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
+
+                        LiquidGlassCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = if (isAr) "المهام السنوية الكبرى (250 إنجازاً)" else "Grand Annual Milestones (250 Goals)",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Black,
+                                            fontFamily = PlusJakartaSans,
+                                            color = NeonAmber
+                                        )
+                                        Text(
+                                            text = if (isAr) {
+                                                "مرتبة تصاعدياً حسب الصعوبة | دون تجاوز بالمفاتيح: 245,350 XP"
+                                            } else {
+                                                "Sorted by ascending difficulty | No skip-keys allowed: 245,350 XP"
+                                            },
+                                            fontSize = 10.sp,
+                                            color = Color(0xFF94A3B8)
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0x33F59E0B))
+                                            .border(1.dp, NeonAmber, RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = "$completedCount / ${yearlyTasks.size}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = NeonAmber
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(Color(0x331E293B))
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(progressFraction)
+                                            .height(6.dp)
+                                            .background(Brush.horizontalGradient(listOf(NeonAmber, Color(0xFFF97316))))
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Sub-filter chips for 250 master goals
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    FilterChipTiny(
+                                        label = if (isAr) "الكل (250)" else "All (250)",
+                                        selected = everlastingFilter == 0,
+                                        onClick = { everlastingFilter = 0 }
+                                    )
+                                    FilterChipTiny(
+                                        label = if (isAr) "قيد الإنجاز (${yearlyTasks.count { !it.isCompleted }})" else "Pending (${yearlyTasks.count { !it.isCompleted }})",
+                                        selected = everlastingFilter == 1,
+                                        onClick = { everlastingFilter = 1 }
+                                    )
+                                    FilterChipTiny(
+                                        label = if (isAr) "المكتملة ($completedCount)" else "Completed ($completedCount)",
+                                        selected = everlastingFilter == 2,
+                                        onClick = { everlastingFilter = 2 }
+                                    )
+                                }
                             }
-                        )
+                        }
+                    }
+
+                    val currentTasks = when (selectedTaskPeriod) {
+                        TaskPeriod.DAILY -> dailyTasks
+                        TaskPeriod.WEEKLY -> weeklyTasks
+                        TaskPeriod.MONTHLY -> monthlyTasks
+                        TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> when (everlastingFilter) {
+                            1 -> yearlyTasks.filter { !it.isCompleted }
+                            2 -> yearlyTasks.filter { it.isCompleted }
+                            else -> yearlyTasks
+                        }
+                    }
+
+                    // Inventory Skip-Keys Summary Strip (for tasks that allow skipping)
+                    if (selectedTaskPeriod != TaskPeriod.YEARLY) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            KeyInventoryChip(
+                                name = SkipKeyType.WOODEN.getLocalizedName(currentLang),
+                                count = woodenKeys,
+                                color = Color(0xFFD97706),
+                                modifier = Modifier.weight(1f)
+                            )
+                            KeyInventoryChip(
+                                name = SkipKeyType.BRONZE.getLocalizedName(currentLang),
+                                count = bronzeKeys,
+                                color = Color(0xFFF59E0B),
+                                modifier = Modifier.weight(1f)
+                            )
+                            KeyInventoryChip(
+                                name = SkipKeyType.SILVER.getLocalizedName(currentLang),
+                                count = silverKeys,
+                                color = Color(0xFFE2E8F0),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 48.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(currentTasks, key = { it.id }) { task ->
+                            TaskItemCard(
+                                task = task,
+                                currentLang = currentLang,
+                                availableKeysForType = when (task.requiredSkipKey) {
+                                    SkipKeyType.WOODEN -> woodenKeys
+                                    SkipKeyType.BRONZE -> bronzeKeys
+                                    SkipKeyType.SILVER -> silverKeys
+                                },
+                                onSkipWithKey = {
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    viewModel.useSkipKeyForTask(task.id)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -583,213 +523,43 @@ fun RoadmapScreen(
     }
 }
 
-/**
- * Wavy Station Item along the vertical sine-wave trajectory
- */
 @Composable
-fun WavyStationItem(
-    station: RoadmapStation,
-    currentLang: String,
-    pulseScale: Float,
-    onClaim: () -> Unit
+private fun RoadmapPillTabButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val isAr = currentLang == "ar"
-    // Horizontal Sine-Wave oscillation: -60.dp to +60.dp
-    val phase = (station.id * 0.42f)
-    val horizontalOffsetDp = (sin(phase) * 60f).dp
+    val bgColor = if (selected) NeonAqua.copy(alpha = 0.14f) else Color(0xAA131A29)
+    val borderColor = if (selected) NeonAqua.copy(alpha = 0.85f) else Color(0x26FFFFFF)
+    val contentColor = if (selected) NeonAqua else Color(0xFFCBD5E1)
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.Center
+    Row(
+        modifier = modifier
+            .height(44.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(bgColor)
+            .border(if (selected) 1.2.dp else 1.dp, borderColor, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
     ) {
-        // Connecting Cyber Conduit to next station along the sine wave
-        if (station.id < 500) {
-            val nextPhase = ((station.id + 1) * 0.42f)
-            val nextOffsetDp = (sin(nextPhase) * 60f).dp
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(32.dp)
-                    .align(Alignment.BottomCenter)
-            ) {
-                val startX = size.width / 2f + horizontalOffsetDp.toPx()
-                val endX = size.width / 2f + nextOffsetDp.toPx()
-                val conduitColor = when (station.state) {
-                    StationState.CLAIMED -> Color(0xFFF59E0B).copy(alpha = 0.65f)
-                    StationState.UNLOCKED -> Color(0xFF10B981).copy(alpha = 0.85f)
-                    StationState.LOCKED -> Color(0x3364748B)
-                }
-                drawLine(
-                    color = conduitColor,
-                    start = Offset(startX, 0f),
-                    end = Offset(endX, size.height),
-                    strokeWidth = 2.5f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
-                )
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(horizontalOffsetDp.roundToPx(), 0) }
-                .width(260.dp)
-        ) {
-            LiquidGlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("station_${station.id}"),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Station ID Pill
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    when (station.state) {
-                                        StationState.CLAIMED -> Color(0x33F59E0B)
-                                        StationState.UNLOCKED -> Color(0x3310B981)
-                                        StationState.LOCKED -> Color(0x221E293B)
-                                    }
-                                )
-                                .border(
-                                    1.dp,
-                                    when (station.state) {
-                                        StationState.CLAIMED -> NeonAmber
-                                        StationState.UNLOCKED -> NeonEmerald
-                                        StationState.LOCKED -> Color(0x3364748B)
-                                    },
-                                    RoundedCornerShape(8.dp)
-                                )
-                                .padding(horizontal = 8.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = if (isAr) "محطة #${station.id}" else "Station #${station.id}",
-                                fontWeight = FontWeight.Black,
-                                fontSize = 11.sp,
-                                color = when (station.state) {
-                                    StationState.CLAIMED -> NeonAmber
-                                    StationState.UNLOCKED -> NeonEmerald
-                                    StationState.LOCKED -> Color(0xFF94A3B8)
-                                }
-                            )
-                        }
-
-                        // Status Icon (Egg, Check, Lock)
-                        when (station.state) {
-                            StationState.CLAIMED -> {
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0x33F59E0B)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = NeonAmber, modifier = Modifier.size(16.dp))
-                                }
-                            }
-                            StationState.UNLOCKED -> {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .scale(pulseScale)
-                                        .clip(CircleShape)
-                                        .background(Color(0x3310B981))
-                                        .border(1.5.dp, NeonEmerald, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonEmerald, modifier = Modifier.size(18.dp))
-                                }
-                            }
-                            StationState.LOCKED -> {
-                                Box(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape)
-                                        .background(Color(0x2264748B)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = Color(0xFF64748B), modifier = Modifier.size(13.dp))
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Reward Title & Description
-                    Text(
-                        text = station.reward.getLocalizedTitle(currentLang),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = Color.White
-                    )
-                    Text(
-                        text = station.reward.getLocalizedDescription(currentLang),
-                        fontSize = 10.sp,
-                        color = Color(0xFF94A3B8),
-                        maxLines = 2
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Action Button depending on state
-                    when (station.state) {
-                        StationState.UNLOCKED -> {
-                            Button(
-                                onClick = onClaim,
-                                colors = ButtonDefaults.buttonColors(containerColor = NeonEmerald),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(34.dp)
-                                    .scale(pulseScale)
-                                    .testTag("btn_claim_station_${station.id}")
-                            ) {
-                                Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF0F172A), modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = if (isAr) "جني المكافأة السيبرانية" else "Claim Cyber Reward",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF0F172A),
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-                        }
-                        StationState.CLAIMED -> {
-                            Text(
-                                text = if (isAr) "تم جني المكافأة بنجاح ✓" else "Reward Claimed ✓",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = NeonAmber,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        StationState.LOCKED -> {
-                            Text(
-                                text = if (isAr) "مقفلة • تتطلب ${station.requiredTotalXp} XP" else "Locked • Requires ${station.requiredTotalXp} XP",
-                                fontSize = 10.sp,
-                                color = Color(0xFF64748B),
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = contentColor,
+            maxLines = 1
+        )
     }
 }
 

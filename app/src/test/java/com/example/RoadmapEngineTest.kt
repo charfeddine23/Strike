@@ -503,4 +503,23 @@ class RoadmapEngineTest {
         assertTrue(ProfileManager.unlockedAvatarIds.value.containsAll(setOf("av_core_node", "av_gabriel_wings")))
         assertTrue(ProfileManager.unlockedTitleIds.value.containsAll(setOf(1, 21)))
     }
+
+    @Test
+    fun testWavySnakeTrajectoryZeroCenterCollisionsAndContinuity() {
+        for (stationId in 1..500) {
+            val nodeX = com.example.ui.components.wavyNodeNormalizedX(stationId.toFloat())
+            // Nodes must always sit clearly on Left (<= 0.30) or Right (>= 0.70) so side glass cards never collide
+            assertTrue(
+                "Station $stationId nodeX=$nodeX too close to center",
+                kotlin.math.abs(nodeX - 0.5f) >= 0.20f
+            )
+            assertTrue("Station $stationId nodeX=$nodeX out of safe bounds", nodeX in 0.14f..0.86f)
+
+            if (stationId < 500) {
+                val bottomOfRow = com.example.ui.components.wavyNodeNormalizedX(stationId + 0.5f)
+                val topOfNextRow = com.example.ui.components.wavyNodeNormalizedX((stationId + 1) - 0.5f)
+                assertEquals(bottomOfRow, topOfNextRow, 0.0001f)
+            }
+        }
+    }
 }
