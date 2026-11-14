@@ -286,9 +286,9 @@ fun RoadmapProgressHudCard(
                     )
                     Text(
                         text = if (isAr) {
-                            "مسار متموج متصل • متبقي $stagesLeft محطة • $totalXp XP"
+                            "XP المهام: $totalXp / 434,725 • متبقي $stagesLeft محطة"
                         } else {
-                            "Continuous Snake Road • $stagesLeft stages left • $totalXp XP"
+                            "Tasks XP: $totalXp / 434,725 • $stagesLeft stages left"
                         },
                         fontSize = 11.sp,
                         color = Color(0xFF94A3B8),
@@ -784,7 +784,7 @@ private fun StationGlassRewardCard(
                         )
                     }
                     Text(
-                        text = "${station.requiredTotalXp} XP",
+                        text = if (isAr) "الحد: ${station.requiredTotalXp} XP" else "Req: ${station.requiredTotalXp} XP",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         color = NeonAqua
@@ -802,7 +802,7 @@ private fun StationGlassRewardCard(
                         MajorBadgePill(isAr = isAr)
                     } else {
                         Text(
-                            text = "${station.requiredTotalXp} XP",
+                            text = if (isAr) "الحد: ${station.requiredTotalXp} XP" else "Req: ${station.requiredTotalXp} XP",
                             fontSize = 10.sp,
                             color = Color(0xFF64748B),
                             fontWeight = FontWeight.Medium
@@ -821,9 +821,9 @@ private fun StationGlassRewardCard(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (isAr) {
-                                "م ${station.id} • ${station.requiredTotalXp} XP"
+                                "م ${station.id} • يتطلب ${station.requiredTotalXp} XP"
                             } else {
-                                "LVL ${station.id} • ${station.requiredTotalXp} XP"
+                                "LVL ${station.id} • Needs ${station.requiredTotalXp} XP"
                             },
                             fontSize = 10.sp,
                             color = Color(0xFF94A3B8),

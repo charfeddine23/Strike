@@ -417,12 +417,12 @@ fun ProfileScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // Total XP
+                            // Tasks XP (sole progression source for the Wavy Roadmap)
                             MetricTile(
                                 modifier = Modifier.weight(1f),
-                                label = if (isAr) "إجمالي نقاط الخبرة" else "Total XP",
+                                label = if (isAr) "XP المهام" else "Tasks XP",
                                 value = "$totalXp XP",
-                                sub = if (isAr) "من 434,725 نقطة خبرة" else "of 434,725 XP",
+                                sub = if (isAr) "من أصل 434,725 XP" else "of 434,725 XP",
                                 icon = Icons.Default.Bolt,
                                 color = NeonCyan
                             )

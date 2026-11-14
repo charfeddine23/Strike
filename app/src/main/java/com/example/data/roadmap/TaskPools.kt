@@ -505,14 +505,14 @@ object TaskPools {
         for (k in 0 until 4) {
             blueprints.add(
                 TaskBlueprint(
-                    title = "جني مكافأة محطة متاحة اليوم — محطة #${k + 1}",
-                    description = "افتح خريطة المسار واجنِ مكافأة واحدة من المحطات التي وصلت لمتطلبها",
-                    titleEn = "Claim 1 Roadmap Station Reward Today — Node #${k + 1}",
-                    descriptionEn = "Open the Roadmap and claim 1 unlocked station reward today.",
-                    targetCount = 1,
+                    title = "ضبط تردد التهدئة (ضغطتان) — مسار التوازن #${k + 1}",
+                    description = "نفّذ ضغطتي تهدئة اليوم عبر زر Deflame أو Girl لتعزيز الانضباط اليومي",
+                    titleEn = "Precision Cooldown Duo (2x) — Balance Route #${k + 1}",
+                    descriptionEn = "Complete 2 Deflame or Girl cooldown taps today to reinforce daily discipline.",
+                    targetCount = 2,
                     difficultyTier = 2,
                     difficultyScore = 60 + k * 3,
-                    actionTag = "ROADMAP"
+                    actionTag = "BALANCE"
                 )
             )
         }
@@ -746,17 +746,17 @@ object TaskPools {
             )
         }
         for (k in 0 until 5) {
-            val target = 1 + k
+            val target = 5 + k * 2
             blueprints.add(
                 TaskBlueprint(
-                    title = "عبور $target محطات على المسار هذا الأسبوع",
-                    description = "افتح واجنِ مكافآت $target محطات متتالية في خريطة الـ 500 محطة",
-                    titleEn = "Claim $target Roadmap Stations This Week",
-                    descriptionEn = "Unlock and claim rewards for $target stations on the 500-station roadmap.",
+                    title = "تثبيت التوازن الأسبوعي ($target خطوات متواصلة) — تحدي #${k + 1}",
+                    description = "حافظ على ثبات المؤشر خلال الأسبوع بتنفيذ $target جولات تبريد وتخفيض (Deflame أو Girl)",
+                    titleEn = "Weekly Equilibrium Lock ($target Steps) — Trial #${k + 1}",
+                    descriptionEn = "Maintain weekly meter stability by completing $target Deflame/Girl cooldown steps.",
                     targetCount = target,
-                    difficultyTier = if (target <= 2) 2 else 3,
-                    difficultyScore = 65 + target * 22,
-                    actionTag = "ROADMAP"
+                    difficultyTier = if (target <= 7) 2 else 3,
+                    difficultyScore = 65 + (k + 1) * 22,
+                    actionTag = "BALANCE"
                 )
             )
         }
@@ -990,17 +990,17 @@ object TaskPools {
             )
         }
         for (k in 0 until 7) {
-            val target = 3 + k * 3
+            val target = 20 + k * 8
             blueprints.add(
                 TaskBlueprint(
-                    title = "الارتقاء في المسار ($target محطات شهرية)",
-                    description = "افتح واستلم مكافآت $target محطات جديدة على المسار الموجي هذا الشهر",
-                    titleEn = "Monthly Roadmap Climb ($target Stations)",
-                    descriptionEn = "Unlock and claim rewards for $target stations on the wavy roadmap this month.",
+                    title = "درع الاستمرارية الشهري ($target جولة متزنة) — مستوى #${k + 1}",
+                    description = "حافظ على إيقاع التحكم الحراري بتسجيل $target جولة Deflame أو Girl خلال الشهر الكامل",
+                    titleEn = "Monthly Continuity Guard ($target Balanced Rounds) — Stage #${k + 1}",
+                    descriptionEn = "Sustain thermal regulation with $target combined Deflame or Girl rounds this month.",
                     targetCount = target,
-                    difficultyTier = if (target <= 9) 2 else 3,
-                    difficultyScore = 90 + target * 10,
-                    actionTag = "ROADMAP"
+                    difficultyTier = if (target <= 36) 2 else 3,
+                    difficultyScore = 90 + (3 + k * 3) * 10,
+                    actionTag = "BALANCE"
                 )
             )
         }
@@ -1210,25 +1210,25 @@ object TaskPools {
             )
         }
 
-        // 7. Annual Roadmap Conquest Milestones (15 tasks: Stations 10 -> 500)
-        val stationMilestones = listOf(10, 25, 50, 75, 100, 140, 180, 220, 260, 300, 350, 400, 440, 480, 500)
-        stationMilestones.forEach { stationTarget ->
+        // 7. Annual Cumulative Cooldown & Discipline Pacts (15 tasks: 90 -> 1650 cumulative rounds)
+        val disciplineMilestones = listOf(90, 160, 240, 330, 420, 520, 620, 730, 840, 960, 1080, 1200, 1350, 1500, 1650)
+        disciplineMilestones.forEachIndexed { idx, cycleTarget ->
             val tier = when {
-                stationTarget <= 75 -> 1
-                stationTarget <= 220 -> 2
-                stationTarget <= 400 -> 3
+                idx <= 2 -> 1
+                idx <= 6 -> 2
+                idx <= 11 -> 3
                 else -> 4
             }
             blueprints.add(
                 TaskBlueprint(
-                    title = "غزو المسار الموجي: جني مكافآت $stationTarget محطة",
-                    description = "الوصول الفعلي للمحطة #$stationTarget واستلام مكافآت خريطة الـ 500 محطة (دون أي مفاتيح تجاوز)",
-                    titleEn = "Roadmap Conquest: Claim $stationTarget Stations",
-                    descriptionEn = "Reach Station #$stationTarget and claim $stationTarget roadmap rewards — no skip keys allowed.",
-                    targetCount = stationTarget,
+                    title = "ميثاق الانضباط السنوي: إتمام $cycleTarget دورة تبريد وتوازن",
+                    description = "الالتزام المستدام بتنفيذ $cycleTarget عملية تبريد وتخفيض متزنة على مدار العام (دون أي مفاتيح تجاوز)",
+                    titleEn = "Annual Discipline Pact: $cycleTarget Cooldown & Balance Cycles",
+                    descriptionEn = "Sustain year-long commitment with $cycleTarget balanced Deflame/Girl actions — no skip keys allowed.",
+                    targetCount = cycleTarget,
                     difficultyTier = tier,
-                    difficultyScore = 100 + stationTarget * 2,
-                    actionTag = "ROADMAP"
+                    difficultyScore = 100 + idx * 75,
+                    actionTag = "BALANCE"
                 )
             )
         }

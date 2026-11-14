@@ -254,7 +254,7 @@ object ProfileManager {
     // POTIONS INVENTORY & USE
 
     @Synchronized
-    fun grantPotion(context: Context, type: PotionType, qty: Int = 1) {
+    fun grantPotion(context: Context, type: PotionType, qty: Int = 1, notifyRoadmapTask: Boolean = true) {
         init(context)
         val prefs = getPrefs(context)
         when (type) {
@@ -270,7 +270,7 @@ object ProfileManager {
             }
             PotionType.GABRIEL_PURITY_DROPLET -> {
                 // Instantly auto-activates upon receipt!
-                activateGabrielDroplet(context)
+                activateGabrielDroplet(context, notifyRoadmapTask = notifyRoadmapTask)
             }
             PotionType.ABSOLUTE_CRYO_INFUSION -> {
                 val newCount = (_cryoInfusionCount.value + qty).coerceAtMost(3)
@@ -338,7 +338,7 @@ object ProfileManager {
     }
 
     @Synchronized
-    fun activateGabrielDroplet(context: Context) {
+    fun activateGabrielDroplet(context: Context, notifyRoadmapTask: Boolean = true) {
         init(context)
         val now = System.currentTimeMillis()
         val exp = now + 7 * 24 * 3600 * 1000L
@@ -346,7 +346,9 @@ object ProfileManager {
         getPrefs(context).edit()
             .putLong(KEY_GABRIEL_DROPLET_EXPIRES_AT, exp)
             .apply()
-        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "POTION")
+        if (notifyRoadmapTask) {
+            com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "POTION")
+        }
     }
 
     fun isGabrielDropletActive(): Boolean {

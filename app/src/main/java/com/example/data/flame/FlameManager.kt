@@ -320,7 +320,7 @@ object FlameManager {
     }
 
     @Synchronized
-    fun activateManualShield(context: Context, days: Int = 3): Boolean {
+    fun activateManualShield(context: Context, days: Int = 3, notifyRoadmapTask: Boolean = true): Boolean {
         init(context)
         if (_availableManualShields.value <= 0) return false
         val now = System.currentTimeMillis()
@@ -351,7 +351,9 @@ object FlameManager {
             reason = "STREAK_SHIELD",
             details = "Manual ${days}-Day Shield activated. Protected until $expiryStr ($countdown countdown remaining)."
         )
-        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "SHIELD")
+        if (notifyRoadmapTask) {
+            com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "SHIELD")
+        }
         return true
     }
 
@@ -365,7 +367,7 @@ object FlameManager {
     }
 
     @Synchronized
-    fun activate48hShield(context: Context): Boolean {
+    fun activate48hShield(context: Context, notifyRoadmapTask: Boolean = true): Boolean {
         init(context)
         if (_available48hShields.value <= 0) return false
         val now = System.currentTimeMillis()
@@ -396,7 +398,9 @@ object FlameManager {
             reason = "STREAK_SHIELD",
             details = "48-Hour Shield activated. Protected until $expiryStr ($countdown countdown remaining)."
         )
-        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "SHIELD")
+        if (notifyRoadmapTask) {
+            com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "SHIELD")
+        }
         return true
     }
 
@@ -410,7 +414,7 @@ object FlameManager {
     }
 
     @Synchronized
-    fun activate1DayShield(context: Context): Boolean {
+    fun activate1DayShield(context: Context, notifyRoadmapTask: Boolean = true): Boolean {
         init(context)
         if (_available1DayShields.value <= 0) return false
         val now = System.currentTimeMillis()
@@ -441,7 +445,9 @@ object FlameManager {
             reason = "STREAK_SHIELD",
             details = "1-Day Shield activated. Protected until $expiryStr ($countdown countdown remaining)."
         )
-        com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "SHIELD")
+        if (notifyRoadmapTask) {
+            com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "SHIELD")
+        }
         return true
     }
 

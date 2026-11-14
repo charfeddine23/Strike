@@ -41,8 +41,8 @@ object RoadmapManager {
     private const val KEY_SHIELDS_48H = "key_shields_48h"
     private const val KEY_SHIELDS_72H = "key_shields_72h"
 
-    // Flows
-    private val _totalXp = MutableStateFlow(50L)
+    // Flows (Tasks XP strictly starts at 0L; Roadmap stations only act as unlock thresholds)
+    private val _totalXp = MutableStateFlow(0L)
     val totalXp: StateFlow<Long> = _totalXp.asStateFlow()
 
     private val _claimedStations = MutableStateFlow<Set<Int>>(emptySet())
@@ -101,7 +101,7 @@ object RoadmapManager {
         ProfileManager.init(context)
         val prefs = getPrefs(context)
 
-        _totalXp.value = prefs.getLong(KEY_TOTAL_XP, 50L)
+        _totalXp.value = prefs.getLong(KEY_TOTAL_XP, 0L)
 
         val claimedStrSet = prefs.getStringSet(KEY_CLAIMED_STATIONS, emptySet()) ?: emptySet()
         _claimedStations.value = claimedStrSet.mapNotNull { it.toIntOrNull() }.toSet()
@@ -126,10 +126,10 @@ object RoadmapManager {
             _shields72h.value = prefs.getInt(KEY_SHIELDS_72H, 0)
         }
 
-        // Legacy cache purge for old task schema
+        // Legacy cache purge for old task schema & phantom initial 50 XP fix
         val tasksCacheVersion = prefs.getInt("key_tasks_matrix_version", 0)
-        if (tasksCacheVersion < 7) {
-            prefs.edit()
+        if (tasksCacheVersion < 8) {
+            val edit = prefs.edit()
                 .remove("key_keys_common")
                 .remove("key_keys_normal")
                 .remove("key_keys_rare")
@@ -140,8 +140,14 @@ object RoadmapManager {
                 .remove(KEY_LAST_DAILY_DATE)
                 .remove(KEY_LAST_WEEKLY_CODE)
                 .remove(KEY_LAST_MONTHLY_CODE)
-                .putInt("key_tasks_matrix_version", 7)
-                .apply()
+                .putInt("key_tasks_matrix_version", 8)
+
+            // If user never completed any tasks and never claimed any stations, clear legacy 50 XP default back to 0 XP
+            if (_completedTaskIds.value.isEmpty() && _claimedStations.value.isEmpty() && _totalXp.value == 50L) {
+                _totalXp.value = 0L
+                edit.putLong(KEY_TOTAL_XP, 0L)
+            }
+            edit.apply()
         }
 
         // Migrate any completed IDs found in saved task JSONs before cycle evaluation
@@ -438,7 +444,8 @@ object RoadmapManager {
 
         applyReward(context, reward)
         ProfileManager.onStationUnlocked(context, stationId)
-        onActionOccurred(context, "ROADMAP")
+        // Roadmap stations are strictly one-way unlock thresholds fueled by Tasks XP;
+        // claiming a station NEVER awards XP or triggers any tasks.
         return reward
     }
 
@@ -446,24 +453,24 @@ object RoadmapManager {
         when (reward.type) {
             RewardType.SHIELD_24H -> {
                 FlameManager.grant1DayShield(context, reward.quantity)
-                FlameManager.activate1DayShield(context)
+                FlameManager.activate1DayShield(context, notifyRoadmapTask = false)
             }
             RewardType.SHIELD_48H -> {
                 FlameManager.grant48hShield(context, reward.quantity)
-                FlameManager.activate48hShield(context)
+                FlameManager.activate48hShield(context, notifyRoadmapTask = false)
             }
             RewardType.SHIELD_72H -> {
                 FlameManager.grantManualShield(context, days = 3)
-                FlameManager.activateManualShield(context, days = 3)
+                FlameManager.activateManualShield(context, days = 3, notifyRoadmapTask = false)
             }
             RewardType.KEY_WOODEN -> ProfileManager.grantSkipKeys(context, SkipKeyType.WOODEN, reward.quantity)
             RewardType.KEY_BRONZE -> ProfileManager.grantSkipKeys(context, SkipKeyType.BRONZE, reward.quantity)
             RewardType.KEY_SILVER -> ProfileManager.grantSkipKeys(context, SkipKeyType.SILVER, reward.quantity)
-            RewardType.POTION_PULSE_ELIXIR -> ProfileManager.grantPotion(context, com.example.data.profile.PotionType.PULSE_ELIXIR, reward.quantity)
-            RewardType.POTION_SHADOW_SERUM -> ProfileManager.grantPotion(context, com.example.data.profile.PotionType.SHADOW_GRIP_SERUM, reward.quantity)
-            RewardType.POTION_GABRIEL_DROPLET -> ProfileManager.grantPotion(context, com.example.data.profile.PotionType.GABRIEL_PURITY_DROPLET, reward.quantity)
-            RewardType.POTION_CRYO_INFUSION -> ProfileManager.grantPotion(context, com.example.data.profile.PotionType.ABSOLUTE_CRYO_INFUSION, reward.quantity)
-            RewardType.POTION_ETERNAL_REBIRTH -> ProfileManager.grantPotion(context, com.example.data.profile.PotionType.ETERNAL_REBIRTH_ELIXIR, reward.quantity)
+            RewardType.POTION_PULSE_ELIXIR -> ProfileManager.grantPotion(context, com.example.data.profile.PotionType.PULSE_ELIXIR, reward.quantity, notifyRoadmapTask = false)
+            RewardType.POTION_SHADOW_SERUM -> ProfileManager.grantPotion(context, com.example.data.profile.PotionType.SHADOW_GRIP_SERUM, reward.quantity, notifyRoadmapTask = false)
+            RewardType.POTION_GABRIEL_DROPLET -> ProfileManager.grantPotion(context, com.example.data.profile.PotionType.GABRIEL_PURITY_DROPLET, reward.quantity, notifyRoadmapTask = false)
+            RewardType.POTION_CRYO_INFUSION -> ProfileManager.grantPotion(context, com.example.data.profile.PotionType.ABSOLUTE_CRYO_INFUSION, reward.quantity, notifyRoadmapTask = false)
+            RewardType.POTION_ETERNAL_REBIRTH -> ProfileManager.grantPotion(context, com.example.data.profile.PotionType.ETERNAL_REBIRTH_ELIXIR, reward.quantity, notifyRoadmapTask = false)
             RewardType.REWARD_AVATAR, RewardType.REWARD_TITLE -> Unit
         }
     }
@@ -693,7 +700,6 @@ object RoadmapManager {
             "KEY" -> item.actionTag == "KEY"
             "POTION" -> item.actionTag == "POTION"
             "PERSON" -> item.actionTag == "PERSON"
-            "ROADMAP" -> item.actionTag == "ROADMAP"
             else -> false
         }
     }
@@ -913,7 +919,7 @@ object RoadmapManager {
             putInt(KEY_SHIELDS_48H, _shields48h.value)
             putInt(KEY_SHIELDS_72H, _shields72h.value)
             putBoolean("has_reset_inventory_to_zero_v3", true)
-            putInt("key_tasks_matrix_version", 7)
+            putInt("key_tasks_matrix_version", 8)
             apply()
         }
 

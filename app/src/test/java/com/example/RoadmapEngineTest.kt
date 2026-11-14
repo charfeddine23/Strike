@@ -522,4 +522,49 @@ class RoadmapEngineTest {
             }
         }
     }
+
+    @Test
+    fun testRoadmapXpThresholdDoesNotAffectOrAddToTasksXp() {
+        // 1. Fresh game must strictly start at 0 Tasks XP and Station 0 (Station 1 requires 50 XP from Tasks)
+        assertEquals(0L, RoadmapManager.totalXp.value)
+        assertEquals(0, RoadmapManager.calculateUnlockedStationId(RoadmapManager.totalXp.value))
+        assertEquals(StationState.LOCKED, RoadmapManager.getStationState(1))
+        assertEquals(null, RoadmapManager.claimStationReward(app, 1))
+
+        // 2. Task catalog must contain ZERO circular "ROADMAP" tasks
+        assertTrue(
+            "TaskPools must not contain circular ROADMAP tasks",
+            TaskPools.ALL_1000_TASKS.none { it.actionTag == "ROADMAP" }
+        )
+
+        // 3. Tasks XP is strictly the sole source of XP progression
+        val firstDaily = RoadmapManager.dailyTasks.value.first()
+        val firstWeekly = RoadmapManager.weeklyTasks.value.first()
+        assertTrue(RoadmapManager.completeTask(app, firstDaily.id))
+        val xpAfterDaily = RoadmapManager.totalXp.value
+        assertEquals(firstDaily.xpBounty.toLong(), xpAfterDaily)
+
+        assertTrue(RoadmapManager.completeTask(app, firstWeekly.id))
+        val expectedTasksXp = firstDaily.xpBounty.toLong() + firstWeekly.xpBounty.toLong()
+        assertEquals(expectedTasksXp, RoadmapManager.totalXp.value)
+
+        // With >= 150 Tasks XP, Station 1 (50 XP), Station 2 (51 XP), ... are unlocked
+        val unlockedCount = RoadmapManager.calculateUnlockedStationId(expectedTasksXp)
+        assertTrue("Expected Stations 1..2 unlocked from Tasks XP, got $unlockedCount", unlockedCount >= 2)
+
+        // 4. Claiming Roadmap stations MUST NOT add station.requiredTotalXp (or any XP) to totalXp
+        val completedCountBefore = RoadmapManager.completedTaskIds.value.size
+        for (stationId in 1..unlockedCount.coerceAtMost(10)) {
+            val reqXpBefore = TaskPools.getRequiredXpForStation(stationId)
+            assertTrue(expectedTasksXp >= reqXpBefore)
+            val claimed = RoadmapManager.claimStationReward(app, stationId)
+            assertNotNull("Station $stationId should be claimable once Tasks XP reaches $reqXpBefore", claimed)
+            assertEquals(
+                "Claiming Roadmap Station $stationId ($reqXpBefore reqXP) MUST NOT alter Tasks XP!",
+                expectedTasksXp,
+                RoadmapManager.totalXp.value
+            )
+        }
+        assertEquals(completedCountBefore, RoadmapManager.completedTaskIds.value.size)
+    }
 }
