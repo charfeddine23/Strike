@@ -59,6 +59,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,6 +100,7 @@ import com.example.ui.screens.FlameScreen
 import com.example.ui.screens.InventoryScreen
 import com.example.ui.screens.RoadmapScreen
 import com.example.ui.screens.StrikeScreen
+import com.example.ui.screens.TasksLedgerScreen
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -118,6 +120,7 @@ enum class AppScreen {
     FLAME,
     DEVIATIONS,
     ROADMAP,
+    TASKS_LEDGER,
     PROFILE
 }
 
@@ -190,6 +193,7 @@ fun LiquidGlassApp(
     onSelectLanguage: (String) -> Unit
 ) {
     var currentScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
+    var roadmapMainTab by remember { mutableIntStateOf(0) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showShieldDropdown by remember { mutableStateOf(false) }
     var showStartDateDialog by remember { mutableStateOf(false) }
@@ -258,9 +262,13 @@ fun LiquidGlassApp(
         }
     }
 
-    // Hardware/gesture BackHandler: if not on DASHBOARD, return to DASHBOARD
+    // Hardware/gesture BackHandler: return from TASKS_LEDGER to ROADMAP, otherwise return to DASHBOARD
     BackHandler(enabled = currentScreen != AppScreen.DASHBOARD) {
-        currentScreen = AppScreen.DASHBOARD
+        currentScreen = if (currentScreen == AppScreen.TASKS_LEDGER) {
+            AppScreen.ROADMAP
+        } else {
+            AppScreen.DASHBOARD
+        }
     }
 
     Box(
@@ -312,44 +320,48 @@ fun LiquidGlassApp(
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    LiquidGlassTopBar(
-                        currentScreen = currentScreen,
-                        flameScore = flameScore,
-                        isStreakShieldActive = shieldActuallyActive,
-                        activeShieldType = effectiveActiveShieldType,
-                        shieldRemainingMillis = currentShieldRemainingMillis,
-                        available24hShields = available1DayShields,
-                        available48hShields = available48hShields,
-                        available72hShields = availableManualShields,
-                        sevenDayAutoShieldCount = sevenDayAutoShieldCount,
-                        showShieldDropdown = showShieldDropdown,
-                        onOpenShieldDropdown = { showShieldDropdown = true },
-                        onDismissShieldDropdown = { showShieldDropdown = false },
-                        onOpenSettings = { currentScreen = AppScreen.PROFILE },
-                        onLongPressProfile5s = { viewModel.hardResetAllTaskCompletionStates() },
-                        onOpenFlame = { currentScreen = AppScreen.FLAME },
-                        onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
-                        onLongPressFlame = { showStartDateDialog = true },
-                        currentLang = currentLang,
-                        isDarkTheme = isDarkTheme
-                    )
-                    if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
-                        FlameEnergyBanner(
+                if (currentScreen != AppScreen.TASKS_LEDGER) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        LiquidGlassTopBar(
+                            currentScreen = currentScreen,
                             flameScore = flameScore,
-                            onClick = { currentScreen = AppScreen.FLAME },
+                            isStreakShieldActive = shieldActuallyActive,
+                            activeShieldType = effectiveActiveShieldType,
+                            shieldRemainingMillis = currentShieldRemainingMillis,
+                            available24hShields = available1DayShields,
+                            available48hShields = available48hShields,
+                            available72hShields = availableManualShields,
+                            sevenDayAutoShieldCount = sevenDayAutoShieldCount,
+                            showShieldDropdown = showShieldDropdown,
+                            onOpenShieldDropdown = { showShieldDropdown = true },
+                            onDismissShieldDropdown = { showShieldDropdown = false },
+                            onOpenSettings = { currentScreen = AppScreen.PROFILE },
+                            onLongPressProfile5s = { viewModel.hardResetAllTaskCompletionStates() },
+                            onOpenFlame = { currentScreen = AppScreen.FLAME },
+                            onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
+                            onLongPressFlame = { showStartDateDialog = true },
+                            currentLang = currentLang,
                             isDarkTheme = isDarkTheme
                         )
+                        if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
+                            FlameEnergyBanner(
+                                flameScore = flameScore,
+                                onClick = { currentScreen = AppScreen.FLAME },
+                                isDarkTheme = isDarkTheme
+                            )
+                        }
                     }
                 }
             },
             bottomBar = {
-                LiquidGlassBottomBar(
-                    currentScreen = currentScreen,
-                    onScreenSelected = { screen ->
-                        currentScreen = screen
-                    }
-                )
+                if (currentScreen != AppScreen.TASKS_LEDGER) {
+                    LiquidGlassBottomBar(
+                        currentScreen = currentScreen,
+                        onScreenSelected = { screen ->
+                            currentScreen = screen
+                        }
+                    )
+                }
             },
             snackbarHost = {
                 SnackbarHost(
@@ -411,7 +423,18 @@ fun LiquidGlassApp(
 
                     AppScreen.ROADMAP -> RoadmapScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
+                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD },
+                        initialMainTab = roadmapMainTab,
+                        onMainTabChanged = { roadmapMainTab = it },
+                        onOpenTasksLedger = {
+                            roadmapMainTab = 1
+                            currentScreen = AppScreen.TASKS_LEDGER
+                        }
+                    )
+
+                    AppScreen.TASKS_LEDGER -> TasksLedgerScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { currentScreen = AppScreen.ROADMAP }
                     )
 
                     AppScreen.PROFILE -> com.example.ui.screens.ProfileScreen(
@@ -502,6 +525,11 @@ fun LiquidGlassTopBar(
         AppScreen.FLAME -> stringResource(R.string.flame_system_title)
         AppScreen.DEVIATIONS -> stringResource(R.string.deviations_title)
         AppScreen.ROADMAP -> stringResource(R.string.roadmap_title)
+        AppScreen.TASKS_LEDGER -> when (currentLang) {
+            "ar" -> "دفتر المهام"
+            "fr" -> "Registre des missions"
+            else -> "Tasks Ledger"
+        }
         AppScreen.PROFILE -> when (currentLang) {
             "ar" -> "الملف الشخصي"
             "fr" -> "Profil"

@@ -522,22 +522,23 @@ fun TasksLedgerSection(
 }
 
 @Composable
-private fun LedgerTaskCard(
+fun LedgerTaskCard(
     entry: TaskLedgerEntry,
     nowMillis: Long,
     currentLang: String,
     onClaimTask: () -> Unit
 ) {
     val isAr = currentLang == "ar"
+    val isFr = currentLang == "fr"
     val task = entry.task
     val isLocked = task.isLocked(nowMillis)
     val percent = (task.progressFraction * 100f).toInt().coerceIn(0, 100)
 
     val (periodLabel, periodColor) = when (task.period) {
-        TaskPeriod.DAILY -> (if (isAr) "يومية" else "Daily") to NeonCyan
-        TaskPeriod.WEEKLY -> (if (isAr) "أسبوعية" else "Weekly") to NeonViolet
-        TaskPeriod.MONTHLY -> (if (isAr) "شهرية" else "Monthly") to WarmFireOrange
-        TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> (if (isAr) "الأبدية" else "Eternal") to NeonAmber
+        TaskPeriod.DAILY -> (if (isAr) "يومية" else if (isFr) "Quotidienne" else "Daily") to NeonCyan
+        TaskPeriod.WEEKLY -> (if (isAr) "أسبوعية" else if (isFr) "Hebdo" else "Weekly") to NeonViolet
+        TaskPeriod.MONTHLY -> (if (isAr) "شهرية" else if (isFr) "Mensuelle" else "Monthly") to WarmFireOrange
+        TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> (if (isAr) "الأبدية" else if (isFr) "Éternelle" else "Eternal") to NeonAmber
     }
 
     LiquidGlassCard(
