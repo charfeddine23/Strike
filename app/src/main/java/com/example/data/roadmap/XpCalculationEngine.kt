@@ -181,8 +181,12 @@ object XpCalculationEngine {
         val startMillis = parseStartOfDayMillis(trackingStartDate)
             ?: return RetroactiveXpBreakdown(trackingStartDate = trackingStartDate)
 
-        val deflameCount = flameLogs.count { it.reason == "DEFLAME" && it.timestamp >= startMillis }
-        val girlCount = flameLogs.count { it.reason == "GIRL" && it.timestamp >= startMillis }
+        val deflameCount = flameLogs.count {
+            it.reason == "DEFLAME" && !it.isRetroactiveEstimate && it.timestamp >= startMillis
+        }
+        val girlCount = flameLogs.count {
+            it.reason == "GIRL" && !it.isRetroactiveEstimate && it.timestamp >= startMillis
+        }
 
         val relevantStrikes = strikeEvents.filter { it.date >= trackingStartDate }
         val strikeCount = relevantStrikes.sumOf { it.count.coerceAtLeast(1) }

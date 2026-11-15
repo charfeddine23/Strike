@@ -427,16 +427,39 @@ class IndividualViewModel(
         return FlameManager.getStreakStartDate(getApplication())
     }
 
-    fun previewStartDateRecalculation(startDateStr: String): com.example.data.flame.FlameRecalculationResult {
-        return FlameManager.previewRecalculation(startDateStr, allStrikeEvents.value)
+    fun getSavedGirlPerMonth(): Int {
+        return FlameManager.getSavedGirlPerMonth(getApplication())
     }
 
-    fun recalculateFlameScoreFromStartDate(startDateStr: String): com.example.data.flame.FlameRecalculationResult {
+    fun getSavedDeflamePerMonth(): Int {
+        return FlameManager.getSavedDeflamePerMonth(getApplication())
+    }
+
+    fun previewStartDateRecalculation(
+        startDateStr: String,
+        girlPerMonth: Int = 0,
+        deflamePerMonth: Int = 0
+    ): com.example.data.flame.FlameRecalculationResult {
+        return FlameManager.previewRecalculation(
+            startDateStr = startDateStr,
+            strikeEvents = allStrikeEvents.value,
+            girlPerMonth = girlPerMonth,
+            deflamePerMonth = deflamePerMonth
+        )
+    }
+
+    fun recalculateFlameScoreFromStartDate(
+        startDateStr: String,
+        girlPerMonth: Int = 0,
+        deflamePerMonth: Int = 0
+    ): com.example.data.flame.FlameRecalculationResult {
         val result = FlameManager.recalculateFromStartDate(
             context = getApplication(),
             startDateStr = startDateStr,
             strikeEvents = allStrikeEvents.value,
-            lang = currentLanguage.value
+            lang = currentLanguage.value,
+            girlPerMonth = girlPerMonth,
+            deflamePerMonth = deflamePerMonth
         )
         viewModelScope.launch {
             XpCalculationEngine.syncRetroactiveTelemetry(
@@ -449,9 +472,19 @@ class IndividualViewModel(
             )
             val formattedScore = if (result.resultingScore % 1.0 == 0.0) "${result.resultingScore.toInt()}" else String.format(Locale.US, "%.1f", result.resultingScore)
             val msg = when (currentLanguage.value) {
-                "ar" -> "تمت إعادة حساب نقاط الشعلة بنجاح: $formattedScore نقطة (+${result.inactivityPointsAdded.toInt()} خمول، -${String.format(Locale.US, "%.1f", result.totalDeductions)} سترايك)"
+                "ar" -> buildString {
+                    append("تمت إعادة حساب نقاط الشعلة بنجاح: $formattedScore نقطة (+${result.inactivityPointsAdded.toInt()} خمول، -${String.format(Locale.US, "%.1f", result.totalDeductions)} سترايك")
+                    if (result.girlPressesCount > 0) append("، -${result.girlPointsDeducted.toInt()} Girl [×${result.girlPressesCount}]")
+                    if (result.deflamePressesCount > 0) append("، -${result.deflamePointsDeducted.toInt()} Deflame [×${result.deflamePressesCount}]")
+                    append(")")
+                }
                 "fr" -> "Score recalculé avec succès : $formattedScore pts"
-                else -> "Flame score recalculated: $formattedScore pts (+${result.inactivityPointsAdded.toInt()} inactivity, -${String.format(Locale.US, "%.1f", result.totalDeductions)} strikes)"
+                else -> buildString {
+                    append("Flame score recalculated: $formattedScore pts (+${result.inactivityPointsAdded.toInt()} inactivity, -${String.format(Locale.US, "%.1f", result.totalDeductions)} strikes")
+                    if (result.girlPressesCount > 0) append(", -${result.girlPointsDeducted.toInt()} Girl [×${result.girlPressesCount}]")
+                    if (result.deflamePressesCount > 0) append(", -${result.deflamePointsDeducted.toInt()} Deflame [×${result.deflamePressesCount}]")
+                    append(")")
+                }
             }
             emitMessage(msg)
         }

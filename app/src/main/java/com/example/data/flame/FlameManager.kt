@@ -18,7 +18,8 @@ data class FlameLogEntry(
     val change: Double,
     val resultingScore: Double,
     val reason: String,
-    val details: String = ""
+    val details: String = "",
+    val isRetroactiveEstimate: Boolean = false
 )
 
 data class StrikeRegistrationResult(
@@ -34,6 +35,12 @@ data class FlameRecalculationResult(
     val inactivityPointsAdded: Double,
     val totalStrikesCount: Int,
     val totalDeductions: Double,
+    val girlPerMonth: Int = 0,
+    val girlPressesCount: Int = 0,
+    val girlPointsDeducted: Double = 0.0,
+    val deflamePerMonth: Int = 0,
+    val deflamePressesCount: Int = 0,
+    val deflamePointsDeducted: Double = 0.0,
     val resultingScore: Double
 )
 
@@ -62,6 +69,8 @@ object FlameManager {
     private const val KEY_PEAK_SCORE = "key_peak_flame_score"
     private const val KEY_TOTAL_POINTS_GAINED = "key_total_points_gained"
     private const val KEY_TOTAL_POINTS_EXTINGUISHED = "key_total_points_extinguished"
+    private const val KEY_GIRL_PER_MONTH = "key_start_date_girl_per_month"
+    private const val KEY_DEFLAME_PER_MONTH = "key_start_date_deflame_per_month"
 
     private val _flameScore = MutableStateFlow(45.0) // Initial starting score
     val flameScore: StateFlow<Double> = _flameScore.asStateFlow()
@@ -228,7 +237,8 @@ object FlameManager {
                             change = obj.optDouble("change", 0.0),
                             resultingScore = obj.optDouble("resultingScore", 0.0),
                             reason = obj.optString("reason", "EVENT"),
-                            details = obj.optString("details", "")
+                            details = obj.optString("details", ""),
+                            isRetroactiveEstimate = obj.optBoolean("isRetroactiveEstimate", false)
                         )
                     )
                 }
@@ -301,6 +311,8 @@ object FlameManager {
             .putBoolean("has_reset_shields_to_zero_v2", true)
             .remove(KEY_START_COUNT_DATE)
             .remove(KEY_LAST_STRIKE_DATE)
+            .remove(KEY_GIRL_PER_MONTH)
+            .remove(KEY_DEFLAME_PER_MONTH)
             .putString(KEY_LAST_INACTIVITY_DATE, today)
             .apply()
     }
@@ -969,12 +981,26 @@ object FlameManager {
         return getPrefs(context).getString(KEY_START_COUNT_DATE, null)
     }
 
+    fun getSavedGirlPerMonth(context: Context): Int {
+        init(context)
+        return getPrefs(context).getInt(KEY_GIRL_PER_MONTH, 0).coerceAtLeast(0)
+    }
+
+    fun getSavedDeflamePerMonth(context: Context): Int {
+        init(context)
+        return getPrefs(context).getInt(KEY_DEFLAME_PER_MONTH, 0).coerceAtLeast(0)
+    }
+
     /**
      * Preview recalculation from a given start date without modifying persistent state.
+     * Supports optional monthly Girl & Deflame button press averages, converting them proportionally
+     * across [daysElapsed] (30 days per month) at -3.0 PTS per press.
      */
     fun previewRecalculation(
         startDateStr: String,
-        strikeEvents: List<com.example.data.model.StrikeEvent>
+        strikeEvents: List<com.example.data.model.StrikeEvent>,
+        girlPerMonth: Int = 0,
+        deflamePerMonth: Int = 0
     ): FlameRecalculationResult {
         val today = todayString()
         val daysElapsed = daysBetween(startDateStr, today).toInt().coerceAtLeast(0)
@@ -1008,7 +1034,24 @@ object FlameManager {
             totalDeductions += dayPenalty
         }
 
-        val resultingScore = (inactivityPointsAdded - totalDeductions).coerceIn(0.0, MAX_SCORE)
+        val safeGirlPerMonth = girlPerMonth.coerceAtLeast(0)
+        val safeDeflamePerMonth = deflamePerMonth.coerceAtLeast(0)
+        val monthsElapsed = daysElapsed / 30.0
+        val girlPressesCount = if (safeGirlPerMonth > 0 && daysElapsed > 0) {
+            kotlin.math.round(safeGirlPerMonth * monthsElapsed).toInt().coerceAtLeast(0)
+        } else {
+            0
+        }
+        val deflamePressesCount = if (safeDeflamePerMonth > 0 && daysElapsed > 0) {
+            kotlin.math.round(safeDeflamePerMonth * monthsElapsed).toInt().coerceAtLeast(0)
+        } else {
+            0
+        }
+        val girlPointsDeducted = girlPressesCount * 3.0
+        val deflamePointsDeducted = deflamePressesCount * 3.0
+
+        val resultingScore = (inactivityPointsAdded - totalDeductions - girlPointsDeducted - deflamePointsDeducted)
+            .coerceIn(0.0, MAX_SCORE)
 
         return FlameRecalculationResult(
             startDate = startDateStr,
@@ -1017,6 +1060,12 @@ object FlameManager {
             inactivityPointsAdded = inactivityPointsAdded,
             totalStrikesCount = relevantStrikes.size,
             totalDeductions = totalDeductions,
+            girlPerMonth = safeGirlPerMonth,
+            girlPressesCount = girlPressesCount,
+            girlPointsDeducted = girlPointsDeducted,
+            deflamePerMonth = safeDeflamePerMonth,
+            deflamePressesCount = deflamePressesCount,
+            deflamePointsDeducted = deflamePointsDeducted,
             resultingScore = resultingScore
         )
     }
@@ -1025,17 +1074,25 @@ object FlameManager {
      * Recalculates Flame Score starting from [startDateStr] up to today:
      * - Adds +3.0 points daily inactivity for each calendar day elapsed since start date.
      * - Accounts for all strikes registered in that period, deducting their multi-strike / single-strike penalties.
-     * - Updates database preferences, peak score, and logs the action in the Flame log.
+     * - Converts [girlPerMonth] & [deflamePerMonth] into period press counts, applies their Flame score effect (-3 PTS/tap),
+     *   and records them in existing Flame logs WITHOUT advancing any tasks or awarding task XP.
      */
     @Synchronized
     fun recalculateFromStartDate(
         context: Context,
         startDateStr: String,
         strikeEvents: List<com.example.data.model.StrikeEvent>,
-        lang: String = "ar"
+        lang: String = "ar",
+        girlPerMonth: Int = 0,
+        deflamePerMonth: Int = 0
     ): FlameRecalculationResult {
         init(context)
-        val result = previewRecalculation(startDateStr, strikeEvents)
+        val result = previewRecalculation(
+            startDateStr = startDateStr,
+            strikeEvents = strikeEvents,
+            girlPerMonth = girlPerMonth,
+            deflamePerMonth = deflamePerMonth
+        )
         val oldScore = _flameScore.value
         val newScore = result.resultingScore
         val diff = newScore - oldScore
@@ -1060,16 +1117,83 @@ object FlameManager {
             .putFloat(KEY_SCORE, newScore.toFloat())
             .putString(KEY_START_COUNT_DATE, startDateStr)
             .putString(KEY_LAST_INACTIVITY_DATE, result.todayDate)
+            .putInt(KEY_GIRL_PER_MONTH, result.girlPerMonth)
+            .putInt(KEY_DEFLAME_PER_MONTH, result.deflamePerMonth)
             .apply()
 
-        val details = if (lang == "ar") {
-            "تاريخ البداية: $startDateStr | الأيام المنقضية: ${result.daysElapsed} (+${result.inactivityPointsAdded.toInt()} نقطة) | السترايكات: ${result.totalStrikesCount} (-${format(result.totalDeductions)} نقطة)"
-        } else {
-            "Start Date: $startDateStr | Days Elapsed: ${result.daysElapsed} (+${result.inactivityPointsAdded.toInt()} pts) | Strikes: ${result.totalStrikesCount} (-${format(result.totalDeductions)} pts)"
+        val scoreAfterStrikes = (result.inactivityPointsAdded - result.totalDeductions).coerceIn(0.0, MAX_SCORE)
+        val scoreAfterGirl = (scoreAfterStrikes - result.girlPointsDeducted).coerceIn(0.0, MAX_SCORE)
+
+        // Log retroactive Girl presses if > 0 (recorded in existing Flame logs, zero effect on task progression)
+        if (result.girlPressesCount > 0) {
+            val girlTitle = when (lang) {
+                "ar" -> "تسجيل Girl التلقائي (×${result.girlPressesCount})"
+                "fr" -> "Action Girl rétroactive (×${result.girlPressesCount})"
+                else -> "Retroactive Girl Action (×${result.girlPressesCount})"
+            }
+            val girlDetails = when (lang) {
+                "ar" -> "${result.girlPerMonth}/شهر × ${result.daysElapsed} يوم = ${result.girlPressesCount} مرة (تُطبق على الشعلة فقط دون المهام)"
+                "fr" -> "${result.girlPerMonth}/mois × ${result.daysElapsed} j = ${result.girlPressesCount} fois (Flamme uniquement, missions inchangées)"
+                else -> "${result.girlPerMonth}/mo × ${result.daysElapsed} days = ${result.girlPressesCount} presses (Flame only, tasks unaffected)"
+            }
+            logEvent(
+                context = context,
+                title = girlTitle,
+                change = -result.girlPointsDeducted,
+                resultingScore = scoreAfterGirl,
+                reason = "GIRL",
+                details = girlDetails,
+                isRetroactiveEstimate = true
+            )
+        }
+
+        // Log retroactive Deflame presses if > 0 (recorded in existing Flame logs, zero effect on task progression)
+        if (result.deflamePressesCount > 0) {
+            val deflameTitle = when (lang) {
+                "ar" -> "تبريد Deflame التلقائي (×${result.deflamePressesCount})"
+                "fr" -> "Refroidissement Deflame rétroactif (×${result.deflamePressesCount})"
+                else -> "Retroactive Deflame Action (×${result.deflamePressesCount})"
+            }
+            val deflameDetails = when (lang) {
+                "ar" -> "${result.deflamePerMonth}/شهر × ${result.daysElapsed} يوم = ${result.deflamePressesCount} مرة (تُطبق على الشعلة فقط دون المهام)"
+                "fr" -> "${result.deflamePerMonth}/mois × ${result.daysElapsed} j = ${result.deflamePressesCount} fois (Flamme uniquement, missions inchangées)"
+                else -> "${result.deflamePerMonth}/mo × ${result.daysElapsed} days = ${result.deflamePressesCount} presses (Flame only, tasks unaffected)"
+            }
+            logEvent(
+                context = context,
+                title = deflameTitle,
+                change = -result.deflamePointsDeducted,
+                resultingScore = newScore,
+                reason = "DEFLAME",
+                details = deflameDetails,
+                isRetroactiveEstimate = true
+            )
+        }
+
+        val details = when (lang) {
+            "ar" -> buildString {
+                append("تاريخ البداية: $startDateStr | الأيام المنقضية: ${result.daysElapsed} (+${result.inactivityPointsAdded.toInt()} نقطة) | السترايكات: ${result.totalStrikesCount} (-${format(result.totalDeductions)} نقطة)")
+                if (result.girlPressesCount > 0) append(" | Girl: ${result.girlPressesCount} (-${format(result.girlPointsDeducted)})")
+                if (result.deflamePressesCount > 0) append(" | Deflame: ${result.deflamePressesCount} (-${format(result.deflamePointsDeducted)})")
+            }
+            "fr" -> buildString {
+                append("Début : $startDateStr | Jours : ${result.daysElapsed} (+${result.inactivityPointsAdded.toInt()} pts) | Strikes : ${result.totalStrikesCount} (-${format(result.totalDeductions)} pts)")
+                if (result.girlPressesCount > 0) append(" | Girl : ${result.girlPressesCount} (-${format(result.girlPointsDeducted)})")
+                if (result.deflamePressesCount > 0) append(" | Deflame : ${result.deflamePressesCount} (-${format(result.deflamePointsDeducted)})")
+            }
+            else -> buildString {
+                append("Start Date: $startDateStr | Days Elapsed: ${result.daysElapsed} (+${result.inactivityPointsAdded.toInt()} pts) | Strikes: ${result.totalStrikesCount} (-${format(result.totalDeductions)} pts)")
+                if (result.girlPressesCount > 0) append(" | Girl: ${result.girlPressesCount} (-${format(result.girlPointsDeducted)})")
+                if (result.deflamePressesCount > 0) append(" | Deflame: ${result.deflamePressesCount} (-${format(result.deflamePointsDeducted)})")
+            }
         }
         logEvent(
             context = context,
-            title = if (lang == "ar") "إعادة حساب تاريخ بداية العد" else "Start Date Recalculation",
+            title = when (lang) {
+                "ar" -> "إعادة حساب تاريخ بداية العد"
+                "fr" -> "Recalcul depuis la date de début"
+                else -> "Start Date Recalculation"
+            },
             change = diff,
             resultingScore = newScore,
             reason = "START_DATE_RECALCULATION",
@@ -1097,7 +1221,8 @@ object FlameManager {
         change: Double,
         resultingScore: Double,
         reason: String,
-        details: String = ""
+        details: String = "",
+        isRetroactiveEstimate: Boolean = false
     ) {
         val entry = FlameLogEntry(
             id = System.currentTimeMillis() + (0..999).random(),
@@ -1106,7 +1231,8 @@ object FlameManager {
             change = change,
             resultingScore = resultingScore,
             reason = reason,
-            details = details
+            details = details,
+            isRetroactiveEstimate = isRetroactiveEstimate
         )
         val current = _flameLogs.value.toMutableList()
         current.add(0, entry)
@@ -1133,6 +1259,7 @@ object FlameManager {
                 put("resultingScore", item.resultingScore)
                 put("reason", item.reason)
                 put("details", item.details)
+                if (item.isRetroactiveEstimate) put("isRetroactiveEstimate", true)
             }
             array.put(obj)
         }
@@ -1158,6 +1285,8 @@ object FlameManager {
             put("startCountDate", prefs.getString(KEY_START_COUNT_DATE, "") ?: "")
             put("lastInactivityDate", prefs.getString(KEY_LAST_INACTIVITY_DATE, "") ?: "")
             put("lastStrikeDate", prefs.getString(KEY_LAST_STRIKE_DATE, "") ?: "")
+            put("girlPerMonth", prefs.getInt(KEY_GIRL_PER_MONTH, 0))
+            put("deflamePerMonth", prefs.getInt(KEY_DEFLAME_PER_MONTH, 0))
             put("logs", logsToJsonArray(_flameLogs.value))
         }
     }
@@ -1220,7 +1349,8 @@ object FlameManager {
                         change = obj.optDouble("change", 0.0),
                         resultingScore = obj.optDouble("resultingScore", 0.0),
                         reason = obj.optString("reason", "EVENT"),
-                        details = obj.optString("details", "")
+                        details = obj.optString("details", ""),
+                        isRetroactiveEstimate = obj.optBoolean("isRetroactiveEstimate", false)
                     )
                 )
             }
@@ -1249,6 +1379,8 @@ object FlameManager {
         val startDate = json.optString("startCountDate", "").trim()
         val lastInact = json.optString("lastInactivityDate", "").trim()
         val lastStrike = json.optString("lastStrikeDate", "").trim()
+        val importedGirlPerMonth = json.optInt("girlPerMonth", 0).coerceAtLeast(0)
+        val importedDeflamePerMonth = json.optInt("deflamePerMonth", 0).coerceAtLeast(0)
 
         prefs.edit().apply {
             putFloat(KEY_SCORE, finalScore.toFloat())
@@ -1271,6 +1403,8 @@ object FlameManager {
             if (startDate.isNotEmpty()) putString(KEY_START_COUNT_DATE, startDate) else if (replaceExisting) remove(KEY_START_COUNT_DATE)
             if (lastInact.isNotEmpty()) putString(KEY_LAST_INACTIVITY_DATE, lastInact) else if (replaceExisting) remove(KEY_LAST_INACTIVITY_DATE)
             if (lastStrike.isNotEmpty()) putString(KEY_LAST_STRIKE_DATE, lastStrike) else if (replaceExisting) remove(KEY_LAST_STRIKE_DATE)
+            if (replaceExisting || importedGirlPerMonth > 0) putInt(KEY_GIRL_PER_MONTH, importedGirlPerMonth)
+            if (replaceExisting || importedDeflamePerMonth > 0) putInt(KEY_DEFLAME_PER_MONTH, importedDeflamePerMonth)
             apply()
         }
         isInitialized = true

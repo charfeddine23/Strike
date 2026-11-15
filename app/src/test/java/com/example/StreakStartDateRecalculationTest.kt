@@ -4,6 +4,10 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.flame.FlameManager
 import com.example.data.model.StrikeEvent
+import com.example.data.profile.ProfileManager
+import com.example.data.roadmap.RoadmapManager
+import com.example.data.roadmap.TaskStatus
+import com.example.data.roadmap.XpCalculationEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -28,6 +32,13 @@ class StreakStartDateRecalculationTest {
         val prefs = context.getSharedPreferences("strikepulse_flame_prefs", Context.MODE_PRIVATE)
         prefs.edit().clear().commit()
         FlameManager.resetForTesting(context)
+
+        context.getSharedPreferences("strikepulse_roadmap_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("strikepulse_profile_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("strikepulse_xp_engine_prefs", Context.MODE_PRIVATE).edit().clear().commit()
+        ProfileManager.resetForTesting(context)
+        XpCalculationEngine.resetForTesting(context)
+        RoadmapManager.resetForTesting(context)
     }
 
     private fun getDateDaysAgo(daysAgo: Int): String {
@@ -133,5 +144,72 @@ class StreakStartDateRecalculationTest {
         assertEquals(90.0, result.totalDeductions, 0.001)
         assertEquals(0.0, result.resultingScore, 0.001) // Clamped to 0.0 minimum
         assertEquals(0.0, FlameManager.getScore(context), 0.001)
+    }
+
+    @Test
+    fun `test monthly girl and deflame presses apply to flame and logs without affecting tasks`() {
+        val startDate = getDateDaysAgo(60) // 60 days = 2 months -> 180 inactivity pts
+        val baselineXp = RoadmapManager.totalXp.value
+        val baselineCompleted = RoadmapManager.completedTaskIds.value.size
+
+        // 5 Girl/month over 60 days = 10 Girl presses (-30 pts)
+        // 10 Deflame/month over 60 days = 20 Deflame presses (-60 pts)
+        // Final Flame score = 180 - 0 - 30 - 60 = 90.0 pts
+        val result = FlameManager.recalculateFromStartDate(
+            context = context,
+            startDateStr = startDate,
+            strikeEvents = emptyList(),
+            lang = "ar",
+            girlPerMonth = 5,
+            deflamePerMonth = 10
+        )
+
+        assertEquals(60, result.daysElapsed)
+        assertEquals(180.0, result.inactivityPointsAdded, 0.001)
+        assertEquals(10, result.girlPressesCount)
+        assertEquals(30.0, result.girlPointsDeducted, 0.001)
+        assertEquals(20, result.deflamePressesCount)
+        assertEquals(60.0, result.deflamePointsDeducted, 0.001)
+        assertEquals(90.0, result.resultingScore, 0.001)
+        assertEquals(90.0, FlameManager.getScore(context), 0.001)
+
+        // Monthly rates are saved
+        assertEquals(5, FlameManager.getSavedGirlPerMonth(context))
+        assertEquals(10, FlameManager.getSavedDeflamePerMonth(context))
+
+        // Recorded in existing Flame logs with isRetroactiveEstimate = true
+        val logs = FlameManager.flameLogs.value
+        assertEquals("START_DATE_RECALCULATION", logs[0].reason)
+        val girlLog = logs.firstOrNull { it.reason == "GIRL" }
+        val deflameLog = logs.firstOrNull { it.reason == "DEFLAME" }
+        assertNotNull(girlLog)
+        assertNotNull(deflameLog)
+        assertEquals(-30.0, girlLog!!.change, 0.001)
+        assertEquals(-60.0, deflameLog!!.change, 0.001)
+        assertTrue(girlLog.isRetroactiveEstimate)
+        assertTrue(deflameLog.isRetroactiveEstimate)
+
+        // MUST NOT affect task progression or award Task/Roadmap XP
+        val allActiveTasks = RoadmapManager.dailyTasks.value +
+            RoadmapManager.weeklyTasks.value +
+            RoadmapManager.monthlyTasks.value +
+            RoadmapManager.yearlyTasks.value
+        assertTrue(allActiveTasks.all { it.currentCount == 0 && it.status == TaskStatus.PENDING })
+        assertEquals(baselineCompleted, RoadmapManager.completedTaskIds.value.size)
+
+        val telemetryBreakdown = XpCalculationEngine.calculateTelemetryFromLogs(
+            trackingStartDate = startDate,
+            flameLogs = logs,
+            strikeEvents = emptyList(),
+            individuals = emptyList()
+        )
+        assertEquals(0, telemetryBreakdown.girlCount)
+        assertEquals(0, telemetryBreakdown.deflameCount)
+        assertEquals(baselineXp, RoadmapManager.totalXp.value)
+
+        // Total reset clears saved monthly rates
+        FlameManager.resetAllLevelsToZero(context)
+        assertEquals(0, FlameManager.getSavedGirlPerMonth(context))
+        assertEquals(0, FlameManager.getSavedDeflamePerMonth(context))
     }
 }
