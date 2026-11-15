@@ -254,10 +254,12 @@ class FullBackupRestoreTest {
         assertEquals(expectedWeeklySnapshot, RoadmapManager.weeklyTasks.value.map { it.id to it.currentCount })
 
         val restoredYearly = RoadmapManager.yearlyTasks.value
-        assertEquals(250, restoredYearly.size)
+        assertEquals(249, restoredYearly.size)
         assertEquals(1, restoredYearly.first { it.id == multiStepAnnual.id }.currentCount)
-        assertEquals(TaskStatus.COMPLETED, restoredYearly.last().status)
-        assertEquals(completedAnnual.id, restoredYearly.last().id)
+        assertFalse(restoredYearly.any { it.id == completedAnnual.id })
+        val restoredLedgerCompleted = RoadmapManager.getTasksLedgerSnapshot().first { it.task.id == completedAnnual.id }
+        assertEquals(TaskStatus.COMPLETED, restoredLedgerCompleted.task.status)
+        assertTrue(restoredLedgerCompleted.completedAtMillis != null)
 
         assertEquals("Sovereign Striker", ProfileManager.userName.value)
         assertEquals("av_gabriel_wings", ProfileManager.equippedAvatar.value.id)

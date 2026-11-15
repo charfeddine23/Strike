@@ -144,15 +144,15 @@ class RoadmapEngineTest {
     }
 
     @Test
-    fun testEverlastingMasterGoalsDisplayAll250() {
+    fun testEverlastingMasterGoalsTransferOutUponCompletion() {
         val completedSet = setOf("everlasting_1", "everlasting_5")
-        val goals = TaskPools.getEverlastingTasks(completedSet)
+        val activeGoals = TaskPools.getEverlastingTasks(completedSet)
 
-        assertEquals(250, goals.size)
-        val task1 = goals.first { it.id == "everlasting_1" }
-        assertEquals(TaskStatus.COMPLETED, task1.status)
+        // Claimed Eternal tasks transfer out of the active Eternal list into Completed Tasks Ledger
+        assertEquals(248, activeGoals.size)
+        assertFalse(activeGoals.any { it.id == "everlasting_1" || it.id == "everlasting_5" })
 
-        val task2 = goals.first { it.id == "everlasting_2" }
+        val task2 = activeGoals.first { it.id == "everlasting_2" }
         assertEquals(TaskStatus.PENDING, task2.status)
     }
 
@@ -229,9 +229,10 @@ class RoadmapEngineTest {
     }
 
     @Test
-    fun testSkipKeyConsumption() {
+    fun testSkipKeyConsumptionQueuesLockedReplacement() {
         val daily = RoadmapManager.dailyTasks.value
         val targetTask = daily.first()
+        val now = System.currentTimeMillis()
 
         RoadmapManager.addKey(app, targetTask.requiredSkipKey, 1)
 
@@ -246,8 +247,53 @@ class RoadmapEngineTest {
         assertEquals(0, remainingCount)
 
         val updatedDaily = RoadmapManager.dailyTasks.value
+        assertEquals(5, updatedDaily.size)
         assertFalse("Skipped Daily task must disappear immediately from active list", updatedDaily.any { it.id == targetTask.id })
         assertTrue(RoadmapManager.completedTaskIds.value.contains(targetTask.id))
+
+        val lockedReplacement = updatedDaily.firstOrNull { it.isLocked(now) }
+        assertNotNull("Skipped slot should be replaced by a task locked until midnight", lockedReplacement)
+        assertFalse("Locked replacement cannot be skipped before midnight unlock", RoadmapManager.useSkipKeyForTask(app, lockedReplacement!!.id))
+    }
+
+    @Test
+    fun testManualCollectHoldAndMidnightReplacementLifecycle() {
+        val initialDaily = RoadmapManager.dailyTasks.value
+        assertEquals(5, initialDaily.size)
+        val xpBefore = RoadmapManager.totalXp.value
+
+        // Trigger an action that completes at least one 1-step daily task (e.g. SHIELD or DEFLAME)
+        val singleStepTask = initialDaily.firstOrNull { it.targetCount == 1 }
+            ?: initialDaily.first().also { RoadmapManager.onActionOccurred(app, it.actionTag) }
+
+        RoadmapManager.onActionOccurred(app, singleStepTask.actionTag)
+
+        // Ensure single-step task reached READY_TO_CLAIM and stayed visible with 0 XP awarded yet
+        val afterAction = RoadmapManager.dailyTasks.value
+        val readyTask = afterAction.firstOrNull { it.id == singleStepTask.id && it.status == TaskStatus.READY_TO_CLAIM }
+            ?: afterAction.firstOrNull { it.status == TaskStatus.READY_TO_CLAIM }
+
+        if (readyTask != null) {
+            assertEquals("XP MUST NOT be awarded before manual Collect click", xpBefore, RoadmapManager.totalXp.value)
+            assertTrue("Ready task must stay visible until user clicks Collect", afterAction.any { it.id == readyTask.id })
+
+            // Now tap Collect ("جمع")
+            assertTrue(RoadmapManager.claimTaskReward(app, readyTask.id))
+            assertEquals(xpBefore + readyTask.xpBounty, RoadmapManager.totalXp.value)
+            assertTrue(RoadmapManager.completedTaskIds.value.contains(readyTask.id))
+            assertTrue(RoadmapManager.completedTaskTimestamps.value.containsKey(readyTask.id))
+
+            val afterClaim = RoadmapManager.dailyTasks.value
+            assertEquals(5, afterClaim.size)
+            assertFalse(afterClaim.any { it.id == readyTask.id })
+
+            // Replacement task must be locked until next midnight and ignore actions until then
+            val replacement = afterClaim.firstOrNull { it.isLocked() }
+            assertNotNull("Claimed slot must draw a replacement waiting until 12:00 AM", replacement)
+            RoadmapManager.onActionOccurred(app, replacement!!.actionTag)
+            val afterLockedAction = RoadmapManager.dailyTasks.value.first { it.id == replacement.id }
+            assertEquals("Locked replacement must not gain progress before unlock time", 0, afterLockedAction.currentCount)
+        }
     }
 
     @Test
@@ -259,25 +305,25 @@ class RoadmapEngineTest {
         val completedId = initialDaily.first().id
         assertTrue(RoadmapManager.completeTask(app, completedId))
 
-        val skippedTask = RoadmapManager.dailyTasks.value.first()
+        val skippedTask = RoadmapManager.dailyTasks.value.first { !it.isLocked() }
         RoadmapManager.addKey(app, skippedTask.requiredSkipKey, 1)
         assertTrue(RoadmapManager.useSkipKeyForTask(app, skippedTask.id))
 
-        // If any remaining daily task requires >1 step, increment it once so we verify partial progress carry-over too
-        val partialCandidate = RoadmapManager.dailyTasks.value.firstOrNull { it.targetCount > 1 }
+        // Increment an unlocked pending multi-step task to verify partial progress carries over across cycles
+        val partialCandidate = RoadmapManager.dailyTasks.value.firstOrNull { !it.isLocked() && it.targetCount > 1 }
         if (partialCandidate != null) {
             RoadmapManager.onActionOccurred(app, partialCandidate.actionTag)
         }
 
-        val carriedOverTasks = RoadmapManager.dailyTasks.value
-        assertTrue("Expected pending tasks to carry over, size=${carriedOverTasks.size}", carriedOverTasks.size in 1..3)
-        val carriedCounts = carriedOverTasks.associate { it.id to it.currentCount }
+        val activeCarried = RoadmapManager.dailyTasks.value.filter { it.status == TaskStatus.PENDING || it.status == TaskStatus.READY_TO_CLAIM }
+        assertEquals(5, activeCarried.size)
+        val carriedCounts = activeCarried.associate { it.id to it.currentCount }
 
         // 2. Simulate next calendar day / week / month rollover
         val prefs = app.getSharedPreferences("strikepulse_roadmap_prefs", Application.MODE_PRIVATE)
         prefs.edit()
             .putString("key_last_daily_date", "2020-01-01")
-            .putString("key_last_weekly_code", "2020_W01")
+            .putString("key_last_weekly_code", "SUN_2020-01-05")
             .putString("key_last_monthly_code", "2020_M01")
             .apply()
 
@@ -285,7 +331,6 @@ class RoadmapEngineTest {
 
         val nextDayDaily = RoadmapManager.dailyTasks.value
         assertEquals(5, nextDayDaily.size)
-        // Pending tasks from previous day must carry over intact with partial progress preserved
         carriedCounts.forEach { (cid, count) ->
             val reloaded = nextDayDaily.find { it.id == cid }
             assertNotNull("Carried-over task $cid must stay active across cycle", reloaded)
@@ -299,35 +344,91 @@ class RoadmapEngineTest {
     }
 
     @Test
-    fun testAnnualBatchPersistenceAndBottomArchive() {
-        val initialYearly = RoadmapManager.yearlyTasks.value
-        assertEquals(250, initialYearly.size)
-        assertTrue(initialYearly.all { it.status == TaskStatus.PENDING })
+    fun testEternalTasksHoldUntilClaimAndTransferToLedger() {
+        val initialEternal = RoadmapManager.yearlyTasks.value
+        assertEquals(250, initialEternal.size)
+        assertTrue(initialEternal.all { it.status == TaskStatus.PENDING })
 
-        // Pick a STRIKE task with targetCount > 1 to test partial persistence, and complete another annual task
-        val multiStepStrike = initialYearly.first { it.actionTag == "STRIKE" && it.targetCount > 1 }
-        val completedAnnual = initialYearly.first { it.id != multiStepStrike.id }
+        // Pick a multi-step STRIKE task for partial persistence and a small POTION Eternal task (targetCount = 3)
+        val multiStepStrike = initialEternal.first { it.actionTag == "STRIKE" && it.targetCount > 1 }
+        val targetEternal = initialEternal.filter { it.actionTag == "POTION" }.minBy { it.targetCount }
 
+        val xpStart = RoadmapManager.totalXp.value
         RoadmapManager.onActionOccurred(app, "STRIKE")
-        assertTrue(RoadmapManager.completeTask(app, completedAnnual.id))
+        repeat(targetEternal.targetCount) {
+            RoadmapManager.onActionOccurred(app, "POTION")
+        }
+
+        // Completed Eternal task stays in yearlyTasks as READY_TO_CLAIM until user clicks Collect ("جمع")
+        val heldTask = RoadmapManager.yearlyTasks.value.first { it.id == targetEternal.id }
+        assertEquals(TaskStatus.READY_TO_CLAIM, heldTask.status)
+        assertEquals(250, RoadmapManager.yearlyTasks.value.size)
+        assertEquals(xpStart, RoadmapManager.totalXp.value)
+
+        // Now user taps Collect ("جمع") -> XP awarded AND task transfers out of yearlyTasks into Ledger
+        assertTrue(RoadmapManager.claimTaskReward(app, targetEternal.id))
+        assertEquals(xpStart + targetEternal.xpBounty, RoadmapManager.totalXp.value)
 
         // Re-initialize from SharedPreferences JSON
         RoadmapManager.resetForTesting(app)
 
-        val reloadedYearly = RoadmapManager.yearlyTasks.value
-        assertEquals(250, reloadedYearly.size)
+        val reloadedEternal = RoadmapManager.yearlyTasks.value
+        assertEquals(249, reloadedEternal.size)
+        assertFalse("Claimed Eternal task must leave active list upon Collect", reloadedEternal.any { it.id == targetEternal.id })
 
-        // Completed task remains visible and sits at the bottom archive (all pending before all completed)
-        val firstCompletedIdx = reloadedYearly.indexOfFirst { it.isCompleted }
-        assertTrue("At least one annual task should be archived as completed", firstCompletedIdx >= 0)
-        assertTrue(reloadedYearly.drop(firstCompletedIdx).all { it.isCompleted })
-        assertTrue(reloadedYearly.take(firstCompletedIdx).all { !it.isCompleted })
-        assertEquals(completedAnnual.id, reloadedYearly.last().id)
-
-        // Partial progress on pending multi-step annual task persisted across restart
-        val reloadedStrike = reloadedYearly.first { it.id == multiStepStrike.id }
+        // Partial progress on pending multi-step Eternal task persisted
+        val reloadedStrike = reloadedEternal.first { it.id == multiStepStrike.id }
         assertEquals(1, reloadedStrike.currentCount)
         assertEquals(TaskStatus.PENDING, reloadedStrike.status)
+
+        // Ledger snapshot contains ALL 1,000 tasks including completed Eternal task w/ timestamp and partial task progress
+        val ledger = RoadmapManager.getTasksLedgerSnapshot()
+        assertEquals(1000, ledger.size)
+        val ledgerClaimed = ledger.first { it.task.id == targetEternal.id }
+        assertEquals(TaskStatus.COMPLETED, ledgerClaimed.task.status)
+        assertNotNull("Ledger entry must store completion timestamp", ledgerClaimed.completedAtMillis)
+        assertEquals(ledgerClaimed.task.targetCount, ledgerClaimed.task.currentCount)
+
+        val ledgerPartial = ledger.first { it.task.id == multiStepStrike.id }
+        assertEquals(1, ledgerPartial.task.currentCount)
+        assertEquals(TaskStatus.PENDING, ledgerPartial.task.status)
+    }
+
+    @Test
+    fun testCycleGrantSchedulesDailyMidnightWeeklySundayMonthlyFirst() {
+        val cal = java.util.Calendar.getInstance().apply {
+            set(2026, java.util.Calendar.NOVEMBER, 11, 15, 30, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val sampleWednesday = cal.timeInMillis
+
+        // Daily reset: Thursday Nov 12 at 00:00:00.000
+        val dailyReset = java.util.Calendar.getInstance().apply {
+            timeInMillis = TaskPools.nextDailyResetMillis(sampleWednesday)
+        }
+        assertEquals(12, dailyReset.get(java.util.Calendar.DAY_OF_MONTH))
+        assertEquals(0, dailyReset.get(java.util.Calendar.HOUR_OF_DAY))
+        assertEquals(0, dailyReset.get(java.util.Calendar.MINUTE))
+
+        // Weekly reset: Upcoming Sunday Nov 15 at 00:00:00.000
+        val weeklyReset = java.util.Calendar.getInstance().apply {
+            timeInMillis = TaskPools.nextSundayResetMillis(sampleWednesday)
+        }
+        assertEquals(java.util.Calendar.SUNDAY, weeklyReset.get(java.util.Calendar.DAY_OF_WEEK))
+        assertEquals(15, weeklyReset.get(java.util.Calendar.DAY_OF_MONTH))
+        assertEquals(0, weeklyReset.get(java.util.Calendar.HOUR_OF_DAY))
+
+        // Week seed stays Sunday-anchored across week
+        val sunWeek = TaskPools.currentWeekString(sampleWednesday)
+        assertEquals("SUN_2026-11-08", sunWeek)
+
+        // Monthly reset: December 1st at 00:00:00.000
+        val monthlyReset = java.util.Calendar.getInstance().apply {
+            timeInMillis = TaskPools.nextMonthlyResetMillis(sampleWednesday)
+        }
+        assertEquals(1, monthlyReset.get(java.util.Calendar.DAY_OF_MONTH))
+        assertEquals(java.util.Calendar.DECEMBER, monthlyReset.get(java.util.Calendar.MONTH))
+        assertEquals(0, monthlyReset.get(java.util.Calendar.HOUR_OF_DAY))
     }
 
     @Test

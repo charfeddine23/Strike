@@ -38,12 +38,21 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -68,11 +77,14 @@ import com.example.data.roadmap.RoadmapStation
 import com.example.data.roadmap.TaskItem
 import com.example.data.roadmap.TaskPeriod
 import com.example.data.roadmap.TaskPools
+import com.example.data.roadmap.TaskStatus
+import com.example.ui.components.CycleScheduleBanner
 import com.example.ui.components.ElectricMint
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.NeonAqua
 import com.example.ui.components.RoadmapAmbientBackground
 import com.example.ui.components.RoadmapProgressHudCard
+import com.example.ui.components.TasksLedgerSection
 import com.example.ui.components.WavySnakeStationRow
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
@@ -81,6 +93,7 @@ import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.util.HapticHelper
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -112,6 +125,8 @@ fun RoadmapScreen(
     val weeklyTasks by viewModel.weeklyTasks.collectAsStateWithLifecycle()
     val monthlyTasks by viewModel.monthlyTasks.collectAsStateWithLifecycle()
     val yearlyTasks by viewModel.yearlyTasks.collectAsStateWithLifecycle()
+    val completedTaskIds by viewModel.completedTaskIds.collectAsStateWithLifecycle()
+    val completedTaskTimestamps by viewModel.completedTaskTimestamps.collectAsStateWithLifecycle()
 
     val woodenKeys by viewModel.woodenKeys.collectAsStateWithLifecycle()
     val bronzeKeys by viewModel.bronzeKeys.collectAsStateWithLifecycle()
@@ -124,6 +139,24 @@ fun RoadmapScreen(
 
     var selectedMainTab by remember { mutableStateOf(0) } // 0: Wavy Roadmap, 1: Dynamic Tasks
     var selectedTaskPeriod by remember { mutableStateOf(TaskPeriod.DAILY) }
+    var isLedgerTabSelected by remember { mutableStateOf(false) }
+
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(selectedMainTab) {
+        if (selectedMainTab == 1) {
+            viewModel.refreshTaskCycles()
+            while (true) {
+                val tick = System.currentTimeMillis()
+                nowMillis = tick
+                val expired = (viewModel.dailyTasks.value + viewModel.weeklyTasks.value + viewModel.monthlyTasks.value)
+                    .any { it.unlockAtMillis in 1L..tick }
+                if (expired) {
+                    viewModel.refreshTaskCycles()
+                }
+                delay(1000L)
+            }
+        }
+    }
 
     val currentStationId = remember(totalXp) { RoadmapManager.calculateUnlockedStationId(totalXp) }
     val roadmapListState = rememberLazyListState()
@@ -376,196 +409,255 @@ fun RoadmapScreen(
                 }
             } else {
                 // ==========================================
-                // TAB 1: DYNAMIC TASK ENGINE
+                // TAB 1: DYNAMIC TASK ENGINE & TASKS LEDGER
                 // ==========================================
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 16.dp)
                 ) {
-                    var everlastingFilter by remember { mutableStateOf(0) } // 0: All, 1: Pending, 2: Completed
+                    var everlastingFilter by remember { mutableStateOf(0) } // 0: All active, 1: Ready to Collect, 2: Pending
 
-                    // Period Selector Chips (Daily, Weekly, Monthly, Annual)
+                    // Period & Ledger Selector Chips (Scrollable row of 5 pills)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
                             .padding(vertical = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         PeriodFilterChip(
                             label = if (isAr) "يومية (5)" else "Daily (5)",
-                            isSelected = selectedTaskPeriod == TaskPeriod.DAILY,
-                            onClick = { selectedTaskPeriod = TaskPeriod.DAILY }
+                            isSelected = !isLedgerTabSelected && selectedTaskPeriod == TaskPeriod.DAILY,
+                            onClick = {
+                                isLedgerTabSelected = false
+                                selectedTaskPeriod = TaskPeriod.DAILY
+                            }
                         )
                         PeriodFilterChip(
                             label = if (isAr) "أسبوعية (7)" else "Weekly (7)",
-                            isSelected = selectedTaskPeriod == TaskPeriod.WEEKLY,
-                            onClick = { selectedTaskPeriod = TaskPeriod.WEEKLY }
+                            isSelected = !isLedgerTabSelected && selectedTaskPeriod == TaskPeriod.WEEKLY,
+                            onClick = {
+                                isLedgerTabSelected = false
+                                selectedTaskPeriod = TaskPeriod.WEEKLY
+                            }
                         )
                         PeriodFilterChip(
                             label = if (isAr) "شهرية (10)" else "Monthly (10)",
-                            isSelected = selectedTaskPeriod == TaskPeriod.MONTHLY,
-                            onClick = { selectedTaskPeriod = TaskPeriod.MONTHLY }
+                            isSelected = !isLedgerTabSelected && selectedTaskPeriod == TaskPeriod.MONTHLY,
+                            onClick = {
+                                isLedgerTabSelected = false
+                                selectedTaskPeriod = TaskPeriod.MONTHLY
+                            }
                         )
                         PeriodFilterChip(
-                            label = if (isAr) "سنوية (250)" else "Annual (250)",
-                            isSelected = selectedTaskPeriod == TaskPeriod.YEARLY,
-                            onClick = { selectedTaskPeriod = TaskPeriod.YEARLY }
+                            label = if (isAr) "الأبدية (${yearlyTasks.size})" else "Eternal (${yearlyTasks.size})",
+                            isSelected = !isLedgerTabSelected && selectedTaskPeriod == TaskPeriod.YEARLY,
+                            onClick = {
+                                isLedgerTabSelected = false
+                                selectedTaskPeriod = TaskPeriod.YEARLY
+                            }
+                        )
+                        PeriodFilterChip(
+                            label = if (isAr) "📒 دفتر المهام" else "📒 Tasks Ledger",
+                            isSelected = isLedgerTabSelected,
+                            accentColor = ElectricMint,
+                            onClick = { isLedgerTabSelected = true }
                         )
                     }
 
-                    // Master Goals Header Banner (Displayed when Annual tab is active)
-                    if (selectedTaskPeriod == TaskPeriod.YEARLY) {
-                        val completedCount = yearlyTasks.count { it.isCompleted }
-                        val progressFraction = (completedCount.toFloat() / yearlyTasks.size.coerceAtLeast(1).toFloat()).coerceIn(0f, 1f)
-
-                        LiquidGlassCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 10.dp),
-                            shape = RoundedCornerShape(14.dp)
+                    if (isLedgerTabSelected) {
+                        val ledgerEntries = remember(
+                            dailyTasks,
+                            weeklyTasks,
+                            monthlyTasks,
+                            yearlyTasks,
+                            completedTaskIds,
+                            completedTaskTimestamps
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text(
-                                            text = if (isAr) "المهام السنوية الكبرى (250 إنجازاً)" else "Grand Annual Milestones (250 Goals)",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Black,
-                                            fontFamily = PlusJakartaSans,
-                                            color = NeonAmber
-                                        )
-                                        Text(
-                                            text = if (isAr) {
-                                                "مرتبة تصاعدياً حسب الصعوبة | دون تجاوز بالمفاتيح: 245,350 XP"
-                                            } else {
-                                                "Sorted by ascending difficulty | No skip-keys allowed: 245,350 XP"
-                                            },
-                                            fontSize = 10.sp,
-                                            color = Color(0xFF94A3B8)
-                                        )
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0x33F59E0B))
-                                            .border(1.dp, NeonAmber, RoundedCornerShape(8.dp))
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            RoadmapManager.getTasksLedgerSnapshot()
+                        }
+
+                        TasksLedgerSection(
+                            entries = ledgerEntries,
+                            nowMillis = nowMillis,
+                            currentLang = currentLang,
+                            onClaimTask = { taskId ->
+                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                viewModel.claimTaskReward(taskId)
+                            }
+                        )
+                    } else {
+                        // Grant Day Schedule & Countdown Banner (Daily 12 AM, Weekly Sunday, Monthly 1st)
+                        if (selectedTaskPeriod != TaskPeriod.YEARLY) {
+                            CycleScheduleBanner(
+                                period = selectedTaskPeriod,
+                                nowMillis = nowMillis,
+                                currentLang = currentLang
+                            )
+                        } else {
+                            // Eternal Master Goals Header Banner
+                            val readyEternalCount = yearlyTasks.count { it.isReadyToClaim }
+                            val claimedEternalCount = (TaskPools.ALL_EVERLASTING_TASKS.size - yearlyTasks.size).coerceAtLeast(0)
+                            val totalEternal = TaskPools.ALL_EVERLASTING_TASKS.size.coerceAtLeast(1)
+                            val progressFraction = (claimedEternalCount.toFloat() / totalEternal.toFloat()).coerceIn(0f, 1f)
+
+                            LiquidGlassCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 10.dp),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(
-                                            text = "$completedCount / ${yearlyTasks.size}",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = NeonAmber
-                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = if (isAr) "مهام الأبدية (${yearlyTasks.size} متبقية)" else "Eternal Goals (${yearlyTasks.size} Remaining)",
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Black,
+                                                fontFamily = PlusJakartaSans,
+                                                color = NeonAmber
+                                            )
+                                            Text(
+                                                text = if (isAr) {
+                                                    "عند جمع المكافأة تُنقل المهمة مباشرةً إلى دفتر المهام المنجزة • دون مفاتيح تجاوز"
+                                                } else {
+                                                    "Collecting a completed goal transfers it directly to the Completed Tasks Ledger"
+                                                },
+                                                fontSize = 10.sp,
+                                                color = Color(0xFF94A3B8)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(Color(0x33F59E0B))
+                                                .border(1.dp, NeonAmber, RoundedCornerShape(8.dp))
+                                                .clickable { isLedgerTabSelected = true }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isAr) "في الدفتر: $claimedEternalCount/$totalEternal" else "Ledger: $claimedEternalCount/$totalEternal",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = NeonAmber
+                                            )
+                                        }
                                     }
-                                }
 
-                                Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
 
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp))
-                                        .background(Color(0x331E293B))
-                                ) {
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxWidth(progressFraction)
+                                            .fillMaxWidth()
                                             .height(6.dp)
-                                            .background(Brush.horizontalGradient(listOf(NeonAmber, Color(0xFFF97316))))
-                                    )
-                                }
+                                            .clip(RoundedCornerShape(3.dp))
+                                            .background(Color(0x331E293B))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(progressFraction)
+                                                .height(6.dp)
+                                                .background(Brush.horizontalGradient(listOf(NeonAmber, Color(0xFFF97316))))
+                                        )
+                                    }
 
-                                Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
 
-                                // Sub-filter chips for 250 master goals
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    FilterChipTiny(
-                                        label = if (isAr) "الكل (250)" else "All (250)",
-                                        selected = everlastingFilter == 0,
-                                        onClick = { everlastingFilter = 0 }
-                                    )
-                                    FilterChipTiny(
-                                        label = if (isAr) "قيد الإنجاز (${yearlyTasks.count { !it.isCompleted }})" else "Pending (${yearlyTasks.count { !it.isCompleted }})",
-                                        selected = everlastingFilter == 1,
-                                        onClick = { everlastingFilter = 1 }
-                                    )
-                                    FilterChipTiny(
-                                        label = if (isAr) "المكتملة ($completedCount)" else "Completed ($completedCount)",
-                                        selected = everlastingFilter == 2,
-                                        onClick = { everlastingFilter = 2 }
-                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        FilterChipTiny(
+                                            label = if (isAr) "الكل (${yearlyTasks.size})" else "All (${yearlyTasks.size})",
+                                            selected = everlastingFilter == 0,
+                                            onClick = { everlastingFilter = 0 }
+                                        )
+                                        FilterChipTiny(
+                                            label = if (isAr) "جاهزة للجمع ($readyEternalCount)" else "Collect ($readyEternalCount)",
+                                            selected = everlastingFilter == 1,
+                                            onClick = { everlastingFilter = 1 }
+                                        )
+                                        FilterChipTiny(
+                                            label = if (isAr) "قيد الإنجاز (${yearlyTasks.size - readyEternalCount})" else "In Progress (${yearlyTasks.size - readyEternalCount})",
+                                            selected = everlastingFilter == 2,
+                                            onClick = { everlastingFilter = 2 }
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    val currentTasks = when (selectedTaskPeriod) {
-                        TaskPeriod.DAILY -> dailyTasks
-                        TaskPeriod.WEEKLY -> weeklyTasks
-                        TaskPeriod.MONTHLY -> monthlyTasks
-                        TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> when (everlastingFilter) {
-                            1 -> yearlyTasks.filter { !it.isCompleted }
-                            2 -> yearlyTasks.filter { it.isCompleted }
-                            else -> yearlyTasks
+                        val currentTasks = when (selectedTaskPeriod) {
+                            TaskPeriod.DAILY -> dailyTasks
+                            TaskPeriod.WEEKLY -> weeklyTasks
+                            TaskPeriod.MONTHLY -> monthlyTasks
+                            TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> when (everlastingFilter) {
+                                1 -> yearlyTasks.filter { it.isReadyToClaim }
+                                2 -> yearlyTasks.filter { !it.isReadyToClaim }
+                                else -> yearlyTasks
+                            }
                         }
-                    }
 
-                    // Inventory Skip-Keys Summary Strip (for tasks that allow skipping)
-                    if (selectedTaskPeriod != TaskPeriod.YEARLY) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        // Inventory Skip-Keys Summary Strip (for Daily, Weekly, Monthly)
+                        if (selectedTaskPeriod != TaskPeriod.YEARLY) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                KeyInventoryChip(
+                                    name = SkipKeyType.WOODEN.getLocalizedName(currentLang),
+                                    count = woodenKeys,
+                                    color = Color(0xFFD97706),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                KeyInventoryChip(
+                                    name = SkipKeyType.BRONZE.getLocalizedName(currentLang),
+                                    count = bronzeKeys,
+                                    color = Color(0xFFF59E0B),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                KeyInventoryChip(
+                                    name = SkipKeyType.SILVER.getLocalizedName(currentLang),
+                                    count = silverKeys,
+                                    color = Color(0xFFE2E8F0),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 48.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            KeyInventoryChip(
-                                name = SkipKeyType.WOODEN.getLocalizedName(currentLang),
-                                count = woodenKeys,
-                                color = Color(0xFFD97706),
-                                modifier = Modifier.weight(1f)
-                            )
-                            KeyInventoryChip(
-                                name = SkipKeyType.BRONZE.getLocalizedName(currentLang),
-                                count = bronzeKeys,
-                                color = Color(0xFFF59E0B),
-                                modifier = Modifier.weight(1f)
-                            )
-                            KeyInventoryChip(
-                                name = SkipKeyType.SILVER.getLocalizedName(currentLang),
-                                count = silverKeys,
-                                color = Color(0xFFE2E8F0),
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 48.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(currentTasks, key = { it.id }) { task ->
-                            TaskItemCard(
-                                task = task,
-                                currentLang = currentLang,
-                                availableKeysForType = when (task.requiredSkipKey) {
-                                    SkipKeyType.WOODEN -> woodenKeys
-                                    SkipKeyType.BRONZE -> bronzeKeys
-                                    SkipKeyType.SILVER -> silverKeys
-                                },
-                                onSkipWithKey = {
-                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    viewModel.useSkipKeyForTask(task.id)
-                                }
-                            )
+                            items(currentTasks, key = { it.id }) { task ->
+                                TaskItemCard(
+                                    task = task,
+                                    nowMillis = nowMillis,
+                                    currentLang = currentLang,
+                                    availableKeysForType = when (task.requiredSkipKey) {
+                                        SkipKeyType.WOODEN -> woodenKeys
+                                        SkipKeyType.BRONZE -> bronzeKeys
+                                        SkipKeyType.SILVER -> silverKeys
+                                    },
+                                    onClaimReward = {
+                                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        viewModel.claimTaskReward(task.id)
+                                    },
+                                    onSkipWithKey = {
+                                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        viewModel.useSkipKeyForTask(task.id)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -620,14 +712,26 @@ private fun RoadmapPillTabButton(
 @Composable
 fun TaskItemCard(
     task: TaskItem,
+    nowMillis: Long = System.currentTimeMillis(),
     currentLang: String = "ar",
     availableKeysForType: Int,
+    onClaimReward: () -> Unit = {},
     onSkipWithKey: () -> Unit
 ) {
     val isAr = currentLang == "ar"
+    val isLocked = task.isLocked(nowMillis)
+    val isReady = task.status == TaskStatus.READY_TO_CLAIM
+
     LiquidGlassCard(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (isReady) {
+                    Modifier.border(1.4.dp, ElectricMint, RoundedCornerShape(16.dp))
+                } else {
+                    Modifier
+                }
+            )
             .testTag("task_card_${task.id}"),
         shape = RoundedCornerShape(16.dp)
     ) {
@@ -647,7 +751,7 @@ fun TaskItemCard(
                         fontWeight = FontWeight.Bold,
                         fontFamily = PlusJakartaSans,
                         fontSize = 14.sp,
-                        color = Color.White
+                        color = if (isLocked) Color(0xFF94A3B8) else Color.White
                     )
                     Text(
                         text = task.getLocalizedDescription(currentLang),
@@ -662,15 +766,15 @@ fun TaskItemCard(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0x3310B981))
-                            .border(1.dp, NeonEmerald, RoundedCornerShape(8.dp))
+                            .background(if (isReady) ElectricMint.copy(alpha = 0.22f) else Color(0x3310B981))
+                            .border(1.dp, if (isReady) ElectricMint else NeonEmerald, RoundedCornerShape(8.dp))
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
                             text = "+${task.xpBounty} XP",
                             fontWeight = FontWeight.Black,
                             fontSize = 11.sp,
-                            color = NeonEmerald
+                            color = if (isReady) ElectricMint else NeonEmerald
                         )
                     }
 
@@ -717,39 +821,155 @@ fun TaskItemCard(
                         modifier = Modifier
                             .fillMaxWidth(task.progressFraction)
                             .height(6.dp)
-                            .background(if (task.isCompleted) NeonEmerald else NeonCyan)
+                            .background(
+                                when {
+                                    isReady -> ElectricMint
+                                    task.isCompleted -> NeonEmerald
+                                    isLocked -> Color(0xFF64748B)
+                                    else -> NeonCyan
+                                }
+                            )
                     )
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
                     text = "${task.currentCount} / ${task.targetCount}",
                     fontSize = 10.sp,
-                    color = Color(0xFFCBD5E1),
+                    color = if (isReady) ElectricMint else Color(0xFFCBD5E1),
                     fontWeight = FontWeight.Bold
                 )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Action Buttons
-            if (task.isCompleted) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = NeonEmerald, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (isAr) "مكتملة (+${task.xpBounty} XP حُصدت بنجاح)" else "Completed (+${task.xpBounty} XP Claimed)",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = NeonEmerald
-                    )
+            // Action / Status Area
+            when {
+                isReady -> {
+                    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = when (task.period) {
+                                TaskPeriod.DAILY -> if (isAr) {
+                                    "اكتمل الهدف! اضغط «جمع» لاستلام المكافأة واستبدالها بمهمة جديدة تفتح 12:00 ليلاً"
+                                } else {
+                                    "Goal met! Tap Collect to claim XP and queue a replacement for midnight"
+                                }
+                                TaskPeriod.WEEKLY -> if (isAr) {
+                                    "اكتمل الهدف! اضغط «جمع» لاستلام المكافأة وتجهيز مهمة جديدة ليوم الأحد"
+                                } else {
+                                    "Goal met! Tap Collect to claim XP and queue a replacement for Sunday"
+                                }
+                                TaskPeriod.MONTHLY -> if (isAr) {
+                                    "اكتمل الهدف! اضغط «جمع» لاستلام المكافأة وتجهيز مهمة جديدة ليوم 1 من الشهر"
+                                } else {
+                                    "Goal met! Tap Collect to claim XP and queue a replacement for the 1st of month"
+                                }
+                                TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> if (isAr) {
+                                    "أنجزت مهمة أبدية! اضغط «جمع» لنقلها مباشرة إلى دفتر المهام المنجزة"
+                                } else {
+                                    "Eternal milestone reached! Tap Collect to move it to the Completed Tasks Ledger"
+                                }
+                            },
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = ElectricMint
+                        )
+                        Button(
+                            onClick = onClaimReward,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = ElectricMint,
+                                contentColor = Color(0xFF041418)
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(42.dp)
+                                .testTag("btn_claim_task_${task.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isAr) "جمع (+${task.xpBounty} XP)" else "Collect (+${task.xpBounty} XP)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
                 }
-            } else {
-                if (!task.canBeSkipped) {
-                    // Annual tasks CANNOT be skipped with keys — strictly require genuine completion
+                isLocked -> {
+                    val countdown = TaskPools.formatRemainingCountdown(task.unlockAtMillis, nowMillis, currentLang)
+                    val scheduleHint = when (task.period) {
+                        TaskPeriod.DAILY -> if (isAr) "تُمنح صلاحية الإنجاز الساعة 12:00 ليلاً" else "Unlocks at 12:00 AM midnight"
+                        TaskPeriod.WEEKLY -> if (isAr) "تُمنح صلاحية الإنجاز يوم الأحد 12:00 ليلاً" else "Unlocks Sunday 12:00 AM"
+                        TaskPeriod.MONTHLY -> if (isAr) "تُمنح صلاحية الإنجاز يوم 1 من الشهر 12:00 ليلاً" else "Unlocks on 1st of month 12:00 AM"
+                        else -> ""
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0x24F59E0B))
+                            .border(1.dp, NeonAmber.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                            .testTag("task_cooldown_timer_${task.id}"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Schedule,
+                                contentDescription = null,
+                                tint = NeonAmber,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = scheduleHint,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NeonAmber
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(7.dp))
+                                .background(Color(0x330F172A))
+                                .border(0.8.dp, NeonAmber, RoundedCornerShape(7.dp))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = countdown,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+                task.isCompleted -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = NeonEmerald, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isAr) "مكتملة (+${task.xpBounty} XP حُصدت بنجاح)" else "Completed (+${task.xpBounty} XP Claimed)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = NeonEmerald
+                        )
+                    }
+                }
+                !task.canBeSkipped -> {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -768,16 +988,17 @@ fun TaskItemCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (isAr) {
-                                "مهمة سنوية (غير قابلة للتجاوز بالمفاتيح - تتطلب إنجازاً فعلياً)"
+                                "مهمة أبدية (غير قابلة للتجاوز بالمفاتيح - تتطلب إنجازاً فعلياً)"
                             } else {
-                                "Annual Milestone (Cannot be skipped with keys — genuine completion required)"
+                                "Eternal Milestone (Cannot be skipped with keys — genuine completion required)"
                             },
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = NeonAmber
                         )
                     }
-                } else {
+                }
+                else -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -855,13 +1076,14 @@ fun KeyInventoryChip(name: String, count: Int, color: Color, modifier: Modifier 
 fun PeriodFilterChip(
     label: String,
     isSelected: Boolean,
+    accentColor: Color = NeonCyan,
     onClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (isSelected) Color(0x3338BDF8) else Color(0x221E293B))
-            .border(1.dp, if (isSelected) NeonCyan else Color(0x20FFFFFF), RoundedCornerShape(10.dp))
+            .background(if (isSelected) accentColor.copy(alpha = 0.2f) else Color(0x221E293B))
+            .border(1.dp, if (isSelected) accentColor else Color(0x20FFFFFF), RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
@@ -869,7 +1091,7 @@ fun PeriodFilterChip(
             text = label,
             fontSize = 11.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) NeonCyan else Color(0xFF94A3B8)
+            color = if (isSelected) accentColor else Color(0xFF94A3B8)
         )
     }
 }

@@ -28,6 +28,7 @@ object RoadmapManager {
     private const val KEY_TOTAL_XP = "key_total_xp"
     private const val KEY_CLAIMED_STATIONS = "key_claimed_stations"
     private const val KEY_COMPLETED_TASK_IDS = "key_completed_task_ids"
+    private const val KEY_COMPLETED_TASK_TIMESTAMPS = "key_completed_task_timestamps"
     private const val KEY_LAST_DAILY_DATE = "key_last_daily_date"
     private const val KEY_LAST_WEEKLY_CODE = "key_last_weekly_code"
     private const val KEY_LAST_MONTHLY_CODE = "key_last_monthly_code"
@@ -50,6 +51,9 @@ object RoadmapManager {
 
     private val _completedTaskIds = MutableStateFlow<Set<String>>(emptySet())
     val completedTaskIds: StateFlow<Set<String>> = _completedTaskIds.asStateFlow()
+
+    private val _completedTaskTimestamps = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val completedTaskTimestamps: StateFlow<Map<String, Long>> = _completedTaskTimestamps.asStateFlow()
 
     private val _dailyTasks = MutableStateFlow<List<TaskItem>>(emptyList())
     val dailyTasks: StateFlow<List<TaskItem>> = _dailyTasks.asStateFlow()
@@ -108,6 +112,8 @@ object RoadmapManager {
 
         val completedStrSet = prefs.getStringSet(KEY_COMPLETED_TASK_IDS, emptySet()) ?: emptySet()
         _completedTaskIds.value = completedStrSet.toSet()
+
+        _completedTaskTimestamps.value = loadTimestampsMap(prefs.getString(KEY_COMPLETED_TASK_TIMESTAMPS, null))
 
         val hasResetInventory = prefs.getBoolean("has_reset_inventory_to_zero_v3", false)
         if (!hasResetInventory) {
@@ -192,9 +198,24 @@ object RoadmapManager {
     ) {
         val prefs = getPrefs(context)
         val completed = _completedTaskIds.value
+        val now = System.currentTimeMillis()
 
-        // 1. Daily Cycle (Capacity 5): Keep unfinished pending tasks across days; refill open slots
-        val today = TaskPools.todayDateString()
+        fun normalizeInCycleList(list: List<TaskItem>): Pair<List<TaskItem>, Boolean> {
+            var modified = false
+            val filtered = list.filter { !it.isCompleted && it.id !in completed }.map { item ->
+                if (item.unlockAtMillis in 1L..now) {
+                    modified = true
+                    item.copy(unlockAtMillis = 0L)
+                } else {
+                    item
+                }
+            }
+            if (filtered.size != list.size) modified = true
+            return TaskPools.sortTasksProgressively(filtered, now) to modified
+        }
+
+        // 1. Daily Cycle (Capacity 5, new tasks unlock at 12:00 AM midnight)
+        val today = TaskPools.todayDateString(now)
         val lastDate = prefs.getString(KEY_LAST_DAILY_DATE, null)
         if (lastDate != today || currentDaily == null) {
             val freshDaily = TaskPools.fillActiveBatch(
@@ -202,23 +223,22 @@ object RoadmapManager {
                 existingPending = currentDaily.orEmpty(),
                 completedIds = completed,
                 seedKey = today,
-                batchSize = 5
+                batchSize = 5,
+                nowMillis = now
             )
             _dailyTasks.value = freshDaily
             saveTasks(context, KEY_DAILY_TASKS_JSON, freshDaily)
             prefs.edit().putString(KEY_LAST_DAILY_DATE, today).apply()
         } else {
-            val activeOnly = TaskPools.sortTasksProgressively(
-                currentDaily.filter { it.status == TaskStatus.PENDING && !it.isCompleted && it.id !in completed }
-            )
+            val (activeOnly, changed) = normalizeInCycleList(currentDaily)
             _dailyTasks.value = activeOnly
-            if (activeOnly.size != currentDaily.size) {
+            if (changed) {
                 saveTasks(context, KEY_DAILY_TASKS_JSON, activeOnly)
             }
         }
 
-        // 2. Weekly Cycle (Capacity 7)
-        val currentWeek = TaskPools.currentWeekString()
+        // 2. Weekly Cycle (Capacity 7, Sunday 12:00 AM grant day)
+        val currentWeek = TaskPools.currentWeekString(now)
         val lastWeek = prefs.getString(KEY_LAST_WEEKLY_CODE, null)
         if (lastWeek != currentWeek || currentWeekly == null) {
             val freshWeekly = TaskPools.fillActiveBatch(
@@ -226,23 +246,22 @@ object RoadmapManager {
                 existingPending = currentWeekly.orEmpty(),
                 completedIds = completed,
                 seedKey = currentWeek,
-                batchSize = 7
+                batchSize = 7,
+                nowMillis = now
             )
             _weeklyTasks.value = freshWeekly
             saveTasks(context, KEY_WEEKLY_TASKS_JSON, freshWeekly)
             prefs.edit().putString(KEY_LAST_WEEKLY_CODE, currentWeek).apply()
         } else {
-            val activeOnly = TaskPools.sortTasksProgressively(
-                currentWeekly.filter { it.status == TaskStatus.PENDING && !it.isCompleted && it.id !in completed }
-            )
+            val (activeOnly, changed) = normalizeInCycleList(currentWeekly)
             _weeklyTasks.value = activeOnly
-            if (activeOnly.size != currentWeekly.size) {
+            if (changed) {
                 saveTasks(context, KEY_WEEKLY_TASKS_JSON, activeOnly)
             }
         }
 
-        // 3. Monthly Cycle (Capacity 10)
-        val currentMonth = TaskPools.currentMonthString()
+        // 3. Monthly Cycle (Capacity 10, 1st of month 12:00 AM grant day)
+        val currentMonth = TaskPools.currentMonthString(now)
         val lastMonth = prefs.getString(KEY_LAST_MONTHLY_CODE, null)
         if (lastMonth != currentMonth || currentMonthly == null) {
             val freshMonthly = TaskPools.fillActiveBatch(
@@ -250,17 +269,16 @@ object RoadmapManager {
                 existingPending = currentMonthly.orEmpty(),
                 completedIds = completed,
                 seedKey = currentMonth,
-                batchSize = 10
+                batchSize = 10,
+                nowMillis = now
             )
             _monthlyTasks.value = freshMonthly
             saveTasks(context, KEY_MONTHLY_TASKS_JSON, freshMonthly)
             prefs.edit().putString(KEY_LAST_MONTHLY_CODE, currentMonth).apply()
         } else {
-            val activeOnly = TaskPools.sortTasksProgressively(
-                currentMonthly.filter { it.status == TaskStatus.PENDING && !it.isCompleted && it.id !in completed }
-            )
+            val (activeOnly, changed) = normalizeInCycleList(currentMonthly)
             _monthlyTasks.value = activeOnly
-            if (activeOnly.size != currentMonthly.size) {
+            if (changed) {
                 saveTasks(context, KEY_MONTHLY_TASKS_JSON, activeOnly)
             }
         }
@@ -295,6 +313,7 @@ object RoadmapManager {
     fun hardResetAllTaskCompletionStates(context: Context) {
         init(context)
         _completedTaskIds.value = emptySet()
+        _completedTaskTimestamps.value = emptyMap()
 
         val today = TaskPools.todayDateString()
         val currentWeek = TaskPools.currentWeekString()
@@ -312,6 +331,7 @@ object RoadmapManager {
 
         getPrefs(context).edit()
             .remove(KEY_COMPLETED_TASK_IDS)
+            .remove(KEY_COMPLETED_TASK_TIMESTAMPS)
             .remove(KEY_DAILY_TASKS_JSON)
             .remove(KEY_WEEKLY_TASKS_JSON)
             .remove(KEY_MONTHLY_TASKS_JSON)
@@ -337,6 +357,7 @@ object RoadmapManager {
         _totalXp.value = 0L
         _claimedStations.value = emptySet()
         _completedTaskIds.value = emptySet()
+        _completedTaskTimestamps.value = emptyMap()
         _shields24h.value = 0
         _shields48h.value = 0
         _shields72h.value = 0
@@ -359,6 +380,7 @@ object RoadmapManager {
             .putLong(KEY_TOTAL_XP, 0L)
             .remove(KEY_CLAIMED_STATIONS)
             .remove(KEY_COMPLETED_TASK_IDS)
+            .remove(KEY_COMPLETED_TASK_TIMESTAMPS)
             .remove(KEY_DAILY_TASKS_JSON)
             .remove(KEY_WEEKLY_TASKS_JSON)
             .remove(KEY_MONTHLY_TASKS_JSON)
@@ -475,82 +497,119 @@ object RoadmapManager {
         }
     }
 
-    private fun sortYearlyForArchive(list: List<TaskItem>): List<TaskItem> {
-        return list.sortedWith(
-            compareBy<TaskItem> { it.isCompleted }
-                .thenBy { it.difficultyTier }
-                .thenBy { it.xpBounty }
-                .thenBy { it.targetCount }
-                .thenBy { it.id }
-        )
+    /**
+     * Collects ("جمع") a task that has reached READY_TO_CLAIM via user actions:
+     * - Awards XP bounty.
+     * - Records task permanently in completedTaskIds & completedTaskTimestamps (visible in Tasks Ledger).
+     * - For Daily / Weekly / Monthly: replaces slot immediately with a fresh non-repeating task
+     *   locked with a countdown until next midnight (Daily), Sunday 12 AM (Weekly), or 1st of month (Monthly).
+     * - For Eternal / Annual: transfers directly out of the active Eternal list into the Completed Tasks Ledger.
+     */
+    @Synchronized
+    fun claimTaskReward(context: Context, taskId: String): Boolean {
+        return finalizeAndReplaceTask(context, taskId, allowPendingDirect = false)
     }
 
     /**
-     * Completes a task and awards its XP bounty:
-     * - Daily, Weekly, Monthly: disappears immediately from active list and enters completedTaskIds.
-     * - Annual: stays visible and shifts down to the bottom archive.
+     * Completes/collects a task directly (supports both READY_TO_CLAIM and direct programmatic completion).
      */
     @Synchronized
     fun completeTask(context: Context, taskId: String): Boolean {
+        return finalizeAndReplaceTask(context, taskId, allowPendingDirect = true)
+    }
+
+    private fun finalizeAndReplaceTask(
+        context: Context,
+        taskId: String,
+        allowPendingDirect: Boolean
+    ): Boolean {
         init(context)
+        val now = System.currentTimeMillis()
         var found = false
         var awardedXp = 0
 
-        fun removeOnComplete(list: List<TaskItem>): List<TaskItem> {
-            val remaining = mutableListOf<TaskItem>()
-            for (item in list) {
-                if (item.id == taskId && item.status == TaskStatus.PENDING) {
-                    found = true
-                    awardedXp = item.xpBounty
-                } else {
-                    remaining.add(item)
-                }
+        val updatedCompleted = _completedTaskIds.value.toMutableSet()
+        updatedCompleted.add(taskId)
+
+        fun tryClaimInRotationalList(
+            currentList: List<TaskItem>,
+            period: TaskPeriod
+        ): Pair<List<TaskItem>, Boolean> {
+            val idx = currentList.indexOfFirst { item ->
+                item.id == taskId && !item.isLocked(now) &&
+                    (item.status == TaskStatus.READY_TO_CLAIM || (allowPendingDirect && item.status == TaskStatus.PENDING))
             }
-            return remaining
+            if (idx < 0) return currentList to false
+
+            val target = currentList[idx]
+            found = true
+            awardedXp = target.xpBounty
+
+            val remaining = currentList.filterNot { it.id == taskId }.toMutableList()
+            val excludedIds = updatedCompleted + remaining.map { it.id }
+            val replacement = TaskPools.drawReplacementTask(
+                period = period,
+                excludedIds = excludedIds,
+                unlockAtMillis = TaskPools.getNextCycleResetMillis(period, now),
+                seedMillis = now
+            )
+            if (replacement != null) {
+                remaining.add(replacement)
+            }
+            return TaskPools.sortTasksProgressively(remaining, now) to true
         }
 
-        val updatedDaily = removeOnComplete(_dailyTasks.value)
+        val (nextDaily, dailyMatched) = tryClaimInRotationalList(_dailyTasks.value, TaskPeriod.DAILY)
+        if (dailyMatched) {
+            _dailyTasks.value = nextDaily
+            saveTasks(context, KEY_DAILY_TASKS_JSON, nextDaily)
+        }
+
+        if (!found) {
+            val (nextWeekly, weeklyMatched) = tryClaimInRotationalList(_weeklyTasks.value, TaskPeriod.WEEKLY)
+            if (weeklyMatched) {
+                _weeklyTasks.value = nextWeekly
+                saveTasks(context, KEY_WEEKLY_TASKS_JSON, nextWeekly)
+            }
+        }
+
+        if (!found) {
+            val (nextMonthly, monthlyMatched) = tryClaimInRotationalList(_monthlyTasks.value, TaskPeriod.MONTHLY)
+            if (monthlyMatched) {
+                _monthlyTasks.value = nextMonthly
+                saveTasks(context, KEY_MONTHLY_TASKS_JSON, nextMonthly)
+            }
+        }
+
+        if (!found) {
+            val targetYearly = _yearlyTasks.value.find { item ->
+                item.id == taskId && !item.isLocked(now) &&
+                    (item.status == TaskStatus.READY_TO_CLAIM || (allowPendingDirect && item.status == TaskStatus.PENDING))
+            }
+            if (targetYearly != null) {
+                found = true
+                awardedXp = targetYearly.xpBounty
+                // Transfer directly out of active Eternal list into Completed Tasks Ledger
+                val remainingYearly = TaskPools.sortTasksProgressively(
+                    _yearlyTasks.value.filterNot { it.id == taskId },
+                    now
+                )
+                _yearlyTasks.value = remainingYearly
+                saveTasks(context, KEY_YEARLY_TASKS_JSON, remainingYearly)
+            }
+        }
+
         if (found) {
-            _dailyTasks.value = updatedDaily
-            saveTasks(context, KEY_DAILY_TASKS_JSON, updatedDaily)
-        }
-
-        if (!found) {
-            val updatedWeekly = removeOnComplete(_weeklyTasks.value)
-            if (found) {
-                _weeklyTasks.value = updatedWeekly
-                saveTasks(context, KEY_WEEKLY_TASKS_JSON, updatedWeekly)
-            }
-        }
-
-        if (!found) {
-            val updatedMonthly = removeOnComplete(_monthlyTasks.value)
-            if (found) {
-                _monthlyTasks.value = updatedMonthly
-                saveTasks(context, KEY_MONTHLY_TASKS_JSON, updatedMonthly)
-            }
-        }
-
-        if (!found) {
-            val updatedYearly = _yearlyTasks.value.map { item ->
-                if (item.id == taskId && item.status == TaskStatus.PENDING) {
-                    found = true
-                    awardedXp = item.xpBounty
-                    item.copy(status = TaskStatus.COMPLETED, currentCount = item.targetCount)
-                } else item
-            }
-            if (found) {
-                val sortedYearly = sortYearlyForArchive(updatedYearly)
-                _yearlyTasks.value = sortedYearly
-                saveTasks(context, KEY_YEARLY_TASKS_JSON, sortedYearly)
-            }
-        }
-
-        if (found) {
-            val updatedCompleted = _completedTaskIds.value.toMutableSet()
-            updatedCompleted.add(taskId)
             _completedTaskIds.value = updatedCompleted
-            getPrefs(context).edit().putStringSet(KEY_COMPLETED_TASK_IDS, updatedCompleted).apply()
+            val updatedTimestamps = _completedTaskTimestamps.value.toMutableMap().apply {
+                put(taskId, now)
+            }
+            _completedTaskTimestamps.value = updatedTimestamps
+
+            getPrefs(context).edit()
+                .putStringSet(KEY_COMPLETED_TASK_IDS, updatedCompleted)
+                .putString(KEY_COMPLETED_TASK_TIMESTAMPS, timestampsToJson(updatedTimestamps))
+                .apply()
 
             if (awardedXp > 0) {
                 addXp(context, awardedXp)
@@ -561,16 +620,19 @@ object RoadmapManager {
 
     /**
      * Consumes an Inventory Skip Key (Wooden, Bronze, or Silver) to skip a Daily, Weekly, or Monthly task:
-     * - Immediately disappears from the active list and permanently enters completedTaskIds (never repeats).
-     * - Annual / Yearly tasks cannot be skipped.
+     * - Locked replacement tasks cannot be skipped until their cycle window opens.
+     * - Permanently enters completedTaskIds + Tasks Ledger and draws 1 replacement task locked until next cycle.
+     * - Eternal / Yearly tasks cannot be skipped.
      */
     @Synchronized
     fun useSkipKeyForTask(context: Context, taskId: String): Boolean {
         init(context)
+        val now = System.currentTimeMillis()
         val allTasks = _dailyTasks.value + _weeklyTasks.value + _monthlyTasks.value + _yearlyTasks.value
         val task = allTasks.find { it.id == taskId } ?: return false
         if (task.status != TaskStatus.PENDING) return false
         if (!task.canBeSkipped) return false
+        if (task.isLocked(now)) return false
 
         val hasKey = ProfileManager.consumeSkipKey(context, task.requiredSkipKey)
         if (!hasKey) return false
@@ -578,28 +640,47 @@ object RoadmapManager {
         val prefs = getPrefs(context)
         val awardedXp = task.xpBounty
 
-        val nextDaily = _dailyTasks.value.filterNot { it.id == taskId }
-        if (nextDaily.size != _dailyTasks.value.size) {
-            _dailyTasks.value = nextDaily
-            saveTasks(context, KEY_DAILY_TASKS_JSON, nextDaily)
-        }
-
-        val nextWeekly = _weeklyTasks.value.filterNot { it.id == taskId }
-        if (nextWeekly.size != _weeklyTasks.value.size) {
-            _weeklyTasks.value = nextWeekly
-            saveTasks(context, KEY_WEEKLY_TASKS_JSON, nextWeekly)
-        }
-
-        val nextMonthly = _monthlyTasks.value.filterNot { it.id == taskId }
-        if (nextMonthly.size != _monthlyTasks.value.size) {
-            _monthlyTasks.value = nextMonthly
-            saveTasks(context, KEY_MONTHLY_TASKS_JSON, nextMonthly)
-        }
-
         val updatedCompleted = _completedTaskIds.value.toMutableSet()
         updatedCompleted.add(taskId)
         _completedTaskIds.value = updatedCompleted
-        prefs.edit().putStringSet(KEY_COMPLETED_TASK_IDS, updatedCompleted).apply()
+
+        val updatedTimestamps = _completedTaskTimestamps.value.toMutableMap().apply {
+            put(taskId, now)
+        }
+        _completedTaskTimestamps.value = updatedTimestamps
+
+        fun replaceInPeriod(list: List<TaskItem>, period: TaskPeriod): List<TaskItem>? {
+            if (list.none { it.id == taskId }) return null
+            val remaining = list.filterNot { it.id == taskId }.toMutableList()
+            val replacement = TaskPools.drawReplacementTask(
+                period = period,
+                excludedIds = updatedCompleted + remaining.map { it.id },
+                unlockAtMillis = TaskPools.getNextCycleResetMillis(period, now),
+                seedMillis = now
+            )
+            if (replacement != null) {
+                remaining.add(replacement)
+            }
+            return TaskPools.sortTasksProgressively(remaining, now)
+        }
+
+        replaceInPeriod(_dailyTasks.value, TaskPeriod.DAILY)?.let {
+            _dailyTasks.value = it
+            saveTasks(context, KEY_DAILY_TASKS_JSON, it)
+        }
+        replaceInPeriod(_weeklyTasks.value, TaskPeriod.WEEKLY)?.let {
+            _weeklyTasks.value = it
+            saveTasks(context, KEY_WEEKLY_TASKS_JSON, it)
+        }
+        replaceInPeriod(_monthlyTasks.value, TaskPeriod.MONTHLY)?.let {
+            _monthlyTasks.value = it
+            saveTasks(context, KEY_MONTHLY_TASKS_JSON, it)
+        }
+
+        prefs.edit()
+            .putStringSet(KEY_COMPLETED_TASK_IDS, updatedCompleted)
+            .putString(KEY_COMPLETED_TASK_TIMESTAMPS, timestampsToJson(updatedTimestamps))
+            .apply()
 
         if (awardedXp > 0) {
             addXp(context, awardedXp)
@@ -609,85 +690,104 @@ object RoadmapManager {
     }
 
     /**
-     * Auto-increments progress for matching pending tasks across Daily, Weekly, Monthly, and Annual pools.
-     * - Completed D/W/M tasks disappear immediately and never repeat.
-     * - Completed Annual tasks archive to the bottom.
+     * Auto-increments progress for matching UNLOCKED pending tasks across D/W/M and Eternal pools.
+     * - When a task reaches its targetCount, it enters READY_TO_CLAIM and stays visible until the user
+     *   explicitly taps Collect ("جمع"). No XP is awarded until collection.
+     * - Locked replacement tasks (unlockAtMillis > now) do not progress until their grant timer expires.
      */
     @Synchronized
     fun onActionOccurred(context: Context, actionType: String) {
         init(context)
-        val newlyCompletedIds = mutableListOf<String>()
-        var earnedXp = 0
+        val now = System.currentTimeMillis()
 
-        fun processRotational(list: List<TaskItem>): Pair<List<TaskItem>, Boolean> {
+        fun advanceList(list: List<TaskItem>): Pair<List<TaskItem>, Boolean> {
             var changed = false
-            val remaining = mutableListOf<TaskItem>()
-            for (item in list) {
-                if (item.status == TaskStatus.PENDING && shouldIncrement(item, actionType)) {
+            val updated = list.map { item ->
+                val effectiveItem = if (item.unlockAtMillis in 1L..now) {
                     changed = true
-                    val newCount = item.currentCount + 1
-                    if (newCount >= item.targetCount) {
-                        newlyCompletedIds.add(item.id)
-                        earnedXp += item.xpBounty
+                    item.copy(unlockAtMillis = 0L)
+                } else {
+                    item
+                }
+
+                if (effectiveItem.status == TaskStatus.PENDING &&
+                    !effectiveItem.isLocked(now) &&
+                    shouldIncrement(effectiveItem, actionType)
+                ) {
+                    changed = true
+                    val newCount = effectiveItem.currentCount + 1
+                    if (newCount >= effectiveItem.targetCount) {
+                        effectiveItem.copy(
+                            currentCount = effectiveItem.targetCount,
+                            status = TaskStatus.READY_TO_CLAIM
+                        )
                     } else {
-                        remaining.add(item.copy(currentCount = newCount))
+                        effectiveItem.copy(currentCount = newCount)
                     }
                 } else {
-                    remaining.add(item)
+                    effectiveItem
                 }
             }
-            return remaining to changed
+            return if (changed) TaskPools.sortTasksProgressively(updated, now) to true else list to false
         }
 
-        val (newDaily, dailyChanged) = processRotational(_dailyTasks.value)
+        val (newDaily, dailyChanged) = advanceList(_dailyTasks.value)
         if (dailyChanged) {
             _dailyTasks.value = newDaily
             saveTasks(context, KEY_DAILY_TASKS_JSON, newDaily)
         }
 
-        val (newWeekly, weeklyChanged) = processRotational(_weeklyTasks.value)
+        val (newWeekly, weeklyChanged) = advanceList(_weeklyTasks.value)
         if (weeklyChanged) {
             _weeklyTasks.value = newWeekly
             saveTasks(context, KEY_WEEKLY_TASKS_JSON, newWeekly)
         }
 
-        val (newMonthly, monthlyChanged) = processRotational(_monthlyTasks.value)
+        val (newMonthly, monthlyChanged) = advanceList(_monthlyTasks.value)
         if (monthlyChanged) {
             _monthlyTasks.value = newMonthly
             saveTasks(context, KEY_MONTHLY_TASKS_JSON, newMonthly)
         }
 
-        var yearlyChanged = false
-        val rawYearly = _yearlyTasks.value.map { item ->
-            if (item.status == TaskStatus.PENDING && shouldIncrement(item, actionType)) {
-                yearlyChanged = true
-                val newCount = item.currentCount + 1
-                if (newCount >= item.targetCount) {
-                    newlyCompletedIds.add(item.id)
-                    earnedXp += item.xpBounty
-                    item.copy(currentCount = item.targetCount, status = TaskStatus.COMPLETED)
-                } else {
-                    item.copy(currentCount = newCount)
-                }
-            } else {
-                item
-            }
-        }
+        val (newYearly, yearlyChanged) = advanceList(_yearlyTasks.value)
         if (yearlyChanged) {
-            val sortedYearly = sortYearlyForArchive(rawYearly)
-            _yearlyTasks.value = sortedYearly
-            saveTasks(context, KEY_YEARLY_TASKS_JSON, sortedYearly)
+            _yearlyTasks.value = newYearly
+            saveTasks(context, KEY_YEARLY_TASKS_JSON, newYearly)
         }
+    }
 
-        if (newlyCompletedIds.isNotEmpty()) {
-            val updatedCompleted = _completedTaskIds.value.toMutableSet()
-            updatedCompleted.addAll(newlyCompletedIds)
-            _completedTaskIds.value = updatedCompleted
-            getPrefs(context).edit().putStringSet(KEY_COMPLETED_TASK_IDS, updatedCompleted).apply()
-        }
+    /**
+     * Builds a complete 1,000-task snapshot for the Tasks Ledger ("دفتر المهام المنجزة") showing
+     * every completed, ready-to-claim, active in-progress, cooldown-waiting, and remaining pool task
+     * along with its live progress counts.
+     */
+    fun getTasksLedgerSnapshot(): List<TaskLedgerEntry> {
+        val activeById = (_dailyTasks.value + _weeklyTasks.value + _monthlyTasks.value + _yearlyTasks.value)
+            .associateBy { it.id }
+        val completedIds = _completedTaskIds.value
+        val timestamps = _completedTaskTimestamps.value
 
-        if (earnedXp > 0) {
-            addXp(context, earnedXp)
+        return TaskPools.ALL_1000_TASKS.map { catalogTask ->
+            val live = activeById[catalogTask.id]
+            when {
+                live != null -> TaskLedgerEntry(task = live, completedAtMillis = null)
+                catalogTask.id in completedIds -> TaskLedgerEntry(
+                    task = catalogTask.copy(
+                        status = TaskStatus.COMPLETED,
+                        currentCount = catalogTask.targetCount,
+                        unlockAtMillis = 0L
+                    ),
+                    completedAtMillis = timestamps[catalogTask.id]
+                )
+                else -> TaskLedgerEntry(
+                    task = catalogTask.copy(
+                        status = TaskStatus.PENDING,
+                        currentCount = 0,
+                        unlockAtMillis = 0L
+                    ),
+                    completedAtMillis = null
+                )
+            }
         }
     }
 
@@ -701,6 +801,29 @@ object RoadmapManager {
             "POTION" -> item.actionTag == "POTION"
             "PERSON" -> item.actionTag == "PERSON"
             else -> false
+        }
+    }
+
+    private fun timestampsToJson(map: Map<String, Long>): String {
+        val obj = JSONObject()
+        map.forEach { (k, v) -> obj.put(k, v) }
+        return obj.toString()
+    }
+
+    private fun loadTimestampsMap(raw: String?): Map<String, Long> {
+        if (raw.isNullOrBlank()) return emptyMap()
+        return try {
+            val obj = JSONObject(raw)
+            val result = mutableMapOf<String, Long>()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val v = obj.optLong(k, 0L)
+                if (v > 0L) result[k] = v
+            }
+            result
+        } catch (_: Exception) {
+            emptyMap()
         }
     }
 
@@ -721,6 +844,7 @@ object RoadmapManager {
                 put("requiredSkipKey", item.requiredSkipKey.name)
                 put("actionTag", item.actionTag)
                 put("difficultyTier", item.difficultyTier)
+                put("unlockAtMillis", item.unlockAtMillis)
             }
             array.put(obj)
         }
@@ -738,14 +862,19 @@ object RoadmapManager {
                 ?: (SkipKeyType.entries.find { it.name == skipKeyName } ?: SkipKeyType.WOODEN)
             val periodName = obj.optString("period", catalog?.period?.name ?: TaskPeriod.DAILY.name)
             val period = catalog?.period ?: (TaskPeriod.entries.find { it.name == periodName } ?: TaskPeriod.DAILY)
-            val status = TaskStatus.entries.find { it.name == obj.optString("status", "PENDING") } ?: TaskStatus.PENDING
+            val rawStatus = TaskStatus.entries.find { it.name == obj.optString("status", "PENDING") } ?: TaskStatus.PENDING
             val targetCount = catalog?.targetCount ?: obj.optInt("targetCount", 1)
             val rawCurrent = obj.optInt("currentCount", 0)
-            val clampedCurrent = if (status == TaskStatus.COMPLETED || status == TaskStatus.SKIPPED) {
-                targetCount
+            val status = if (rawStatus == TaskStatus.PENDING && rawCurrent >= targetCount) {
+                TaskStatus.READY_TO_CLAIM
             } else {
-                rawCurrent.coerceIn(0, (targetCount - 1).coerceAtLeast(0))
+                rawStatus
             }
+            val clampedCurrent = when (status) {
+                TaskStatus.COMPLETED, TaskStatus.SKIPPED, TaskStatus.READY_TO_CLAIM -> targetCount
+                TaskStatus.PENDING -> rawCurrent.coerceIn(0, (targetCount - 1).coerceAtLeast(0))
+            }
+            val unlockAtMillis = obj.optLong("unlockAtMillis", 0L).coerceAtLeast(0L)
 
             list.add(
                 TaskItem(
@@ -761,11 +890,12 @@ object RoadmapManager {
                     actionTag = catalog?.actionTag ?: obj.optString("actionTag", "GENERAL"),
                     difficultyTier = catalog?.difficultyTier ?: obj.optInt("difficultyTier", 1),
                     titleEn = catalog?.titleEn ?: obj.optString("titleEn", catalog?.title ?: obj.optString("title", id)),
-                    descriptionEn = catalog?.descriptionEn ?: obj.optString("descriptionEn", catalog?.description ?: obj.optString("description", ""))
+                    descriptionEn = catalog?.descriptionEn ?: obj.optString("descriptionEn", catalog?.description ?: obj.optString("description", "")),
+                    unlockAtMillis = unlockAtMillis
                 )
             )
         }
-        return if (sortForYearly) sortYearlyForArchive(list) else TaskPools.sortTasksProgressively(list)
+        return TaskPools.sortTasksProgressively(list)
     }
 
     private fun saveTasks(context: Context, key: String, tasks: List<TaskItem>) {
@@ -789,6 +919,9 @@ object RoadmapManager {
             put("totalXp", _totalXp.value)
             put("claimedStations", JSONArray(_claimedStations.value.sorted()))
             put("completedTaskIds", JSONArray(_completedTaskIds.value.sorted()))
+            put("completedTaskTimestamps", JSONObject().apply {
+                _completedTaskTimestamps.value.forEach { (k, v) -> put(k, v) }
+            })
             put("lastDailyDate", prefs.getString(KEY_LAST_DAILY_DATE, TaskPools.todayDateString()))
             put("lastWeeklyCode", prefs.getString(KEY_LAST_WEEKLY_CODE, TaskPools.currentWeekString()))
             put("lastMonthlyCode", prefs.getString(KEY_LAST_MONTHLY_CODE, TaskPools.currentMonthString()))
@@ -827,6 +960,13 @@ object RoadmapManager {
         }
         val finalCompleted = if (replaceExisting) importedCompleted else (_completedTaskIds.value + importedCompleted)
 
+        val importedTimestamps = loadTimestampsMap(json.optJSONObject("completedTaskTimestamps")?.toString())
+        val finalTimestamps = if (replaceExisting) {
+            importedTimestamps
+        } else {
+            _completedTaskTimestamps.value + importedTimestamps
+        }
+
         val importedDaily = json.optJSONArray("dailyTasks")?.let { jsonArrayToTasks(it) }
         val importedWeekly = json.optJSONArray("weeklyTasks")?.let { jsonArrayToTasks(it) }
         val importedMonthly = json.optJSONArray("monthlyTasks")?.let { jsonArrayToTasks(it) }
@@ -840,44 +980,23 @@ object RoadmapManager {
         val lastWeekly = json.optString("lastWeeklyCode", currentWeek).ifBlank { currentWeek }
         val lastMonthly = json.optString("lastMonthlyCode", currentMonth).ifBlank { currentMonth }
 
-        val finalDaily = if (replaceExisting) {
-            TaskPools.sortTasksProgressively(
-                (importedDaily ?: TaskPools.getRotatedDailyTasks(finalCompleted, lastDaily))
-                    .filter { it.status == TaskStatus.PENDING && !it.isCompleted && it.id !in finalCompleted }
-            )
-        } else {
-            val mergedMap = (_dailyTasks.value + importedDaily.orEmpty())
-                .filter { it.status == TaskStatus.PENDING && !it.isCompleted && it.id !in finalCompleted }
-                .groupBy { it.id }
-                .map { (_, items) -> items.maxBy { it.currentCount } }
-            TaskPools.sortTasksProgressively(mergedMap)
+        fun mergeRotational(current: List<TaskItem>, imported: List<TaskItem>?, fallback: List<TaskItem>): List<TaskItem> {
+            return if (replaceExisting) {
+                TaskPools.sortTasksProgressively(
+                    (imported ?: fallback).filter { !it.isCompleted && it.id !in finalCompleted }
+                )
+            } else {
+                val mergedMap = (current + imported.orEmpty())
+                    .filter { !it.isCompleted && it.id !in finalCompleted }
+                    .groupBy { it.id }
+                    .map { (_, items) -> items.maxBy { it.currentCount } }
+                TaskPools.sortTasksProgressively(mergedMap)
+            }
         }
 
-        val finalWeekly = if (replaceExisting) {
-            TaskPools.sortTasksProgressively(
-                (importedWeekly ?: TaskPools.getRotatedWeeklyTasks(finalCompleted, lastWeekly))
-                    .filter { it.status == TaskStatus.PENDING && !it.isCompleted && it.id !in finalCompleted }
-            )
-        } else {
-            val mergedMap = (_weeklyTasks.value + importedWeekly.orEmpty())
-                .filter { it.status == TaskStatus.PENDING && !it.isCompleted && it.id !in finalCompleted }
-                .groupBy { it.id }
-                .map { (_, items) -> items.maxBy { it.currentCount } }
-            TaskPools.sortTasksProgressively(mergedMap)
-        }
-
-        val finalMonthly = if (replaceExisting) {
-            TaskPools.sortTasksProgressively(
-                (importedMonthly ?: TaskPools.getRotatedMonthlyTasks(finalCompleted, lastMonthly))
-                    .filter { it.status == TaskStatus.PENDING && !it.isCompleted && it.id !in finalCompleted }
-            )
-        } else {
-            val mergedMap = (_monthlyTasks.value + importedMonthly.orEmpty())
-                .filter { it.status == TaskStatus.PENDING && !it.isCompleted && it.id !in finalCompleted }
-                .groupBy { it.id }
-                .map { (_, items) -> items.maxBy { it.currentCount } }
-            TaskPools.sortTasksProgressively(mergedMap)
-        }
+        val finalDaily = mergeRotational(_dailyTasks.value, importedDaily, TaskPools.getRotatedDailyTasks(finalCompleted, lastDaily))
+        val finalWeekly = mergeRotational(_weeklyTasks.value, importedWeekly, TaskPools.getRotatedWeeklyTasks(finalCompleted, lastWeekly))
+        val finalMonthly = mergeRotational(_monthlyTasks.value, importedMonthly, TaskPools.getRotatedMonthlyTasks(finalCompleted, lastMonthly))
 
         val finalYearly = if (replaceExisting) {
             TaskPools.getEverlastingTasks(finalCompleted, importedYearly.orEmpty())
@@ -895,6 +1014,7 @@ object RoadmapManager {
         _totalXp.value = finalXp
         _claimedStations.value = finalStations
         _completedTaskIds.value = finalCompleted
+        _completedTaskTimestamps.value = finalTimestamps
         _shields24h.value = s24.coerceAtLeast(0)
         _shields48h.value = s48.coerceAtLeast(0)
         _shields72h.value = s72.coerceAtLeast(0)
@@ -908,6 +1028,7 @@ object RoadmapManager {
             putLong(KEY_TOTAL_XP, finalXp)
             putStringSet(KEY_CLAIMED_STATIONS, finalStations.map { it.toString() }.toSet())
             putStringSet(KEY_COMPLETED_TASK_IDS, finalCompleted)
+            putString(KEY_COMPLETED_TASK_TIMESTAMPS, timestampsToJson(finalTimestamps))
             putString(KEY_LAST_DAILY_DATE, lastDaily)
             putString(KEY_LAST_WEEKLY_CODE, lastWeekly)
             putString(KEY_LAST_MONTHLY_CODE, lastMonthly)

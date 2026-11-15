@@ -343,6 +343,7 @@ class IndividualViewModel(
     val yearlyTasks: StateFlow<List<TaskItem>> = RoadmapManager.yearlyTasks
     val everlastingTasks: StateFlow<List<TaskItem>> = RoadmapManager.everlastingTasks
     val completedTaskIds: StateFlow<Set<String>> = RoadmapManager.completedTaskIds
+    val completedTaskTimestamps: StateFlow<Map<String, Long>> = RoadmapManager.completedTaskTimestamps
 
     fun getRemainingPoolCount(period: com.example.data.roadmap.TaskPeriod): Int {
         return RoadmapManager.getRemainingPoolCount(period)
@@ -535,6 +536,20 @@ class IndividualViewModel(
         }
     }
 
+    fun claimTaskReward(taskId: String) {
+        val success = RoadmapManager.claimTaskReward(getApplication(), taskId)
+        if (success) {
+            viewModelScope.launch {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> "تم جمع مكافأة المهمة وإضافة نقاط الـ XP بنجاح! ⚡"
+                    "fr" -> "Récompense collectée et XP ajouté avec succès ! ⚡"
+                    else -> "Task reward collected and XP awarded! ⚡"
+                }
+                emitMessage(msg)
+            }
+        }
+    }
+
     fun completeTask(taskId: String) {
         val success = RoadmapManager.completeTask(getApplication(), taskId)
         if (success) {
@@ -555,9 +570,20 @@ class IndividualViewModel(
         if (task != null && !task.canBeSkipped) {
             viewModelScope.launch {
                 val msg = when (currentLanguage.value) {
-                    "ar" -> "المهام السنوية لا تقبل التجاوز بالمفاتيح! تتطلب إنجازاً فعلياً."
-                    "fr" -> "Les missions annuelles ne peuvent pas être passées avec des clés !"
-                    else -> "Annual tasks cannot be skipped using keys! Real completion is required."
+                    "ar" -> "مهام الأبدية لا تقبل التجاوز بالمفاتيح! تتطلب إنجازاً فعلياً."
+                    "fr" -> "Les missions éternelles ne peuvent pas être passées avec des clés !"
+                    else -> "Eternal tasks cannot be skipped using keys! Real completion is required."
+                }
+                emitMessage(msg)
+            }
+            return
+        }
+        if (task != null && task.isLocked()) {
+            viewModelScope.launch {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> "هذه المهمة قيد الانتظار حتى موعد منح المهام الجديد"
+                    "fr" -> "Cette mission attend le prochain cycle d'attribution"
+                    else -> "This task is waiting for its next cycle unlock window"
                 }
                 emitMessage(msg)
             }

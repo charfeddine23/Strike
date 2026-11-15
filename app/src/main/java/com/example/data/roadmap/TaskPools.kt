@@ -1405,30 +1405,111 @@ object TaskPools {
     fun findById(id: String): TaskItem? = taskByIdMap[id]
 
     // ==========================================
-    // DATE SEED & PROGRESSIVE ROTATION ENGINE
+    // DATE SEED, GRANT SCHEDULE & COOLDOWN HELPERS
     // ==========================================
 
-    fun todayDateString(): String {
-        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    fun todayDateString(nowMillis: Long = System.currentTimeMillis()): String {
+        return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date(nowMillis))
     }
 
-    fun currentWeekString(): String {
-        val cal = Calendar.getInstance()
-        val year = cal.get(Calendar.YEAR)
-        val week = cal.get(Calendar.WEEK_OF_YEAR)
-        return "${year}_W${String.format(Locale.US, "%02d", week)}"
+    /**
+     * Sunday-anchored Weekly cycle key (every Sunday 00:00 starts a new Weekly grant window).
+     */
+    fun currentWeekString(nowMillis: Long = System.currentTimeMillis()): String {
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = nowMillis
+            val daysSinceSunday = (get(Calendar.DAY_OF_WEEK) - Calendar.SUNDAY + 7) % 7
+            add(Calendar.DAY_OF_YEAR, -daysSinceSunday)
+        }
+        return "SUN_" + SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
     }
 
-    fun currentMonthString(): String {
-        val cal = Calendar.getInstance()
+    /**
+     * 1st-of-month anchored Monthly cycle key (the 1st of each month starts a new Monthly grant window).
+     */
+    fun currentMonthString(nowMillis: Long = System.currentTimeMillis()): String {
+        val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
         val year = cal.get(Calendar.YEAR)
         val month = cal.get(Calendar.MONTH) + 1
         return "${year}_M${String.format(Locale.US, "%02d", month)}"
     }
 
-    fun sortTasksProgressively(tasks: List<TaskItem>): List<TaskItem> {
+    /**
+     * Next midnight (12:00 AM of tomorrow) in epoch millis for Daily replacement tasks.
+     */
+    fun nextDailyResetMillis(nowMillis: Long = System.currentTimeMillis()): Long {
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = nowMillis
+            add(Calendar.DAY_OF_YEAR, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        return cal.timeInMillis
+    }
+
+    /**
+     * Next Sunday at 12:00 AM (00:00:00) in epoch millis for Weekly replacement tasks.
+     */
+    fun nextSundayResetMillis(nowMillis: Long = System.currentTimeMillis()): Long {
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = nowMillis
+            val daysUntilSunday = ((Calendar.SUNDAY - get(Calendar.DAY_OF_WEEK) + 7) % 7).let { if (it == 0) 7 else it }
+            add(Calendar.DAY_OF_YEAR, daysUntilSunday)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        return cal.timeInMillis
+    }
+
+    /**
+     * 1st day of next month at 12:00 AM (00:00:00) in epoch millis for Monthly replacement tasks.
+     */
+    fun nextMonthlyResetMillis(nowMillis: Long = System.currentTimeMillis()): Long {
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = nowMillis
+            add(Calendar.MONTH, 1)
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        return cal.timeInMillis
+    }
+
+    fun getNextCycleResetMillis(period: TaskPeriod, nowMillis: Long = System.currentTimeMillis()): Long {
+        return when (period) {
+            TaskPeriod.DAILY -> nextDailyResetMillis(nowMillis)
+            TaskPeriod.WEEKLY -> nextSundayResetMillis(nowMillis)
+            TaskPeriod.MONTHLY -> nextMonthlyResetMillis(nowMillis)
+            TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> 0L
+        }
+    }
+
+    fun formatRemainingCountdown(unlockAtMillis: Long, nowMillis: Long, lang: String): String {
+        val diff = (unlockAtMillis - nowMillis).coerceAtLeast(0L)
+        val totalSeconds = diff / 1000L
+        val days = totalSeconds / 86400L
+        val hours = (totalSeconds % 86400L) / 3600L
+        val minutes = (totalSeconds % 3600L) / 60L
+        val seconds = totalSeconds % 60L
+        val hms = String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
+        return if (days > 0L) {
+            if (lang == "ar") "${days}ي $hms" else "${days}d $hms"
+        } else {
+            hms
+        }
+    }
+
+    fun sortTasksProgressively(tasks: List<TaskItem>, nowMillis: Long = System.currentTimeMillis()): List<TaskItem> {
         return tasks.sortedWith(
-            compareBy<TaskItem> { it.difficultyTier }
+            compareBy<TaskItem> { !it.isReadyToClaim }
+                .thenBy { it.isLocked(nowMillis) }
+                .thenBy { it.difficultyTier }
                 .thenBy { it.xpBounty }
                 .thenBy { it.targetCount }
                 .thenBy { it.id }
@@ -1436,16 +1517,17 @@ object TaskPools {
     }
 
     /**
-     * Carries over all still-pending tasks from [existingPending] (preserving partial progress),
-     * permanently excludes anything in [completedIds], and dynamically refills open slots up to
-     * [batchSize] with fresh unused tasks from the pool, ordered progressively.
+     * Carries over all active, ready-to-claim, or still-cooling tasks from [existingPending],
+     * clears expired cooldown locks once [nowMillis] >= unlockAtMillis, permanently excludes
+     * anything in [completedIds], and dynamically fills open slots up to [batchSize].
      */
     fun fillActiveBatch(
         period: TaskPeriod,
         existingPending: List<TaskItem>,
         completedIds: Set<String>,
         seedKey: String,
-        batchSize: Int
+        batchSize: Int,
+        nowMillis: Long = System.currentTimeMillis()
     ): List<TaskItem> {
         val pool = when (period) {
             TaskPeriod.DAILY -> ALL_DAILY_TASKS
@@ -1454,18 +1536,25 @@ object TaskPools {
             TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> ALL_EVERLASTING_TASKS
         }
         val carriedOver = existingPending
-            .filter { it.status == TaskStatus.PENDING && !it.isCompleted && it.id !in completedIds }
+            .filter { !it.isCompleted && it.id !in completedIds }
             .distinctBy { it.id }
             .map { existing ->
-                val freshMeta = findById(existing.id)
-                if (freshMeta != null) {
-                    freshMeta.copy(
-                        currentCount = existing.currentCount.coerceIn(0, freshMeta.targetCount - 1),
-                        status = TaskStatus.PENDING
-                    )
-                } else {
-                    existing
+                val freshMeta = findById(existing.id) ?: existing
+                val unlockedTime = if (existing.unlockAtMillis <= nowMillis) 0L else existing.unlockAtMillis
+                val resolvedStatus = when {
+                    existing.status == TaskStatus.READY_TO_CLAIM || existing.currentCount >= freshMeta.targetCount -> TaskStatus.READY_TO_CLAIM
+                    else -> TaskStatus.PENDING
                 }
+                val resolvedCount = if (resolvedStatus == TaskStatus.READY_TO_CLAIM) {
+                    freshMeta.targetCount
+                } else {
+                    existing.currentCount.coerceIn(0, (freshMeta.targetCount - 1).coerceAtLeast(0))
+                }
+                freshMeta.copy(
+                    currentCount = resolvedCount,
+                    status = resolvedStatus,
+                    unlockAtMillis = unlockedTime
+                )
             }
             .take(batchSize)
 
@@ -1477,7 +1566,34 @@ object TaskPools {
         } else {
             emptyList()
         }
-        return sortTasksProgressively(carriedOver + newlyDrawn)
+        return sortTasksProgressively(carriedOver + newlyDrawn, nowMillis)
+    }
+
+    /**
+     * Draws a single fresh replacement task after claiming/skipping a Daily, Weekly, or Monthly task.
+     * The new task is stamped with [unlockAtMillis] (midnight / Sunday / 1st of month) so it displays
+     * a live countdown timer until the user is permitted to complete it.
+     */
+    fun drawReplacementTask(
+        period: TaskPeriod,
+        excludedIds: Set<String>,
+        unlockAtMillis: Long,
+        seedMillis: Long = System.currentTimeMillis()
+    ): TaskItem? {
+        val pool = when (period) {
+            TaskPeriod.DAILY -> ALL_DAILY_TASKS
+            TaskPeriod.WEEKLY -> ALL_WEEKLY_TASKS
+            TaskPeriod.MONTHLY -> ALL_MONTHLY_TASKS
+            TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> return null
+        }
+        val candidates = pool.filter { it.id !in excludedIds }
+        if (candidates.isEmpty()) return null
+        return candidates.shuffled(Random(seedMillis xor excludedIds.size.toLong())).first()
+            .copy(
+                currentCount = 0,
+                status = TaskStatus.PENDING,
+                unlockAtMillis = unlockAtMillis
+            )
     }
 
     fun getRotatedDailyTasks(completedIds: Set<String>, dateStr: String = todayDateString()): List<TaskItem> {
@@ -1493,31 +1609,31 @@ object TaskPools {
     }
 
     /**
-     * Annual / Master Goals Tasks:
-     * - Returns all 250 annual macro-achievements as a full batch from day one.
-     * - Pending tasks stay at the top in progressive difficulty order; completed tasks archive to the bottom.
+     * Eternal / Annual Master Goals Tasks:
+     * - Unclaimed tasks (PENDING & READY_TO_CLAIM) appear in the Eternal Goals tab.
+     * - Once claimed ("جمع"), completed Eternal tasks leave this active list and transfer directly
+     *   to the Tasks Ledger ("دفتر المهام المنجزة").
      */
     fun getEverlastingTasks(
         completedIds: Set<String>,
         existingSaved: List<TaskItem> = emptyList()
     ): List<TaskItem> {
         val savedById = existingSaved.associateBy { it.id }
-        val merged = ALL_EVERLASTING_TASKS.map { task ->
+        val activeUnclaimed = ALL_EVERLASTING_TASKS.mapNotNull { task ->
             val saved = savedById[task.id]
-            val done = (task.id in completedIds) || (saved != null && saved.isCompleted)
-            if (done) {
-                task.copy(status = TaskStatus.COMPLETED, currentCount = task.targetCount)
+            val alreadyClaimed = (task.id in completedIds) || (saved != null && saved.isCompleted)
+            if (alreadyClaimed) {
+                null
             } else {
-                val savedProgress = (saved?.currentCount ?: 0).coerceIn(0, (task.targetCount - 1).coerceAtLeast(0))
-                task.copy(status = TaskStatus.PENDING, currentCount = savedProgress)
+                val isReady = saved != null && (saved.status == TaskStatus.READY_TO_CLAIM || saved.currentCount >= task.targetCount)
+                if (isReady) {
+                    task.copy(status = TaskStatus.READY_TO_CLAIM, currentCount = task.targetCount, unlockAtMillis = 0L)
+                } else {
+                    val savedProgress = (saved?.currentCount ?: 0).coerceIn(0, (task.targetCount - 1).coerceAtLeast(0))
+                    task.copy(status = TaskStatus.PENDING, currentCount = savedProgress, unlockAtMillis = 0L)
+                }
             }
         }
-        return merged.sortedWith(
-            compareBy<TaskItem> { it.isCompleted }
-                .thenBy { it.difficultyTier }
-                .thenBy { it.xpBounty }
-                .thenBy { it.targetCount }
-                .thenBy { it.id }
-        )
+        return sortTasksProgressively(activeUnclaimed)
     }
 }
