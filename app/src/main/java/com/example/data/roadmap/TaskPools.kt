@@ -11,7 +11,7 @@ import java.util.Random
  * 1000-Task Matrix & Exponential Roadmap XP Engine for StrikePulse:
  * - Exactly 1000 Tasks across 4 Categories (250 Daily, 250 Weekly, 250 Monthly, 250 Annual/Everlasting)
  * - Total XP Pool across all 1000 tasks: Exactly 434,725 XP
- * - 500 Stations Exponential Curve: Station 1 = 50 XP, Station 500 = 434,725 XP
+ * - 500 Stations Exponential Curve: Station 1 = 1,345 XP, Station 500 = 1,000,000 XP
  * - Realistic Timeframe Scaling:
  *   * Daily (5 active slots): Light, practical 24h micro-discipline & single-action triggers
  *   * Weekly (7 active slots): 7-day consistency, streaks, strategic potions & moderate key allocation
@@ -25,6 +25,8 @@ object TaskPools {
     const val TOTAL_TASKS_COUNT = 1000
     const val CATEGORY_TASKS_COUNT = 250
     const val TOTAL_XP_POOL = 434725L
+    const val ROADMAP_LEVEL_1_XP = 1345L
+    const val ROADMAP_LEVEL_500_XP = 1_000_000L
 
     private data class TaskBlueprint(
         val title: String,
@@ -172,17 +174,18 @@ object TaskPools {
     }
 
     /**
-     * Exponential Wavy Roadmap XP Curve (500 Stations):
-     * - Station 1: 50 XP
-     * - Station 500: exactly 434,725 XP
+     * Smooth Exponential Wavy Roadmap XP Curve (500 Stations):
+     * - Station 1: exactly 1,345 XP
+     * - Stations 2..499: smooth monotonically rising progression
+     * - Station 500: exactly 1,000,000 XP
      */
     fun getRequiredXpForStation(stationId: Int): Long {
         val s = stationId.coerceIn(1, 500)
-        if (s == 1) return 50L
-        if (s == 500) return TOTAL_XP_POOL
-        val ratio = 434725.0 / 50.0
+        if (s == 1) return ROADMAP_LEVEL_1_XP
+        if (s == 500) return ROADMAP_LEVEL_500_XP
+        val ratio = ROADMAP_LEVEL_500_XP.toDouble() / ROADMAP_LEVEL_1_XP.toDouble()
         val power = (s - 1.0) / 499.0
-        return Math.round(50.0 * Math.pow(ratio, power))
+        return Math.round(ROADMAP_LEVEL_1_XP.toDouble() * Math.pow(ratio, power))
     }
 
     // ==========================================

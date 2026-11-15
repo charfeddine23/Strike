@@ -86,37 +86,45 @@ class RoadmapEngineTest {
         val s1Xp = TaskPools.getRequiredXpForStation(1)
         val s500Xp = TaskPools.getRequiredXpForStation(500)
 
-        // Station 1: 50 XP
-        assertEquals(50L, s1Xp)
+        // Station 1: exactly 1,345 XP
+        assertEquals(1345L, s1Xp)
 
-        // Station 500: exactly 434,725 XP (matches total XP pool)
-        assertEquals(434725L, s500Xp)
+        // Station 500: exactly 1,000,000 XP
+        assertEquals(1_000_000L, s500Xp)
 
-        // Monotonic check across all 500 stations
+        // Strictly increasing smooth difficulty progression across all 500 stations
         var prevXp = 0L
+        var prevStepDelta = 0L
         for (s in 1..500) {
             val req = TaskPools.getRequiredXpForStation(s)
-            assertTrue("Station $s required XP ($req) should be >= prev ($prevXp)", req >= prevXp)
+            assertTrue("Station $s required XP ($req) must strictly exceed prev ($prevXp)", req > prevXp)
+            if (s > 1) {
+                val delta = req - prevXp
+                assertTrue("Step delta ($delta) at station $s should rise smoothly from prior ($prevStepDelta)", delta >= prevStepDelta - 1L)
+                prevStepDelta = delta
+            }
             prevXp = req
         }
     }
 
     @Test
     fun testGenerate500Stations() {
-        val stations = RoadmapManager.generateStations(totalXp = 50L, claimedStations = emptySet())
+        val stations = RoadmapManager.generateStations(totalXp = 1345L, claimedStations = emptySet())
         assertEquals(500, stations.size)
 
-        // Station 1 requires 50 XP, with 50 XP it is UNLOCKED
+        // Station 1 requires 1,345 XP, with 1,345 XP it is UNLOCKED
         assertEquals(1, stations[0].id)
+        assertEquals(1345L, stations[0].requiredTotalXp)
         assertEquals(StationState.UNLOCKED, stations[0].state)
 
-        // Station 2 requires 51 XP, should be LOCKED at 50 XP
+        // Station 2 requires > 1,345 XP, should be LOCKED at 1,345 XP
         assertEquals(2, stations[1].id)
+        assertTrue(stations[1].requiredTotalXp > 1345L)
         assertEquals(StationState.LOCKED, stations[1].state)
 
-        // Station 500 requires 434,725 XP
+        // Station 500 requires 1,000,000 XP
         assertEquals(500, stations[499].id)
-        assertEquals(434725L, stations[499].requiredTotalXp)
+        assertEquals(1_000_000L, stations[499].requiredTotalXp)
         assertEquals(StationState.LOCKED, stations[499].state)
     }
 
@@ -537,20 +545,20 @@ class RoadmapEngineTest {
             TaskPools.ALL_1000_TASKS.none { it.actionTag == "ROADMAP" }
         )
 
-        // 3. Tasks XP is strictly the sole source of XP progression
-        val firstDaily = RoadmapManager.dailyTasks.value.first()
-        val firstWeekly = RoadmapManager.weeklyTasks.value.first()
-        assertTrue(RoadmapManager.completeTask(app, firstDaily.id))
-        val xpAfterDaily = RoadmapManager.totalXp.value
-        assertEquals(firstDaily.xpBounty.toLong(), xpAfterDaily)
+        // 3. Tasks XP is strictly the sole source of XP progression (Station 1 requires 1,345 XP)
+        var expectedTasksXp = 0L
+        val targetUnlockXp = TaskPools.getRequiredXpForStation(10)
+        val annualCandidates = RoadmapManager.yearlyTasks.value.filter { it.status == TaskStatus.PENDING }
+        for (task in annualCandidates) {
+            if (expectedTasksXp >= targetUnlockXp) break
+            assertTrue(RoadmapManager.completeTask(app, task.id))
+            expectedTasksXp += task.xpBounty.toLong()
+            assertEquals(expectedTasksXp, RoadmapManager.totalXp.value)
+        }
 
-        assertTrue(RoadmapManager.completeTask(app, firstWeekly.id))
-        val expectedTasksXp = firstDaily.xpBounty.toLong() + firstWeekly.xpBounty.toLong()
-        assertEquals(expectedTasksXp, RoadmapManager.totalXp.value)
-
-        // With >= 150 Tasks XP, Station 1 (50 XP), Station 2 (51 XP), ... are unlocked
+        // Stations 1..10 unlocked purely from Tasks XP
         val unlockedCount = RoadmapManager.calculateUnlockedStationId(expectedTasksXp)
-        assertTrue("Expected Stations 1..2 unlocked from Tasks XP, got $unlockedCount", unlockedCount >= 2)
+        assertTrue("Expected Stations 1..10 unlocked from Tasks XP ($expectedTasksXp), got $unlockedCount", unlockedCount >= 10)
 
         // 4. Claiming Roadmap stations MUST NOT add station.requiredTotalXp (or any XP) to totalXp
         val completedCountBefore = RoadmapManager.completedTaskIds.value.size

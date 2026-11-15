@@ -422,7 +422,7 @@ fun ProfileScreen(
                                 modifier = Modifier.weight(1f),
                                 label = if (isAr) "XP المهام" else "Tasks XP",
                                 value = "$totalXp XP",
-                                sub = if (isAr) "من أصل 434,725 XP" else "of 434,725 XP",
+                                sub = if (isAr) "من أصل 1,000,000 XP" else "of 1,000,000 XP",
                                 icon = Icons.Default.Bolt,
                                 color = NeonCyan
                             )

@@ -13,7 +13,7 @@ import org.json.JSONObject
 
 /**
  * Singleton state and persistence manager for:
- * - 500-Station Wavy Roadmap & Station Claims (Exponential XP scaling from 50 to 434,725 XP)
+ * - 500-Station Wavy Roadmap & Station Claims (Smooth exponential XP scaling from 1,345 to 1,000,000 XP)
  * - 1000-Task Matrix & Progression Engine
  * - Carry-Over & Non-Repeating Consumption Rotation Engine:
  *   * Daily (5), Weekly (7), Monthly (10): completed/skipped tasks vanish immediately and never repeat;

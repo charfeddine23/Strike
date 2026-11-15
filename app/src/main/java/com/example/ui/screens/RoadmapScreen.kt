@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import android.view.SoundEffectConstants
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -138,11 +139,47 @@ fun RoadmapScreen(
     }
 
     val infiniteTransition = rememberInfiniteTransition(label = "roadmap_pulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.06f,
+    val flowPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1350, easing = LinearEasing),
+            animation = tween(durationMillis = 2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "flow_phase"
+    )
+    val glowPulse by infiniteTransition.animateFloat(
+        initialValue = 0.65f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glow_pulse"
+    )
+    val rippleProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ripple_progress"
+    )
+    val badgeBobDp by infiniteTransition.animateFloat(
+        initialValue = -3.5f,
+        targetValue = 2.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "badge_bob"
+    )
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.07f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1350, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "egg_pulse"
@@ -151,11 +188,20 @@ fun RoadmapScreen(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 16000, easing = LinearEasing),
+            animation = tween(durationMillis = 14000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "orbit_rotation"
     )
+
+    var hasAutoScrolledToFrontier by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(selectedMainTab, currentStationId) {
+        if (selectedMainTab == 0 && !hasAutoScrolledToFrontier && currentStationId > 2) {
+            hasAutoScrolledToFrontier = true
+            val targetIdx = (currentStationId - 2).coerceIn(0, stations.lastIndex)
+            roadmapListState.scrollToItem(targetIdx)
+        }
+    }
 
     Box(
         modifier = modifier
@@ -283,6 +329,7 @@ fun RoadmapScreen(
                         currentStationId = currentStationId,
                         totalXp = totalXp,
                         isAr = isAr,
+                        glowPulse = glowPulse,
                         onJumpToStation = { targetStation ->
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             coroutineScope.launch {
@@ -315,6 +362,10 @@ fun RoadmapScreen(
                             currentLang = currentLang,
                             pulseScale = pulseScale,
                             orbitRotation = orbitRotation,
+                            flowPhase = flowPhase,
+                            glowPulse = glowPulse,
+                            rippleProgress = rippleProgress,
+                            badgeBobDp = badgeBobDp,
                             onClaim = {
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                 view.playSoundEffect(SoundEffectConstants.CLICK)

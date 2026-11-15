@@ -171,23 +171,32 @@ fun RoadmapAmbientBackground(modifier: Modifier = Modifier) {
                 center = Offset(size.width * 0.20f, size.height * 0.82f)
             )
 
-            // Subtle ambient floating glow dots
+            // Subtle ambient floating bokeh glow dots matching reference video depth
             dots.forEach { dot ->
-                val dx = sin(driftPhase + dot.phaseOffset) * 6.dp.toPx()
-                val dy = cos(driftPhase + dot.phaseOffset * 1.3f) * 8.dp.toPx()
-                val pulse = 0.65f + 0.35f * sin(driftPhase * 2f + dot.phaseOffset)
+                val dx = sin(driftPhase + dot.phaseOffset) * 8.dp.toPx()
+                val dy = cos(driftPhase + dot.phaseOffset * 1.3f) * 10.dp.toPx()
+                val pulse = 0.62f + 0.38f * sin(driftPhase * 2f + dot.phaseOffset)
                 val center = Offset(size.width * dot.xFrac + dx, size.height * dot.yFrac + dy)
                 val r = dot.radiusDp.dp.toPx()
 
                 if (dot.hasHalo) {
                     drawCircle(
-                        color = dot.color.copy(alpha = 0.14f * pulse),
-                        radius = r * 3.0f,
+                        brush = Brush.radialGradient(
+                            colors = listOf(dot.color.copy(alpha = 0.22f * pulse), Color.Transparent),
+                            center = center,
+                            radius = r * 4.2f
+                        ),
+                        radius = r * 4.2f,
+                        center = center
+                    )
+                    drawCircle(
+                        color = dot.color.copy(alpha = 0.16f * pulse),
+                        radius = r * 2.1f,
                         center = center
                     )
                 }
                 drawCircle(
-                    color = dot.color.copy(alpha = 0.58f * pulse),
+                    color = dot.color.copy(alpha = 0.68f * pulse),
                     radius = r,
                     center = center
                 )
@@ -218,7 +227,8 @@ fun RoadmapProgressHudCard(
     totalXp: Long,
     isAr: Boolean,
     onJumpToStation: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    glowPulse: Float = 0.85f
 ) {
     val safeStation = currentStationId.coerceIn(0, 500)
     val stagesLeft = (500 - safeStation).coerceAtLeast(0)
@@ -286,9 +296,9 @@ fun RoadmapProgressHudCard(
                     )
                     Text(
                         text = if (isAr) {
-                            "XP المهام: $totalXp / 434,725 • متبقي $stagesLeft محطة"
+                            "XP المهام: $totalXp / 1,000,000 • متبقي $stagesLeft محطة"
                         } else {
-                            "Tasks XP: $totalXp / 434,725 • $stagesLeft stages left"
+                            "Tasks XP: $totalXp / 1,000,000 • $stagesLeft stages left"
                         },
                         fontSize = 11.sp,
                         color = Color(0xFF94A3B8),
@@ -322,7 +332,7 @@ fun RoadmapProgressHudCard(
                     )
                 }
 
-                // Glowing start & end dots on the progress bar
+                // Glowing start & end dots on the progress bar with gentle breathing glow
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -330,16 +340,18 @@ fun RoadmapProgressHudCard(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(9.dp)
+                            .size(10.dp)
+                            .scale(0.92f + 0.16f * glowPulse)
                             .clip(CircleShape)
                             .background(NeonAqua)
                     )
                     Box(
                         modifier = Modifier
-                            .size(7.dp)
+                            .size(8.dp)
+                            .scale(0.92f + 0.16f * glowPulse)
                             .clip(CircleShape)
                             .background(
-                                if (progressFraction >= 0.99f) ElectricMint else NeonAqua.copy(alpha = 0.55f)
+                                if (progressFraction >= 0.99f) ElectricMint else NeonAqua.copy(alpha = 0.72f * glowPulse)
                             )
                     )
                 }
@@ -461,7 +473,11 @@ fun WavySnakeStationRow(
     currentLang: String,
     pulseScale: Float,
     orbitRotation: Float,
-    onClaim: () -> Unit
+    onClaim: () -> Unit,
+    flowPhase: Float = 0f,
+    glowPulse: Float = 0.85f,
+    rippleProgress: Float = 0f,
+    badgeBobDp: Float = 0f
 ) {
     val isAr = currentLang == "ar"
     val appDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
@@ -477,7 +493,8 @@ fun WavySnakeStationRow(
     val nodeNormX = remember(station.id) { wavyNodeNormalizedX(station.id.toFloat()) }
     val nodeOnLeft = nodeNormX < 0.5f
 
-    val isCurrentActiveOrb = isCurrentMilestone || station.state == StationState.UNLOCKED
+    val isCurrentActiveOrb = (isCurrentMilestone && station.state != StationState.LOCKED) || station.state == StationState.UNLOCKED
+    val isStartingLockedFrontier = isCurrentMilestone && station.state == StationState.LOCKED
     val upperPathActive = station.state != StationState.LOCKED || (prevStationState != null && prevStationState != StationState.LOCKED)
     val lowerPathActive = nextStationState != null && nextStationState != StationState.LOCKED
     val isFrontierTail = station.state != StationState.LOCKED && nextStationState == StationState.LOCKED
@@ -500,17 +517,19 @@ fun WavySnakeStationRow(
             upperPathActive = upperPathActive,
             lowerPathActive = lowerPathActive,
             isFrontierTail = isFrontierTail,
+            flowPhase = flowPhase,
+            glowPulse = glowPulse,
             modifier = Modifier.fillMaxSize()
         )
 
         // Layer 2: Physical LTR positioning for Node Orb + Side Frosted Card
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Box(modifier = Modifier.fillMaxSize()) {
-                val orbBoxSize = 74.dp
+                val orbBoxSize = 84.dp
                 val orbCenterX = (totalWidthPx * nodeNormX).roundToInt()
                 val orbCenterY = (totalHeightPx * 0.5f).roundToInt()
 
-                // 2A. Circular Station Orb + Animated Orbital Rings + "YOU" Tag
+                // 2A. Circular Station Orb + Expanding Sonar Ripples + Animated Orbital Rings + "YOU" Tag
                 Box(
                     modifier = Modifier
                         .offset {
@@ -520,37 +539,89 @@ fun WavySnakeStationRow(
                         .size(orbBoxSize),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isCurrentActiveOrb) {
+                    if (isCurrentActiveOrb || isStartingLockedFrontier) {
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val center = Offset(size.width / 2f, size.height / 2f)
-                            // Warm ambient radial halo
+                            val haloAccent = if (isStartingLockedFrontier) NeonAqua else WarmFireOrange
+                            val ringAccent = if (isStartingLockedFrontier) NeonAqua else MilestoneGold
+
+                            // Warm/Cyan ambient breathing radial halo
                             drawCircle(
                                 brush = Brush.radialGradient(
-                                    colors = listOf(WarmFireOrange.copy(alpha = 0.35f), Color.Transparent),
+                                    colors = listOf(haloAccent.copy(alpha = 0.42f * glowPulse), Color.Transparent),
                                     center = center,
-                                    radius = size.minDimension * 0.5f
+                                    radius = size.minDimension * 0.50f
                                 ),
-                                radius = size.minDimension * 0.5f,
+                                radius = size.minDimension * 0.50f,
                                 center = center
                             )
-                            // Rotating outer dashed gold ring
-                            rotate(degrees = orbitRotation, pivot = center) {
+
+                            // Expanding sonar pulse wave ring around current frontier / claimable orb
+                            val rippleRadius = size.minDimension * (0.31f + rippleProgress * 0.19f)
+                            val rippleAlpha = (1f - rippleProgress) * 0.72f
+                            drawCircle(
+                                color = ringAccent.copy(alpha = rippleAlpha),
+                                radius = rippleRadius,
+                                center = center,
+                                style = Stroke(width = 1.8.dp.toPx())
+                            )
+
+                            // Counter-rotating faint outer ring
+                            rotate(degrees = -orbitRotation * 0.6f, pivot = center) {
                                 drawCircle(
-                                    color = MilestoneGold.copy(alpha = 0.72f),
-                                    radius = size.minDimension * 0.45f,
+                                    color = haloAccent.copy(alpha = 0.36f * glowPulse),
+                                    radius = size.minDimension * 0.46f,
                                     center = center,
                                     style = Stroke(
-                                        width = 1.6.dp.toPx(),
-                                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(9f, 7f), 0f)
+                                        width = 1.1.dp.toPx(),
+                                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 9f), 0f)
                                     )
                                 )
                             }
+
+                            // Rotating crisp dashed outer gold/cyan ring
+                            rotate(degrees = orbitRotation, pivot = center) {
+                                drawCircle(
+                                    color = ringAccent.copy(alpha = 0.82f),
+                                    radius = size.minDimension * 0.40f,
+                                    center = center,
+                                    style = Stroke(
+                                        width = 1.8.dp.toPx(),
+                                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(9f, 6f), 0f)
+                                    )
+                                )
+                            }
+
                             // Inner crisp glowing ring
                             drawCircle(
-                                color = Color.White.copy(alpha = 0.75f),
-                                radius = size.minDimension * 0.37f,
+                                color = Color.White.copy(alpha = 0.85f * glowPulse),
+                                radius = size.minDimension * 0.33f,
                                 center = center,
                                 style = Stroke(width = 1.4.dp.toPx())
+                            )
+                        }
+                    } else if (station.state == StationState.CLAIMED) {
+                        // Claimed nodes keep their iconic outer concentric aura ring (Gold rotating halo on MAJOR)
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val center = Offset(size.width / 2f, size.height / 2f)
+                            if (isMajorMilestone) {
+                                rotate(degrees = orbitRotation, pivot = center) {
+                                    drawCircle(
+                                        color = MilestoneGold.copy(alpha = 0.72f * glowPulse),
+                                        radius = size.minDimension * 0.38f,
+                                        center = center,
+                                        style = Stroke(
+                                            width = 1.5.dp.toPx(),
+                                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+                                        )
+                                    )
+                                }
+                            }
+                            drawCircle(
+                                color = (if (isMajorMilestone) MilestoneGold else ElectricMint).copy(alpha = 0.48f * glowPulse),
+                                radius = size.minDimension * 0.32f,
+                                center = center,
+                                style = Stroke(width = 1.3.dp.toPx())
                             )
                         }
                     }
@@ -617,17 +688,17 @@ fun WavySnakeStationRow(
                         }
                     }
 
-                    // "YOU" / "أنت" neon badge floating cleanly above active node
+                    // "YOU" / "أنت" neon badge gently bobbing directly above current node
                     if (isCurrentMilestone) {
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
-                                .offset(y = (-8).dp)
+                                .offset(y = (-6f + badgeBobDp).dp)
                                 .clip(RoundedCornerShape(50))
                                 .background(
                                     Brush.horizontalGradient(listOf(MilestoneGold, WarmFireOrange))
                                 )
-                                .border(1.dp, Color.White.copy(alpha = 0.65f), RoundedCornerShape(50))
+                                .border(1.dp, Color.White.copy(alpha = 0.75f), RoundedCornerShape(50))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
