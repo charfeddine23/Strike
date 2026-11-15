@@ -640,7 +640,7 @@ object FlameManager {
 
     /**
      * "Deflame" Button: Each tap instantly decreases the total Flame score by 3 points (ensuring score >= 0).
-     * If Pulse Elixir is active, grants +5 extra points (consumes 1 of 3 uses).
+     * If Pulse Elixir is active, grants +5 extra points (consumes 1 of 3 uses). Also awards +20 XP.
      */
     fun deflame(context: Context, delta: Double = 3.0): Double {
         com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "DEFLAME")
@@ -648,29 +648,34 @@ object FlameManager {
         val safeDelta = (delta + pulseElixirBonus).coerceAtLeast(0.1)
         val formatted = if (safeDelta % 1.0 == 0.0) "${safeDelta.toInt()}" else String.format(Locale.US, "%.1f", safeDelta)
         val bonusNote = if (pulseElixirBonus > 0) " [Pulse Elixir: +5 pts]" else ""
-        return deductPoints(
+        val updated = deductPoints(
             context = context,
             delta = safeDelta,
             reason = "DEFLAME",
             details = "Manual instant decrease (-$formatted pts)$bonusNote",
             title = "Deflame Button Action"
         )
+        com.example.data.roadmap.XpCalculationEngine.onDeflameAction(context)
+        return updated
     }
 
     /**
      * "Girl" Button / Custom Points Adjustment: Each tap decreases the total Flame score by [delta] (default 3.0).
+     * Also awards +50 XP.
      */
     fun girl(context: Context, delta: Double = 3.0): Double {
         com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "GIRL")
         val safeDelta = delta.coerceAtLeast(0.1)
         val formatted = if (safeDelta % 1.0 == 0.0) "${safeDelta.toInt()}" else String.format(Locale.US, "%.1f", safeDelta)
-        return deductPoints(
+        val updated = deductPoints(
             context = context,
             delta = safeDelta,
             reason = "GIRL",
             details = "Manual cooldown decrease (-$formatted pts)",
             title = "Girl Button Action"
         )
+        com.example.data.roadmap.XpCalculationEngine.onGirlAction(context)
+        return updated
     }
 
     /**
@@ -764,7 +769,8 @@ object FlameManager {
         boost: Double,
         personName: String,
         latestDateBeforeInsert: String?,
-        strikesToday: List<com.example.data.model.StrikeEvent> = emptyList()
+        strikesToday: List<com.example.data.model.StrikeEvent> = emptyList(),
+        strikeCount: Int = 1
     ): StrikeRegistrationResult {
         init(context)
         val prefs = getPrefs(context)
@@ -897,6 +903,9 @@ object FlameManager {
                 StrikeRegistrationResult(rawDeduction, "SINGLE_STRIKE")
             }
         }
+
+        // Award +100 XP per recorded Strike
+        com.example.data.roadmap.XpCalculationEngine.onStrikeRecorded(context, strikeCount)
 
         // Update last strike date & reset inactivity baseline date to this strike's date
         prefs.edit()

@@ -83,7 +83,7 @@ import com.example.ui.components.ElectricMint
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.NeonAqua
 import com.example.ui.components.RoadmapAmbientBackground
-import com.example.ui.components.RoadmapProgressHudCard
+import com.example.ui.components.RoadmapProgressHeader
 import com.example.ui.components.TasksLedgerSection
 import com.example.ui.components.WavySnakeStationRow
 import com.example.ui.theme.NeonAmber
@@ -357,11 +357,12 @@ fun RoadmapScreen(
                 if (selectedMainTab == 0) {
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // TOP FROSTED GLASS PROGRESS HUD CARD WITH QUICK JUMP CHIPS
-                    RoadmapProgressHudCard(
+                    // TOP FROSTED LIQUID GLASS PROGRESS HEADER CARD WITH LEFT-ALIGNED XP GUIDE ICON
+                    RoadmapProgressHeader(
                         currentStationId = currentStationId,
                         totalXp = totalXp,
                         isAr = isAr,
+                        currentLang = currentLang,
                         glowPulse = glowPulse,
                         onJumpToStation = { targetStation ->
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)

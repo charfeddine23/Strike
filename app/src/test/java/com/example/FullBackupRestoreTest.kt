@@ -17,6 +17,7 @@ import com.example.data.profile.SkipKeyType
 import com.example.data.repository.IndividualRepository
 import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.TaskStatus
+import com.example.data.roadmap.XpCalculationEngine
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -64,9 +65,11 @@ class FullBackupRestoreTest {
         app.getSharedPreferences("strikepulse_flame_prefs", Application.MODE_PRIVATE).edit().clear().commit()
         app.getSharedPreferences("strikepulse_profile_prefs", Application.MODE_PRIVATE).edit().clear().commit()
         app.getSharedPreferences("strikepulse_security_prefs", Application.MODE_PRIVATE).edit().clear().commit()
+        app.getSharedPreferences("strikepulse_xp_engine_prefs", Application.MODE_PRIVATE).edit().clear().commit()
 
         ProfileManager.resetForTesting(app)
         FlameManager.resetForTesting(app)
+        XpCalculationEngine.resetForTesting(app)
         RoadmapManager.resetForTesting(app)
     }
 
@@ -161,6 +164,11 @@ class FullBackupRestoreTest {
         RoadmapManager.onActionOccurred(app, "STRIKE")
         assertTrue(RoadmapManager.completeTask(app, completedAnnual.id))
 
+        XpCalculationEngine.onNewPersonAdded(app, 250.0) // +1,500 XP
+        FlameManager.deflame(app, 3.0) // +20 XP
+        val expectedCreditedTelemetryXp = XpCalculationEngine.creditedTelemetryXp.value
+        assertEquals(1520L, expectedCreditedTelemetryXp)
+
         val expectedTotalXp = RoadmapManager.totalXp.value
         val expectedClaimedStations = RoadmapManager.claimedStations.value
         val expectedCompletedTaskIds = RoadmapManager.completedTaskIds.value
@@ -248,6 +256,7 @@ class FullBackupRestoreTest {
         assertEquals(expectedManualShields, FlameManager.availableManualShields.value)
 
         assertEquals(expectedTotalXp, RoadmapManager.totalXp.value)
+        assertEquals(expectedCreditedTelemetryXp, XpCalculationEngine.creditedTelemetryXp.value)
         assertEquals(expectedClaimedStations, RoadmapManager.claimedStations.value)
         assertEquals(expectedCompletedTaskIds, RoadmapManager.completedTaskIds.value)
         assertEquals(expectedDailyIds, RoadmapManager.dailyTasks.value.map { it.id })

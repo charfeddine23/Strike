@@ -22,6 +22,7 @@ import com.example.data.repository.IndividualRepository
 import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.RewardType
 import com.example.data.roadmap.TaskItem
+import com.example.data.roadmap.XpCalculationEngine
 import com.example.data.update.AppUpdateManager
 import com.example.data.update.AppUpdateState
 import com.example.data.update.GitHubReleaseInfo
@@ -362,10 +363,22 @@ class IndividualViewModel(
         FlameManager.init(application)
         ProfileManager.init(application)
         RoadmapManager.init(application)
+        XpCalculationEngine.init(application)
         viewModelScope.launch {
             repository.seedSampleDataIfEmpty()
             val latestStrikeDate = repository.getLatestStrikeDate()
             FlameManager.evaluateDailyInactivity(application, latestStrikeDate)
+            val trackingStartDate = FlameManager.getStreakStartDate(application)
+            if (!trackingStartDate.isNullOrBlank()) {
+                XpCalculationEngine.syncRetroactiveTelemetry(
+                    context = application,
+                    trackingStartDate = trackingStartDate,
+                    flameLogs = FlameManager.flameLogs.value,
+                    strikeEvents = repository.getAllStrikeEventsList(),
+                    individuals = repository.getAllIndividualsList(),
+                    recalculateExact = false
+                )
+            }
         }
     }
 
@@ -426,6 +439,14 @@ class IndividualViewModel(
             lang = currentLanguage.value
         )
         viewModelScope.launch {
+            XpCalculationEngine.syncRetroactiveTelemetry(
+                context = getApplication(),
+                trackingStartDate = startDateStr,
+                flameLogs = FlameManager.flameLogs.value,
+                strikeEvents = repository.getAllStrikeEventsList(),
+                individuals = repository.getAllIndividualsList(),
+                recalculateExact = true
+            )
             val formattedScore = if (result.resultingScore % 1.0 == 0.0) "${result.resultingScore.toInt()}" else String.format(Locale.US, "%.1f", result.resultingScore)
             val msg = when (currentLanguage.value) {
                 "ar" -> "تمت إعادة حساب نقاط الشعلة بنجاح: $formattedScore نقطة (+${result.inactivityPointsAdded.toInt()} خمول، -${String.format(Locale.US, "%.1f", result.totalDeductions)} سترايك)"
@@ -816,7 +837,8 @@ class IndividualViewModel(
                 boost = target.boost,
                 personName = target.fullName,
                 latestDateBeforeInsert = latestBefore,
-                strikesToday = strikesToday
+                strikesToday = strikesToday,
+                strikeCount = delta
             )
 
             if (result.penaltyDeducted > 0.0) {
@@ -874,7 +896,8 @@ class IndividualViewModel(
                     boost = target.boost,
                     personName = target.fullName,
                     latestDateBeforeInsert = latestBefore,
-                    strikesToday = strikesToday
+                    strikesToday = strikesToday,
+                    strikeCount = delta
                 )
 
                 if (result.penaltyDeducted > 0.0) {
@@ -1043,6 +1066,21 @@ class IndividualViewModel(
 
             if (editingId == null) {
                 RoadmapManager.onActionOccurred(getApplication(), "PERSON")
+                XpCalculationEngine.onNewPersonAdded(getApplication(), individualToSave.size)
+            }
+
+            if (formHistoricalEntries.value.isNotEmpty()) {
+                val startDate = FlameManager.getStreakStartDate(getApplication())
+                if (!startDate.isNullOrBlank()) {
+                    XpCalculationEngine.syncRetroactiveTelemetry(
+                        context = getApplication(),
+                        trackingStartDate = startDate,
+                        flameLogs = FlameManager.flameLogs.value,
+                        strikeEvents = repository.getAllStrikeEventsList(),
+                        individuals = repository.getAllIndividualsList(),
+                        recalculateExact = false
+                    )
+                }
             }
 
             val savedMsg = when (currentLanguage.value) {

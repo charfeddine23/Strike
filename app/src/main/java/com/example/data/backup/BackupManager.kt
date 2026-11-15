@@ -10,6 +10,7 @@ import com.example.data.model.StrikeEvent
 import com.example.data.profile.ProfileManager
 import com.example.data.repository.IndividualRepository
 import com.example.data.roadmap.RoadmapManager
+import com.example.data.roadmap.XpCalculationEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -48,6 +49,7 @@ class BackupManager(private val repository: IndividualRepository) {
             val strikeEvents = repository.getAllStrikeEventsList()
             val flameSnapshot = FlameManager.exportSnapshot(context)
             val roadmapSnapshot = RoadmapManager.exportSnapshot(context)
+            val xpEngineSnapshot = XpCalculationEngine.exportSnapshot(context)
             val profileSnapshot = ProfileManager.exportSnapshot(context)
             val prefsSnapshot = SecurityPreferences(context).exportSnapshot()
 
@@ -106,6 +108,7 @@ class BackupManager(private val repository: IndividualRepository) {
                 // 3. Complete Literal State Snapshots
                 put("flame_state", flameSnapshot)
                 put("roadmap_state", roadmapSnapshot)
+                put("xp_engine_state", xpEngineSnapshot)
                 put("profile_state", profileSnapshot)
                 put("preferences_state", prefsSnapshot)
             }
@@ -168,10 +171,11 @@ class BackupManager(private val repository: IndividualRepository) {
 
             val flameState = rootJson.optJSONObject("flame_state")
             val roadmapState = rootJson.optJSONObject("roadmap_state")
+            val xpEngineState = rootJson.optJSONObject("xp_engine_state")
             val profileState = rootJson.optJSONObject("profile_state")
             val prefsState = rootJson.optJSONObject("preferences_state")
 
-            val hasFullState = flameState != null || roadmapState != null || profileState != null || prefsState != null
+            val hasFullState = flameState != null || roadmapState != null || xpEngineState != null || profileState != null || prefsState != null
             if (individualsJson.length() == 0 && eventsJson.length() == 0 && !hasFullState) {
                 return@withContext BackupResult(
                     success = false,
@@ -235,6 +239,7 @@ class BackupManager(private val repository: IndividualRepository) {
             profileState?.let { ProfileManager.restoreSnapshot(context, it, replaceExisting) }
             flameState?.let { FlameManager.restoreSnapshot(context, it, replaceExisting) }
             roadmapState?.let { RoadmapManager.restoreSnapshot(context, it, replaceExisting) }
+            xpEngineState?.let { XpCalculationEngine.restoreSnapshot(context, it, replaceExisting) }
             if (replaceExisting && prefsState != null) {
                 SecurityPreferences(context).restoreSnapshot(prefsState)
             }

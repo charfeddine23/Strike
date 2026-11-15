@@ -2,7 +2,10 @@ package com.example
 
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.flame.FlameLogEntry
 import com.example.data.flame.FlameManager
+import com.example.data.model.Individual
+import com.example.data.model.StrikeEvent
 import com.example.data.profile.ProfileManager
 import com.example.data.profile.SkipKeyType
 import com.example.data.roadmap.RewardType
@@ -10,10 +13,14 @@ import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.StationState
 import com.example.data.roadmap.TaskPools
 import com.example.data.roadmap.TaskStatus
+import com.example.data.roadmap.XpCalculationEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,6 +47,11 @@ class RoadmapEngineTest {
         val profilePrefs = app.getSharedPreferences("strikepulse_profile_prefs", Application.MODE_PRIVATE)
         profilePrefs.edit().clear().commit()
         ProfileManager.resetForTesting(app)
+
+        val xpEnginePrefs = app.getSharedPreferences("strikepulse_xp_engine_prefs", Application.MODE_PRIVATE)
+        xpEnginePrefs.edit().clear().commit()
+        XpCalculationEngine.resetForTesting(app)
+
         RoadmapManager.resetForTesting(app)
     }
 
@@ -675,5 +687,139 @@ class RoadmapEngineTest {
             )
         }
         assertEquals(completedCountBefore, RoadmapManager.completedTaskIds.value.size)
+    }
+
+    @Test
+    fun testXpCalculationEngineActionRulesAndSizeBonus() {
+        assertEquals(0L, RoadmapManager.totalXp.value)
+        assertEquals(0L, XpCalculationEngine.creditedTelemetryXp.value)
+
+        // 1. Deflame Action: +20 XP per tap
+        FlameManager.setScore(app, 500.0)
+        FlameManager.deflame(app, 3.0)
+        assertEquals(20L, RoadmapManager.totalXp.value)
+        assertEquals(20L, XpCalculationEngine.creditedTelemetryXp.value)
+
+        // 2. Girl Action: +50 XP per tap
+        FlameManager.girl(app, 3.0)
+        assertEquals(70L, RoadmapManager.totalXp.value)
+        assertEquals(70L, XpCalculationEngine.creditedTelemetryXp.value)
+
+        // 3. Strike Recorded: +100 XP per single strike (and scaled for batch strikes)
+        FlameManager.onStrikeRegistered(
+            context = app,
+            strikeDate = "2026-11-15",
+            boost = 90.0,
+            personName = "Target A",
+            latestDateBeforeInsert = null,
+            strikesToday = emptyList(),
+            strikeCount = 1
+        )
+        assertEquals(170L, RoadmapManager.totalXp.value)
+
+        FlameManager.onStrikeRegistered(
+            context = app,
+            strikeDate = "2026-11-15",
+            boost = 90.0,
+            personName = "Target B",
+            latestDateBeforeInsert = null,
+            strikesToday = emptyList(),
+            strikeCount = 3
+        )
+        assertEquals(470L, RoadmapManager.totalXp.value)
+
+        // 4. New Person Added (Size <= 200 -> +500 XP strictly, NO bonus at exact 200.0)
+        assertEquals(500L, XpCalculationEngine.calculatePersonAdditionXp(200.0))
+        XpCalculationEngine.onNewPersonAdded(app, 200.0)
+        assertEquals(970L, RoadmapManager.totalXp.value)
+
+        // 5. New Person Added (Size > 200 -> +500 base + 1,000 bonus = +1,500 XP total)
+        assertEquals(1500L, XpCalculationEngine.calculatePersonAdditionXp(200.1))
+        XpCalculationEngine.onNewPersonAdded(app, 300.0)
+        assertEquals(2470L, RoadmapManager.totalXp.value)
+        assertEquals(2470L, XpCalculationEngine.creditedTelemetryXp.value)
+    }
+
+    @Test
+    fun testXpCalculationEngineRetroactiveStartDateScanAndIdempotency() {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val startCal = Calendar.getInstance().apply {
+            set(2026, Calendar.NOVEMBER, 10, 0, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val trackingStartDate = sdf.format(startCal.time) // 2026-11-10
+        val beforeStartMillis = startCal.timeInMillis - 86_400_000L // 2026-11-09
+        val onStartMillis = startCal.timeInMillis + 3_600_000L // 2026-11-10 01:00
+        val afterStartMillis = startCal.timeInMillis + 2 * 86_400_000L // 2026-11-12
+
+        val flameLogs = listOf(
+            FlameLogEntry(id = 1, timestamp = beforeStartMillis, title = "Old Deflame", change = -3.0, resultingScore = 97.0, reason = "DEFLAME"),
+            FlameLogEntry(id = 2, timestamp = onStartMillis, title = "Valid Deflame 1", change = -3.0, resultingScore = 94.0, reason = "DEFLAME"),
+            FlameLogEntry(id = 3, timestamp = afterStartMillis, title = "Valid Deflame 2", change = -3.0, resultingScore = 91.0, reason = "DEFLAME"),
+            FlameLogEntry(id = 4, timestamp = beforeStartMillis, title = "Old Girl", change = -3.0, resultingScore = 88.0, reason = "GIRL"),
+            FlameLogEntry(id = 5, timestamp = afterStartMillis, title = "Valid Girl", change = -3.0, resultingScore = 85.0, reason = "GIRL"),
+            FlameLogEntry(id = 6, timestamp = afterStartMillis, title = "Inactivity", change = 50.0, resultingScore = 135.0, reason = "INACTIVITY")
+        )
+
+        val strikeEvents = listOf(
+            StrikeEvent(id = 10, individualId = 1, individualName = "A", year = 2026, date = "2026-11-08", time = "12:00:00", count = 5, strikeType = "Strike", performanceValue = 80.0),
+            StrikeEvent(id = 11, individualId = 1, individualName = "A", year = 2026, date = "2026-11-10", time = "12:00:00", count = 1, strikeType = "Strike", performanceValue = 80.0),
+            StrikeEvent(id = 12, individualId = 2, individualName = "B", year = 2026, date = "2026-11-14", time = "15:00:00", count = 2, strikeType = "Strike", performanceValue = 90.0)
+        )
+
+        val individuals = listOf(
+            Individual(id = 1, fullName = "Old Person", type = "M", length = 25.0, width = 12.0, size = 300.0, sScore = 80.0, fScore = 80.0, cScore = 80.0, boost = 85.0, updatedAt = beforeStartMillis),
+            Individual(id = 2, fullName = "Standard New Person", type = "M", length = 20.0, width = 10.0, size = 200.0, sScore = 80.0, fScore = 80.0, cScore = 80.0, boost = 85.0, updatedAt = onStartMillis),
+            Individual(id = 3, fullName = "Bonus Size Person", type = "FG", length = 25.0, width = 10.0, size = 250.0, sScore = 80.0, fScore = 80.0, cScore = 80.0, boost = 85.0, updatedAt = afterStartMillis)
+        )
+
+        // Expected from >= 2026-11-10:
+        // 2 Deflames (40) + 1 Girl (50) + 3 Strikes (300) + 2 Persons base (1000) + 1 Large Size Bonus >200 (1000) = 2,390 XP
+        val breakdown1 = XpCalculationEngine.syncRetroactiveTelemetry(
+            context = app,
+            trackingStartDate = trackingStartDate,
+            flameLogs = flameLogs,
+            strikeEvents = strikeEvents,
+            individuals = individuals,
+            recalculateExact = false
+        )
+        assertEquals(2, breakdown1.deflameCount)
+        assertEquals(1, breakdown1.girlCount)
+        assertEquals(3, breakdown1.strikeCount)
+        assertEquals(2, breakdown1.personCount)
+        assertEquals(1, breakdown1.largePersonBonusCount)
+        assertEquals(2390L, breakdown1.totalTelemetryXp)
+        assertEquals(2390L, breakdown1.deltaCreditedXp)
+        assertEquals(2390L, RoadmapManager.totalXp.value)
+        val unlockedLevel = XpCalculationEngine.calculateLevelForXp(RoadmapManager.totalXp.value)
+        assertTrue("Expected unlockedLevel >= 1 for 2,390 XP, got $unlockedLevel", unlockedLevel >= 1)
+        assertTrue(RoadmapManager.totalXp.value >= XpCalculationEngine.getRequiredXpForLevel(unlockedLevel))
+        assertTrue(RoadmapManager.totalXp.value < XpCalculationEngine.getRequiredXpForLevel(unlockedLevel + 1))
+
+        // Idempotency check: repeating sync must award +0 delta and never double-count
+        val breakdown2 = XpCalculationEngine.syncRetroactiveTelemetry(
+            context = app,
+            trackingStartDate = trackingStartDate,
+            flameLogs = flameLogs,
+            strikeEvents = strikeEvents,
+            individuals = individuals,
+            recalculateExact = false
+        )
+        assertEquals(0L, breakdown2.deltaCreditedXp)
+        assertEquals(2390L, RoadmapManager.totalXp.value)
+
+        // Moving start date forward to 2026-11-12 with recalculateExact = true reconciles cleanly:
+        // Only: 1 Deflame (20) + 1 Girl (50) + 2 Strikes (200) + 1 Large Person (1500) = 1,770 XP
+        val earlierAdjusted = XpCalculationEngine.syncRetroactiveTelemetry(
+            context = app,
+            trackingStartDate = "2026-11-12",
+            flameLogs = flameLogs,
+            strikeEvents = strikeEvents,
+            individuals = individuals,
+            recalculateExact = true
+        )
+        assertEquals(1770L, earlierAdjusted.totalTelemetryXp)
+        assertEquals(-620L, earlierAdjusted.deltaCreditedXp)
+        assertEquals(1770L, RoadmapManager.totalXp.value)
     }
 }

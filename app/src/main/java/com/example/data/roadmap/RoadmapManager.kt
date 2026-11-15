@@ -103,6 +103,7 @@ object RoadmapManager {
     fun init(context: Context) {
         if (isInitialized) return
         ProfileManager.init(context)
+        XpCalculationEngine.init(context)
         val prefs = getPrefs(context)
 
         _totalXp.value = prefs.getLong(KEY_TOTAL_XP, 0L)
@@ -287,6 +288,7 @@ object RoadmapManager {
     @Synchronized
     fun resetForTesting(context: Context) {
         isInitialized = false
+        XpCalculationEngine.resetForTesting(context)
         init(context)
     }
 
@@ -354,6 +356,7 @@ object RoadmapManager {
     @Synchronized
     fun resetAllLevelsToZero(context: Context) {
         init(context)
+        XpCalculationEngine.resetAllToZero(context)
         _totalXp.value = 0L
         _claimedStations.value = emptySet()
         _completedTaskIds.value = emptySet()
@@ -437,6 +440,11 @@ object RoadmapManager {
 
     @Synchronized
     fun addXp(context: Context, amount: Int): Long {
+        return addXp(context, amount.toLong())
+    }
+
+    @Synchronized
+    fun addXp(context: Context, amount: Long): Long {
         init(context)
         val newXp = (_totalXp.value + amount).coerceAtLeast(0L)
         _totalXp.value = newXp

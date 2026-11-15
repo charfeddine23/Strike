@@ -10,7 +10,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,7 +24,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,8 +32,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.LocalDrink
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.MilitaryTech
-import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
@@ -220,6 +216,7 @@ fun wavyNodeNormalizedX(continuousStationIndex: Float): Float {
 
 /**
  * Top Frosted Glass Roadmap Progress HUD Card with quick-jump milestone chips.
+ * Delegates to [RoadmapProgressHeader] which includes the glowing XP Guide icon & Liquid Glass modal.
  */
 @Composable
 fun RoadmapProgressHudCard(
@@ -230,233 +227,14 @@ fun RoadmapProgressHudCard(
     modifier: Modifier = Modifier,
     glowPulse: Float = 0.85f
 ) {
-    val safeStation = currentStationId.coerceIn(0, 500)
-    val stagesLeft = (500 - safeStation).coerceAtLeast(0)
-    val progressFraction = (safeStation / 500f).coerceIn(0f, 1f)
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xD6141C2E), Color(0xC80D1322))
-                )
-            )
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        NeonAqua.copy(alpha = 0.45f),
-                        Color.White.copy(alpha = 0.14f),
-                        ElectricMint.copy(alpha = 0.35f)
-                    )
-                ),
-                shape = RoundedCornerShape(20.dp)
-            )
-            .padding(horizontal = 14.dp, vertical = 12.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Glowing cyan circular emblem
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(NeonAqua.copy(alpha = 0.14f))
-                        .border(1.4.dp, NeonAqua.copy(alpha = 0.8f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MilitaryTech,
-                        contentDescription = null,
-                        tint = NeonAqua,
-                        modifier = Modifier.size(21.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (isAr) {
-                            "تقدم المسار: المحطة $safeStation / 500"
-                        } else {
-                            "Roadmap Progress: LVL $safeStation / 500"
-                        },
-                        fontWeight = FontWeight.Black,
-                        fontFamily = PlusJakartaSans,
-                        fontSize = 15.sp,
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = if (isAr) {
-                            "XP المهام: $totalXp / 1,000,000 • متبقي $stagesLeft محطة"
-                        } else {
-                            "Tasks XP: $totalXp / 1,000,000 • $stagesLeft stages left"
-                        },
-                        fontSize = 11.sp,
-                        color = Color(0xFF94A3B8),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Sleek horizontal glowing progress track with endpoint glow dots
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(12.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color(0xFF1E293B))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(progressFraction.coerceAtLeast(0.02f))
-                            .height(4.dp)
-                            .background(Brush.horizontalGradient(listOf(NeonAqua, ElectricMint)))
-                    )
-                }
-
-                // Glowing start & end dots on the progress bar with gentle breathing glow
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .scale(0.92f + 0.16f * glowPulse)
-                            .clip(CircleShape)
-                            .background(NeonAqua)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .scale(0.92f + 0.16f * glowPulse)
-                            .clip(CircleShape)
-                            .background(
-                                if (progressFraction >= 0.99f) ElectricMint else NeonAqua.copy(alpha = 0.72f * glowPulse)
-                            )
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Quick-Jump Milestones Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Jump to Me
-                QuickJumpChip(
-                    label = if (isAr) "موقعي ($safeStation)" else "Me ($safeStation)",
-                    icon = Icons.Default.MyLocation,
-                    isHighlighted = true,
-                    accentColor = NeonAqua,
-                    onClick = { onJumpToStation(safeStation.coerceAtLeast(1)) },
-                    modifier = Modifier.testTag("btn_jump_me")
-                )
-                QuickJumpChip(
-                    label = if (isAr) "م 1" else "LVL 1",
-                    onClick = { onJumpToStation(1) }
-                )
-                QuickJumpChip(
-                    label = if (isAr) "م 100" else "LVL 100",
-                    onClick = { onJumpToStation(100) }
-                )
-                QuickJumpChip(
-                    label = if (isAr) "م 250" else "LVL 250",
-                    onClick = { onJumpToStation(250) }
-                )
-                QuickJumpChip(
-                    label = if (isAr) "م 400" else "LVL 400",
-                    onClick = { onJumpToStation(400) }
-                )
-                QuickJumpChip(
-                    label = "500",
-                    icon = Icons.Default.EmojiEvents,
-                    isHighlighted = false,
-                    accentColor = MilestoneGold,
-                    isCrown = true,
-                    onClick = { onJumpToStation(500) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun QuickJumpChip(
-    label: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
-    isHighlighted: Boolean = false,
-    accentColor: Color = Color(0xFF94A3B8),
-    isCrown: Boolean = false,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val bgColor = when {
-        isHighlighted -> accentColor.copy(alpha = 0.16f)
-        isCrown -> MilestoneGold.copy(alpha = 0.14f)
-        else -> Color(0x99161E31)
-    }
-    val borderColor = when {
-        isHighlighted -> accentColor.copy(alpha = 0.85f)
-        isCrown -> MilestoneGold.copy(alpha = 0.55f)
-        else -> Color(0x33FFFFFF)
-    }
-    val textColor = when {
-        isHighlighted -> NeonAqua
-        isCrown -> MilestoneGold
-        else -> Color(0xFFCBD5E1)
-    }
-
-    Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(bgColor)
-            .border(1.dp, borderColor, RoundedCornerShape(50))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = textColor,
-                modifier = Modifier.size(12.dp)
-            )
-        }
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = if (isHighlighted || isCrown) FontWeight.Bold else FontWeight.Medium,
-            color = textColor,
-            maxLines = 1
-        )
-    }
+    RoadmapProgressHeader(
+        currentStationId = currentStationId,
+        totalXp = totalXp,
+        isAr = isAr,
+        onJumpToStation = onJumpToStation,
+        modifier = modifier,
+        glowPulse = glowPulse
+    )
 }
 
 /**
