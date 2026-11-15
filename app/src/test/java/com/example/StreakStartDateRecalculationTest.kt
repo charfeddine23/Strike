@@ -269,4 +269,97 @@ class StreakStartDateRecalculationTest {
         assertEquals(20, rank.index)
         assertEquals(50, tier.index)
     }
+
+    @Test
+    fun `test end date and independent per-element custom date ranges isolate calculations accurately`() {
+        val globalStart = getDateDaysAgo(60)
+        val globalEnd = getDateDaysAgo(10) // Excludes last 10 days from main range
+
+        // Strike 5 days ago (AFTER strikesEnd = 20 days ago -> MUST BE EXCLUDED)
+        // Strike 25 days ago (INSIDE strikes range 40..20 days ago -> MUST BE INCLUDED, -10.0 pts)
+        // Strike 50 days ago (BEFORE strikesStart = 40 days ago -> MUST BE EXCLUDED)
+        val strikes = listOf(
+            StrikeEvent(id = 1, individualId = 1, individualName = "Old", date = getDateDaysAgo(50), year = 2026, count = 1, performanceValue = 15.0),
+            StrikeEvent(id = 2, individualId = 2, individualName = "InWindow", date = getDateDaysAgo(25), year = 2026, count = 1, performanceValue = 10.0),
+            StrikeEvent(id = 3, individualId = 3, individualName = "TooRecent", date = getDateDaysAgo(5), year = 2026, count = 1, performanceValue = 20.0)
+        )
+
+        val inactivityRange = com.example.data.flame.DateRangeConfig(
+            startDate = getDateDaysAgo(40),
+            endDate = getDateDaysAgo(10), // 30 days -> +90.0 pts
+            isCustom = true
+        )
+        val strikesRange = com.example.data.flame.DateRangeConfig(
+            startDate = getDateDaysAgo(40),
+            endDate = getDateDaysAgo(20), // Only Strike #2 (-10.0 pts)
+            isCustom = true
+        )
+        val girlRange = com.example.data.flame.DateRangeConfig(
+            startDate = getDateDaysAgo(30),
+            endDate = getDateDaysAgo(0), // 30 days = 1 month -> 6 Girl * 1 = 6 (-18.0 pts flame, +300 XP)
+            isCustom = true
+        )
+        val deflameRange = com.example.data.flame.DateRangeConfig(
+            startDate = getDateDaysAgo(45),
+            endDate = getDateDaysAgo(15), // 30 days = 1 month -> 3 Deflame * 1 = 3 (-9.0 pts flame, +60 XP)
+            isCustom = true
+        )
+
+        val result = FlameManager.recalculateFromStartDate(
+            context = context,
+            startDateStr = globalStart,
+            strikeEvents = strikes,
+            lang = "ar",
+            girlPerMonth = 6,
+            deflamePerMonth = 3,
+            endDateStr = globalEnd,
+            inactivityRange = inactivityRange,
+            strikesRange = strikesRange,
+            girlRange = girlRange,
+            deflameRange = deflameRange
+        )
+
+        assertEquals(30, result.daysElapsed)
+        assertEquals(90.0, result.inactivityPointsAdded, 0.001)
+        assertEquals(1, result.totalStrikesCount)
+        assertEquals(10.0, result.totalDeductions, 0.001)
+        assertEquals(6, result.girlPressesCount)
+        assertEquals(18.0, result.girlPointsDeducted, 0.001)
+        assertEquals(3, result.deflamePressesCount)
+        assertEquals(9.0, result.deflamePointsDeducted, 0.001)
+        // Final Flame score = 90.0 - 10.0 - 18.0 - 9.0 = 53.0
+        assertEquals(53.0, result.resultingScore, 0.001)
+        assertEquals(globalStart, FlameManager.getStreakStartDate(context))
+        assertEquals(globalEnd, FlameManager.getStreakEndDate(context))
+
+        val savedCfg = FlameManager.getSavedRecalculationConfig(context)
+        assertEquals(globalStart, savedCfg.globalStartDate)
+        assertEquals(globalEnd, savedCfg.globalEndDate)
+        assertEquals(true, savedCfg.inactivityRange?.isCustom)
+        assertEquals(getDateDaysAgo(40), savedCfg.strikesRange?.startDate)
+        assertEquals(getDateDaysAgo(20), savedCfg.strikesRange?.endDate)
+
+        // XP breakdown also respects custom per-element ranges without leaking Strike #1 or #3
+        val baselineXp = RoadmapManager.totalXp.value
+        val xpBreakdown = XpCalculationEngine.syncRetroactiveTelemetry(
+            context = context,
+            trackingStartDate = result.startDate,
+            flameLogs = FlameManager.flameLogs.value,
+            strikeEvents = strikes,
+            individuals = emptyList(),
+            recalculateExact = true,
+            trackingEndDate = result.endDate,
+            strikesStartDate = result.strikesStartDate,
+            strikesEndDate = result.strikesEndDate,
+            girlStartDate = result.girlStartDate,
+            girlEndDate = result.girlEndDate,
+            deflameStartDate = result.deflameStartDate,
+            deflameEndDate = result.deflameEndDate
+        )
+        assertEquals(1, xpBreakdown.strikeCount) // Strictly Strike #2 (+100 XP)
+        assertEquals(6, xpBreakdown.girlCount) // +300 XP
+        assertEquals(3, xpBreakdown.deflameCount) // +60 XP
+        assertEquals(460L, xpBreakdown.totalTelemetryXp)
+        assertEquals(baselineXp + 460L, RoadmapManager.totalXp.value)
+    }
 }

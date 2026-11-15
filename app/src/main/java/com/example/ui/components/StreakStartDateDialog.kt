@@ -1,10 +1,10 @@
 package com.example.ui.components
 
-import android.app.DatePickerDialog
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,26 +25,36 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,20 +64,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.data.flame.FlameRecalculationResult
+import com.example.data.flame.DateRangeConfig
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -77,100 +89,102 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
 
+private enum class PickerTarget {
+    GLOBAL_START,
+    GLOBAL_END,
+    INACTIVITY_START,
+    INACTIVITY_END,
+    STRIKES_START,
+    STRIKES_END,
+    GIRL_START,
+    GIRL_END,
+    DEFLAME_START,
+    DEFLAME_END
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StreakStartDateDialog(
     viewModel: IndividualViewModel,
     onDismiss: () -> Unit,
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
-    val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
+    val isFr = currentLang == "fr"
 
-    val initialDate = remember {
-        viewModel.getStreakStartDate() ?: SimpleDateFormat("yyyy-MM-dd", Locale.US).format(
-            Date(System.currentTimeMillis() - 30L * 24 * 3600 * 1000L) // Default suggestion: 30 days ago
+    val savedConfig = remember { viewModel.getSavedRecalculationConfig() }
+    val todayStr = remember { localTodayString() }
+
+    var globalStartDate by remember { mutableStateOf(savedConfig.globalStartDate.coerceMax(todayStr)) }
+    var globalEndDate by remember {
+        mutableStateOf(
+            savedConfig.globalEndDate.coerceInRange(globalStartDate, todayStr)
         )
     }
-    val initialGirlPerMonth = remember {
-        viewModel.getSavedGirlPerMonth().let { if (it > 0) it.toString() else "" }
+
+    // Per-element custom date range states
+    var inactivityRange by remember {
+        mutableStateOf(
+            savedConfig.inactivityRange ?: DateRangeConfig(globalStartDate, globalEndDate, isCustom = false)
+        )
     }
-    val initialDeflamePerMonth = remember {
-        viewModel.getSavedDeflamePerMonth().let { if (it > 0) it.toString() else "" }
+    var strikesRange by remember {
+        mutableStateOf(
+            savedConfig.strikesRange ?: DateRangeConfig(globalStartDate, globalEndDate, isCustom = false)
+        )
+    }
+    var girlRange by remember {
+        mutableStateOf(
+            savedConfig.girlRange ?: DateRangeConfig(globalStartDate, globalEndDate, isCustom = false)
+        )
+    }
+    var deflameRange by remember {
+        mutableStateOf(
+            savedConfig.deflameRange ?: DateRangeConfig(globalStartDate, globalEndDate, isCustom = false)
+        )
     }
 
-    var dateInput by remember { mutableStateOf(initialDate) }
-    var girlPerMonthInput by remember { mutableStateOf(initialGirlPerMonth) }
-    var deflamePerMonthInput by remember { mutableStateOf(initialDeflamePerMonth) }
-    var previewResult by remember { mutableStateOf<FlameRecalculationResult?>(null) }
-    var isValidDate by remember { mutableStateOf(true) }
+    var girlPerMonthInput by remember {
+        mutableStateOf(if (savedConfig.girlPerMonth > 0) savedConfig.girlPerMonth.toString() else "")
+    }
+    var deflamePerMonthInput by remember {
+        mutableStateOf(if (savedConfig.deflamePerMonth > 0) savedConfig.deflamePerMonth.toString() else "")
+    }
 
     val girlPerMonth = girlPerMonthInput.toIntOrNull()?.coerceAtLeast(0) ?: 0
     val deflamePerMonth = deflamePerMonthInput.toIntOrNull()?.coerceAtLeast(0) ?: 0
 
-    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false } }
+    var activePickerTarget by remember { mutableStateOf<PickerTarget?>(null) }
 
-    fun validateAndPreview(dateStr: String, girlMonthly: Int, deflameMonthly: Int) {
-        try {
-            val parsed = dateFormat.parse(dateStr.trim())
-            val today = Date()
-            if (parsed != null && !parsed.after(today)) {
-                isValidDate = true
-                previewResult = viewModel.previewStartDateRecalculation(
-                    startDateStr = dateStr.trim(),
-                    girlPerMonth = girlMonthly,
-                    deflamePerMonth = deflameMonthly
-                )
-            } else {
-                isValidDate = false
-                previewResult = null
-            }
-        } catch (_: Exception) {
-            isValidDate = false
-            previewResult = null
-        }
-    }
-
-    LaunchedEffect(dateInput, girlPerMonth, deflamePerMonth) {
-        validateAndPreview(dateInput, girlPerMonth, deflamePerMonth)
-    }
-
-    fun openCalendarPicker() {
-        val calendar = Calendar.getInstance()
-        try {
-            val parsed = dateFormat.parse(dateInput)
-            if (parsed != null) calendar.time = parsed
-        } catch (_: Exception) {
-        }
-
-        DatePickerDialog(
-            context,
-            { _, year, month, dayOfMonth ->
-                val selected = Calendar.getInstance().apply {
-                    set(Calendar.YEAR, year)
-                    set(Calendar.MONTH, month)
-                    set(Calendar.DAY_OF_MONTH, dayOfMonth)
-                }
-                dateInput = dateFormat.format(selected.time)
-            },
-            calendar.get(Calendar.YEAR),
-            calendar.get(Calendar.MONTH),
-            calendar.get(Calendar.DAY_OF_MONTH)
-        ).apply {
-            datePicker.maxDate = System.currentTimeMillis()
-            show()
-        }
-    }
-
-    fun setQuickPreset(daysAgo: Int) {
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.DAY_OF_YEAR, -daysAgo)
-        dateInput = dateFormat.format(cal.time)
+    val previewResult = remember(
+        globalStartDate,
+        globalEndDate,
+        inactivityRange,
+        strikesRange,
+        girlRange,
+        deflameRange,
+        girlPerMonth,
+        deflamePerMonth
+    ) {
+        viewModel.previewStartDateRecalculation(
+            startDateStr = globalStartDate,
+            girlPerMonth = girlPerMonth,
+            deflamePerMonth = deflamePerMonth,
+            endDateStr = globalEndDate,
+            inactivityRange = inactivityRange,
+            strikesRange = strikesRange,
+            girlRange = girlRange,
+            deflameRange = deflameRange
+        )
     }
 
     val effectiveLayoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val girlAccent = Color(0xFFFB7185)
+    val deflameAccent = Color(0xFF38BDF8)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -179,12 +193,13 @@ fun StreakStartDateDialog(
         CompositionLocalProvider(LocalLayoutDirection provides effectiveLayoutDirection) {
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth(0.92f)
+                    .fillMaxWidth(0.94f)
+                    .heightIn(max = 760.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .border(
                         width = 1.dp,
                         brush = Brush.verticalGradient(
-                            listOf(NeonCyan.copy(alpha = 0.8f), NeonAmber.copy(alpha = 0.4f), Color(0x3338BDF8))
+                            listOf(NeonCyan.copy(alpha = 0.8f), NeonAmber.copy(alpha = 0.45f), Color(0x3338BDF8))
                         ),
                         shape = RoundedCornerShape(24.dp)
                     )
@@ -195,7 +210,7 @@ fun StreakStartDateDialog(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp)
+                        .padding(18.dp)
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -227,10 +242,10 @@ fun StreakStartDateDialog(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(
-                                    text = when (currentLang) {
-                                        "ar" -> "تاريخ بداية العد"
-                                        "fr" -> "Date de début du suivi"
-                                        else -> "Streak Start Date"
+                                    text = when {
+                                        isAr -> "فترة بداية ونهاية العد"
+                                        isFr -> "Période de calcul"
+                                        else -> "Streak Date Range"
                                     },
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.ExtraBold,
@@ -238,10 +253,10 @@ fun StreakStartDateDialog(
                                     fontFamily = PlusJakartaSans
                                 )
                                 Text(
-                                    text = when (currentLang) {
-                                        "ar" -> "إعادة احتساب نقاط الشعلة تلقائياً"
-                                        "fr" -> "Recalcul automatique du score de flamme"
-                                        else -> "Streak Start Date Recalculation"
+                                    text = when {
+                                        isAr -> "تحديد من التقويم وتخصيص لكل عنصر"
+                                        isFr -> "Sélection par calendrier & par élément"
+                                        else -> "Calendar-only & per-element ranges"
                                     },
                                     fontSize = 11.sp,
                                     color = NeonCyan,
@@ -265,9 +280,9 @@ fun StreakStartDateDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
-                                    contentDescription = when (currentLang) {
-                                        "ar" -> "إغلاق"
-                                        "fr" -> "Fermer"
+                                    contentDescription = when {
+                                        isAr -> "إغلاق"
+                                        isFr -> "Fermer"
                                         else -> "Close"
                                     },
                                     tint = Color.White.copy(alpha = 0.7f),
@@ -277,519 +292,507 @@ fun StreakStartDateDialog(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    // Explanatory Subtitle
                     Text(
-                        text = when (currentLang) {
-                            "ar" -> "أدخل تاريخ بدء السلسلة لحساب الشعلة تلقائياً. تُضاف +3 نقاط لكل يوم مضى، وتُخصم نقاط الضربات بالإضافة لمرات الضغط الشهرية على زر Girl وDeflame في السجلات وتُحتسب نقاط الـ XP الخاصة بها في المسار دون تعديل عداد المهام."
-                            "fr" -> "Entrez la date de début pour calculer votre flamme automatiquement (+3 pts/jour, déductions des strikes et appuis mensuels Girl/Deflame enregistrés avec leurs XP dans la progression sans modifier les compteurs de missions)."
-                            else -> "Enter your streak start date to calculate your flame automatically (+3 pts/day, strike deductions, and monthly Girl/Deflame presses logged with their XP toward roadmap progress without changing task step counters)."
+                        text = when {
+                            isAr -> "اختر تاريخ البداية والنهاية من التقويم فقط لمنع تداخل الحسابات، مع إمكانية تخصيص فترة مستقلة لكل عنصر على حدة."
+                            isFr -> "Choisissez la date de début et de fin uniquement depuis le calendrier et personnalisez chaque élément indépendamment."
+                            else -> "Pick start & end dates exclusively from the calendar to keep period math isolated, and customize dates per element if needed."
                         },
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.78f),
-                        lineHeight = 18.sp
+                        fontSize = 11.5.sp,
+                        color = Color.White.copy(alpha = 0.76f),
+                        lineHeight = 17.sp
                     )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Date Input Field with Calendar Trigger
-                    OutlinedTextField(
-                        value = dateInput,
-                        onValueChange = { dateInput = it },
-                        label = {
-                            Text(
-                                text = when (currentLang) {
-                                    "ar" -> "تاريخ البداية (YYYY-MM-DD)"
-                                    "fr" -> "Date de début (YYYY-MM-DD)"
-                                    else -> "Start Date (YYYY-MM-DD)"
-                                },
-                                color = NeonCyan.copy(alpha = 0.85f),
-                                fontSize = 12.sp
-                            )
-                        },
-                        placeholder = {
-                            Text(
-                                text = when (currentLang) {
-                                    "ar" -> "مثال: 2026-10-15"
-                                    "fr" -> "ex. 2026-10-15"
-                                    else -> "e.g. 2026-10-15"
-                                },
-                                color = Color(0x66FFFFFF)
-                            )
-                        },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = PlusJakartaSans
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("date_input_field"),
-                        shape = RoundedCornerShape(14.dp),
-                        trailingIcon = {
-                            IconButton(onClick = { openCalendarPicker() }) {
-                                Icon(
-                                    imageVector = Icons.Default.CalendarMonth,
-                                    contentDescription = when (currentLang) {
-                                        "ar" -> "اختيار التاريخ"
-                                        "fr" -> "Choisir la date"
-                                        else -> "Pick Date"
-                                    },
-                                    tint = NeonCyan
-                                )
-                            }
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = Color(0x4438BDF8),
-                            focusedContainerColor = Color(0x1A1E293B),
-                            unfocusedContainerColor = Color(0x1A1E293B),
-                            cursorColor = NeonCyan
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Text,
-                            imeAction = ImeAction.Next
-                        ),
-                        isError = !isValidDate
-                    )
-
-                    if (!isValidDate) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = when (currentLang) {
-                                "ar" -> "الرجاء إدخال تاريخ صحيح بصيغة YYYY-MM-DD وليس في المستقبل"
-                                "fr" -> "Veuillez entrer une date valide (YYYY-MM-DD) non future"
-                                else -> "Please enter a valid date (YYYY-MM-DD) not in the future"
-                            },
-                            fontSize = 11.sp,
-                            color = NeonRose,
-                            modifier = Modifier.align(Alignment.Start)
-                        )
-                    }
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Quick Preset Chips
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        PresetDateChip(
-                            label = when (currentLang) { "ar" -> "اليوم (0ي)"; "fr" -> "Aujourd'hui (0j)"; else -> "Today (0d)" },
-                            onClick = { setQuickPreset(0) }
-                        )
-                        PresetDateChip(
-                            label = when (currentLang) { "ar" -> "منذ أسبوع (7ي)"; "fr" -> "1 Semaine (7j)"; else -> "1 Week (7d)" },
-                            onClick = { setQuickPreset(7) }
-                        )
-                        PresetDateChip(
-                            label = when (currentLang) { "ar" -> "منذ 15 يوماً"; "fr" -> "15 Jours"; else -> "15 Days" },
-                            onClick = { setQuickPreset(15) }
-                        )
-                        PresetDateChip(
-                            label = when (currentLang) { "ar" -> "منذ شهر (30ي)"; "fr" -> "1 Mois (30j)"; else -> "1 Month (30d)" },
-                            onClick = { setQuickPreset(30) }
-                        )
-                        PresetDateChip(
-                            label = when (currentLang) { "ar" -> "منذ شهرين (60ي)"; "fr" -> "2 Mois (60j)"; else -> "2 Months (60d)" },
-                            onClick = { setQuickPreset(60) }
-                        )
-                        PresetDateChip(
-                            label = when (currentLang) { "ar" -> "منذ 3 أشهر (90ي)"; "fr" -> "3 Mois (90j)"; else -> "3 Months (90d)" },
-                            onClick = { setQuickPreset(90) }
-                        )
+                    // MAIN GLOBAL DATE RANGE CARD (CALENDAR PICKER ONLY)
+                    val globalDaysCount = remember(globalStartDate, globalEndDate) {
+                        daysBetweenStrings(globalStartDate, globalEndDate)
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // NEW FIELD 1: Girl Button Monthly Presses
-                    val girlAccent = Color(0xFFFB7185)
-                    OutlinedTextField(
-                        value = girlPerMonthInput,
-                        onValueChange = { raw ->
-                            val digits = raw.filter { it.isDigit() }.take(4)
-                            girlPerMonthInput = digits
-                        },
-                        label = {
-                            Text(
-                                text = when (currentLang) {
-                                    "ar" -> "عدد مرات الضغط على زر Girl في الشهر"
-                                    "fr" -> "Appuis sur le bouton Girl par mois"
-                                    else -> "Girl button presses per month"
-                                },
-                                color = girlAccent.copy(alpha = 0.9f),
-                                fontSize = 12.sp
-                            )
-                        },
-                        placeholder = { Text("0", color = Color(0x66FFFFFF)) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Favorite,
-                                contentDescription = null,
-                                tint = girlAccent,
-                                modifier = Modifier.size(19.dp)
-                            )
-                        },
-                        supportingText = previewResult?.let { res ->
-                            {
-                                Text(
-                                    text = when (currentLang) {
-                                        "ar" -> "الإجمالي من البداية حتى اليوم: ${res.girlPressesCount} مرة (${if (res.girlPressesCount > 0) "-${res.girlPointsDeducted.toInt()} نقطة" else "0 نقطة"})"
-                                        "fr" -> "Total sur la période : ${res.girlPressesCount} fois (-${res.girlPointsDeducted.toInt()} pts)"
-                                        else -> "Total for period: ${res.girlPressesCount} presses (-${res.girlPointsDeducted.toInt()} pts)"
-                                    },
-                                    color = girlAccent.copy(alpha = 0.85f),
-                                    fontSize = 11.sp
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = PlusJakartaSans
-                        ),
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .testTag("girl_per_month_input"),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = girlAccent,
-                            unfocusedBorderColor = girlAccent.copy(alpha = 0.35f),
-                            focusedContainerColor = Color(0x1A1E293B),
-                            unfocusedContainerColor = Color(0x1A1E293B),
-                            cursorColor = girlAccent
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Next
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // NEW FIELD 2: Deflame Button Monthly Presses
-                    val deflameAccent = Color(0xFF38BDF8)
-                    OutlinedTextField(
-                        value = deflamePerMonthInput,
-                        onValueChange = { raw ->
-                            val digits = raw.filter { it.isDigit() }.take(4)
-                            deflamePerMonthInput = digits
-                        },
-                        label = {
-                            Text(
-                                text = when (currentLang) {
-                                    "ar" -> "عدد مرات الضغط على زر Deflame في الشهر"
-                                    "fr" -> "Appuis sur le bouton Deflame par mois"
-                                    else -> "Deflame button presses per month"
-                                },
-                                color = deflameAccent.copy(alpha = 0.9f),
-                                fontSize = 12.sp
-                            )
-                        },
-                        placeholder = { Text("0", color = Color(0x66FFFFFF)) },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.AcUnit,
-                                contentDescription = null,
-                                tint = deflameAccent,
-                                modifier = Modifier.size(19.dp)
-                            )
-                        },
-                        supportingText = previewResult?.let { res ->
-                            {
-                                Text(
-                                    text = when (currentLang) {
-                                        "ar" -> "الإجمالي من البداية حتى اليوم: ${res.deflamePressesCount} مرة (${if (res.deflamePressesCount > 0) "-${res.deflamePointsDeducted.toInt()} نقطة" else "0 نقطة"})"
-                                        "fr" -> "Total sur la période : ${res.deflamePressesCount} fois (-${res.deflamePointsDeducted.toInt()} pts)"
-                                        else -> "Total for period: ${res.deflamePressesCount} presses (-${res.deflamePointsDeducted.toInt()} pts)"
-                                    },
-                                    color = deflameAccent.copy(alpha = 0.85f),
-                                    fontSize = 11.sp
-                                )
-                            }
-                        },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = PlusJakartaSans
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("deflame_per_month_input"),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = deflameAccent,
-                            unfocusedBorderColor = deflameAccent.copy(alpha = 0.35f),
-                            focusedContainerColor = Color(0x1A1E293B),
-                            unfocusedContainerColor = Color(0x1A1E293B),
-                            cursorColor = deflameAccent
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = { focusManager.clearFocus() }
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Live Preview Calculation Card
-                    previewResult?.let { res ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0x221E293B))
-                                .border(1.dp, Color(0x4038BDF8), RoundedCornerShape(16.dp))
-                                .padding(14.dp)
-                        ) {
-                            Column {
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0x2B16233B))
+                            .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Text(
-                                        text = when (currentLang) {
-                                            "ar" -> "المعاينة الحسابية التلقائية"
-                                            "fr" -> "Aperçu du calcul automatique"
-                                            else -> "Automatic Calculation Preview"
-                                        },
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = NeonCyan,
-                                        fontFamily = PlusJakartaSans
+                                    Icon(
+                                        imageVector = Icons.Default.DateRange,
+                                        contentDescription = null,
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(16.dp)
                                     )
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(NeonEmerald.copy(alpha = 0.2f))
-                                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = when (currentLang) {
-                                                "ar" -> "تلقائي ودقيق"
-                                                "fr" -> "Auto & Vérifié"
-                                                else -> "Auto & Verified"
-                                            },
-                                            fontSize = 10.sp,
-                                            color = NeonEmerald,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                // Elapsed Days & Inactivity Points
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.TrendingUp,
-                                            contentDescription = null,
-                                            tint = NeonAmber,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = when (currentLang) {
-                                                "ar" -> "الأيام المنقضية (${res.daysElapsed} يوم):"
-                                                "fr" -> "Jours écoulés (${res.daysElapsed}j) :"
-                                                else -> "Elapsed Days (${res.daysElapsed}d):"
-                                            },
-                                            fontSize = 12.sp,
-                                            color = Color.White.copy(alpha = 0.9f)
-                                        )
-                                    }
                                     Text(
-                                        text = when (currentLang) {
-                                            "ar" -> "+${res.inactivityPointsAdded.toInt()} نقطة (+3/يوم)"
-                                            "fr" -> "+${res.inactivityPointsAdded.toInt()} PTS (+3/j)"
-                                            else -> "+${res.inactivityPointsAdded.toInt()} PTS (+3/day)"
-                                        },
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = NeonAmber
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                // Registered Strikes in Period
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.TrendingDown,
-                                            contentDescription = null,
-                                            tint = NeonRose,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = when (currentLang) {
-                                                "ar" -> "الضربات المكتشفة (${res.totalStrikesCount}):"
-                                                "fr" -> "Strikes détectés (${res.totalStrikesCount}) :"
-                                                else -> "Detected Strikes (${res.totalStrikesCount}):"
-                                            },
-                                            fontSize = 12.sp,
-                                            color = Color.White.copy(alpha = 0.9f)
-                                        )
-                                    }
-                                    Text(
-                                        text = when (currentLang) {
-                                            "ar" -> "-${String.format(Locale.US, "%.1f", res.totalDeductions)} نقطة"
-                                            else -> "-${String.format(Locale.US, "%.1f", res.totalDeductions)} PTS"
-                                        },
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = NeonRose
-                                    )
-                                }
-
-                                // Calculated Girl Presses Row
-                                if (res.girlPerMonth > 0 || res.girlPressesCount > 0) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Default.Favorite,
-                                                contentDescription = null,
-                                                tint = girlAccent,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = when (currentLang) {
-                                                    "ar" -> "ضغطات Girl (${res.girlPressesCount} مرة):"
-                                                    "fr" -> "Appuis Girl (${res.girlPressesCount}×) :"
-                                                    else -> "Girl Presses (${res.girlPressesCount}×):"
-                                                },
-                                                fontSize = 12.sp,
-                                                color = Color.White.copy(alpha = 0.9f)
-                                            )
-                                        }
-                                        Text(
-                                            text = when (currentLang) {
-                                                "ar" -> "-${String.format(Locale.US, "%.1f", res.girlPointsDeducted)} نقطة"
-                                                else -> "-${String.format(Locale.US, "%.1f", res.girlPointsDeducted)} PTS"
-                                            },
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = girlAccent
-                                        )
-                                    }
-                                }
-
-                                // Calculated Deflame Presses Row
-                                if (res.deflamePerMonth > 0 || res.deflamePressesCount > 0) {
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Default.AcUnit,
-                                                contentDescription = null,
-                                                tint = deflameAccent,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = when (currentLang) {
-                                                    "ar" -> "ضغطات Deflame (${res.deflamePressesCount} مرة):"
-                                                    "fr" -> "Appuis Deflame (${res.deflamePressesCount}×) :"
-                                                    else -> "Deflame Presses (${res.deflamePressesCount}×):"
-                                                },
-                                                fontSize = 12.sp,
-                                                color = Color.White.copy(alpha = 0.9f)
-                                            )
-                                        }
-                                        Text(
-                                            text = when (currentLang) {
-                                                "ar" -> "-${String.format(Locale.US, "%.1f", res.deflamePointsDeducted)} نقطة"
-                                                else -> "-${String.format(Locale.US, "%.1f", res.deflamePointsDeducted)} PTS"
-                                            },
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = deflameAccent
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(1.dp)
-                                        .background(Color(0x33FFFFFF))
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                // Resulting Final Score
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = when (currentLang) {
-                                            "ar" -> "النتيجة النهائية للشعلة:"
-                                            "fr" -> "Score final de la flamme :"
-                                            else -> "Resulting Flame Score:"
+                                        text = when {
+                                            isAr -> "الفترة الزمنية الرئيسية"
+                                            isFr -> "Période principale"
+                                            else -> "Main Counting Period"
                                         },
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = Color.White
-                                    )
-                                    Text(
-                                        text = when (currentLang) {
-                                            "ar" -> "${String.format(Locale.US, "%.1f", res.resultingScore)} نقطة"
-                                            else -> "${String.format(Locale.US, "%.1f", res.resultingScore)} PTS"
-                                        },
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = if (res.resultingScore > 2000.0) NeonCyan else NeonAmber,
+                                        color = Color.White,
                                         fontFamily = PlusJakartaSans
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = when (currentLang) {
-                                        "ar" -> "ملاحظة: تُسجّل في سجل الشعلة وتُحتسب نقاط الـ XP الخاصة بها (+50 Girl / +20 Deflame) دون إكمال المهام."
-                                        "fr" -> "Note : Enregistré dans le journal avec XP (+50 Girl / +20 Deflame) sans valider les missions."
-                                        else -> "Note: Logged in Flame history with XP (+50 Girl / +20 Deflame) without mutating task step counters."
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(NeonCyan.copy(alpha = 0.16f))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
+                                    Text(
+                                        text = when {
+                                            isAr -> "$globalDaysCount يوم"
+                                            isFr -> "$globalDaysCount j"
+                                            else -> "$globalDaysCount days"
+                                        },
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = NeonCyan
+                                    )
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                CalendarDateButton(
+                                    label = when {
+                                        isAr -> "تاريخ بداية العد"
+                                        isFr -> "Date de début"
+                                        else -> "Start Date"
                                     },
-                                    fontSize = 10.5.sp,
-                                    color = Color(0xFF94A3B8)
+                                    dateStr = globalStartDate,
+                                    accentColor = NeonCyan,
+                                    testTag = "btn_pick_global_start_date",
+                                    onClick = { activePickerTarget = PickerTarget.GLOBAL_START },
+                                    modifier = Modifier.weight(1f)
+                                )
+                                CalendarDateButton(
+                                    label = when {
+                                        isAr -> "تاريخ نهاية العد"
+                                        isFr -> "Date de fin"
+                                        else -> "End Date"
+                                    },
+                                    dateStr = globalEndDate,
+                                    accentColor = NeonEmerald,
+                                    testTag = "btn_pick_global_end_date",
+                                    onClick = { activePickerTarget = PickerTarget.GLOBAL_END },
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // PER-ELEMENT DATE CUSTOMIZATION SECTION HEADER
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = when {
+                                isAr -> "تخصيص التاريخ لكل عنصر على حدة"
+                                isFr -> "Dates personnalisées par élément"
+                                else -> "Customize Dates Per Element"
+                            },
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE2E8F0)
+                        )
+                        Text(
+                            text = when {
+                                isAr -> "اختيار من التقويم"
+                                isFr -> "Calendrier uniquement"
+                                else -> "Calendar only"
+                            },
+                            fontSize = 10.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+
+                    // ELEMENT 1: INACTIVITY / STREAK DAYS (+3 PTS / DAY)
+                    PerElementDateCard(
+                        title = when {
+                            isAr -> "أيام السلسلة (+3 نقاط/يوم)"
+                            isFr -> "Jours d'inactivité (+3 pts/j)"
+                            else -> "Streak Days (+3 PTS/day)"
+                        },
+                        subtitle = "${previewResult.daysElapsed} " + (if (isAr) "يوم" else if (isFr) "jours" else "days") +
+                            " • +${previewResult.inactivityPointsAdded.toInt()} " + (if (isAr) "نقطة" else "PTS"),
+                        icon = Icons.Default.TrendingUp,
+                        accentColor = NeonAmber,
+                        range = inactivityRange,
+                        globalStartDate = globalStartDate,
+                        globalEndDate = globalEndDate,
+                        isAr = isAr,
+                        isFr = isFr,
+                        toggleTestTag = "toggle_custom_inactivity",
+                        startBtnTestTag = "btn_pick_inactivity_start",
+                        endBtnTestTag = "btn_pick_inactivity_end",
+                        onToggleCustom = { enabled ->
+                            inactivityRange = if (enabled) {
+                                DateRangeConfig(
+                                    startDate = inactivityRange.startDate.ifBlank { globalStartDate }.coerceMax(todayStr),
+                                    endDate = inactivityRange.endDate.ifBlank { globalEndDate }.coerceInRange(globalStartDate, todayStr),
+                                    isCustom = true
+                                )
+                            } else {
+                                inactivityRange.copy(isCustom = false)
+                            }
+                        },
+                        onPickStart = { activePickerTarget = PickerTarget.INACTIVITY_START },
+                        onPickEnd = { activePickerTarget = PickerTarget.INACTIVITY_END }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // ELEMENT 2: DETECTED STRIKES
+                    PerElementDateCard(
+                        title = when {
+                            isAr -> "الضربات المسجلة (Strikes)"
+                            isFr -> "Strikes détectés"
+                            else -> "Recorded Strikes"
+                        },
+                        subtitle = "${previewResult.totalStrikesCount} " +
+                            (if (isAr) "سترايك" else "strikes") +
+                            " • -${String.format(Locale.US, "%.1f", previewResult.totalDeductions)} " +
+                            (if (isAr) "نقطة" else "PTS"),
+                        icon = Icons.Default.Bolt,
+                        accentColor = NeonRose,
+                        range = strikesRange,
+                        globalStartDate = globalStartDate,
+                        globalEndDate = globalEndDate,
+                        isAr = isAr,
+                        isFr = isFr,
+                        toggleTestTag = "toggle_custom_strikes",
+                        startBtnTestTag = "btn_pick_strikes_start",
+                        endBtnTestTag = "btn_pick_strikes_end",
+                        onToggleCustom = { enabled ->
+                            strikesRange = if (enabled) {
+                                DateRangeConfig(
+                                    startDate = strikesRange.startDate.ifBlank { globalStartDate }.coerceMax(todayStr),
+                                    endDate = strikesRange.endDate.ifBlank { globalEndDate }.coerceInRange(globalStartDate, todayStr),
+                                    isCustom = true
+                                )
+                            } else {
+                                strikesRange.copy(isCustom = false)
+                            }
+                        },
+                        onPickStart = { activePickerTarget = PickerTarget.STRIKES_START },
+                        onPickEnd = { activePickerTarget = PickerTarget.STRIKES_END }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // ELEMENT 3: GIRL BUTTON PRESSES + PER-ELEMENT DATES
+                    PerElementDateCard(
+                        title = when {
+                            isAr -> "مرات الضغط على زر Girl"
+                            isFr -> "Appuis bouton Girl"
+                            else -> "Girl Button Presses"
+                        },
+                        subtitle = "${previewResult.girlPressesCount} " +
+                            (if (isAr) "مرة خلال" else if (isFr) "fois sur" else "presses over") +
+                            " ${previewResult.girlDaysElapsed} " +
+                            (if (isAr) "يوم" else if (isFr) "j" else "d"),
+                        icon = Icons.Default.Favorite,
+                        accentColor = girlAccent,
+                        range = girlRange,
+                        globalStartDate = globalStartDate,
+                        globalEndDate = globalEndDate,
+                        isAr = isAr,
+                        isFr = isFr,
+                        toggleTestTag = "toggle_custom_girl",
+                        startBtnTestTag = "btn_pick_girl_start",
+                        endBtnTestTag = "btn_pick_girl_end",
+                        onToggleCustom = { enabled ->
+                            girlRange = if (enabled) {
+                                DateRangeConfig(
+                                    startDate = girlRange.startDate.ifBlank { globalStartDate }.coerceMax(todayStr),
+                                    endDate = girlRange.endDate.ifBlank { globalEndDate }.coerceInRange(globalStartDate, todayStr),
+                                    isCustom = true
+                                )
+                            } else {
+                                girlRange.copy(isCustom = false)
+                            }
+                        },
+                        onPickStart = { activePickerTarget = PickerTarget.GIRL_START },
+                        onPickEnd = { activePickerTarget = PickerTarget.GIRL_END },
+                        extraContent = {
+                            OutlinedTextField(
+                                value = girlPerMonthInput,
+                                onValueChange = { raw ->
+                                    girlPerMonthInput = raw.filter { it.isDigit() }.take(4)
+                                },
+                                label = {
+                                    Text(
+                                        text = when {
+                                            isAr -> "عدد مرات الضغط على Girl في الشهر"
+                                            isFr -> "Appuis Girl par mois"
+                                            else -> "Girl presses per month"
+                                        },
+                                        color = girlAccent.copy(alpha = 0.9f),
+                                        fontSize = 11.5.sp
+                                    )
+                                },
+                                placeholder = { Text("0", color = Color(0x66FFFFFF)) },
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = PlusJakartaSans
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("girl_per_month_input"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = girlAccent,
+                                    unfocusedBorderColor = girlAccent.copy(alpha = 0.35f),
+                                    focusedContainerColor = Color(0x1A1E293B),
+                                    unfocusedContainerColor = Color(0x1A1E293B),
+                                    cursorColor = girlAccent
+                                ),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Next
+                                )
+                            )
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // ELEMENT 4: DEFLAME BUTTON PRESSES + PER-ELEMENT DATES
+                    PerElementDateCard(
+                        title = when {
+                            isAr -> "مرات الضغط على زر Deflame"
+                            isFr -> "Appuis bouton Deflame"
+                            else -> "Deflame Button Presses"
+                        },
+                        subtitle = "${previewResult.deflamePressesCount} " +
+                            (if (isAr) "مرة خلال" else if (isFr) "fois sur" else "presses over") +
+                            " ${previewResult.deflameDaysElapsed} " +
+                            (if (isAr) "يوم" else if (isFr) "j" else "d"),
+                        icon = Icons.Default.AcUnit,
+                        accentColor = deflameAccent,
+                        range = deflameRange,
+                        globalStartDate = globalStartDate,
+                        globalEndDate = globalEndDate,
+                        isAr = isAr,
+                        isFr = isFr,
+                        toggleTestTag = "toggle_custom_deflame",
+                        startBtnTestTag = "btn_pick_deflame_start",
+                        endBtnTestTag = "btn_pick_deflame_end",
+                        onToggleCustom = { enabled ->
+                            deflameRange = if (enabled) {
+                                DateRangeConfig(
+                                    startDate = deflameRange.startDate.ifBlank { globalStartDate }.coerceMax(todayStr),
+                                    endDate = deflameRange.endDate.ifBlank { globalEndDate }.coerceInRange(globalStartDate, todayStr),
+                                    isCustom = true
+                                )
+                            } else {
+                                deflameRange.copy(isCustom = false)
+                            }
+                        },
+                        onPickStart = { activePickerTarget = PickerTarget.DEFLAME_START },
+                        onPickEnd = { activePickerTarget = PickerTarget.DEFLAME_END },
+                        extraContent = {
+                            OutlinedTextField(
+                                value = deflamePerMonthInput,
+                                onValueChange = { raw ->
+                                    deflamePerMonthInput = raw.filter { it.isDigit() }.take(4)
+                                },
+                                label = {
+                                    Text(
+                                        text = when {
+                                            isAr -> "عدد مرات الضغط على Deflame في الشهر"
+                                            isFr -> "Appuis Deflame par mois"
+                                            else -> "Deflame presses per month"
+                                        },
+                                        color = deflameAccent.copy(alpha = 0.9f),
+                                        fontSize = 11.5.sp
+                                    )
+                                },
+                                placeholder = { Text("0", color = Color(0x66FFFFFF)) },
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = PlusJakartaSans
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("deflame_per_month_input"),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = deflameAccent,
+                                    unfocusedBorderColor = deflameAccent.copy(alpha = 0.35f),
+                                    focusedContainerColor = Color(0x1A1E293B),
+                                    unfocusedContainerColor = Color(0x1A1E293B),
+                                    cursorColor = deflameAccent
+                                ),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Done
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = { focusManager.clearFocus() }
+                                )
+                            )
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // LIVE AUTOMATIC PREVIEW CARD
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color(0x221E293B))
+                            .border(1.dp, Color(0x4038BDF8), RoundedCornerShape(16.dp))
+                            .padding(14.dp)
+                            .testTag("preview_calculation_card")
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = when {
+                                        isAr -> "المعاينة الحسابية التلقائية"
+                                        isFr -> "Aperçu du calcul"
+                                        else -> "Calculation Preview"
+                                    },
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = NeonCyan,
+                                    fontFamily = PlusJakartaSans
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(NeonEmerald.copy(alpha = 0.2f))
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = when {
+                                            isAr -> "تلقائي ودقيق"
+                                            isFr -> "Auto & Vérifié"
+                                            else -> "Auto & Verified"
+                                        },
+                                        fontSize = 10.sp,
+                                        color = NeonEmerald,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            PreviewLineRow(
+                                icon = Icons.Default.TrendingUp,
+                                tint = NeonAmber,
+                                label = when {
+                                    isAr -> "الأيام (${previewResult.daysElapsed}ي • ${previewResult.inactivityStartDate}→${previewResult.inactivityEndDate}):"
+                                    else -> "Days (${previewResult.daysElapsed}d • ${previewResult.inactivityStartDate}→${previewResult.inactivityEndDate}):"
+                                },
+                                value = "+${previewResult.inactivityPointsAdded.toInt()} " + if (isAr) "نقطة" else "PTS"
+                            )
+
+                            PreviewLineRow(
+                                icon = Icons.Default.TrendingDown,
+                                tint = NeonRose,
+                                label = when {
+                                    isAr -> "الضربات (${previewResult.totalStrikesCount} • ${previewResult.strikesStartDate}→${previewResult.strikesEndDate}):"
+                                    else -> "Strikes (${previewResult.totalStrikesCount} • ${previewResult.strikesStartDate}→${previewResult.strikesEndDate}):"
+                                },
+                                value = "-${String.format(Locale.US, "%.1f", previewResult.totalDeductions)} " + if (isAr) "نقطة" else "PTS"
+                            )
+
+                            if (previewResult.girlPerMonth > 0 || previewResult.girlPressesCount > 0) {
+                                PreviewLineRow(
+                                    icon = Icons.Default.Favorite,
+                                    tint = girlAccent,
+                                    label = when {
+                                        isAr -> "Girl (${previewResult.girlPressesCount}× • ${previewResult.girlStartDate}→${previewResult.girlEndDate}):"
+                                        else -> "Girl (${previewResult.girlPressesCount}× • ${previewResult.girlStartDate}→${previewResult.girlEndDate}):"
+                                    },
+                                    value = "-${String.format(Locale.US, "%.1f", previewResult.girlPointsDeducted)} " + if (isAr) "نقطة" else "PTS"
+                                )
+                            }
+
+                            if (previewResult.deflamePerMonth > 0 || previewResult.deflamePressesCount > 0) {
+                                PreviewLineRow(
+                                    icon = Icons.Default.AcUnit,
+                                    tint = deflameAccent,
+                                    label = when {
+                                        isAr -> "Deflame (${previewResult.deflamePressesCount}× • ${previewResult.deflameStartDate}→${previewResult.deflameEndDate}):"
+                                        else -> "Deflame (${previewResult.deflamePressesCount}× • ${previewResult.deflameStartDate}→${previewResult.deflameEndDate}):"
+                                    },
+                                    value = "-${String.format(Locale.US, "%.1f", previewResult.deflamePointsDeducted)} " + if (isAr) "نقطة" else "PTS"
+                                )
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(Color(0x33FFFFFF))
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = when {
+                                        isAr -> "النتيجة النهائية للشعلة:"
+                                        isFr -> "Score final :"
+                                        else -> "Resulting Flame Score:"
+                                    },
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = if (isAr) {
+                                        "${String.format(Locale.US, "%.1f", previewResult.resultingScore)} نقطة"
+                                    } else {
+                                        "${String.format(Locale.US, "%.1f", previewResult.resultingScore)} PTS"
+                                    },
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = if (previewResult.resultingScore > 2000.0) NeonCyan else NeonAmber,
+                                    fontFamily = PlusJakartaSans
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Action Buttons
                     Row(
@@ -803,12 +806,12 @@ fun StreakStartDateDialog(
                                 .height(48.dp)
                                 .testTag("btn_cancel_start_date"),
                             shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x4038BDF8))
+                            border = BorderStroke(1.dp, Color(0x4038BDF8))
                         ) {
                             Text(
-                                text = when (currentLang) {
-                                    "ar" -> "إلغاء"
-                                    "fr" -> "Annuler"
+                                text = when {
+                                    isAr -> "إلغاء"
+                                    isFr -> "Annuler"
                                     else -> "Cancel"
                                 },
                                 color = Color.White.copy(alpha = 0.8f),
@@ -818,16 +821,18 @@ fun StreakStartDateDialog(
 
                         Button(
                             onClick = {
-                                if (isValidDate) {
-                                    viewModel.recalculateFlameScoreFromStartDate(
-                                        startDateStr = dateInput.trim(),
-                                        girlPerMonth = girlPerMonth,
-                                        deflamePerMonth = deflamePerMonth
-                                    )
-                                    onDismiss()
-                                }
+                                viewModel.recalculateFlameScoreFromStartDate(
+                                    startDateStr = globalStartDate,
+                                    girlPerMonth = girlPerMonth,
+                                    deflamePerMonth = deflamePerMonth,
+                                    endDateStr = globalEndDate,
+                                    inactivityRange = inactivityRange,
+                                    strikesRange = strikesRange,
+                                    girlRange = girlRange,
+                                    deflameRange = deflameRange
+                                )
+                                onDismiss()
                             },
-                            enabled = isValidDate && previewResult != null,
                             modifier = Modifier
                                 .weight(1.4f)
                                 .height(48.dp)
@@ -846,9 +851,9 @@ fun StreakStartDateDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = when (currentLang) {
-                                    "ar" -> "تطبيق وإعادة الحساب"
-                                    "fr" -> "Appliquer et recalculer"
+                                text = when {
+                                    isAr -> "تطبيق وإعادة الحساب"
+                                    isFr -> "Appliquer et recalculer"
                                     else -> "Apply & Recalculate"
                                 },
                                 color = Color.Black,
@@ -862,23 +867,454 @@ fun StreakStartDateDialog(
             }
         }
     }
+
+    // CALENDAR-ONLY PICKER DIALOG (Material 3 Calendar Grid with Dark Liquid Glass styling)
+    activePickerTarget?.let { target ->
+        val (currentSelectedStr, minBoundStr) = when (target) {
+            PickerTarget.GLOBAL_START -> globalStartDate to null
+            PickerTarget.GLOBAL_END -> globalEndDate to globalStartDate
+            PickerTarget.INACTIVITY_START -> inactivityRange.startDate to null
+            PickerTarget.INACTIVITY_END -> inactivityRange.endDate to inactivityRange.startDate
+            PickerTarget.STRIKES_START -> strikesRange.startDate to null
+            PickerTarget.STRIKES_END -> strikesRange.endDate to strikesRange.startDate
+            PickerTarget.GIRL_START -> girlRange.startDate to null
+            PickerTarget.GIRL_END -> girlRange.endDate to girlRange.startDate
+            PickerTarget.DEFLAME_START -> deflameRange.startDate to null
+            PickerTarget.DEFLAME_END -> deflameRange.endDate to deflameRange.startDate
+        }
+
+        val initialUtcMillis = remember(target, currentSelectedStr) {
+            dateStringToUtcMidnightMillis(currentSelectedStr) ?: todayUtcMidnightMillis()
+        }
+        val todayUtcMillis = remember { todayUtcMidnightMillis() }
+        val minUtcMillis = remember(minBoundStr) {
+            minBoundStr?.let { dateStringToUtcMidnightMillis(it) }
+        }
+
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = initialUtcMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    val notFuture = utcTimeMillis <= todayUtcMillis
+                    val afterMin = minUtcMillis == null || utcTimeMillis >= minUtcMillis
+                    return notFuture && afterMin
+                }
+            }
+        )
+
+        DatePickerDialog(
+            onDismissRequest = { activePickerTarget = null },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val pickedMillis = datePickerState.selectedDateMillis ?: initialUtcMillis
+                        val pickedStr = utcMidnightMillisToDateString(pickedMillis).coerceMax(todayStr)
+                        when (target) {
+                            PickerTarget.GLOBAL_START -> {
+                                globalStartDate = pickedStr
+                                if (globalEndDate < pickedStr) globalEndDate = pickedStr
+                            }
+                            PickerTarget.GLOBAL_END -> {
+                                globalEndDate = pickedStr.coerceInRange(globalStartDate, todayStr)
+                            }
+                            PickerTarget.INACTIVITY_START -> {
+                                val nextEnd = if (inactivityRange.endDate < pickedStr) pickedStr else inactivityRange.endDate
+                                inactivityRange = inactivityRange.copy(startDate = pickedStr, endDate = nextEnd, isCustom = true)
+                            }
+                            PickerTarget.INACTIVITY_END -> {
+                                inactivityRange = inactivityRange.copy(
+                                    endDate = pickedStr.coerceInRange(inactivityRange.startDate, todayStr),
+                                    isCustom = true
+                                )
+                            }
+                            PickerTarget.STRIKES_START -> {
+                                val nextEnd = if (strikesRange.endDate < pickedStr) pickedStr else strikesRange.endDate
+                                strikesRange = strikesRange.copy(startDate = pickedStr, endDate = nextEnd, isCustom = true)
+                            }
+                            PickerTarget.STRIKES_END -> {
+                                strikesRange = strikesRange.copy(
+                                    endDate = pickedStr.coerceInRange(strikesRange.startDate, todayStr),
+                                    isCustom = true
+                                )
+                            }
+                            PickerTarget.GIRL_START -> {
+                                val nextEnd = if (girlRange.endDate < pickedStr) pickedStr else girlRange.endDate
+                                girlRange = girlRange.copy(startDate = pickedStr, endDate = nextEnd, isCustom = true)
+                            }
+                            PickerTarget.GIRL_END -> {
+                                girlRange = girlRange.copy(
+                                    endDate = pickedStr.coerceInRange(girlRange.startDate, todayStr),
+                                    isCustom = true
+                                )
+                            }
+                            PickerTarget.DEFLAME_START -> {
+                                val nextEnd = if (deflameRange.endDate < pickedStr) pickedStr else deflameRange.endDate
+                                deflameRange = deflameRange.copy(startDate = pickedStr, endDate = nextEnd, isCustom = true)
+                            }
+                            PickerTarget.DEFLAME_END -> {
+                                deflameRange = deflameRange.copy(
+                                    endDate = pickedStr.coerceInRange(deflameRange.startDate, todayStr),
+                                    isCustom = true
+                                )
+                            }
+                        }
+                        activePickerTarget = null
+                    },
+                    modifier = Modifier.testTag("calendar_confirm_btn")
+                ) {
+                    Text(
+                        text = when {
+                            isAr -> "تأكيد"
+                            isFr -> "Confirmer"
+                            else -> "Confirm"
+                        },
+                        color = NeonCyan,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { activePickerTarget = null }) {
+                    Text(
+                        text = when {
+                            isAr -> "إلغاء"
+                            isFr -> "Annuler"
+                            else -> "Cancel"
+                        },
+                        color = Color(0xFF94A3B8)
+                    )
+                }
+            },
+            colors = DatePickerDefaults.colors(
+                containerColor = Color(0xFF0E172A)
+            )
+        ) {
+            DatePicker(
+                state = datePickerState,
+                showModeToggle = false,
+                colors = DatePickerDefaults.colors(
+                    containerColor = Color(0xFF0E172A),
+                    titleContentColor = NeonCyan,
+                    headlineContentColor = Color.White,
+                    weekdayContentColor = Color(0xFF94A3B8),
+                    subheadContentColor = Color(0xFFCBD5E1),
+                    yearContentColor = Color.White,
+                    currentYearContentColor = NeonCyan,
+                    selectedYearContentColor = Color.Black,
+                    selectedYearContainerColor = NeonCyan,
+                    dayContentColor = Color.White,
+                    disabledDayContentColor = Color(0x33FFFFFF),
+                    selectedDayContentColor = Color.Black,
+                    selectedDayContainerColor = NeonCyan,
+                    todayContentColor = NeonAmber,
+                    todayDateBorderColor = NeonAmber
+                )
+            )
+        }
+    }
 }
 
 @Composable
-private fun PresetDateChip(label: String, onClick: () -> Unit) {
+private fun CalendarDateButton(
+    label: String,
+    dateStr: String,
+    accentColor: Color,
+    testTag: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0x330F172A))
+            .border(1.dp, accentColor.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp)
+            .testTag(testTag),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(accentColor.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.CalendarMonth,
+                contentDescription = label,
+                tint = accentColor,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                fontSize = 10.sp,
+                color = accentColor.copy(alpha = 0.9f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = dateStr,
+                fontSize = 12.5.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = PlusJakartaSans,
+                color = Color.White,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun PerElementDateCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    accentColor: Color,
+    range: DateRangeConfig,
+    globalStartDate: String,
+    globalEndDate: String,
+    isAr: Boolean,
+    isFr: Boolean,
+    toggleTestTag: String,
+    startBtnTestTag: String,
+    endBtnTestTag: String,
+    onToggleCustom: (Boolean) -> Unit,
+    onPickStart: () -> Unit,
+    onPickEnd: () -> Unit,
+    extraContent: (@Composable () -> Unit)? = null
+) {
+    val activeStart = if (range.isCustom) range.startDate else globalStartDate
+    val activeEnd = if (range.isCustom) range.endDate else globalEndDate
+
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0x221E293B))
-            .border(1.dp, Color(0x3338BDF8), RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(15.dp))
+            .background(Color(0x22162238))
+            .border(
+                width = if (range.isCustom) 1.2.dp else 1.dp,
+                color = if (range.isCustom) accentColor.copy(alpha = 0.7f) else Color(0x29FFFFFF),
+                shape = RoundedCornerShape(15.dp)
+            )
+            .padding(12.dp)
     ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(accentColor.copy(alpha = 0.16f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = title,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = subtitle,
+                            fontSize = 10.5.sp,
+                            color = accentColor,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = when {
+                            isAr -> "تخصيص"
+                            isFr -> "Perso"
+                            else -> "Custom"
+                        },
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (range.isCustom) accentColor else Color(0xFF94A3B8)
+                    )
+                    Switch(
+                        checked = range.isCustom,
+                        onCheckedChange = onToggleCustom,
+                        modifier = Modifier.testTag(toggleTestTag),
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.Black,
+                            checkedTrackColor = accentColor,
+                            uncheckedThumbColor = Color(0xFF94A3B8),
+                            uncheckedTrackColor = Color(0xFF1E293B),
+                            uncheckedBorderColor = Color(0x44FFFFFF)
+                        )
+                    )
+                }
+            }
+
+            if (extraContent != null) {
+                extraContent()
+            }
+
+            if (!range.isCustom) {
+                Text(
+                    text = when {
+                        isAr -> "يتبع الفترة الرئيسية: $activeStart ← $activeEnd"
+                        isFr -> "Suit la période principale : $activeStart → $activeEnd"
+                        else -> "Using main range: $activeStart → $activeEnd"
+                    },
+                    fontSize = 10.5.sp,
+                    color = Color(0xFF94A3B8)
+                )
+            }
+
+            AnimatedVisibility(visible = range.isCustom) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CalendarDateButton(
+                        label = when {
+                            isAr -> "من (التقويم)"
+                            isFr -> "Début"
+                            else -> "From"
+                        },
+                        dateStr = range.startDate,
+                        accentColor = accentColor,
+                        testTag = startBtnTestTag,
+                        onClick = onPickStart,
+                        modifier = Modifier.weight(1f)
+                    )
+                    CalendarDateButton(
+                        label = when {
+                            isAr -> "إلى (التقويم)"
+                            isFr -> "Fin"
+                            else -> "To"
+                        },
+                        dateStr = range.endDate,
+                        accentColor = accentColor,
+                        testTag = endBtnTestTag,
+                        onClick = onPickEnd,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewLineRow(
+    icon: ImageVector,
+    tint: Color,
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(15.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                color = Color.White.copy(alpha = 0.88f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = label,
-            fontSize = 11.sp,
-            color = NeonCyan,
-            fontWeight = FontWeight.SemiBold
+            text = value,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = tint
         )
+    }
+}
+
+private fun localTodayString(): String {
+    return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+}
+
+private fun daysBetweenStrings(fromStr: String, toStr: String): Int {
+    return try {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+        val from = sdf.parse(fromStr) ?: return 0
+        val to = sdf.parse(toStr) ?: return 0
+        ((to.time - from.time) / (24L * 3600L * 1000L)).toInt().coerceAtLeast(0)
+    } catch (_: Exception) {
+        0
+    }
+}
+
+private fun dateStringToUtcMidnightMillis(dateStr: String): Long? {
+    return try {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            isLenient = false
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        sdf.parse(dateStr.trim())?.time
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun utcMidnightMillisToDateString(utcMillis: Long): String {
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }
+    return sdf.format(Date(utcMillis))
+}
+
+private fun todayUtcMidnightMillis(): Long {
+    return dateStringToUtcMidnightMillis(localTodayString()) ?: System.currentTimeMillis()
+}
+
+private fun String.coerceMax(maxDateStr: String): String {
+    return if (this.isBlank() || this > maxDateStr) maxDateStr else this
+}
+
+private fun String.coerceInRange(minDateStr: String, maxDateStr: String): String {
+    if (this.isBlank()) return maxDateStr
+    return when {
+        this < minDateStr -> minDateStr
+        this > maxDateStr -> maxDateStr
+        else -> this
     }
 }

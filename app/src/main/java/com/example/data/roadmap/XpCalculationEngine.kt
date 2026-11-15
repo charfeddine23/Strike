@@ -168,31 +168,61 @@ object XpCalculationEngine {
 
     /**
      * Computes exact XP earned from Flame logs (DEFLAME, GIRL), Strike events, and added Individuals
-     * starting strictly at 00:00:00 local time on [trackingStartDate] (yyyy-MM-dd).
+     * starting strictly at 00:00:00 local time on each element's start date up to 23:59:59.999 on
+     * its end date (unbounded at end when end date is null).
      */
     fun calculateTelemetryFromLogs(
         trackingStartDate: String?,
         flameLogs: List<FlameLogEntry>,
         strikeEvents: List<StrikeEvent>,
-        individuals: List<Individual>
+        individuals: List<Individual>,
+        trackingEndDate: String? = null,
+        strikesStartDate: String? = trackingStartDate,
+        strikesEndDate: String? = trackingEndDate,
+        girlStartDate: String? = trackingStartDate,
+        girlEndDate: String? = trackingEndDate,
+        deflameStartDate: String? = trackingStartDate,
+        deflameEndDate: String? = trackingEndDate
     ): RetroactiveXpBreakdown {
         if (trackingStartDate.isNullOrBlank()) {
             return RetroactiveXpBreakdown(trackingStartDate = null)
         }
         val startMillis = parseStartOfDayMillis(trackingStartDate)
             ?: return RetroactiveXpBreakdown(trackingStartDate = trackingStartDate)
+        val endMillis = trackingEndDate?.takeIf { it.isNotBlank() }?.let { parseEndOfDayMillis(it) }
+
+        val effDeflameStart = deflameStartDate?.takeIf { it.isNotBlank() }?.let { parseStartOfDayMillis(it) } ?: startMillis
+        val effDeflameEnd = deflameEndDate?.takeIf { it.isNotBlank() }?.let { parseEndOfDayMillis(it) } ?: endMillis
+
+        val effGirlStart = girlStartDate?.takeIf { it.isNotBlank() }?.let { parseStartOfDayMillis(it) } ?: startMillis
+        val effGirlEnd = girlEndDate?.takeIf { it.isNotBlank() }?.let { parseEndOfDayMillis(it) } ?: endMillis
+
+        val effStrikesStartStr = strikesStartDate?.takeIf { it.isNotBlank() } ?: trackingStartDate
+        val effStrikesEndStr = strikesEndDate?.takeIf { it.isNotBlank() } ?: trackingEndDate
 
         val deflameCount = flameLogs
-            .filter { it.reason == "DEFLAME" && it.timestamp >= startMillis }
+            .filter {
+                it.reason == "DEFLAME" &&
+                    it.timestamp >= effDeflameStart &&
+                    (effDeflameEnd == null || it.timestamp <= effDeflameEnd)
+            }
             .sumOf { it.actionCount.coerceAtLeast(1) }
         val girlCount = flameLogs
-            .filter { it.reason == "GIRL" && it.timestamp >= startMillis }
+            .filter {
+                it.reason == "GIRL" &&
+                    it.timestamp >= effGirlStart &&
+                    (effGirlEnd == null || it.timestamp <= effGirlEnd)
+            }
             .sumOf { it.actionCount.coerceAtLeast(1) }
 
-        val relevantStrikes = strikeEvents.filter { it.date >= trackingStartDate }
+        val relevantStrikes = strikeEvents.filter {
+            it.date >= effStrikesStartStr && (effStrikesEndStr.isNullOrBlank() || it.date <= effStrikesEndStr)
+        }
         val strikeCount = relevantStrikes.sumOf { it.count.coerceAtLeast(1) }
 
-        val relevantPersons = individuals.filter { it.updatedAt >= startMillis }
+        val relevantPersons = individuals.filter {
+            it.updatedAt >= startMillis && (endMillis == null || it.updatedAt <= endMillis)
+        }
         val personCount = relevantPersons.size
         val largePersonBonusCount = relevantPersons.count { it.size > PERSON_SIZE_BONUS_THRESHOLD }
 
@@ -221,10 +251,10 @@ object XpCalculationEngine {
     }
 
     /**
-     * Scans all historical user logs/records starting strictly from [trackingStartDate]
+     * Scans all historical user logs/records within the configured start/end bounds
      * and credits any missing retroactive XP without double-counting previously credited actions.
      *
-     * When [recalculateExact] is true (e.g., user explicitly changes `trackingStartDate`),
+     * When [recalculateExact] is true (e.g., user explicitly updates date ranges),
      * reconciles exact telemetry delta (positive or negative) relative to previous credited telemetry XP.
      */
     @Synchronized
@@ -234,7 +264,14 @@ object XpCalculationEngine {
         flameLogs: List<FlameLogEntry>,
         strikeEvents: List<StrikeEvent>,
         individuals: List<Individual>,
-        recalculateExact: Boolean = false
+        recalculateExact: Boolean = false,
+        trackingEndDate: String? = null,
+        strikesStartDate: String? = trackingStartDate,
+        strikesEndDate: String? = trackingEndDate,
+        girlStartDate: String? = trackingStartDate,
+        girlEndDate: String? = trackingEndDate,
+        deflameStartDate: String? = trackingStartDate,
+        deflameEndDate: String? = trackingEndDate
     ): RetroactiveXpBreakdown {
         init(context)
         RoadmapManager.init(context)
@@ -247,7 +284,14 @@ object XpCalculationEngine {
             trackingStartDate = trackingStartDate,
             flameLogs = flameLogs,
             strikeEvents = strikeEvents,
-            individuals = individuals
+            individuals = individuals,
+            trackingEndDate = trackingEndDate,
+            strikesStartDate = strikesStartDate,
+            strikesEndDate = strikesEndDate,
+            girlStartDate = girlStartDate,
+            girlEndDate = girlEndDate,
+            deflameStartDate = deflameStartDate,
+            deflameEndDate = deflameEndDate
         )
 
         val prevCredited = _creditedTelemetryXp.value
@@ -283,6 +327,23 @@ object XpCalculationEngine {
                 set(Calendar.MINUTE, 0)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
+            }
+            cal.timeInMillis
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun parseEndOfDayMillis(dateStr: String): Long? {
+        return try {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+            val date = sdf.parse(dateStr.trim()) ?: return null
+            val cal = Calendar.getInstance().apply {
+                time = date
+                set(Calendar.HOUR_OF_DAY, 23)
+                set(Calendar.MINUTE, 59)
+                set(Calendar.SECOND, 59)
+                set(Calendar.MILLISECOND, 999)
             }
             cal.timeInMillis
         } catch (_: Exception) {

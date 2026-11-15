@@ -370,13 +370,22 @@ class IndividualViewModel(
             FlameManager.evaluateDailyInactivity(application, latestStrikeDate)
             val trackingStartDate = FlameManager.getStreakStartDate(application)
             if (!trackingStartDate.isNullOrBlank()) {
+                val cfg = FlameManager.getSavedRecalculationConfig(application)
+                val endDate = FlameManager.getStreakEndDate(application)
                 XpCalculationEngine.syncRetroactiveTelemetry(
                     context = application,
                     trackingStartDate = trackingStartDate,
                     flameLogs = FlameManager.flameLogs.value,
                     strikeEvents = repository.getAllStrikeEventsList(),
                     individuals = repository.getAllIndividualsList(),
-                    recalculateExact = false
+                    recalculateExact = false,
+                    trackingEndDate = endDate,
+                    strikesStartDate = cfg.strikesRange?.takeIf { it.isCustom }?.startDate ?: trackingStartDate,
+                    strikesEndDate = cfg.strikesRange?.takeIf { it.isCustom }?.endDate ?: endDate,
+                    girlStartDate = cfg.girlRange?.takeIf { it.isCustom }?.startDate ?: trackingStartDate,
+                    girlEndDate = cfg.girlRange?.takeIf { it.isCustom }?.endDate ?: endDate,
+                    deflameStartDate = cfg.deflameRange?.takeIf { it.isCustom }?.startDate ?: trackingStartDate,
+                    deflameEndDate = cfg.deflameRange?.takeIf { it.isCustom }?.endDate ?: endDate
                 )
             }
         }
@@ -427,6 +436,10 @@ class IndividualViewModel(
         return FlameManager.getStreakStartDate(getApplication())
     }
 
+    fun getStreakEndDate(): String? {
+        return FlameManager.getStreakEndDate(getApplication())
+    }
+
     fun getSavedGirlPerMonth(): Int {
         return FlameManager.getSavedGirlPerMonth(getApplication())
     }
@@ -435,23 +448,42 @@ class IndividualViewModel(
         return FlameManager.getSavedDeflamePerMonth(getApplication())
     }
 
+    fun getSavedRecalculationConfig(): com.example.data.flame.StreakRecalculationConfig {
+        return FlameManager.getSavedRecalculationConfig(getApplication())
+    }
+
     fun previewStartDateRecalculation(
         startDateStr: String,
         girlPerMonth: Int = 0,
-        deflamePerMonth: Int = 0
+        deflamePerMonth: Int = 0,
+        endDateStr: String? = null,
+        inactivityRange: com.example.data.flame.DateRangeConfig? = null,
+        strikesRange: com.example.data.flame.DateRangeConfig? = null,
+        girlRange: com.example.data.flame.DateRangeConfig? = null,
+        deflameRange: com.example.data.flame.DateRangeConfig? = null
     ): com.example.data.flame.FlameRecalculationResult {
         return FlameManager.previewRecalculation(
             startDateStr = startDateStr,
             strikeEvents = allStrikeEvents.value,
             girlPerMonth = girlPerMonth,
-            deflamePerMonth = deflamePerMonth
+            deflamePerMonth = deflamePerMonth,
+            endDateStr = endDateStr,
+            inactivityRange = inactivityRange,
+            strikesRange = strikesRange,
+            girlRange = girlRange,
+            deflameRange = deflameRange
         )
     }
 
     fun recalculateFlameScoreFromStartDate(
         startDateStr: String,
         girlPerMonth: Int = 0,
-        deflamePerMonth: Int = 0
+        deflamePerMonth: Int = 0,
+        endDateStr: String? = null,
+        inactivityRange: com.example.data.flame.DateRangeConfig? = null,
+        strikesRange: com.example.data.flame.DateRangeConfig? = null,
+        girlRange: com.example.data.flame.DateRangeConfig? = null,
+        deflameRange: com.example.data.flame.DateRangeConfig? = null
     ): com.example.data.flame.FlameRecalculationResult {
         val result = FlameManager.recalculateFromStartDate(
             context = getApplication(),
@@ -459,16 +491,28 @@ class IndividualViewModel(
             strikeEvents = allStrikeEvents.value,
             lang = currentLanguage.value,
             girlPerMonth = girlPerMonth,
-            deflamePerMonth = deflamePerMonth
+            deflamePerMonth = deflamePerMonth,
+            endDateStr = endDateStr,
+            inactivityRange = inactivityRange,
+            strikesRange = strikesRange,
+            girlRange = girlRange,
+            deflameRange = deflameRange
         )
         viewModelScope.launch {
             XpCalculationEngine.syncRetroactiveTelemetry(
                 context = getApplication(),
-                trackingStartDate = startDateStr,
+                trackingStartDate = result.startDate,
                 flameLogs = FlameManager.flameLogs.value,
                 strikeEvents = repository.getAllStrikeEventsList(),
                 individuals = repository.getAllIndividualsList(),
-                recalculateExact = true
+                recalculateExact = true,
+                trackingEndDate = result.endDate,
+                strikesStartDate = result.strikesStartDate,
+                strikesEndDate = result.strikesEndDate,
+                girlStartDate = result.girlStartDate,
+                girlEndDate = result.girlEndDate,
+                deflameStartDate = result.deflameStartDate,
+                deflameEndDate = result.deflameEndDate
             )
             val formattedScore = if (result.resultingScore % 1.0 == 0.0) "${result.resultingScore.toInt()}" else String.format(Locale.US, "%.1f", result.resultingScore)
             val msg = when (currentLanguage.value) {
