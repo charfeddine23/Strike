@@ -147,13 +147,13 @@ class StreakStartDateRecalculationTest {
     }
 
     @Test
-    fun `test monthly girl and deflame presses apply to flame and logs without affecting tasks`() {
+    fun `test monthly girl and deflame presses award XP without mutating task step counters`() {
         val startDate = getDateDaysAgo(60) // 60 days = 2 months -> 180 inactivity pts
         val baselineXp = RoadmapManager.totalXp.value
         val baselineCompleted = RoadmapManager.completedTaskIds.value.size
 
-        // 5 Girl/month over 60 days = 10 Girl presses (-30 pts)
-        // 10 Deflame/month over 60 days = 20 Deflame presses (-60 pts)
+        // 5 Girl/month over 60 days = 10 Girl presses (-30 pts flame, +500 XP)
+        // 10 Deflame/month over 60 days = 20 Deflame presses (-60 pts flame, +400 XP)
         // Final Flame score = 180 - 0 - 30 - 60 = 90.0 pts
         val result = FlameManager.recalculateFromStartDate(
             context = context,
@@ -177,7 +177,7 @@ class StreakStartDateRecalculationTest {
         assertEquals(5, FlameManager.getSavedGirlPerMonth(context))
         assertEquals(10, FlameManager.getSavedDeflamePerMonth(context))
 
-        // Recorded in existing Flame logs with isRetroactiveEstimate = true
+        // Recorded in existing Flame logs with isRetroactiveEstimate = true & actionCount
         val logs = FlameManager.flameLogs.value
         assertEquals("START_DATE_RECALCULATION", logs[0].reason)
         val girlLog = logs.firstOrNull { it.reason == "GIRL" }
@@ -186,10 +186,12 @@ class StreakStartDateRecalculationTest {
         assertNotNull(deflameLog)
         assertEquals(-30.0, girlLog!!.change, 0.001)
         assertEquals(-60.0, deflameLog!!.change, 0.001)
+        assertEquals(10, girlLog.actionCount)
+        assertEquals(20, deflameLog.actionCount)
         assertTrue(girlLog.isRetroactiveEstimate)
         assertTrue(deflameLog.isRetroactiveEstimate)
 
-        // MUST NOT affect task progression or award Task/Roadmap XP
+        // Task step counters MUST NOT advance or complete from monthly retroactive estimates
         val allActiveTasks = RoadmapManager.dailyTasks.value +
             RoadmapManager.weeklyTasks.value +
             RoadmapManager.monthlyTasks.value +
@@ -197,19 +199,74 @@ class StreakStartDateRecalculationTest {
         assertTrue(allActiveTasks.all { it.currentCount == 0 && it.status == TaskStatus.PENDING })
         assertEquals(baselineCompleted, RoadmapManager.completedTaskIds.value.size)
 
-        val telemetryBreakdown = XpCalculationEngine.calculateTelemetryFromLogs(
+        // Total XP from Girl (10 * 50 = 500) + Deflame (20 * 20 = 400) = 900 XP MUST count in progression
+        val breakdown = XpCalculationEngine.syncRetroactiveTelemetry(
+            context = context,
             trackingStartDate = startDate,
             flameLogs = logs,
             strikeEvents = emptyList(),
-            individuals = emptyList()
+            individuals = emptyList(),
+            recalculateExact = true
         )
-        assertEquals(0, telemetryBreakdown.girlCount)
-        assertEquals(0, telemetryBreakdown.deflameCount)
-        assertEquals(baselineXp, RoadmapManager.totalXp.value)
+        assertEquals(10, breakdown.girlCount)
+        assertEquals(20, breakdown.deflameCount)
+        assertEquals(500L, breakdown.girlXp)
+        assertEquals(400L, breakdown.deflameXp)
+        assertEquals(900L, breakdown.totalTelemetryXp)
+        assertEquals(baselineXp + 900L, RoadmapManager.totalXp.value)
+
+        // Re-running with updated rates replaces estimate logs cleanly without doubling XP
+        FlameManager.recalculateFromStartDate(
+            context = context,
+            startDateStr = startDate,
+            strikeEvents = emptyList(),
+            lang = "ar",
+            girlPerMonth = 2,
+            deflamePerMonth = 0
+        )
+        val updatedBreakdown = XpCalculationEngine.syncRetroactiveTelemetry(
+            context = context,
+            trackingStartDate = startDate,
+            flameLogs = FlameManager.flameLogs.value,
+            strikeEvents = emptyList(),
+            individuals = emptyList(),
+            recalculateExact = true
+        )
+        assertEquals(4, updatedBreakdown.girlCount)
+        assertEquals(0, updatedBreakdown.deflameCount)
+        assertEquals(200L, updatedBreakdown.totalTelemetryXp)
+        assertEquals(baselineXp + 200L, RoadmapManager.totalXp.value)
 
         // Total reset clears saved monthly rates
         FlameManager.resetAllLevelsToZero(context)
         assertEquals(0, FlameManager.getSavedGirlPerMonth(context))
         assertEquals(0, FlameManager.getSavedDeflamePerMonth(context))
+    }
+
+    @Test
+    fun `test flame score exceeds 20000 without upper limit and persists accurately`() {
+        FlameManager.setScore(context, 75000.0)
+        assertEquals(75000.0, FlameManager.getScore(context), 0.001)
+        assertEquals(75000.0, FlameManager.peakScore.value, 0.001)
+
+        // Adding points beyond 20,000 continues cleanly
+        FlameManager.addPoints(context, 50000.0, reason = "INACTIVITY", details = "Huge streak bonus")
+        assertEquals(125000.0, FlameManager.getScore(context), 0.001)
+
+        // Survives full reload from SharedPreferences
+        FlameManager.resetForTesting(context)
+        assertEquals(125000.0, FlameManager.getScore(context), 0.001)
+
+        // Start-date recalculation over 10,000 days (~27.4 years -> 30,000 pts) exceeds 20,000 without clamp
+        val longStartDate = getDateDaysAgo(10000)
+        val result = FlameManager.recalculateFromStartDate(context, longStartDate, emptyList())
+        assertEquals(30000.0, result.resultingScore, 0.001)
+        assertEquals(30000.0, FlameManager.getScore(context), 0.001)
+
+        // DeviationsManager handles > 20,000 scores smoothly at top Rank & Tier
+        val rank = com.example.data.deviations.DeviationsManager.getLightRank(125000.0)
+        val tier = com.example.data.deviations.DeviationsManager.getBiologicalTier(125000.0)
+        assertEquals(20, rank.index)
+        assertEquals(50, tier.index)
     }
 }

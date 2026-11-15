@@ -158,17 +158,13 @@ fun RoadmapScreen(
         }
     }
 
-    val currentStationId = remember(totalXp) { RoadmapManager.calculateUnlockedStationId(totalXp) }
+    val stageProgress = remember(totalXp) { RoadmapManager.getStageProgress(totalXp) }
+    val currentStationId = stageProgress.unlockedStationId
     val roadmapListState = rememberLazyListState()
 
     // 500 Stations generation (memoized)
     val stations = remember(claimedStations, totalXp) {
-        (1..500).map { id ->
-            val reward = TaskPools.getRewardForStation(id)
-            val reqXp = TaskPools.getRequiredXpForStation(id)
-            val state = RoadmapManager.getStationState(id)
-            RoadmapStation(id = id, requiredTotalXp = reqXp, reward = reward, state = state)
-        }
+        RoadmapManager.generateStations(totalXp, claimedStations)
     }
 
     val infiniteTransition = rememberInfiniteTransition(label = "roadmap_pulse")
@@ -400,6 +396,8 @@ fun RoadmapScreen(
                             glowPulse = glowPulse,
                             rippleProgress = rippleProgress,
                             badgeBobDp = badgeBobDp,
+                            nextStationId = stageProgress.nextStationId,
+                            currentStageXp = stageProgress.currentStageXp,
                             onClaim = {
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                 view.playSoundEffect(SoundEffectConstants.CLICK)

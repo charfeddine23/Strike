@@ -658,9 +658,9 @@ class RoadmapEngineTest {
             TaskPools.ALL_1000_TASKS.none { it.actionTag == "ROADMAP" }
         )
 
-        // 3. Tasks XP is strictly the sole source of XP progression (Station 1 requires 1,345 XP)
+        // 3. Tasks XP is strictly the sole source of XP progression (Station 1 requires 1,345 XP, each stage resets from 0)
         var expectedTasksXp = 0L
-        val targetUnlockXp = TaskPools.getRequiredXpForStation(10)
+        val targetUnlockXp = TaskPools.getCumulativeXpForStation(10)
         val annualCandidates = RoadmapManager.yearlyTasks.value.filter { it.status == TaskStatus.PENDING }
         for (task in annualCandidates) {
             if (expectedTasksXp >= targetUnlockXp) break
@@ -676,17 +676,61 @@ class RoadmapEngineTest {
         // 4. Claiming Roadmap stations MUST NOT add station.requiredTotalXp (or any XP) to totalXp
         val completedCountBefore = RoadmapManager.completedTaskIds.value.size
         for (stationId in 1..unlockedCount.coerceAtMost(10)) {
-            val reqXpBefore = TaskPools.getRequiredXpForStation(stationId)
-            assertTrue(expectedTasksXp >= reqXpBefore)
+            val cumulativeBefore = TaskPools.getCumulativeXpForStation(stationId)
+            assertTrue(expectedTasksXp >= cumulativeBefore)
             val claimed = RoadmapManager.claimStationReward(app, stationId)
-            assertNotNull("Station $stationId should be claimable once Tasks XP reaches $reqXpBefore", claimed)
+            assertNotNull("Station $stationId should be claimable once cumulative XP reaches $cumulativeBefore", claimed)
             assertEquals(
-                "Claiming Roadmap Station $stationId ($reqXpBefore reqXP) MUST NOT alter Tasks XP!",
+                "Claiming Roadmap Station $stationId MUST NOT alter Tasks XP!",
                 expectedTasksXp,
                 RoadmapManager.totalXp.value
             )
         }
         assertEquals(completedCountBefore, RoadmapManager.completedTaskIds.value.size)
+    }
+
+    @Test
+    fun testNonCumulativePerStageXpResetsFromZero() {
+        val s1Cost = TaskPools.getRequiredXpForStation(1)
+        val s2Cost = TaskPools.getRequiredXpForStation(2)
+        val s3Cost = TaskPools.getRequiredXpForStation(3)
+        assertEquals(1345L, s1Cost)
+        assertTrue(s2Cost > s1Cost)
+
+        // At 0 XP -> Station 0 unlocked, stage progress is 0 / s1Cost
+        val prog0 = RoadmapManager.getStageProgress(0L)
+        assertEquals(0, prog0.unlockedStationId)
+        assertEquals(1, prog0.nextStationId)
+        assertEquals(0L, prog0.currentStageXp)
+        assertEquals(s1Cost, prog0.nextStageRequiredXp)
+
+        // Reach exact Station 1 cost (1,345 XP) -> Station 1 unlocked, Station 2 resets back to 0 / s2Cost!
+        RoadmapManager.addXp(app, s1Cost)
+        val prog1 = RoadmapManager.getStageProgress(RoadmapManager.totalXp.value)
+        assertEquals(1, prog1.unlockedStationId)
+        assertEquals(2, prog1.nextStationId)
+        assertEquals(0L, prog1.currentStageXp)
+        assertEquals(s2Cost, prog1.nextStageRequiredXp)
+        assertEquals(StationState.UNLOCKED, RoadmapManager.getStationState(1))
+        assertEquals(StationState.LOCKED, RoadmapManager.getStationState(2))
+
+        // Add +500 XP (total 1,845 XP > s2Cost): Station 2 must STILL be LOCKED at 500 / s2Cost!
+        RoadmapManager.addXp(app, 500L)
+        val progPartialS2 = RoadmapManager.getStageProgress(RoadmapManager.totalXp.value)
+        assertEquals(1, progPartialS2.unlockedStationId)
+        assertEquals(2, progPartialS2.nextStationId)
+        assertEquals(500L, progPartialS2.currentStageXp)
+        assertEquals(StationState.LOCKED, RoadmapManager.getStationState(2))
+
+        // Earn remaining XP needed for Station 2 -> Station 2 unlocks, Station 3 starts from 0 / s3Cost
+        RoadmapManager.addXp(app, s2Cost - 500L)
+        val prog2 = RoadmapManager.getStageProgress(RoadmapManager.totalXp.value)
+        assertEquals(2, prog2.unlockedStationId)
+        assertEquals(3, prog2.nextStationId)
+        assertEquals(0L, prog2.currentStageXp)
+        assertEquals(s3Cost, prog2.nextStageRequiredXp)
+        assertEquals(StationState.UNLOCKED, RoadmapManager.getStationState(2))
+        assertEquals(StationState.LOCKED, RoadmapManager.getStationState(3))
     }
 
     @Test
@@ -792,9 +836,9 @@ class RoadmapEngineTest {
         assertEquals(2390L, breakdown1.deltaCreditedXp)
         assertEquals(2390L, RoadmapManager.totalXp.value)
         val unlockedLevel = XpCalculationEngine.calculateLevelForXp(RoadmapManager.totalXp.value)
-        assertTrue("Expected unlockedLevel >= 1 for 2,390 XP, got $unlockedLevel", unlockedLevel >= 1)
-        assertTrue(RoadmapManager.totalXp.value >= XpCalculationEngine.getRequiredXpForLevel(unlockedLevel))
-        assertTrue(RoadmapManager.totalXp.value < XpCalculationEngine.getRequiredXpForLevel(unlockedLevel + 1))
+        assertEquals(1, unlockedLevel)
+        assertTrue(RoadmapManager.totalXp.value >= XpCalculationEngine.getCumulativeXpForLevel(unlockedLevel))
+        assertTrue(RoadmapManager.totalXp.value < XpCalculationEngine.getCumulativeXpForLevel(unlockedLevel + 1))
 
         // Idempotency check: repeating sync must award +0 delta and never double-count
         val breakdown2 = XpCalculationEngine.syncRetroactiveTelemetry(

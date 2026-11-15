@@ -255,7 +255,9 @@ fun WavySnakeStationRow(
     flowPhase: Float = 0f,
     glowPulse: Float = 0.85f,
     rippleProgress: Float = 0f,
-    badgeBobDp: Float = 0f
+    badgeBobDp: Float = 0f,
+    nextStationId: Int = 1,
+    currentStageXp: Long = 0L
 ) {
     val isAr = currentLang == "ar"
     val appDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
@@ -510,6 +512,8 @@ fun WavySnakeStationRow(
                             isCurrentMilestone = isCurrentMilestone,
                             currentLang = currentLang,
                             pulseScale = pulseScale,
+                            nextStationId = nextStationId,
+                            currentStageXp = currentStageXp,
                             onClaim = onClaim
                         )
                     }
@@ -526,6 +530,8 @@ private fun StationGlassRewardCard(
     isCurrentMilestone: Boolean,
     currentLang: String,
     pulseScale: Float,
+    nextStationId: Int = 1,
+    currentStageXp: Long = 0L,
     onClaim: () -> Unit
 ) {
     val isAr = currentLang == "ar"
@@ -660,6 +666,7 @@ private fun StationGlassRewardCard(
                 }
 
                 StationState.LOCKED -> {
+                    val stageEarnedForThis = if (station.id == nextStationId) currentStageXp.coerceIn(0L, station.requiredTotalXp) else 0L
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Lock,
@@ -670,9 +677,9 @@ private fun StationGlassRewardCard(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (isAr) {
-                                "م ${station.id} • يتطلب ${station.requiredTotalXp} XP"
+                                "م ${station.id} • $stageEarnedForThis / ${station.requiredTotalXp} XP"
                             } else {
-                                "LVL ${station.id} • Needs ${station.requiredTotalXp} XP"
+                                "LVL ${station.id} • $stageEarnedForThis / ${station.requiredTotalXp} XP"
                             },
                             fontSize = 10.sp,
                             color = Color(0xFF94A3B8),

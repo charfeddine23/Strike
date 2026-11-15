@@ -1406,7 +1406,7 @@ private fun FlameSettingsAndSimulatorSheet(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Direct Numeric Input up to 20,000
+                    // Direct Numeric Input (Unlimited up to Infinity)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1428,7 +1428,7 @@ private fun FlameSettingsAndSimulatorSheet(
                             },
                             placeholder = {
                                 Text(
-                                    text = "0 - 20000",
+                                    text = "0 - ∞",
                                     fontSize = 12.sp,
                                     color = Color.Gray
                                 )
@@ -1441,14 +1441,14 @@ private fun FlameSettingsAndSimulatorSheet(
                             keyboardActions = KeyboardActions(
                                 onDone = {
                                     val num = customScoreInput.toDoubleOrNull()
-                                    if (num != null && num in 0.0..20000.0) {
+                                    if (num != null && num.isFinite() && num >= 0.0) {
                                         viewModel.setFlameScore(num)
                                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                         view.playSoundEffect(SoundEffectConstants.CLICK)
                                         focusManager.clearFocus()
                                         inputError = null
                                     } else {
-                                        inputError = "0 - 20000"
+                                        inputError = ">= 0"
                                     }
                                 }
                             ),
@@ -1467,14 +1467,14 @@ private fun FlameSettingsAndSimulatorSheet(
                         Button(
                             onClick = {
                                 val num = customScoreInput.toDoubleOrNull()
-                                if (num != null && num in 0.0..20000.0) {
+                                if (num != null && num.isFinite() && num >= 0.0) {
                                     viewModel.setFlameScore(num)
                                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
                                     focusManager.clearFocus()
                                     inputError = null
                                 } else {
-                                    inputError = "0 - 20000"
+                                    inputError = ">= 0"
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
@@ -1493,7 +1493,7 @@ private fun FlameSettingsAndSimulatorSheet(
 
                     if (inputError != null) {
                         Text(
-                            text = if (isAr) "أدخل قيمة بين 0 و 20,000" else "Enter value between 0 and 20,000",
+                            text = if (isAr) "أدخل قيمة موجبة (0 فأكثر)" else "Enter any non-negative value (>= 0)",
                             fontSize = 11.sp,
                             color = NeonRose,
                             modifier = Modifier.padding(top = 4.dp, start = 4.dp)
@@ -1502,14 +1502,18 @@ private fun FlameSettingsAndSimulatorSheet(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Continuous Slider up to 20,000 pts
+                    // Adaptive Continuous Slider (auto-expands dynamically past 20,000)
+                    val sliderMax = remember(currentScore) {
+                        val safe = currentScore.coerceIn(0.0, 1_000_000_000.0)
+                        if (safe <= 20000.0) 20000f else (((safe / 10000.0).toLong() + 1L) * 10000f).coerceAtMost(1_000_000_000f)
+                    }
                     Slider(
-                        value = currentScore.toFloat().coerceIn(0f, 20000f),
+                        value = currentScore.toFloat().coerceIn(0f, sliderMax),
                         onValueChange = {
                             viewModel.setFlameScore(it.toDouble())
                             customScoreInput = String.format(Locale.US, "%.0f", it)
                         },
-                        valueRange = 0f..20000f,
+                        valueRange = 0f..sliderMax,
                         colors = SliderDefaults.colors(
                             thumbColor = stageBadgeColor,
                             activeTrackColor = stageBadgeColor,
@@ -1520,7 +1524,7 @@ private fun FlameSettingsAndSimulatorSheet(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Presets
+                    // Presets (including beyond 20,000)
                     val presets = listOf(
                         Pair("0", 0.0),
                         Pair("45", 45.0),
@@ -1529,7 +1533,9 @@ private fun FlameSettingsAndSimulatorSheet(
                         Pair(if (isAr) "750 (مستعر أعظم)" else "750 (Supernova)", 750.0),
                         Pair("2,000", 2000.0),
                         Pair("10,000", 10000.0),
-                        Pair("20,000", 20000.0)
+                        Pair("20,000", 20000.0),
+                        Pair("50,000", 50000.0),
+                        Pair("100,000", 100000.0)
                     )
 
                     Row(

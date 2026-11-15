@@ -107,13 +107,14 @@ object XpCalculationEngine {
      */
     fun getRequiredXpForLevel(level: Int): Long = TaskPools.getRequiredXpForStation(level)
 
+    fun getCumulativeXpForLevel(level: Int): Long = TaskPools.getCumulativeXpForStation(level)
+
     fun calculateLevelForXp(totalXp: Long): Int = RoadmapManager.calculateUnlockedStationId(totalXp)
 
+    fun getStageProgress(totalXp: Long): RoadmapManager.StageXpProgress = RoadmapManager.getStageProgress(totalXp)
+
     fun xpRemainingToNextLevel(totalXp: Long): Long {
-        val currentLevel = calculateLevelForXp(totalXp)
-        if (currentLevel >= 500) return 0L
-        val nextReq = getRequiredXpForLevel(currentLevel + 1)
-        return (nextReq - totalXp).coerceAtLeast(0L)
+        return RoadmapManager.getStageProgress(totalXp).remainingXpForNextStage
     }
 
     fun calculatePersonAdditionXp(size: Double): Long {
@@ -181,12 +182,12 @@ object XpCalculationEngine {
         val startMillis = parseStartOfDayMillis(trackingStartDate)
             ?: return RetroactiveXpBreakdown(trackingStartDate = trackingStartDate)
 
-        val deflameCount = flameLogs.count {
-            it.reason == "DEFLAME" && !it.isRetroactiveEstimate && it.timestamp >= startMillis
-        }
-        val girlCount = flameLogs.count {
-            it.reason == "GIRL" && !it.isRetroactiveEstimate && it.timestamp >= startMillis
-        }
+        val deflameCount = flameLogs
+            .filter { it.reason == "DEFLAME" && it.timestamp >= startMillis }
+            .sumOf { it.actionCount.coerceAtLeast(1) }
+        val girlCount = flameLogs
+            .filter { it.reason == "GIRL" && it.timestamp >= startMillis }
+            .sumOf { it.actionCount.coerceAtLeast(1) }
 
         val relevantStrikes = strikeEvents.filter { it.date >= trackingStartDate }
         val strikeCount = relevantStrikes.sumOf { it.count.coerceAtLeast(1) }

@@ -282,9 +282,9 @@ fun StreakStartDateDialog(
                     // Explanatory Subtitle
                     Text(
                         text = when (currentLang) {
-                            "ar" -> "أدخل تاريخ بدء السلسلة لحساب الشعلة تلقائياً. تُضاف +3 نقاط لكل يوم مضى، وتُخصم نقاط الضربات بالإضافة لمرات الضغط الشهرية على زر Girl وDeflame في السجلات دون التأثير على تقدم المهام."
-                            "fr" -> "Entrez la date de début pour calculer votre flamme automatiquement (+3 pts/jour écoulé, déductions des strikes et appuis mensuels Girl/Deflame enregistrés sans affecter les missions)."
-                            else -> "Enter your streak start date to calculate your flame automatically. +3 pts are added for each elapsed day, strikes are deducted, and monthly Girl/Deflame presses are applied & logged without affecting task progress."
+                            "ar" -> "أدخل تاريخ بدء السلسلة لحساب الشعلة تلقائياً. تُضاف +3 نقاط لكل يوم مضى، وتُخصم نقاط الضربات بالإضافة لمرات الضغط الشهرية على زر Girl وDeflame في السجلات وتُحتسب نقاط الـ XP الخاصة بها في المسار دون تعديل عداد المهام."
+                            "fr" -> "Entrez la date de début pour calculer votre flamme automatiquement (+3 pts/jour, déductions des strikes et appuis mensuels Girl/Deflame enregistrés avec leurs XP dans la progression sans modifier les compteurs de missions)."
+                            else -> "Enter your streak start date to calculate your flame automatically (+3 pts/day, strike deductions, and monthly Girl/Deflame presses logged with their XP toward roadmap progress without changing task step counters)."
                         },
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.78f),
@@ -778,9 +778,9 @@ fun StreakStartDateDialog(
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = when (currentLang) {
-                                        "ar" -> "ملاحظة: تُسجّل في سجل الشعلة وتُطبق تلقائياً دون التأثير على تقدم المهام."
-                                        "fr" -> "Note : Enregistré dans le journal sans affecter la progression des missions."
-                                        else -> "Note: Recorded in Flame logs and applied automatically without affecting task progress."
+                                        "ar" -> "ملاحظة: تُسجّل في سجل الشعلة وتُحتسب نقاط الـ XP الخاصة بها (+50 Girl / +20 Deflame) دون إكمال المهام."
+                                        "fr" -> "Note : Enregistré dans le journal avec XP (+50 Girl / +20 Deflame) sans valider les missions."
+                                        else -> "Note: Logged in Flame history with XP (+50 Girl / +20 Deflame) without mutating task step counters."
                                     },
                                     fontSize = 10.5.sp,
                                     color = Color(0xFF94A3B8)

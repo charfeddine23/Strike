@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.data.roadmap.RoadmapManager
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import java.text.NumberFormat
@@ -85,12 +86,14 @@ fun RoadmapProgressHeader(
 ) {
     var showXpGuideDialog by remember { mutableStateOf(false) }
 
-    val safeStation = currentStationId.coerceIn(0, 500)
+    val stageProgress = remember(totalXp) { RoadmapManager.getStageProgress(totalXp) }
+    val safeStation = stageProgress.unlockedStationId.coerceIn(0, 500)
     val stagesLeft = (500 - safeStation).coerceAtLeast(0)
-    val progressFraction = (safeStation / 500f).coerceIn(0f, 1f)
-    val xpFormatted = remember(totalXp) {
-        NumberFormat.getNumberInstance(Locale.US).format(totalXp.coerceAtLeast(0L))
-    }
+    val progressFraction = stageProgress.progressFraction.coerceIn(0f, 1f)
+    val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
+    val xpFormatted = remember(totalXp) { nf.format(totalXp.coerceAtLeast(0L)) }
+    val stageXpFormatted = remember(stageProgress) { nf.format(stageProgress.currentStageXp) }
+    val stageReqFormatted = remember(stageProgress) { nf.format(stageProgress.nextStageRequiredXp) }
 
     val effectiveLayoutDirection = if (isAr || currentLang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
 
@@ -156,10 +159,18 @@ fun RoadmapProgressHeader(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = when (currentLang) {
-                                "ar" -> "XP الإجمالي: $xpFormatted / 1,000,000 • متبقي $stagesLeft محطة"
-                                "fr" -> "XP Total : $xpFormatted / 1,000,000 • $stagesLeft restantes"
-                                else -> "Total XP: $xpFormatted / 1,000,000 • $stagesLeft stages left"
+                            text = if (safeStation >= 500) {
+                                when (currentLang) {
+                                    "ar" -> "اكتملت 500 محطة! • الإجمالي: $xpFormatted XP"
+                                    "fr" -> "500 stations débloquées ! • Total : $xpFormatted XP"
+                                    else -> "All 500 stations unlocked! • Total: $xpFormatted XP"
+                                }
+                            } else {
+                                when (currentLang) {
+                                    "ar" -> "المحطة ${stageProgress.nextStationId}: $stageXpFormatted / $stageReqFormatted XP • متبقي $stagesLeft محطة"
+                                    "fr" -> "Station ${stageProgress.nextStationId} : $stageXpFormatted / $stageReqFormatted XP • $stagesLeft rest."
+                                    else -> "Station ${stageProgress.nextStationId}: $stageXpFormatted / $stageReqFormatted XP • $stagesLeft left"
+                                }
                             },
                             fontSize = 11.sp,
                             color = Color(0xFF94A3B8),
@@ -619,9 +630,9 @@ fun XpEarningGuideDialog(
                             )
                             Text(
                                 text = when (currentLang) {
-                                    "ar" -> "تُحتسب جميع التسجيلات والنشاطات السابقة بداية من تاريخ بداية العد."
-                                    "fr" -> "Tous les enregistrements et actions passés depuis la date de début sont comptabilisés rétroactivement."
-                                    else -> "All prior logs and records starting strictly from your tracking start date are credited retroactively."
+                                    "ar" -> "تُحتسب جميع التسجيلات والنشاطات السابقة بداية من تاريخ بداية العد، وتبدأ كل محطة جديدة جمع الـ XP الخاص بها من الصفر."
+                                    "fr" -> "Toutes les actions depuis la date de début sont comptabilisées rétroactivement, et chaque station collecte son propre XP à partir de 0."
+                                    else -> "All prior records from your tracking start date are credited retroactively, and each stage collects its XP requirement starting from 0."
                                 },
                                 fontSize = 12.sp,
                                 lineHeight = 17.sp,

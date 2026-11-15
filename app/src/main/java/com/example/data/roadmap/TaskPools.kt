@@ -188,6 +188,23 @@ object TaskPools {
         return Math.round(ROADMAP_LEVEL_1_XP.toDouble() * Math.pow(ratio, power))
     }
 
+    private val CUMULATIVE_STATION_XP: LongArray by lazy {
+        LongArray(501).apply {
+            this[0] = 0L
+            for (s in 1..500) {
+                this[s] = this[s - 1] + getRequiredXpForStation(s)
+            }
+        }
+    }
+
+    /**
+     * Cumulative lifetime XP required to unlock [stationId] (0..500) when each stage
+     * resets its XP progress bar to 0 upon completion and consumes its own cost.
+     */
+    fun getCumulativeXpForStation(stationId: Int): Long {
+        return CUMULATIVE_STATION_XP[stationId.coerceIn(0, 500)]
+    }
+
     // ==========================================
     // MATHEMATICALLY EXACT XP GENERATOR
     // ==========================================

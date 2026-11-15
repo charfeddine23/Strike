@@ -390,12 +390,16 @@ fun ProfileScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // Flame Score / 20000
+                            // Unlimited Flame Score (0 -> Infinity)
                             MetricTile(
                                 modifier = Modifier.weight(1f),
                                 label = if (isAr) "نقاط الشعلة" else "Flame Score",
-                                value = "${String.format(Locale.US, "%.0f", flameScore)} / 20k",
-                                sub = "${String.format(Locale.US, "%.1f", (flameScore / 20000.0) * 100)}%",
+                                value = String.format(Locale.US, "%,.0f", flameScore),
+                                sub = if (flameScore > 20000.0) {
+                                    if (isAr) "تخطى حاجز 20k ⚡ (∞)" else "Beyond 20k ⚡ (∞)"
+                                } else {
+                                    "${String.format(Locale.US, "%.1f", (flameScore / 20000.0) * 100)}%"
+                                },
                                 icon = Icons.Default.LocalFireDepartment,
                                 color = NeonAmber
                             )
@@ -417,12 +421,13 @@ fun ProfileScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            // Tasks XP (sole progression source for the Wavy Roadmap)
+                            // Stage XP Progress (Resets from 0 per station)
+                            val stageProg = remember(totalXp) { RoadmapManager.getStageProgress(totalXp) }
                             MetricTile(
                                 modifier = Modifier.weight(1f),
-                                label = if (isAr) "XP المهام" else "Tasks XP",
-                                value = "$totalXp XP",
-                                sub = if (isAr) "من أصل 1,000,000 XP" else "of 1,000,000 XP",
+                                label = if (isAr) "XP المحطة ${stageProg.nextStationId}" else "LVL ${stageProg.nextStationId} XP",
+                                value = "${stageProg.currentStageXp} / ${stageProg.nextStageRequiredXp}",
+                                sub = if (isAr) "الإجمالي: $totalXp XP" else "Total: $totalXp XP",
                                 icon = Icons.Default.Bolt,
                                 color = NeonCyan
                             )

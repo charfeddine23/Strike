@@ -19,7 +19,8 @@ data class FlameLogEntry(
     val resultingScore: Double,
     val reason: String,
     val details: String = "",
-    val isRetroactiveEstimate: Boolean = false
+    val isRetroactiveEstimate: Boolean = false,
+    val actionCount: Int = 1
 )
 
 data class StrikeRegistrationResult(
@@ -71,6 +72,10 @@ object FlameManager {
     private const val KEY_TOTAL_POINTS_EXTINGUISHED = "key_total_points_extinguished"
     private const val KEY_GIRL_PER_MONTH = "key_start_date_girl_per_month"
     private const val KEY_DEFLAME_PER_MONTH = "key_start_date_deflame_per_month"
+    private const val KEY_SCORE_BITS = "key_flame_score_bits"
+    private const val KEY_PEAK_SCORE_BITS = "key_peak_flame_score_bits"
+    private const val KEY_TOTAL_POINTS_GAINED_BITS = "key_total_points_gained_bits"
+    private const val KEY_TOTAL_POINTS_EXTINGUISHED_BITS = "key_total_points_extinguished_bits"
 
     private val _flameScore = MutableStateFlow(45.0) // Initial starting score
     val flameScore: StateFlow<Double> = _flameScore.asStateFlow()
@@ -118,8 +123,43 @@ object FlameManager {
         return SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
     }
 
+    private fun sanitizeScore(value: Double): Double {
+        return if (!value.isFinite()) 0.0 else value.coerceAtLeast(0.0)
+    }
+
+    private fun saveDouble(
+        editor: SharedPreferences.Editor,
+        floatKey: String,
+        bitsKey: String,
+        value: Double
+    ): SharedPreferences.Editor {
+        val safe = sanitizeScore(value)
+        val floatSafe = safe.coerceAtMost(Float.MAX_VALUE.toDouble()).toFloat()
+        return editor
+            .putFloat(floatKey, floatSafe)
+            .putLong(bitsKey, java.lang.Double.doubleToRawLongBits(safe))
+    }
+
+    private fun loadDouble(
+        prefs: SharedPreferences,
+        floatKey: String,
+        bitsKey: String,
+        defaultValue: Double
+    ): Double {
+        val raw = if (prefs.contains(bitsKey)) {
+            java.lang.Double.longBitsToDouble(prefs.getLong(bitsKey, java.lang.Double.doubleToRawLongBits(defaultValue)))
+        } else {
+            prefs.getFloat(floatKey, defaultValue.toFloat()).toDouble()
+        }
+        return sanitizeScore(raw)
+    }
+
     private fun format(value: Double): String {
-        return if (value % 1.0 == 0.0) "${value.toInt()}" else String.format(Locale.US, "%.1f", value)
+        return if (value % 1.0 == 0.0 && value <= Long.MAX_VALUE.toDouble()) {
+            "${value.toLong()}"
+        } else {
+            String.format(Locale.US, "%.1f", value)
+        }
     }
 
     fun isShieldActiveNow(): Boolean {
@@ -155,7 +195,7 @@ object FlameManager {
     fun init(context: Context) {
         if (isInitialized) return
         val prefs = getPrefs(context)
-        val savedScore = prefs.getFloat(KEY_SCORE, 45.0f).toDouble().coerceAtLeast(0.0)
+        val savedScore = loadDouble(prefs, KEY_SCORE, KEY_SCORE_BITS, 45.0)
         _flameScore.value = savedScore
 
         val now = System.currentTimeMillis()
@@ -217,10 +257,10 @@ object FlameManager {
             _available1DayShields.value = prefs.getInt(KEY_AVAILABLE_1DAY_SHIELDS, 0)
             _sevenDayAutoShieldCount.value = prefs.getInt(KEY_SEVEN_DAY_AUTO_TRIGGERS, 0)
         }
-        val savedPeak = prefs.getFloat(KEY_PEAK_SCORE, savedScore.toFloat()).toDouble()
+        val savedPeak = loadDouble(prefs, KEY_PEAK_SCORE, KEY_PEAK_SCORE_BITS, savedScore)
         _peakScore.value = maxOf(savedScore, savedPeak)
-        _totalPointsGained.value = prefs.getFloat(KEY_TOTAL_POINTS_GAINED, 0.0f).toDouble()
-        _totalPointsExtinguished.value = prefs.getFloat(KEY_TOTAL_POINTS_EXTINGUISHED, 0.0f).toDouble()
+        _totalPointsGained.value = loadDouble(prefs, KEY_TOTAL_POINTS_GAINED, KEY_TOTAL_POINTS_GAINED_BITS, 0.0)
+        _totalPointsExtinguished.value = loadDouble(prefs, KEY_TOTAL_POINTS_EXTINGUISHED, KEY_TOTAL_POINTS_EXTINGUISHED_BITS, 0.0)
 
         val logsJson = prefs.getString(KEY_FLAME_LOGS, null)
         if (!logsJson.isNullOrBlank()) {
@@ -238,7 +278,8 @@ object FlameManager {
                             resultingScore = obj.optDouble("resultingScore", 0.0),
                             reason = obj.optString("reason", "EVENT"),
                             details = obj.optString("details", ""),
-                            isRetroactiveEstimate = obj.optBoolean("isRetroactiveEstimate", false)
+                            isRetroactiveEstimate = obj.optBoolean("isRetroactiveEstimate", false),
+                            actionCount = obj.optInt("actionCount", 1).coerceAtLeast(1)
                         )
                     )
                 }
@@ -295,26 +336,27 @@ object FlameManager {
         _available1DayShields.value = 0
         _sevenDayAutoShieldCount.value = 0
 
-        getPrefs(context).edit()
-            .putFloat(KEY_SCORE, 0.0f)
-            .putFloat(KEY_PEAK_SCORE, 0.0f)
-            .putFloat(KEY_TOTAL_POINTS_GAINED, 0.0f)
-            .putFloat(KEY_TOTAL_POINTS_EXTINGUISHED, 0.0f)
-            .remove(KEY_FLAME_LOGS)
-            .putBoolean(KEY_STREAK_SHIELD, false)
-            .remove(KEY_ACTIVE_SHIELD_EXPIRES_AT)
-            .remove(KEY_ACTIVE_SHIELD_TYPE)
-            .putInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
-            .putInt(KEY_AVAILABLE_48H_SHIELDS, 0)
-            .putInt(KEY_AVAILABLE_1DAY_SHIELDS, 0)
-            .putInt(KEY_SEVEN_DAY_AUTO_TRIGGERS, 0)
-            .putBoolean("has_reset_shields_to_zero_v2", true)
-            .remove(KEY_START_COUNT_DATE)
-            .remove(KEY_LAST_STRIKE_DATE)
-            .remove(KEY_GIRL_PER_MONTH)
-            .remove(KEY_DEFLAME_PER_MONTH)
-            .putString(KEY_LAST_INACTIVITY_DATE, today)
-            .apply()
+        getPrefs(context).edit().apply {
+            saveDouble(this, KEY_SCORE, KEY_SCORE_BITS, 0.0)
+            saveDouble(this, KEY_PEAK_SCORE, KEY_PEAK_SCORE_BITS, 0.0)
+            saveDouble(this, KEY_TOTAL_POINTS_GAINED, KEY_TOTAL_POINTS_GAINED_BITS, 0.0)
+            saveDouble(this, KEY_TOTAL_POINTS_EXTINGUISHED, KEY_TOTAL_POINTS_EXTINGUISHED_BITS, 0.0)
+            remove(KEY_FLAME_LOGS)
+            putBoolean(KEY_STREAK_SHIELD, false)
+            remove(KEY_ACTIVE_SHIELD_EXPIRES_AT)
+            remove(KEY_ACTIVE_SHIELD_TYPE)
+            putInt(KEY_AVAILABLE_MANUAL_SHIELDS, 0)
+            putInt(KEY_AVAILABLE_48H_SHIELDS, 0)
+            putInt(KEY_AVAILABLE_1DAY_SHIELDS, 0)
+            putInt(KEY_SEVEN_DAY_AUTO_TRIGGERS, 0)
+            putBoolean("has_reset_shields_to_zero_v2", true)
+            remove(KEY_START_COUNT_DATE)
+            remove(KEY_LAST_STRIKE_DATE)
+            remove(KEY_GIRL_PER_MONTH)
+            remove(KEY_DEFLAME_PER_MONTH)
+            putString(KEY_LAST_INACTIVITY_DATE, today)
+            apply()
+        }
     }
 
     fun getScore(context: Context): Double {
@@ -539,35 +581,47 @@ object FlameManager {
         }
     }
 
-    const val MAX_SCORE = 20000.0
+    const val MAX_SCORE = Double.MAX_VALUE
 
     @Synchronized
     fun setScore(context: Context, newScore: Double, reason: String = "SIMULATION", details: String = ""): Double {
         init(context)
-        val clamped = newScore.coerceIn(0.0, MAX_SCORE)
+        val clamped = sanitizeScore(newScore)
         val diff = clamped - _flameScore.value
         _flameScore.value = clamped
 
         if (clamped > _peakScore.value) {
             _peakScore.value = clamped
-            getPrefs(context).edit().putFloat(KEY_PEAK_SCORE, clamped.toFloat()).apply()
+            getPrefs(context).edit().apply {
+                saveDouble(this, KEY_PEAK_SCORE, KEY_PEAK_SCORE_BITS, clamped)
+                apply()
+            }
         }
 
-        // Check Milestone Peak Title unlock at 20,000 pts
+        // Check Milestone Peak Title unlock at 20,000+ pts
         com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(context, clamped)
 
         if (diff > 0) {
             val updatedGained = _totalPointsGained.value + diff
             _totalPointsGained.value = updatedGained
-            getPrefs(context).edit().putFloat(KEY_TOTAL_POINTS_GAINED, updatedGained.toFloat()).apply()
+            getPrefs(context).edit().apply {
+                saveDouble(this, KEY_TOTAL_POINTS_GAINED, KEY_TOTAL_POINTS_GAINED_BITS, updatedGained)
+                apply()
+            }
         } else if (diff < 0) {
             val updatedExt = _totalPointsExtinguished.value + (-diff)
             _totalPointsExtinguished.value = updatedExt
-            getPrefs(context).edit().putFloat(KEY_TOTAL_POINTS_EXTINGUISHED, updatedExt.toFloat()).apply()
+            getPrefs(context).edit().apply {
+                saveDouble(this, KEY_TOTAL_POINTS_EXTINGUISHED, KEY_TOTAL_POINTS_EXTINGUISHED_BITS, updatedExt)
+                apply()
+            }
         }
 
         val prefs = getPrefs(context)
-        prefs.edit().putFloat(KEY_SCORE, clamped.toFloat()).apply()
+        prefs.edit().apply {
+            saveDouble(this, KEY_SCORE, KEY_SCORE_BITS, clamped)
+            apply()
+        }
 
         if (diff != 0.0) {
             logEvent(
@@ -592,23 +646,27 @@ object FlameManager {
         val effectiveDelta = delta * shadowFactor * gabrielFactor
 
         val old = _flameScore.value
-        val updated = (old + effectiveDelta).coerceIn(0.0, MAX_SCORE)
+        val updated = sanitizeScore(old + effectiveDelta)
         _flameScore.value = updated
 
         if (updated > _peakScore.value) {
             _peakScore.value = updated
-            getPrefs(context).edit().putFloat(KEY_PEAK_SCORE, updated.toFloat()).apply()
+            getPrefs(context).edit().apply {
+                saveDouble(this, KEY_PEAK_SCORE, KEY_PEAK_SCORE_BITS, updated)
+                apply()
+            }
         }
 
-        // Check Milestone Peak Title unlock at 20,000 pts
+        // Check Milestone Peak Title unlock at 20,000+ pts
         com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(context, updated)
 
         val updatedGained = _totalPointsGained.value + effectiveDelta
         _totalPointsGained.value = updatedGained
-        getPrefs(context).edit()
-            .putFloat(KEY_SCORE, updated.toFloat())
-            .putFloat(KEY_TOTAL_POINTS_GAINED, updatedGained.toFloat())
-            .apply()
+        getPrefs(context).edit().apply {
+            saveDouble(this, KEY_SCORE, KEY_SCORE_BITS, updated)
+            saveDouble(this, KEY_TOTAL_POINTS_GAINED, KEY_TOTAL_POINTS_GAINED_BITS, updatedGained)
+            apply()
+        }
 
         val eventTitle = title.ifBlank {
             when (reason) {
@@ -626,16 +684,17 @@ object FlameManager {
     fun deductPoints(context: Context, delta: Double, reason: String, details: String, title: String = ""): Double {
         init(context)
         val old = _flameScore.value
-        val updated = (old - delta).coerceIn(0.0, MAX_SCORE)
+        val updated = sanitizeScore(old - delta)
         val actualDeducted = old - updated
         _flameScore.value = updated
 
         val updatedExt = _totalPointsExtinguished.value + actualDeducted
         _totalPointsExtinguished.value = updatedExt
-        getPrefs(context).edit()
-            .putFloat(KEY_SCORE, updated.toFloat())
-            .putFloat(KEY_TOTAL_POINTS_EXTINGUISHED, updatedExt.toFloat())
-            .apply()
+        getPrefs(context).edit().apply {
+            saveDouble(this, KEY_SCORE, KEY_SCORE_BITS, updated)
+            saveDouble(this, KEY_TOTAL_POINTS_EXTINGUISHED, KEY_TOTAL_POINTS_EXTINGUISHED_BITS, updatedExt)
+            apply()
+        }
 
         val eventTitle = title.ifBlank {
             when (reason) {
@@ -816,10 +875,11 @@ object FlameManager {
                 _flameScore.value = 0.0
                 val updatedExt = _totalPointsExtinguished.value + oldScore
                 _totalPointsExtinguished.value = updatedExt
-                prefs.edit()
-                    .putFloat(KEY_SCORE, 0.0f)
-                    .putFloat(KEY_TOTAL_POINTS_EXTINGUISHED, updatedExt.toFloat())
-                    .apply()
+                prefs.edit().apply {
+                    saveDouble(this, KEY_SCORE, KEY_SCORE_BITS, 0.0)
+                    saveDouble(this, KEY_TOTAL_POINTS_EXTINGUISHED, KEY_TOTAL_POINTS_EXTINGUISHED_BITS, updatedExt)
+                    apply()
+                }
 
                 val namesList = strikesToday.joinToString(", ") { it.individualName }
                 val details = "Extreme system overload triggered! $strikesCount strikes registered today ($namesList). Flame score completely reset to 0.0 PTS. Visuals frozen to initial static state. Counting restarts from zero."
@@ -1050,8 +1110,7 @@ object FlameManager {
         val girlPointsDeducted = girlPressesCount * 3.0
         val deflamePointsDeducted = deflamePressesCount * 3.0
 
-        val resultingScore = (inactivityPointsAdded - totalDeductions - girlPointsDeducted - deflamePointsDeducted)
-            .coerceIn(0.0, MAX_SCORE)
+        val resultingScore = sanitizeScore(inactivityPointsAdded - totalDeductions - girlPointsDeducted - deflamePointsDeducted)
 
         return FlameRecalculationResult(
             startDate = startDateStr,
@@ -1072,10 +1131,11 @@ object FlameManager {
 
     /**
      * Recalculates Flame Score starting from [startDateStr] up to today:
-     * - Adds +3.0 points daily inactivity for each calendar day elapsed since start date.
+     * - Adds +3.0 points daily inactivity for each calendar day elapsed since start date (no 20k upper cap).
      * - Accounts for all strikes registered in that period, deducting their multi-strike / single-strike penalties.
      * - Converts [girlPerMonth] & [deflamePerMonth] into period press counts, applies their Flame score effect (-3 PTS/tap),
-     *   and records them in existing Flame logs WITHOUT advancing any tasks or awarding task XP.
+     *   records them in existing Flame logs (with actionCount so XP engine credits +50 XP / +20 XP),
+     *   WITHOUT advancing individual Dynamic Task step counters.
      */
     @Synchronized
     fun recalculateFromStartDate(
@@ -1100,41 +1160,62 @@ object FlameManager {
         _flameScore.value = newScore
         if (newScore > _peakScore.value) {
             _peakScore.value = newScore
-            getPrefs(context).edit().putFloat(KEY_PEAK_SCORE, newScore.toFloat()).apply()
+            getPrefs(context).edit().apply {
+                saveDouble(this, KEY_PEAK_SCORE, KEY_PEAK_SCORE_BITS, newScore)
+                apply()
+            }
         }
+
+        // Check Milestone Peak Title unlock at 20,000+ pts
+        com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(context, newScore)
 
         if (diff > 0) {
             val updatedGained = _totalPointsGained.value + diff
             _totalPointsGained.value = updatedGained
-            getPrefs(context).edit().putFloat(KEY_TOTAL_POINTS_GAINED, updatedGained.toFloat()).apply()
+            getPrefs(context).edit().apply {
+                saveDouble(this, KEY_TOTAL_POINTS_GAINED, KEY_TOTAL_POINTS_GAINED_BITS, updatedGained)
+                apply()
+            }
         } else if (diff < 0) {
             val updatedExt = _totalPointsExtinguished.value + (-diff)
             _totalPointsExtinguished.value = updatedExt
-            getPrefs(context).edit().putFloat(KEY_TOTAL_POINTS_EXTINGUISHED, updatedExt.toFloat()).apply()
+            getPrefs(context).edit().apply {
+                saveDouble(this, KEY_TOTAL_POINTS_EXTINGUISHED, KEY_TOTAL_POINTS_EXTINGUISHED_BITS, updatedExt)
+                apply()
+            }
         }
 
-        getPrefs(context).edit()
-            .putFloat(KEY_SCORE, newScore.toFloat())
-            .putString(KEY_START_COUNT_DATE, startDateStr)
-            .putString(KEY_LAST_INACTIVITY_DATE, result.todayDate)
-            .putInt(KEY_GIRL_PER_MONTH, result.girlPerMonth)
-            .putInt(KEY_DEFLAME_PER_MONTH, result.deflamePerMonth)
-            .apply()
+        getPrefs(context).edit().apply {
+            saveDouble(this, KEY_SCORE, KEY_SCORE_BITS, newScore)
+            putString(KEY_START_COUNT_DATE, startDateStr)
+            putString(KEY_LAST_INACTIVITY_DATE, result.todayDate)
+            putInt(KEY_GIRL_PER_MONTH, result.girlPerMonth)
+            putInt(KEY_DEFLAME_PER_MONTH, result.deflamePerMonth)
+            apply()
+        }
 
-        val scoreAfterStrikes = (result.inactivityPointsAdded - result.totalDeductions).coerceIn(0.0, MAX_SCORE)
-        val scoreAfterGirl = (scoreAfterStrikes - result.girlPointsDeducted).coerceIn(0.0, MAX_SCORE)
+        // Replace previous retroactive estimate logs cleanly so recalculating with new rates/dates never duplicates XP or logs
+        val cleanedLogs = _flameLogs.value.filterNot { it.isRetroactiveEstimate }
+        if (cleanedLogs.size != _flameLogs.value.size) {
+            _flameLogs.value = cleanedLogs
+            persistLogs(context, cleanedLogs)
+        }
 
-        // Log retroactive Girl presses if > 0 (recorded in existing Flame logs, zero effect on task progression)
+        val scoreAfterStrikes = sanitizeScore(result.inactivityPointsAdded - result.totalDeductions)
+        val scoreAfterGirl = sanitizeScore(scoreAfterStrikes - result.girlPointsDeducted)
+
+        // Log retroactive Girl presses if > 0 (recorded in existing Flame logs; XP +50/press counted in progress without mutating individual task counters)
         if (result.girlPressesCount > 0) {
+            val girlXp = result.girlPressesCount * 50L
             val girlTitle = when (lang) {
                 "ar" -> "تسجيل Girl التلقائي (×${result.girlPressesCount})"
                 "fr" -> "Action Girl rétroactive (×${result.girlPressesCount})"
                 else -> "Retroactive Girl Action (×${result.girlPressesCount})"
             }
             val girlDetails = when (lang) {
-                "ar" -> "${result.girlPerMonth}/شهر × ${result.daysElapsed} يوم = ${result.girlPressesCount} مرة (تُطبق على الشعلة فقط دون المهام)"
-                "fr" -> "${result.girlPerMonth}/mois × ${result.daysElapsed} j = ${result.girlPressesCount} fois (Flamme uniquement, missions inchangées)"
-                else -> "${result.girlPerMonth}/mo × ${result.daysElapsed} days = ${result.girlPressesCount} presses (Flame only, tasks unaffected)"
+                "ar" -> "${result.girlPerMonth}/شهر × ${result.daysElapsed} يوم = ${result.girlPressesCount} مرة (+$girlXp XP، دون تعديل عداد المهام)"
+                "fr" -> "${result.girlPerMonth}/mois × ${result.daysElapsed} j = ${result.girlPressesCount} fois (+$girlXp XP, compteurs missions inchangés)"
+                else -> "${result.girlPerMonth}/mo × ${result.daysElapsed} days = ${result.girlPressesCount} presses (+$girlXp XP, task counters unaffected)"
             }
             logEvent(
                 context = context,
@@ -1143,21 +1224,23 @@ object FlameManager {
                 resultingScore = scoreAfterGirl,
                 reason = "GIRL",
                 details = girlDetails,
-                isRetroactiveEstimate = true
+                isRetroactiveEstimate = true,
+                actionCount = result.girlPressesCount
             )
         }
 
-        // Log retroactive Deflame presses if > 0 (recorded in existing Flame logs, zero effect on task progression)
+        // Log retroactive Deflame presses if > 0 (recorded in existing Flame logs; XP +20/press counted in progress without mutating individual task counters)
         if (result.deflamePressesCount > 0) {
+            val deflameXp = result.deflamePressesCount * 20L
             val deflameTitle = when (lang) {
                 "ar" -> "تبريد Deflame التلقائي (×${result.deflamePressesCount})"
                 "fr" -> "Refroidissement Deflame rétroactif (×${result.deflamePressesCount})"
                 else -> "Retroactive Deflame Action (×${result.deflamePressesCount})"
             }
             val deflameDetails = when (lang) {
-                "ar" -> "${result.deflamePerMonth}/شهر × ${result.daysElapsed} يوم = ${result.deflamePressesCount} مرة (تُطبق على الشعلة فقط دون المهام)"
-                "fr" -> "${result.deflamePerMonth}/mois × ${result.daysElapsed} j = ${result.deflamePressesCount} fois (Flamme uniquement, missions inchangées)"
-                else -> "${result.deflamePerMonth}/mo × ${result.daysElapsed} days = ${result.deflamePressesCount} presses (Flame only, tasks unaffected)"
+                "ar" -> "${result.deflamePerMonth}/شهر × ${result.daysElapsed} يوم = ${result.deflamePressesCount} مرة (+$deflameXp XP، دون تعديل عداد المهام)"
+                "fr" -> "${result.deflamePerMonth}/mois × ${result.daysElapsed} j = ${result.deflamePressesCount} fois (+$deflameXp XP, compteurs missions inchangées)"
+                else -> "${result.deflamePerMonth}/mo × ${result.daysElapsed} days = ${result.deflamePressesCount} presses (+$deflameXp XP, task counters unaffected)"
             }
             logEvent(
                 context = context,
@@ -1166,7 +1249,8 @@ object FlameManager {
                 resultingScore = newScore,
                 reason = "DEFLAME",
                 details = deflameDetails,
-                isRetroactiveEstimate = true
+                isRetroactiveEstimate = true,
+                actionCount = result.deflamePressesCount
             )
         }
 
@@ -1222,7 +1306,8 @@ object FlameManager {
         resultingScore: Double,
         reason: String,
         details: String = "",
-        isRetroactiveEstimate: Boolean = false
+        isRetroactiveEstimate: Boolean = false,
+        actionCount: Int = 1
     ) {
         val entry = FlameLogEntry(
             id = System.currentTimeMillis() + (0..999).random(),
@@ -1232,7 +1317,8 @@ object FlameManager {
             resultingScore = resultingScore,
             reason = reason,
             details = details,
-            isRetroactiveEstimate = isRetroactiveEstimate
+            isRetroactiveEstimate = isRetroactiveEstimate,
+            actionCount = actionCount.coerceAtLeast(1)
         )
         val current = _flameLogs.value.toMutableList()
         current.add(0, entry)
@@ -1260,6 +1346,7 @@ object FlameManager {
                 put("reason", item.reason)
                 put("details", item.details)
                 if (item.isRetroactiveEstimate) put("isRetroactiveEstimate", true)
+                if (item.actionCount != 1) put("actionCount", item.actionCount.coerceAtLeast(1))
             }
             array.put(obj)
         }
@@ -1297,8 +1384,8 @@ object FlameManager {
         val prefs = getPrefs(context)
         val now = System.currentTimeMillis()
 
-        val importedScore = json.optDouble("score", _flameScore.value).coerceIn(0.0, MAX_SCORE)
-        val importedPeak = json.optDouble("peakScore", importedScore).coerceIn(0.0, MAX_SCORE)
+        val importedScore = sanitizeScore(json.optDouble("score", _flameScore.value))
+        val importedPeak = sanitizeScore(json.optDouble("peakScore", importedScore))
         val importedGained = json.optDouble("totalPointsGained", 0.0).coerceAtLeast(0.0)
         val importedExt = json.optDouble("totalPointsExtinguished", 0.0).coerceAtLeast(0.0)
 
@@ -1350,7 +1437,8 @@ object FlameManager {
                         resultingScore = obj.optDouble("resultingScore", 0.0),
                         reason = obj.optString("reason", "EVENT"),
                         details = obj.optString("details", ""),
-                        isRetroactiveEstimate = obj.optBoolean("isRetroactiveEstimate", false)
+                        isRetroactiveEstimate = obj.optBoolean("isRetroactiveEstimate", false),
+                        actionCount = obj.optInt("actionCount", 1).coerceAtLeast(1)
                     )
                 )
             }
@@ -1383,10 +1471,10 @@ object FlameManager {
         val importedDeflamePerMonth = json.optInt("deflamePerMonth", 0).coerceAtLeast(0)
 
         prefs.edit().apply {
-            putFloat(KEY_SCORE, finalScore.toFloat())
-            putFloat(KEY_PEAK_SCORE, finalPeak.toFloat())
-            putFloat(KEY_TOTAL_POINTS_GAINED, finalGained.toFloat())
-            putFloat(KEY_TOTAL_POINTS_EXTINGUISHED, finalExt.toFloat())
+            saveDouble(this, KEY_SCORE, KEY_SCORE_BITS, finalScore)
+            saveDouble(this, KEY_PEAK_SCORE, KEY_PEAK_SCORE_BITS, finalPeak)
+            saveDouble(this, KEY_TOTAL_POINTS_GAINED, KEY_TOTAL_POINTS_GAINED_BITS, finalGained)
+            saveDouble(this, KEY_TOTAL_POINTS_EXTINGUISHED, KEY_TOTAL_POINTS_EXTINGUISHED_BITS, finalExt)
             putBoolean(KEY_STREAK_SHIELD, finalShieldActive)
             if (finalExpires != null) putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, finalExpires) else remove(KEY_ACTIVE_SHIELD_EXPIRES_AT)
             if (finalShieldActive && finalType != ActiveShieldType.NONE) {

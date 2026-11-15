@@ -403,29 +403,76 @@ object RoadmapManager {
         saveTasks(context, KEY_YEARLY_TASKS_JSON, freshEverlasting)
     }
 
+    data class StageXpProgress(
+        val unlockedStationId: Int,
+        val nextStationId: Int,
+        val currentStageXp: Long,
+        val nextStageRequiredXp: Long,
+        val remainingXpForNextStage: Long,
+        val progressFraction: Float
+    )
+
     /**
-     * Calculates the highest unlocked station (1 to 500) based on Total XP.
+     * Calculates the highest unlocked station (0 to 500) using non-cumulative per-stage XP:
+     * unlocking station `k` consumes `getRequiredXpForStation(k)` XP so station `k + 1`
+     * must be earned from 0 XP up to `getRequiredXpForStation(k + 1)`.
      */
     fun calculateUnlockedStationId(currentXp: Long): Int {
+        val safeXp = currentXp.coerceAtLeast(0L)
         for (s in 500 downTo 1) {
-            if (currentXp >= TaskPools.getRequiredXpForStation(s)) {
+            if (safeXp >= TaskPools.getCumulativeXpForStation(s)) {
                 return s
             }
         }
         return 0
     }
 
+    /**
+     * Returns the player's current-stage XP progress starting from 0 for the next locked station.
+     */
+    fun getStageProgress(currentXp: Long): StageXpProgress {
+        val safeXp = currentXp.coerceAtLeast(0L)
+        val unlocked = calculateUnlockedStationId(safeXp)
+        if (unlocked >= 500) {
+            val maxReq = TaskPools.getRequiredXpForStation(500)
+            return StageXpProgress(
+                unlockedStationId = 500,
+                nextStationId = 500,
+                currentStageXp = maxReq,
+                nextStageRequiredXp = maxReq,
+                remainingXpForNextStage = 0L,
+                progressFraction = 1f
+            )
+        }
+        val nextId = unlocked + 1
+        val consumedCumulative = TaskPools.getCumulativeXpForStation(unlocked)
+        val stageXp = (safeXp - consumedCumulative).coerceAtLeast(0L)
+        val nextReq = TaskPools.getRequiredXpForStation(nextId).coerceAtLeast(1L)
+        val remaining = (nextReq - stageXp).coerceAtLeast(0L)
+        val fraction = (stageXp.toFloat() / nextReq.toFloat()).coerceIn(0f, 1f)
+        return StageXpProgress(
+            unlockedStationId = unlocked,
+            nextStationId = nextId,
+            currentStageXp = stageXp,
+            nextStageRequiredXp = nextReq,
+            remainingXpForNextStage = remaining,
+            progressFraction = fraction
+        )
+    }
+
     fun generateStations(totalXp: Long, claimedStations: Set<Int>): List<RoadmapStation> {
+        val safeXp = totalXp.coerceAtLeast(0L)
         return (1..500).map { id ->
-            val reqXp = TaskPools.getRequiredXpForStation(id)
+            val stageCost = TaskPools.getRequiredXpForStation(id)
+            val cumulativeCost = TaskPools.getCumulativeXpForStation(id)
             val state = when {
                 claimedStations.contains(id) -> StationState.CLAIMED
-                totalXp >= reqXp -> StationState.UNLOCKED
+                safeXp >= cumulativeCost -> StationState.UNLOCKED
                 else -> StationState.LOCKED
             }
             RoadmapStation(
                 id = id,
-                requiredTotalXp = reqXp,
+                requiredTotalXp = stageCost,
                 state = state,
                 reward = TaskPools.getRewardForStation(id)
             )
@@ -434,8 +481,8 @@ object RoadmapManager {
 
     fun getStationState(stationId: Int): StationState {
         if (_claimedStations.value.contains(stationId)) return StationState.CLAIMED
-        val reqXp = TaskPools.getRequiredXpForStation(stationId)
-        return if (_totalXp.value >= reqXp) StationState.UNLOCKED else StationState.LOCKED
+        val cumulativeReq = TaskPools.getCumulativeXpForStation(stationId)
+        return if (_totalXp.value >= cumulativeReq) StationState.UNLOCKED else StationState.LOCKED
     }
 
     @Synchronized
