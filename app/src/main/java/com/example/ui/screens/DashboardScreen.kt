@@ -2,12 +2,16 @@ package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,6 +66,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,16 +80,21 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
@@ -216,7 +226,7 @@ fun DashboardScreen(
                                 )
                                 .clickable {
                                     HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
-                                    showSortMenu = true
+                                    showSortMenu = !showSortMenu
                                 }
                                 .testTag("sort_button"),
                             contentAlignment = Alignment.Center
@@ -234,6 +244,20 @@ fun DashboardScreen(
                                 .size(7.dp)
                                 .clip(CircleShape)
                                 .background(if (isDarkTheme) NeonAmber else DayOrange)
+                        )
+
+                        // Luxury Sort Selector anchored directly to & emerging from the Sort button
+                        LuxurySortButtonPopup(
+                            visible = showSortMenu,
+                            currentSortOrder = sortOrder,
+                            currentLang = currentLang,
+                            onSelectSortOrder = { selected ->
+                                HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                                viewModel.setSortOrder(selected)
+                                showSortMenu = false
+                            },
+                            onDismiss = { showSortMenu = false },
+                            darkTheme = isDarkTheme
                         )
                     }
                 }
@@ -517,21 +541,6 @@ fun DashboardScreen(
             viewModel = viewModel,
             onDismiss = { showDataEntryDialog = false },
             isDarkTheme = isDarkTheme
-        )
-    }
-
-    // Luxury Sort Selector Modal
-    if (showSortMenu) {
-        LuxurySortSelectorDialog(
-            currentSortOrder = sortOrder,
-            currentLang = currentLang,
-            onSelectSortOrder = { selected ->
-                HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
-                viewModel.setSortOrder(selected)
-                showSortMenu = false
-            },
-            onDismiss = { showSortMenu = false },
-            darkTheme = isDarkTheme
         )
     }
 
@@ -1043,13 +1052,23 @@ private data class LuxurySortOptionSpec(
 )
 
 @Composable
-private fun LuxurySortSelectorDialog(
+private fun LuxurySortButtonPopup(
+    visible: Boolean,
     currentSortOrder: SortOrder,
     currentLang: String,
     onSelectSortOrder: (SortOrder) -> Unit,
     onDismiss: () -> Unit,
     darkTheme: Boolean = isSystemInDarkTheme()
 ) {
+    val transitionState = remember { MutableTransitionState(false) }
+    LaunchedEffect(visible) {
+        transitionState.targetState = visible
+    }
+
+    if (!visible && !transitionState.currentState && !transitionState.targetState) {
+        return
+    }
+
     val isAr = currentLang == "ar"
     val isFr = currentLang == "fr"
 
@@ -1127,51 +1146,88 @@ private fun LuxurySortSelectorDialog(
     val accentViolet = if (darkTheme) NeonViolet else DayPurple
     val borderBrush = Brush.linearGradient(
         listOf(
-            accentCyan.copy(alpha = 0.75f),
-            accentViolet.copy(alpha = 0.55f),
-            NeonEmerald.copy(alpha = 0.65f)
+            accentCyan.copy(alpha = 0.8f),
+            accentViolet.copy(alpha = 0.6f),
+            NeonEmerald.copy(alpha = 0.7f)
         )
     )
 
-    Dialog(
+    val density = LocalDensity.current
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val yOffsetPx = remember(density) { with(density) { 54.dp.roundToPx() } }
+    val scaleOrigin = TransformOrigin(
+        pivotFractionX = if (isRtl) 0.08f else 0.92f,
+        pivotFractionY = 0.0f
+    )
+    val popoverShape = RoundedCornerShape(
+        topStart = if (isRtl) 6.dp else 22.dp,
+        topEnd = if (isRtl) 22.dp else 6.dp,
+        bottomStart = 22.dp,
+        bottomEnd = 22.dp
+    )
+
+    Popup(
+        alignment = Alignment.TopEnd,
+        offset = IntOffset(0, yOffsetPx),
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = PopupProperties(focusable = true)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .widthIn(max = 460.dp)
-                .shadow(
-                    elevation = if (darkTheme) 16.dp else 12.dp,
-                    shape = RoundedCornerShape(26.dp),
-                    ambientColor = accentCyan.copy(alpha = 0.25f),
-                    spotColor = accentViolet.copy(alpha = 0.25f)
+        AnimatedVisibility(
+            visibleState = transitionState,
+            enter = fadeIn(animationSpec = tween(durationMillis = 150)) + scaleIn(
+                initialScale = 0.16f,
+                transformOrigin = scaleOrigin,
+                animationSpec = spring(
+                    dampingRatio = 0.78f,
+                    stiffness = Spring.StiffnessMediumLow
                 )
-                .clip(RoundedCornerShape(26.dp))
-                .background(containerBg)
-                .drawBehind {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                accentCyan.copy(alpha = if (darkTheme) 0.16f else 0.10f),
-                                accentViolet.copy(alpha = if (darkTheme) 0.08f else 0.04f),
-                                Color.Transparent
-                            ),
-                            center = Offset(size.width * 0.85f, size.height * 0.12f),
-                            radius = size.width * 0.8f
-                        )
-                    )
-                    drawLine(
-                        color = if (darkTheme) Color(0x38FFFFFF) else Color(0x99FFFFFF),
-                        start = Offset(24.dp.toPx(), 1.dp.toPx()),
-                        end = Offset(size.width - 24.dp.toPx(), 1.dp.toPx()),
-                        strokeWidth = 1.4.dp.toPx()
-                    )
-                }
-                .border(1.4.dp, borderBrush, RoundedCornerShape(26.dp))
-                .padding(18.dp)
-                .testTag("luxury_sort_dialog")
+            ),
+            exit = fadeOut(animationSpec = tween(durationMillis = 130)) + scaleOut(
+                targetScale = 0.16f,
+                transformOrigin = scaleOrigin,
+                animationSpec = tween(durationMillis = 140)
+            ),
+            label = "luxury_sort_button_emerge"
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.88f)
+                    .widthIn(min = 270.dp, max = 340.dp)
+                    .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 12.dp)
+                    .shadow(
+                        elevation = if (darkTheme) 18.dp else 12.dp,
+                        shape = popoverShape,
+                        ambientColor = accentCyan.copy(alpha = 0.28f),
+                        spotColor = accentViolet.copy(alpha = 0.26f)
+                    )
+                    .clip(popoverShape)
+                    .background(containerBg)
+                    .drawBehind {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    accentCyan.copy(alpha = if (darkTheme) 0.18f else 0.11f),
+                                    accentViolet.copy(alpha = if (darkTheme) 0.09f else 0.05f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(
+                                    x = if (isRtl) size.width * 0.12f else size.width * 0.88f,
+                                    y = size.height * 0.08f
+                                ),
+                                radius = size.width * 0.85f
+                            )
+                        )
+                        drawLine(
+                            color = if (darkTheme) Color(0x40FFFFFF) else Color(0xAAFFFFFF),
+                            start = Offset(20.dp.toPx(), 1.dp.toPx()),
+                            end = Offset(size.width - 20.dp.toPx(), 1.dp.toPx()),
+                            strokeWidth = 1.4.dp.toPx()
+                        )
+                    }
+                    .border(1.4.dp, borderBrush, popoverShape)
+                    .padding(16.dp)
+                    .testTag("luxury_sort_dialog")
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1362,6 +1418,7 @@ private fun LuxurySortSelectorDialog(
                     }
                 }
             }
+        }
         }
     }
 }
