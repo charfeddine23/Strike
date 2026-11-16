@@ -197,12 +197,17 @@ fun LiquidGlassApp(
     var showShieldDropdown by remember { mutableStateOf(false) }
     var showStartDateDialog by remember { mutableStateOf(false) }
     var startedUpdateFromModal by remember { mutableStateOf(false) }
-    var updateDialogDismissed by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Check for updates & refresh dynamic task cycles every time the user enters or returns to the app
+    // Automatically check for updates when entering the app (including after pattern unlock)
+    LaunchedEffect(Unit) {
+        viewModel.refreshTaskCycles()
+        viewModel.checkForAppUpdate(isAutoCheck = true)
+    }
+
+    // Check for updates & refresh dynamic task cycles every time the user returns to the app
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -422,8 +427,8 @@ fun LiquidGlassApp(
         )
     }
 
-    // Optional In-App Update Card Dialog (user can update immediately or choose "ربما لاحقا")
-    val shouldShowUpdateModal = !updateDialogDismissed && !showSettingsDialog && when (appUpdateState) {
+    // Mandatory In-App Update Card Dialog (auto-triggered on app entry whenever a newer version is found)
+    val shouldShowUpdateModal = when (appUpdateState) {
         is AppUpdateState.UpdateAvailable,
         is AppUpdateState.Downloading,
         is AppUpdateState.ReadyToInstall -> true
@@ -431,10 +436,17 @@ fun LiquidGlassApp(
         else -> false
     }
 
+    LaunchedEffect(shouldShowUpdateModal) {
+        if (shouldShowUpdateModal && showSettingsDialog) {
+            showSettingsDialog = false
+        }
+    }
+
     if (shouldShowUpdateModal) {
         AppUpdateCardDialog(
             state = appUpdateState,
             currentLang = currentLang,
+            isMandatory = true,
             onUpdateClick = { release ->
                 startedUpdateFromModal = true
                 viewModel.downloadAppUpdate(release)
@@ -445,9 +457,7 @@ fun LiquidGlassApp(
             onRetryClick = {
                 viewModel.checkForAppUpdate(isAutoCheck = false)
             },
-            onDismiss = {
-                updateDialogDismissed = true
-            }
+            onDismiss = {}
         )
     }
 }

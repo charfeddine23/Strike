@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -52,9 +53,8 @@ import com.example.data.update.GitHubReleaseInfo
 import java.io.File
 
 /**
- * Compact, floating Optional In-App Update Card Dialog.
- * Matches the dark charcoal aesthetic with the circular crimson rocket emblem,
- * crisp Arabic hierarchy, full-width vibrant red CTA pill button, and "ربما لاحقا" dismiss option.
+ * Compact, floating In-App Update Card Dialog.
+ * Supports mandatory update mode (cannot be skipped with "Maybe Later", back press, or outside tap).
  */
 @Composable
 fun AppUpdateCardDialog(
@@ -63,7 +63,8 @@ fun AppUpdateCardDialog(
     onInstallClick: (File) -> Unit,
     onRetryClick: () -> Unit,
     onDismiss: () -> Unit,
-    currentLang: String = "ar"
+    currentLang: String = "ar",
+    isMandatory: Boolean = true
 ) {
     val context = LocalContext.current
     val isAr = currentLang == "ar"
@@ -80,12 +81,18 @@ fun AppUpdateCardDialog(
         else -> "Maybe Later"
     }
 
+    if (isMandatory) {
+        BackHandler(enabled = true) {
+            // Mandatory update cannot be bypassed with Back navigation
+        }
+    }
+
     Dialog(
-        onDismissRequest = { if (!isDownloading) onDismiss() },
+        onDismissRequest = { if (!isMandatory && !isDownloading) onDismiss() },
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
-            dismissOnBackPress = !isDownloading,
-            dismissOnClickOutside = !isDownloading
+            dismissOnBackPress = !isMandatory && !isDownloading,
+            dismissOnClickOutside = !isMandatory && !isDownloading
         )
     ) {
 
@@ -129,6 +136,9 @@ fun AppUpdateCardDialog(
                             else -> "Update Failed"
                         }
                         else -> when {
+                            isMandatory && isAr -> "تحديث إجباري متاح"
+                            isMandatory && isFr -> "Mise à jour obligatoire"
+                            isMandatory -> "Mandatory Update Required"
                             isAr -> "تحديث جديد متاح"
                             isFr -> "Nouvelle mise à jour disponible"
                             else -> "New Update Available"
@@ -146,7 +156,7 @@ fun AppUpdateCardDialog(
                 Text(
                     text = when (state) {
                         is AppUpdateState.UpdateAvailable -> when {
-                            isAr -> "تحديث جديد • v${state.release.versionName}"
+                            isAr -> "إصدار جديد • v${state.release.versionName}"
                             isFr -> "Nouvelle version • v${state.release.versionName}"
                             else -> "New Version • v${state.release.versionName}"
                         }
@@ -157,9 +167,9 @@ fun AppUpdateCardDialog(
                         }
                         is AppUpdateState.ReadyToInstall -> "v${state.release.versionName}"
                         is AppUpdateState.Error -> when {
-                            isAr -> "تحديث جديد"
-                            isFr -> "Nouvelle mise à jour"
-                            else -> "New Update"
+                            isAr -> "تحديث إجباري"
+                            isFr -> "Mise à jour obligatoire"
+                            else -> "Mandatory Update"
                         }
                         else -> when {
                             isAr -> "تحديث جديد"
@@ -180,6 +190,9 @@ fun AppUpdateCardDialog(
                     is AppUpdateState.UpdateAvailable -> {
                         Text(
                             text = when {
+                                isMandatory && isAr -> "يجب تحديث التطبيق للاستمرار في الاستخدام"
+                                isMandatory && isFr -> "Vous devez mettre à jour l'application pour continuer"
+                                isMandatory -> "Please update the app to continue using it"
                                 isAr -> "تحديث جديد متاح على GitHub"
                                 isFr -> "Une nouvelle mise à jour est disponible sur GitHub"
                                 else -> "A new version is available from GitHub"
@@ -295,21 +308,23 @@ fun AppUpdateCardDialog(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        if (!isMandatory) {
+                            Spacer(modifier = Modifier.height(6.dp))
 
-                        TextButton(
-                            onClick = onDismiss,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .testTag("modal_maybe_later_btn")
-                        ) {
-                            Text(
-                                text = laterLabel,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = mutedText
-                            )
+                            TextButton(
+                                onClick = onDismiss,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .testTag("modal_maybe_later_btn")
+                            ) {
+                                Text(
+                                    text = laterLabel,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = mutedText
+                                )
+                            }
                         }
                     }
 
@@ -363,21 +378,23 @@ fun AppUpdateCardDialog(
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        if (!isMandatory) {
+                            Spacer(modifier = Modifier.height(6.dp))
 
-                        TextButton(
-                            onClick = onDismiss,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .testTag("modal_maybe_later_btn")
-                        ) {
-                            Text(
-                                text = laterLabel,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = mutedText
-                            )
+                            TextButton(
+                                onClick = onDismiss,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .testTag("modal_maybe_later_btn")
+                            ) {
+                                Text(
+                                    text = laterLabel,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = mutedText
+                                )
+                            }
                         }
                     }
 
@@ -421,19 +438,21 @@ fun AppUpdateCardDialog(
                             )
                         }
 
-                        TextButton(
-                            onClick = onDismiss,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .testTag("modal_maybe_later_btn")
-                        ) {
-                            Text(
-                                text = laterLabel,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = mutedText
-                            )
+                        if (!isMandatory) {
+                            TextButton(
+                                onClick = onDismiss,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .testTag("modal_maybe_later_btn")
+                            ) {
+                                Text(
+                                    text = laterLabel,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = mutedText
+                                )
+                            }
                         }
                     }
 

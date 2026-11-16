@@ -794,6 +794,7 @@ class IndividualViewModel(
     }
 
     fun checkForAppUpdate(isAutoCheck: Boolean = false) {
+        if (isAutoCheck && !isAutoUpdateEnabled.value) return
         viewModelScope.launch {
             AppUpdateManager.checkForUpdates(
                 currentVersion = BuildConfig.VERSION_NAME,
