@@ -2,7 +2,7 @@ package com.example
 
 import android.content.res.Configuration
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.compose.setContent
@@ -87,7 +87,7 @@ import com.example.ui.components.AppUpdateCardDialog
 import com.example.ui.components.DnaHeaderIcon
 import com.example.ui.components.DynamicStreakShieldHeaderButton
 import com.example.ui.components.FlameEnergyBanner
-import com.example.ui.components.FullscreenPatternUnlockScreen
+import com.example.ui.components.FullscreenFingerprintUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.LuxurySettingsMenuButton
@@ -123,7 +123,7 @@ enum class AppScreen {
     PROFILE
 }
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private val viewModel: IndividualViewModel by viewModels {
         IndividualViewModel.provideFactory(application)
     }
@@ -163,11 +163,10 @@ class MainActivity : ComponentActivity() {
                 StrikePulseTheme(darkTheme = isDarkTheme) {
                     LiquidGlassBackground(darkTheme = isDarkTheme) {
                         if (!isAppUnlocked) {
-                            FullscreenPatternUnlockScreen(
-                                onUnlockSuccess = { /* state handled in viewmodel */ },
-                                onVerifyPattern = { pattern ->
-                                    viewModel.verifyAndUnlock(pattern)
-                                }
+                            val isHapticEnabled by viewModel.isHapticFeedbackEnabled
+                            FullscreenFingerprintUnlockScreen(
+                                onUnlockSuccess = { viewModel.unlockWithFingerprint() },
+                                isHapticEnabled = isHapticEnabled
                             )
                         } else {
                             LiquidGlassApp(
@@ -201,7 +200,7 @@ fun LiquidGlassApp(
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Automatically check for updates when entering the app (including after pattern unlock)
+    // Automatically check for updates when entering the app (including after fingerprint unlock)
     LaunchedEffect(Unit) {
         viewModel.refreshTaskCycles()
         viewModel.checkForAppUpdate(isAutoCheck = true)

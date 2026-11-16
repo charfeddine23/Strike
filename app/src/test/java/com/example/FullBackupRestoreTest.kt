@@ -194,6 +194,7 @@ class FullBackupRestoreTest {
         secPrefs.selectedLanguage = "en"
         secPrefs.isHapticFeedbackEnabled = false
         secPrefs.isAutoUpdateEnabled = false
+        secPrefs.isFingerprintLockEnabled = true
         secPrefs.savedPattern = "1-2-3-6-9"
         secPrefs.isPatternLockEnabled = true
 
@@ -287,6 +288,7 @@ class FullBackupRestoreTest {
         assertEquals("en", restoredSec.selectedLanguage)
         assertFalse(restoredSec.isHapticFeedbackEnabled)
         assertFalse(restoredSec.isAutoUpdateEnabled)
+        assertTrue(restoredSec.isFingerprintLockEnabled)
         assertTrue(restoredSec.isPatternLockEnabled)
         assertEquals("1-2-3-6-9", restoredSec.savedPattern)
     }

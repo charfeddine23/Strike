@@ -9,12 +9,17 @@ class SecurityPreferences(context: Context) {
         context.getSharedPreferences("strikepulse_security_prefs", Context.MODE_PRIVATE)
 
     companion object {
+        private const val KEY_FINGERPRINT_LOCK_ENABLED = "fingerprint_lock_enabled"
         private const val KEY_PATTERN_LOCK_ENABLED = "pattern_lock_enabled"
         private const val KEY_SAVED_PATTERN = "saved_pattern"
         private const val KEY_APP_LANGUAGE = "app_language"
         private const val KEY_HAPTIC_ENABLED = "haptic_feedback_enabled"
         private const val KEY_AUTO_UPDATE_ENABLED = "auto_update_enabled"
     }
+
+    var isFingerprintLockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_FINGERPRINT_LOCK_ENABLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_FINGERPRINT_LOCK_ENABLED, value).apply()
 
     var isPatternLockEnabled: Boolean
         get() = prefs.getBoolean(KEY_PATTERN_LOCK_ENABLED, false)
@@ -50,6 +55,7 @@ class SecurityPreferences(context: Context) {
 
     fun exportSnapshot(): JSONObject {
         return JSONObject().apply {
+            put("isFingerprintLockEnabled", isFingerprintLockEnabled)
             put("isPatternLockEnabled", isPatternLockEnabled)
             put("savedPattern", savedPattern ?: "")
             put("selectedLanguage", selectedLanguage)
@@ -60,6 +66,7 @@ class SecurityPreferences(context: Context) {
 
     fun restoreSnapshot(json: JSONObject) {
         val lang = json.optString("selectedLanguage", selectedLanguage).ifBlank { "ar" }
+        val fingerprintEnabled = json.optBoolean("isFingerprintLockEnabled", isFingerprintLockEnabled)
         val patternEnabled = json.optBoolean("isPatternLockEnabled", isPatternLockEnabled)
         val pattern = json.optString("savedPattern", "").ifBlank { null }
         val haptic = json.optBoolean("isHapticFeedbackEnabled", isHapticFeedbackEnabled)
@@ -67,6 +74,7 @@ class SecurityPreferences(context: Context) {
 
         prefs.edit().apply {
             putString(KEY_APP_LANGUAGE, lang)
+            putBoolean(KEY_FINGERPRINT_LOCK_ENABLED, fingerprintEnabled)
             putBoolean(KEY_PATTERN_LOCK_ENABLED, patternEnabled && pattern != null)
             if (pattern != null) putString(KEY_SAVED_PATTERN, pattern) else remove(KEY_SAVED_PATTERN)
             putBoolean(KEY_HAPTIC_ENABLED, haptic)

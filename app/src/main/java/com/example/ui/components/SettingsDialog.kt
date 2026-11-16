@@ -44,7 +44,7 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Gesture
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.Language
@@ -63,7 +63,10 @@ import androidx.compose.material.icons.filled.Vibration
 import com.example.BuildConfig
 import com.example.data.update.AppUpdateManager
 import com.example.data.update.AppUpdateState
+import com.example.util.BiometricAvailability
 import com.example.util.CallNotificationHelper
+import com.example.util.FingerprintAuthHelper
+import com.example.util.findFragmentActivity
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -84,7 +87,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
@@ -119,8 +121,6 @@ import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
  * Right-Anchored Partial-Width Slide-Out Settings Drawer:
@@ -305,12 +305,17 @@ private fun SettingsPanelBody(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val isPatternLockEnabled by viewModel.isPatternLockEnabled
+    val isFingerprintLockEnabled by viewModel.isFingerprintLockEnabled
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
     val isAutoUpdateEnabled by viewModel.isAutoUpdateEnabled
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
-    var showPatternSetupDialog by remember { mutableStateOf(false) }
+    val biometricAvailability = remember(context) { FingerprintAuthHelper.checkAvailability(context) }
+    val promptTitleStr = stringResource(R.string.fingerprint_prompt_title)
+    val setupSubtitleStr = stringResource(R.string.fingerprint_setup_subtitle)
+    val cancelLabelStr = stringResource(R.string.cancel)
+    val notEnrolledMsgStr = stringResource(R.string.fingerprint_not_enrolled)
+    val unavailableMsgStr = stringResource(R.string.fingerprint_unavailable)
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     var showResetAllLevelsConfirmDialog by remember { mutableStateOf(false) }
@@ -428,7 +433,7 @@ private fun SettingsPanelBody(
             }
         }
 
-                // 1. Pattern Lock Section (قفل التطبيق بالنقش)
+                // 1. Fingerprint Authentication Section (قفل التطبيق ببصمة الإصبع)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -447,7 +452,7 @@ private fun SettingsPanelBody(
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Gesture,
+                                imageVector = Icons.Default.Fingerprint,
                                 contentDescription = null,
                                 tint = activeCyan,
                                 modifier = Modifier.size(24.dp)
@@ -455,13 +460,13 @@ private fun SettingsPanelBody(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = stringResource(R.string.pattern_lock),
+                                    text = stringResource(R.string.fingerprint_lock),
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
                                     color = titleColor
                                 )
                                 Text(
-                                    text = stringResource(R.string.pattern_lock_desc),
+                                    text = stringResource(R.string.fingerprint_lock_desc),
                                     fontSize = 11.sp,
                                     color = descColor
                                 )
@@ -469,64 +474,104 @@ private fun SettingsPanelBody(
                         }
 
                         Switch(
-                            checked = isPatternLockEnabled,
+                            checked = isFingerprintLockEnabled,
                             onCheckedChange = { enabled ->
-                                if (enabled) {
-                                    showPatternSetupDialog = true
+                                if (!enabled) {
+                                    viewModel.setFingerprintLockEnabled(false)
                                 } else {
-                                    viewModel.disablePatternLock()
+                                    when (FingerprintAuthHelper.checkAvailability(context)) {
+                                        BiometricAvailability.AVAILABLE -> {
+                                            val activity = context.findFragmentActivity()
+                                            if (activity != null) {
+                                                FingerprintAuthHelper.showFingerprintPrompt(
+                                                    activity = activity,
+                                                    title = promptTitleStr,
+                                                    subtitle = setupSubtitleStr,
+                                                    cancelButtonText = cancelLabelStr,
+                                                    onSuccess = {
+                                                        viewModel.setFingerprintLockEnabled(true)
+                                                    },
+                                                    onError = { err ->
+                                                        if (err.isNotBlank()) {
+                                                            viewModel.notifyMessage(err)
+                                                        }
+                                                    }
+                                                )
+                                            } else {
+                                                viewModel.notifyMessage(unavailableMsgStr)
+                                            }
+                                        }
+                                        BiometricAvailability.NONE_ENROLLED -> {
+                                            viewModel.notifyMessage(notEnrolledMsgStr)
+                                        }
+                                        BiometricAvailability.UNAVAILABLE -> {
+                                            viewModel.notifyMessage(unavailableMsgStr)
+                                        }
+                                    }
                                 }
                             },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = activeCyan,
                                 checkedTrackColor = activeCyan.copy(alpha = 0.4f)
                             ),
-                            modifier = Modifier.testTag("pattern_lock_switch")
+                            modifier = Modifier.testTag("fingerprint_lock_switch")
                         )
                     }
 
-                    if (isPatternLockEnabled) {
+                    if (biometricAvailability == BiometricAvailability.NONE_ENROLLED) {
                         Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        OutlinedButton(
+                            onClick = { FingerprintAuthHelper.openSecuritySettings(context) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("fingerprint_settings_enroll_btn"),
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, activeCyan.copy(alpha = 0.55f))
                         ) {
-                            OutlinedButton(
-                                onClick = { showPatternSetupDialog = true },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(40.dp),
-                                shape = RoundedCornerShape(10.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, cardBorder)
-                            ) {
-                                Text(stringResource(R.string.change_pattern), fontSize = 12.sp, color = titleColor)
-                            }
+                            Icon(
+                                imageVector = Icons.Default.Fingerprint,
+                                contentDescription = null,
+                                tint = activeCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.fingerprint_open_settings),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = activeCyan
+                            )
+                        }
+                    }
 
-                            Button(
-                                onClick = {
-                                    onDismiss()
-                                    onLockAppNow()
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(40.dp),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = sensitiveRed)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Lock,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = stringResource(R.string.lock_now),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
+                    if (isFingerprintLockEnabled) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = {
+                                onDismiss()
+                                onLockAppNow()
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("lock_app_now_btn"),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = sensitiveRed)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(R.string.lock_now),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
                         }
                     }
                 }
@@ -1637,133 +1682,4 @@ private fun SettingsPanelBody(
         )
     }
 
-    // Modal Dialog to Setup or Change Pattern Lock
-    if (showPatternSetupDialog) {
-        PatternSetupDialog(
-            onDismiss = { showPatternSetupDialog = false },
-            onPatternSaved = { pattern ->
-                viewModel.setPatternLock(pattern)
-                showPatternSetupDialog = false
-            }
-        )
-    }
-}
-
-/**
- * Multi-step pattern registration dialog (Step 1: Draw pattern, Step 2: Confirm pattern)
- */
-@Composable
-fun PatternSetupDialog(
-    onDismiss: () -> Unit,
-    onPatternSaved: (String) -> Unit
-) {
-    val drawNewPatternStr = stringResource(R.string.draw_new_pattern)
-    val confirmPatternStr = stringResource(R.string.confirm_pattern)
-    val minPointsErrorStr = stringResource(R.string.pattern_min_points_error)
-    val confirmedSuccessStr = stringResource(R.string.pattern_confirmed_success)
-    val mismatchRetryStr = stringResource(R.string.pattern_mismatch_retry)
-
-    var firstPattern by remember { mutableStateOf<String?>(null) }
-    var instructionText by remember { mutableStateOf(drawNewPatternStr) }
-    var status by remember { mutableStateOf(PatternStatus.IDLE) }
-    val scope = rememberCoroutineScope()
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Color(0xF00A1020))
-                .border(1.5.dp, NeonViolet, RoundedCornerShape(24.dp))
-                .padding(20.dp)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.set_pattern_title),
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 16.sp
-                    )
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
-                        Icon(imageVector = Icons.Default.Close, contentDescription = null)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = instructionText,
-                    fontSize = 13.sp,
-                    color = if (status == PatternStatus.ERROR) NeonRose else NeonCyan,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                PatternLockCanvas(
-                    modifier = Modifier.fillMaxWidth(),
-                    status = status,
-                    onPatternEntered = { entered ->
-                        val nodeCount = entered.split("-").size
-                        if (firstPattern == null) {
-                            if (nodeCount < 4) {
-                                status = PatternStatus.ERROR
-                                instructionText = minPointsErrorStr
-                                scope.launch {
-                                    delay(900)
-                                    status = PatternStatus.IDLE
-                                    instructionText = drawNewPatternStr
-                                }
-                            } else {
-                                firstPattern = entered
-                                instructionText = confirmPatternStr
-                                status = PatternStatus.IDLE
-                            }
-                        } else {
-                            if (entered == firstPattern) {
-                                status = PatternStatus.SUCCESS
-                                instructionText = confirmedSuccessStr
-                                scope.launch {
-                                    delay(400)
-                                    onPatternSaved(entered)
-                                }
-                            } else {
-                                status = PatternStatus.ERROR
-                                instructionText = mismatchRetryStr
-                                scope.launch {
-                                    delay(900)
-                                    firstPattern = null
-                                    status = PatternStatus.IDLE
-                                    instructionText = drawNewPatternStr
-                                }
-                            }
-                        }
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                TextButton(
-                    onClick = {
-                        firstPattern = null
-                        instructionText = drawNewPatternStr
-                        status = PatternStatus.IDLE
-                    }
-                ) {
-                    Text(stringResource(R.string.redraw_from_start), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-    }
 }

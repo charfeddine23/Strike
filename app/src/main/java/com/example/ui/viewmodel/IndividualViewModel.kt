@@ -79,12 +79,12 @@ class IndividualViewModel(
     private val securityPrefs = SecurityPreferences(application)
     val backupManager = BackupManager(repository)
 
-    // Security, Pattern Lock, Haptics & Auto-Update
-    val isPatternLockEnabled = mutableStateOf(securityPrefs.isPatternLockEnabled)
+    // Security, Fingerprint Authentication, Haptics & Auto-Update
+    val isFingerprintLockEnabled = mutableStateOf(securityPrefs.isFingerprintLockEnabled)
     val isHapticFeedbackEnabled = mutableStateOf(securityPrefs.isHapticFeedbackEnabled)
     val isAutoUpdateEnabled = mutableStateOf(securityPrefs.isAutoUpdateEnabled)
     val appUpdateState: StateFlow<AppUpdateState> = AppUpdateManager.state
-    private val _isAppUnlocked = MutableStateFlow(!securityPrefs.isPatternLockEnabled)
+    private val _isAppUnlocked = MutableStateFlow(!securityPrefs.isFingerprintLockEnabled)
     val isAppUnlocked: StateFlow<Boolean> = _isAppUnlocked.asStateFlow()
 
     // Events flow for snackbars/toasts
@@ -712,40 +712,35 @@ class IndividualViewModel(
         RoadmapManager.addXp(getApplication(), amount)
     }
 
-    // Security & Pattern Lock Operations
-    fun verifyAndUnlock(pattern: String): Boolean {
-        val matches = securityPrefs.verifyPattern(pattern)
-        if (matches) {
-            _isAppUnlocked.value = true
-        }
-        return matches
+    // Security & Fingerprint Authentication Operations
+    fun unlockWithFingerprint() {
+        _isAppUnlocked.value = true
     }
 
-    fun setPatternLock(newPattern: String) {
-        securityPrefs.savedPattern = newPattern
-        securityPrefs.isPatternLockEnabled = true
-        isPatternLockEnabled.value = true
+    fun setFingerprintLockEnabled(enabled: Boolean) {
+        securityPrefs.isFingerprintLockEnabled = enabled
+        isFingerprintLockEnabled.value = enabled
         _isAppUnlocked.value = true
         viewModelScope.launch {
-            val msg = when (currentLanguage.value) {
-                "ar" -> "تم تفعيل قفل النقش بنجاح"
-                "fr" -> "Verrouillage par schéma activé avec succès"
-                else -> "Pattern lock enabled successfully"
+            val msg = if (enabled) {
+                when (currentLanguage.value) {
+                    "ar" -> "تم تفعيل قفل البصمة بنجاح"
+                    "fr" -> "Verrouillage par empreinte activé avec succès"
+                    else -> "Fingerprint authentication enabled"
+                }
+            } else {
+                when (currentLanguage.value) {
+                    "ar" -> "تم إلغاء قفل البصمة"
+                    "fr" -> "Verrouillage par empreinte désactivé"
+                    else -> "Fingerprint authentication disabled"
+                }
             }
             emitMessage(msg)
         }
     }
 
-    fun disablePatternLock() {
-        securityPrefs.clearPattern()
-        isPatternLockEnabled.value = false
-        _isAppUnlocked.value = true
+    fun notifyMessage(msg: String) {
         viewModelScope.launch {
-            val msg = when (currentLanguage.value) {
-                "ar" -> "تم إلغاء قفل النقش"
-                "fr" -> "Verrouillage par schéma désactivé"
-                else -> "Pattern lock disabled"
-            }
             emitMessage(msg)
         }
     }
@@ -851,7 +846,7 @@ class IndividualViewModel(
     }
 
     fun lockApp() {
-        if (isPatternLockEnabled.value) {
+        if (isFingerprintLockEnabled.value) {
             _isAppUnlocked.value = false
         }
     }
@@ -1342,7 +1337,7 @@ class IndividualViewModel(
             val result = backupManager.importBackup(context, sourceUri, replaceExisting, lang)
             if (result.success) {
                 _currentLanguage.value = securityPrefs.selectedLanguage
-                isPatternLockEnabled.value = securityPrefs.isPatternLockEnabled
+                isFingerprintLockEnabled.value = securityPrefs.isFingerprintLockEnabled
                 isHapticFeedbackEnabled.value = securityPrefs.isHapticFeedbackEnabled
                 isAutoUpdateEnabled.value = securityPrefs.isAutoUpdateEnabled
                 _isAppUnlocked.value = true
