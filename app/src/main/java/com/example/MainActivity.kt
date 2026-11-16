@@ -438,15 +438,12 @@ fun LiquidGlassApp(
         )
     }
 
-    // Records Dashboard Modal Window (Total Records, Top Striker, Highest BOOST, Avg Size & Yearly Strikes)
+    // Records Dashboard Modal Window (Total Records, Top Striker, Highest BOOST, Avg Size & Yearly Strikes Dashboard)
     if (showRecordsDashboardDialog) {
         RecordsDashboardDialog(
+            viewModel = viewModel,
             allList = allIndividuals,
             currentLang = currentLang,
-            onOpenYearlyDashboard = {
-                viewModel.selectStrikeIndividual(allIndividuals.firstOrNull()?.id ?: 1L)
-                currentScreen = AppScreen.STRIKE
-            },
             onDismiss = { showRecordsDashboardDialog = false },
             isDarkTheme = isDarkTheme
         )

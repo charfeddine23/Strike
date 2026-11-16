@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -7,6 +8,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,24 +18,32 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Icon
@@ -41,6 +53,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,8 +72,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
+import com.example.ui.screens.SwipeableStrikeLogItem
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
@@ -66,8 +83,11 @@ import com.example.ui.theme.DayPurple
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
+import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
+import com.example.ui.viewmodel.IndividualViewModel
+import com.example.ui.viewmodel.YearlyStrikeStat
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -254,13 +274,13 @@ fun RecordsDashboardBanner(
 
 /**
  * Dashboard Modal Window containing Total Records, Top Striker, Highest BOOST,
- * Avg Size, and Yearly Strikes Dashboard moved off the main Records feed.
+ * Avg Size, and the complete Yearly Strikes Dashboard (Yearly Analytics moved from StrikeScreen).
  */
 @Composable
 fun RecordsDashboardDialog(
+    viewModel: IndividualViewModel,
     allList: List<Individual>,
     currentLang: String,
-    onOpenYearlyDashboard: () -> Unit,
     onDismiss: () -> Unit,
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
@@ -272,6 +292,12 @@ fun RecordsDashboardDialog(
         (allList.map { it.size }.average() * 10.0).toLong() / 10.0
     } else 0.0
 
+    val yearlyStats by viewModel.yearlyStrikeStats.collectAsStateWithLifecycle()
+    val allTimeStrikes by viewModel.allTimeStrikesCount.collectAsStateWithLifecycle()
+    val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
+
+    var showYearlyAnalytics by remember { mutableStateOf(false) }
+
     val dialogBg = if (isDarkTheme) Color(0xF50B1324) else Color(0xFFF8FAFC)
     val dialogBorder = if (isDarkTheme) NeonCyan.copy(alpha = 0.45f) else Color(0xFFCBD5E1)
     val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
@@ -280,25 +306,26 @@ fun RecordsDashboardDialog(
     val accentViolet = if (isDarkTheme) NeonViolet else DayPurple
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            if (showYearlyAnalytics) {
+                showYearlyAnalytics = false
+            } else {
+                onDismiss()
+            }
+        },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .widthIn(max = 520.dp)
+                .fillMaxWidth(0.94f)
+                .widthIn(max = 560.dp)
                 .clip(RoundedCornerShape(24.dp))
                 .background(dialogBg)
                 .border(1.5.dp, dialogBorder, RoundedCornerShape(24.dp))
                 .padding(18.dp)
                 .testTag("records_dashboard_dialog")
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -309,34 +336,64 @@ fun RecordsDashboardDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(accentCyan.copy(alpha = 0.16f))
-                                .border(1.dp, accentCyan.copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Dashboard,
-                                contentDescription = null,
-                                tint = accentCyan,
-                                modifier = Modifier.size(20.dp)
-                            )
+                        if (showYearlyAnalytics) {
+                            IconButton(
+                                onClick = { showYearlyAnalytics = false },
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(accentEmerald.copy(alpha = 0.16f))
+                                    .border(1.dp, accentEmerald.copy(alpha = 0.55f), CircleShape)
+                                    .testTag("dashboard_yearly_back_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.cancel),
+                                    tint = accentEmerald,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(accentCyan.copy(alpha = 0.16f))
+                                    .border(1.dp, accentCyan.copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Dashboard,
+                                    contentDescription = null,
+                                    tint = accentCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = stringResource(R.string.records_dashboard_window_title),
+                                text = if (showYearlyAnalytics) {
+                                    stringResource(R.string.yearly_dashboard_title)
+                                } else {
+                                    stringResource(R.string.records_dashboard_window_title)
+                                },
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontFamily = PlusJakartaSans,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = stringResource(R.string.records_dashboard_banner_subtitle),
+                                text = if (showYearlyAnalytics) {
+                                    stringResource(R.string.yearly_analytics)
+                                } else {
+                                    stringResource(R.string.records_dashboard_banner_subtitle)
+                                },
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (showYearlyAnalytics) accentEmerald else MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -361,126 +418,419 @@ fun RecordsDashboardDialog(
                     }
                 }
 
-                // Telemetry Row 1: Total Records & Top Striker
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    GlassStatSummaryCard(
-                        title = stringResource(R.string.total_records),
-                        value = "$totalCount",
-                        icon = Icons.Default.People,
-                        accentColor = accentCyan,
-                        modifier = Modifier.weight(1f),
-                        testTag = "stat_total_records"
-                    )
-                    GlassStatSummaryCard(
-                        title = stringResource(R.string.top_striker),
-                        value = topStriker?.let { "${it.strikeCount} (${it.fullName.take(6)})" } ?: "—",
-                        icon = Icons.Default.Bolt,
-                        accentColor = accentAmber,
-                        modifier = Modifier.weight(1f),
-                        testTag = "stat_top_striker"
-                    )
-                }
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Telemetry Row 2: Highest BOOST & Avg Size
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    GlassStatSummaryCard(
-                        title = stringResource(R.string.highest_boost),
-                        value = highestBoost?.let { "${it.boost}" } ?: "—",
-                        icon = Icons.Default.Speed,
-                        accentColor = accentEmerald,
-                        modifier = Modifier.weight(1f),
-                        testTag = "stat_highest_boost"
-                    )
-                    GlassStatSummaryCard(
-                        title = stringResource(R.string.avg_size),
-                        value = "$avgSize",
-                        icon = Icons.Default.FitnessCenter,
-                        accentColor = accentViolet,
-                        modifier = Modifier.weight(1f),
-                        testTag = "stat_avg_size"
-                    )
-                }
-
-                // Yearly Strikes Analytics Card
-                LiquidGlassCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            onDismiss()
-                            onOpenYearlyDashboard()
-                        }
-                        .testTag("dashboard_yearly_strikes_card"),
-                    shape = RoundedCornerShape(18.dp),
-                    darkTheme = isDarkTheme
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(accentEmerald.copy(alpha = 0.2f))
-                                    .border(1.dp, accentEmerald, RoundedCornerShape(10.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Bolt,
-                                    contentDescription = null,
-                                    tint = accentEmerald,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.yearly_dashboard_title),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = if (isAr) {
-                                        "تتبع إجمالي الضربات لكل سنة • اضغط للعرض"
-                                    } else {
-                                        "Track total strikes by year • Tap to view"
-                                    },
-                                    fontSize = 11.sp,
-                                    color = accentEmerald
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Box(
+                AnimatedContent(
+                    targetState = showYearlyAnalytics,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
+                    },
+                    label = "dashboard_modal_page_switch"
+                ) { showingYearly ->
+                    if (!showingYearly) {
+                        // Dashboard Overview Page
+                        Column(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(accentCyan.copy(alpha = 0.2f))
-                                .border(1.dp, accentCyan, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(
-                                text = if (isAr) "عرض اللوحة" else "View Board",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = accentCyan
-                            )
+                            // Telemetry Row 1: Total Records & Top Striker
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                GlassStatSummaryCard(
+                                    title = stringResource(R.string.total_records),
+                                    value = "$totalCount",
+                                    icon = Icons.Default.People,
+                                    accentColor = accentCyan,
+                                    modifier = Modifier.weight(1f),
+                                    testTag = "stat_total_records"
+                                )
+                                GlassStatSummaryCard(
+                                    title = stringResource(R.string.top_striker),
+                                    value = topStriker?.let { "${it.strikeCount} (${it.fullName.take(6)})" } ?: "—",
+                                    icon = Icons.Default.Bolt,
+                                    accentColor = accentAmber,
+                                    modifier = Modifier.weight(1f),
+                                    testTag = "stat_top_striker"
+                                )
+                            }
+
+                            // Telemetry Row 2: Highest BOOST & Avg Size
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                GlassStatSummaryCard(
+                                    title = stringResource(R.string.highest_boost),
+                                    value = highestBoost?.let { "${it.boost}" } ?: "—",
+                                    icon = Icons.Default.Speed,
+                                    accentColor = accentEmerald,
+                                    modifier = Modifier.weight(1f),
+                                    testTag = "stat_highest_boost"
+                                )
+                                GlassStatSummaryCard(
+                                    title = stringResource(R.string.avg_size),
+                                    value = "$avgSize",
+                                    icon = Icons.Default.FitnessCenter,
+                                    accentColor = accentViolet,
+                                    modifier = Modifier.weight(1f),
+                                    testTag = "stat_avg_size"
+                                )
+                            }
+
+                            // Yearly Strikes Dashboard Card -> opens complete Yearly Analytics inside Dashboard
+                            LiquidGlassCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showYearlyAnalytics = true }
+                                    .testTag("dashboard_yearly_strikes_card"),
+                                shape = RoundedCornerShape(18.dp),
+                                darkTheme = isDarkTheme
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(accentEmerald.copy(alpha = 0.2f))
+                                                .border(1.dp, accentEmerald, RoundedCornerShape(10.dp)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Leaderboard,
+                                                contentDescription = null,
+                                                tint = accentEmerald,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(
+                                                text = stringResource(R.string.yearly_dashboard_title),
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = if (isAr) {
+                                                    "إحصائيات السنوات ($allTimeStrikes ضربة) • اضغط للعرض"
+                                                } else {
+                                                    "Yearly Analytics ($allTimeStrikes strikes) • Tap to view"
+                                                },
+                                                fontSize = 11.sp,
+                                                color = accentEmerald
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(accentCyan.copy(alpha = 0.2f))
+                                            .border(1.dp, accentCyan, RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isAr) "عرض اللوحة" else "View Board",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = accentCyan
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // Complete Yearly Strikes Dashboard (Moved Yearly Analytics from StrikeScreen)
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 560.dp)
+                                .testTag("dashboard_yearly_analytics_list"),
+                            contentPadding = PaddingValues(bottom = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Summary Banner Card
+                            item {
+                                LiquidGlassCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(18.dp),
+                                    darkTheme = isDarkTheme
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(42.dp)
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(accentEmerald.copy(alpha = 0.2f))
+                                                    .border(1.dp, accentEmerald, RoundedCornerShape(12.dp)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.CalendarMonth,
+                                                    contentDescription = null,
+                                                    tint = accentEmerald,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column {
+                                                Text(
+                                                    text = stringResource(R.string.yearly_analytics),
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = if (isAr) {
+                                                        "إحصائيات الضربات مجمّعة حسب كل سنة"
+                                                    } else {
+                                                        "Strike statistics grouped by year"
+                                                    },
+                                                    fontSize = 11.sp,
+                                                    color = accentEmerald
+                                                )
+                                            }
+                                        }
+
+                                        Column(horizontalAlignment = Alignment.End) {
+                                            Text(
+                                                text = "$allTimeStrikes",
+                                                fontSize = 24.sp,
+                                                fontWeight = FontWeight.Black,
+                                                color = accentEmerald
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.all_time_strikes),
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Yearly Breakdown Cards
+                            if (yearlyStats.isEmpty()) {
+                                item {
+                                    LiquidGlassCard(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(16.dp),
+                                        darkTheme = isDarkTheme
+                                    ) {
+                                        Text(
+                                            text = if (isAr) {
+                                                "لا توجد ضربات مسجّلة بعد في قاعدة البيانات."
+                                            } else {
+                                                "No strikes recorded yet in the database."
+                                            },
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+                            } else {
+                                items(yearlyStats, key = { "year_${it.year}" }) { stat ->
+                                    YearlyStatCard(stat = stat, darkTheme = isDarkTheme, isAr = isAr)
+                                }
+                            }
+
+                            // Detailed Historical Strike Log List
+                            item {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (isAr) "سجل الضربات التاريخي المفصّل" else "Detailed Historical Strike Log",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.swipe_to_delete_hint),
+                                        fontSize = 11.sp,
+                                        color = NeonRose.copy(alpha = 0.85f),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+
+                            items(allStrikeEvents, key = { "yearly_hist_${it.id}" }) { event ->
+                                SwipeableStrikeLogItem(
+                                    event = event,
+                                    onDelete = { viewModel.deleteStrikeEvent(it) }
+                                )
+                            }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun YearlyStatCard(
+    stat: YearlyStrikeStat,
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    isAr: Boolean = true
+) {
+    val yearBadgeBg = if (darkTheme) Color(0xFF0F2537) else Color(0x2200B4D8)
+    val yearBadgeBorder = if (darkTheme) NeonCyan else DayCyan
+    val yearTextColor = if (darkTheme) NeonCyan else DayCyan
+
+    val topBadgeBg = if (darkTheme) NeonAmber.copy(alpha = 0.2f) else Color(0x24F59E0B)
+    val topBadgeBorder = if (darkTheme) NeonAmber else DayOrange.copy(alpha = 0.5f)
+    val topBadgeColor = if (darkTheme) NeonAmber else DayOrange
+
+    val trackColor = if (darkTheme) Color(0x331E293B) else Color(0x35CBD5E1)
+    val progressBrush = if (darkTheme) {
+        Brush.horizontalGradient(listOf(NeonCyan, NeonEmerald))
+    } else {
+        Brush.horizontalGradient(listOf(DayCyan, DayEmerald))
+    }
+
+    LiquidGlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        darkTheme = darkTheme
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(yearBadgeBg)
+                            .border(1.5.dp, yearBadgeBorder, RoundedCornerShape(10.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "${stat.year}",
+                            fontWeight = FontWeight.Black,
+                            fontFamily = PlusJakartaSans,
+                            fontSize = 16.sp,
+                            color = yearTextColor
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = if (isAr) "${stat.totalStrikes} ضربة" else "${stat.totalStrikes} strikes",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = PlusJakartaSans,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (isAr) "${stat.eventCount} عملية تسجيل في السنة" else "${stat.eventCount} recorded events this year",
+                            fontSize = 11.sp,
+                            fontFamily = PlusJakartaSans,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(topBadgeBg)
+                        .border(1.dp, topBadgeBorder, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.EmojiEvents,
+                            contentDescription = null,
+                            tint = topBadgeColor,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = stat.topIndividualName,
+                            fontSize = 11.sp,
+                            fontFamily = PlusJakartaSans,
+                            fontWeight = FontWeight.Bold,
+                            color = topBadgeColor
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Glowing Progress Bar for the year proportion
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(CircleShape)
+                    .background(trackColor)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(stat.percentageOfAllTime)
+                        .height(8.dp)
+                        .clip(CircleShape)
+                        .background(progressBrush)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = if (isAr) {
+                        "الحصة من الإجمالي: ${(stat.percentageOfAllTime * 100).toInt()}%"
+                    } else {
+                        "Share of total: ${(stat.percentageOfAllTime * 100).toInt()}%"
+                    },
+                    fontSize = 10.sp,
+                    fontFamily = PlusJakartaSans,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = if (isAr) {
+                        "المتصدر: ${stat.topIndividualStrikes} ضربة"
+                    } else {
+                        "Leader: ${stat.topIndividualStrikes} strikes"
+                    },
+                    fontSize = 10.sp,
+                    fontFamily = PlusJakartaSans,
+                    color = if (darkTheme) NeonEmerald else DayEmerald,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
     }

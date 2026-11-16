@@ -29,20 +29,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Swipe
-import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -52,16 +43,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -89,8 +75,6 @@ import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
-import com.example.ui.viewmodel.YearlyStrikeStat
-
 import com.example.util.HapticHelper
 
 @Composable
@@ -103,14 +87,9 @@ fun StrikeScreen(
     val currentTarget by viewModel.currentStrikeIndividual.collectAsStateWithLifecycle()
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
-    val yearlyStats by viewModel.yearlyStrikeStats.collectAsStateWithLifecycle()
-    val allTimeStrikes by viewModel.allTimeStrikesCount.collectAsStateWithLifecycle()
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
-
-    // Screen Sub-tab: 0 = Arena, 1 = Yearly Dashboard
-    var selectedTab by remember { mutableIntStateOf(0) }
 
     fun triggerHapticFeedback() {
         HapticHelper.triggerStrikeHaptic(context, isHapticFeedbackEnabled)
@@ -122,87 +101,9 @@ fun StrikeScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Tab Switcher: Arena vs Yearly Dashboard
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0x221E293B))
-                        .border(1.dp, Color(0x3538BDF8), RoundedCornerShape(16.dp))
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (selectedTab == 0) NeonCyan.copy(alpha = 0.25f) else Color.Transparent)
-                            .border(
-                                1.dp,
-                                if (selectedTab == 0) NeonCyan else Color.Transparent,
-                                RoundedCornerShape(12.dp)
-                            )
-                            .clickable { selectedTab = 0 }
-                            .padding(vertical = 10.dp)
-                            .testTag("tab_strike_arena"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = if (selectedTab == 0) NeonCyan else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = stringResource(R.string.strike_arena),
-                                fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedTab == 0) NeonCyan else MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(if (selectedTab == 1) NeonEmerald.copy(alpha = 0.25f) else Color.Transparent)
-                            .border(
-                                1.dp,
-                                if (selectedTab == 1) NeonEmerald else Color.Transparent,
-                                RoundedCornerShape(12.dp)
-                            )
-                            .clickable { selectedTab = 1 }
-                            .padding(vertical = 10.dp)
-                            .testTag("tab_yearly_dashboard"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Leaderboard,
-                                contentDescription = null,
-                                tint = if (selectedTab == 1) NeonEmerald else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = stringResource(R.string.yearly_analytics),
-                                fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selectedTab == 1) NeonEmerald else MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (selectedTab == 0) {
-                // ==========================================
-                // TAB 0: STRIKE ARENA
-                // ==========================================
+            // ==========================================
+            // STRIKE ARENA
+            // ==========================================
 
                 // Individual Selector Carousel
                 item {
@@ -501,270 +402,8 @@ fun StrikeScreen(
                     }
                 }
 
-            } else {
-                // ==========================================
-                // TAB 1: YEARLY STRIKES DASHBOARD
-                // ==========================================
-                item {
-                    LiquidGlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(42.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(NeonEmerald.copy(alpha = 0.2f))
-                                            .border(1.dp, NeonEmerald, RoundedCornerShape(12.dp)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CalendarMonth,
-                                            contentDescription = null,
-                                            tint = NeonEmerald,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        Text(
-                                            text = stringResource(R.string.yearly_dashboard_title),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = if (isAr) "إحصائيات الضربات مجمّعة حسب كل سنة" else "Strike statistics grouped by year",
-                                            fontSize = 11.sp,
-                                            color = NeonEmerald
-                                        )
-                                    }
-                                }
-
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = "$allTimeStrikes",
-                                        fontSize = 24.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = NeonEmerald
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.all_time_strikes),
-                                        fontSize = 10.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Yearly Breakdown Cards
-                if (yearlyStats.isEmpty()) {
-                    item {
-                        LiquidGlassCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Text(
-                                text = if (isAr) {
-                                    "لا توجد ضربات مسجّلة بعد في قاعدة البيانات."
-                                } else {
-                                    "No strikes recorded yet in the database."
-                                },
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-                } else {
-                    items(yearlyStats) { stat ->
-                        YearlyStatCard(stat = stat, isAr = isAr)
-                    }
-                }
-
-                // Full Historical Strike Log List
-                item {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = if (isAr) "سجل الضربات التاريخي المفصّل" else "Detailed Historical Strike Log",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.swipe_to_delete_hint),
-                            fontSize = 11.sp,
-                            color = NeonRose.copy(alpha = 0.85f),
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                items(allStrikeEvents, key = { it.id }) { event ->
-                    SwipeableStrikeLogItem(
-                        event = event,
-                        onDelete = { viewModel.deleteStrikeEvent(it) }
-                    )
-                }
-            }
-
             item {
                 Spacer(modifier = Modifier.height(64.dp))
-            }
-        }
-    }
-}
-
-@Composable
-fun YearlyStatCard(
-    stat: YearlyStrikeStat,
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    isAr: Boolean = true
-) {
-    val yearBadgeBg = if (darkTheme) Color(0xFF0F2537) else Color(0x2200B4D8)
-    val yearBadgeBorder = if (darkTheme) NeonCyan else DayCyan
-    val yearTextColor = if (darkTheme) NeonCyan else DayCyan
-
-    val topBadgeBg = if (darkTheme) NeonAmber.copy(alpha = 0.2f) else Color(0x24F59E0B)
-    val topBadgeBorder = if (darkTheme) NeonAmber else DayOrange.copy(alpha = 0.5f)
-    val topBadgeColor = if (darkTheme) NeonAmber else DayOrange
-
-    val trackColor = if (darkTheme) Color(0x331E293B) else Color(0x35CBD5E1)
-    val progressBrush = if (darkTheme) {
-        Brush.horizontalGradient(listOf(NeonCyan, NeonEmerald))
-    } else {
-        Brush.horizontalGradient(listOf(DayCyan, DayEmerald))
-    }
-
-    LiquidGlassCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(yearBadgeBg)
-                            .border(1.5.dp, yearBadgeBorder, RoundedCornerShape(10.dp))
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = "${stat.year}",
-                            fontWeight = FontWeight.Black,
-                            fontFamily = PlusJakartaSans,
-                            fontSize = 16.sp,
-                            color = yearTextColor
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = if (isAr) "${stat.totalStrikes} ضربة" else "${stat.totalStrikes} strikes",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = PlusJakartaSans,
-                            fontSize = 16.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = if (isAr) "${stat.eventCount} عملية تسجيل في السنة" else "${stat.eventCount} recorded events this year",
-                            fontSize = 11.sp,
-                            fontFamily = PlusJakartaSans,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(topBadgeBg)
-                        .border(1.dp, topBadgeBorder, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.EmojiEvents,
-                            contentDescription = null,
-                            tint = topBadgeColor,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = stat.topIndividualName,
-                            fontSize = 11.sp,
-                            fontFamily = PlusJakartaSans,
-                            fontWeight = FontWeight.Bold,
-                            color = topBadgeColor
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Glowing Progress Bar for the year proportion
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(CircleShape)
-                    .background(trackColor)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(stat.percentageOfAllTime)
-                        .height(8.dp)
-                        .clip(CircleShape)
-                        .background(progressBrush)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = if (isAr) {
-                        "الحصة من الإجمالي: ${(stat.percentageOfAllTime * 100).toInt()}%"
-                    } else {
-                        "Share of total: ${(stat.percentageOfAllTime * 100).toInt()}%"
-                    },
-                    fontSize = 10.sp,
-                    fontFamily = PlusJakartaSans,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = if (isAr) {
-                        "المتصدر: ${stat.topIndividualStrikes} ضربة"
-                    } else {
-                        "Leader: ${stat.topIndividualStrikes} strikes"
-                    },
-                    fontSize = 10.sp,
-                    fontFamily = PlusJakartaSans,
-                    color = if (darkTheme) NeonEmerald else DayEmerald,
-                    fontWeight = FontWeight.SemiBold
-                )
             }
         }
     }
