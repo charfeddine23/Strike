@@ -66,7 +66,7 @@ import com.example.data.update.AppUpdateState
 import com.example.util.BiometricAvailability
 import com.example.util.CallNotificationHelper
 import com.example.util.FingerprintAuthHelper
-import com.example.util.findFragmentActivity
+import com.example.util.rememberFragmentActivity
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -84,10 +84,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -305,12 +309,25 @@ private fun SettingsPanelBody(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val hostActivity = rememberFragmentActivity()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val isFingerprintLockEnabled by viewModel.isFingerprintLockEnabled
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
     val isAutoUpdateEnabled by viewModel.isAutoUpdateEnabled
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
-    val biometricAvailability = remember(context) { FingerprintAuthHelper.checkAvailability(context) }
+    var biometricAvailability by remember(context, hostActivity) {
+        mutableStateOf(FingerprintAuthHelper.checkAvailability(hostActivity ?: context))
+    }
+    DisposableEffect(lifecycleOwner, context, hostActivity) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                biometricAvailability = FingerprintAuthHelper.checkAvailability(hostActivity ?: context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val promptTitleStr = stringResource(R.string.fingerprint_prompt_title)
     val setupSubtitleStr = stringResource(R.string.fingerprint_setup_subtitle)
     val cancelLabelStr = stringResource(R.string.cancel)
@@ -479,12 +496,14 @@ private fun SettingsPanelBody(
                                 if (!enabled) {
                                     viewModel.setFingerprintLockEnabled(false)
                                 } else {
-                                    when (FingerprintAuthHelper.checkAvailability(context)) {
+                                    val checkContext = hostActivity ?: context
+                                    val latestAvailability = FingerprintAuthHelper.checkAvailability(checkContext)
+                                    biometricAvailability = latestAvailability
+                                    when (latestAvailability) {
                                         BiometricAvailability.AVAILABLE -> {
-                                            val activity = context.findFragmentActivity()
-                                            if (activity != null) {
+                                            if (hostActivity != null) {
                                                 FingerprintAuthHelper.showFingerprintPrompt(
-                                                    activity = activity,
+                                                    activity = hostActivity,
                                                     title = promptTitleStr,
                                                     subtitle = setupSubtitleStr,
                                                     cancelButtonText = cancelLabelStr,
@@ -495,6 +514,9 @@ private fun SettingsPanelBody(
                                                         if (err.isNotBlank()) {
                                                             viewModel.notifyMessage(err)
                                                         }
+                                                    },
+                                                    onCancel = {
+                                                        // User dismissed prompt; keep fingerprint lock off cleanly
                                                     }
                                                 )
                                             } else {

@@ -36,12 +36,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,7 +73,7 @@ import com.example.ui.theme.PlusJakartaSans
 import com.example.util.BiometricAvailability
 import com.example.util.FingerprintAuthHelper
 import com.example.util.HapticHelper
-import com.example.util.findFragmentActivity
+import com.example.util.rememberFragmentActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -90,13 +94,17 @@ fun FullscreenFingerprintUnlockScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val hostActivity = rememberFragmentActivity()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
     val isDarkTheme = isSystemInDarkTheme()
 
     var uiStatus by remember { mutableStateOf(BiometricUiStatus.IDLE) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
-    val availability = remember(context) { FingerprintAuthHelper.checkAvailability(context) }
+    var availability by remember(context, hostActivity) {
+        mutableStateOf(FingerprintAuthHelper.checkAvailability(hostActivity ?: context))
+    }
 
     val promptTitle = stringResource(R.string.fingerprint_prompt_title)
     val promptSubtitle = stringResource(R.string.fingerprint_prompt_subtitle)
@@ -105,15 +113,26 @@ fun FullscreenFingerprintUnlockScreen(
     val notEnrolledMsg = stringResource(R.string.fingerprint_not_enrolled)
     val unavailableMsg = stringResource(R.string.fingerprint_unavailable)
 
+    DisposableEffect(lifecycleOwner, context, hostActivity) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                availability = FingerprintAuthHelper.checkAvailability(hostActivity ?: context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     fun launchBiometricPrompt() {
-        val currentAvailability = FingerprintAuthHelper.checkAvailability(context)
+        val checkContext = hostActivity ?: context
+        val currentAvailability = FingerprintAuthHelper.checkAvailability(checkContext)
+        availability = currentAvailability
         if (currentAvailability == BiometricAvailability.NONE_ENROLLED) {
             uiStatus = BiometricUiStatus.ERROR
             statusMessage = notEnrolledMsg
             return
         }
-        val activity = context.findFragmentActivity()
-        if (activity == null) {
+        if (hostActivity == null) {
             uiStatus = BiometricUiStatus.ERROR
             statusMessage = unavailableMsg
             return
@@ -121,7 +140,7 @@ fun FullscreenFingerprintUnlockScreen(
         uiStatus = BiometricUiStatus.IDLE
         statusMessage = null
         FingerprintAuthHelper.showFingerprintPrompt(
-            activity = activity,
+            activity = hostActivity,
             title = promptTitle,
             subtitle = promptSubtitle,
             cancelButtonText = cancelLabel,
@@ -137,6 +156,10 @@ fun FullscreenFingerprintUnlockScreen(
             onError = { errMsg ->
                 uiStatus = BiometricUiStatus.ERROR
                 statusMessage = errMsg.ifBlank { authFailedMsg }
+            },
+            onCancel = {
+                uiStatus = BiometricUiStatus.IDLE
+                statusMessage = null
             }
         )
     }

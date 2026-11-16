@@ -5,8 +5,12 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 
@@ -26,18 +30,55 @@ tailrec fun Context.findFragmentActivity(): FragmentActivity? = when (this) {
     else -> null
 }
 
+/**
+ * Safely resolves the hosting FragmentActivity from either LocalContext or LocalActivityResultRegistryOwner.
+ */
+@Composable
+fun rememberFragmentActivity(): FragmentActivity? {
+    val context = LocalContext.current
+    val registryOwner = LocalActivityResultRegistryOwner.current
+    return remember(context, registryOwner) {
+        context.findFragmentActivity() ?: (registryOwner as? FragmentActivity)
+    }
+}
+
 object FingerprintAuthHelper {
 
     fun checkAvailability(context: Context): BiometricAvailability {
-        val manager = BiometricManager.from(context)
-        val biometricOnlyFlags = BiometricManager.Authenticators.BIOMETRIC_STRONG or
+        val hostContext = context.findFragmentActivity() ?: context
+        val manager = BiometricManager.from(hostContext)
+
+        val biometricWeakOrStrong = BiometricManager.Authenticators.BIOMETRIC_STRONG or
             BiometricManager.Authenticators.BIOMETRIC_WEAK
 
-        return when (manager.canAuthenticate(biometricOnlyFlags)) {
-            BiometricManager.BIOMETRIC_SUCCESS -> BiometricAvailability.AVAILABLE
-            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> BiometricAvailability.NONE_ENROLLED
-            else -> BiometricAvailability.UNAVAILABLE
+        val primaryStatus = manager.canAuthenticate(biometricWeakOrStrong)
+        if (primaryStatus == BiometricManager.BIOMETRIC_SUCCESS) {
+            return BiometricAvailability.AVAILABLE
         }
+        if (primaryStatus == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED) {
+            return BiometricAvailability.NONE_ENROLLED
+        }
+
+        // Fallback for OEMs / API 28-29 builds where BIOMETRIC_WEAK reports BIOMETRIC_ERROR_UNSUPPORTED
+        val strongStatus = manager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        if (strongStatus == BiometricManager.BIOMETRIC_SUCCESS) {
+            return BiometricAvailability.AVAILABLE
+        }
+        if (strongStatus == BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED) {
+            return BiometricAvailability.NONE_ENROLLED
+        }
+
+        // On Android 11+ (API 30+), if biometric hardware is absent/unsupported, allow device credential
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val withDeviceCredential = biometricWeakOrStrong or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            when (manager.canAuthenticate(withDeviceCredential)) {
+                BiometricManager.BIOMETRIC_SUCCESS -> return BiometricAvailability.AVAILABLE
+                BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> return BiometricAvailability.NONE_ENROLLED
+            }
+        }
+
+        return BiometricAvailability.UNAVAILABLE
     }
 
     fun showFingerprintPrompt(
@@ -46,7 +87,8 @@ object FingerprintAuthHelper {
         subtitle: String,
         cancelButtonText: String,
         onSuccess: () -> Unit,
-        onError: (String) -> Unit
+        onError: (String) -> Unit,
+        onCancel: () -> Unit = {}
     ) {
         val executor = ContextCompat.getMainExecutor(activity)
         val prompt = BiometricPrompt(
@@ -60,7 +102,12 @@ object FingerprintAuthHelper {
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                     super.onAuthenticationError(errorCode, errString)
-                    onError(errString.toString())
+                    when (errorCode) {
+                        BiometricPrompt.ERROR_USER_CANCELED,
+                        BiometricPrompt.ERROR_NEGATIVE_BUTTON,
+                        BiometricPrompt.ERROR_CANCELED -> onCancel()
+                        else -> onError(errString.toString())
+                    }
                 }
 
                 override fun onAuthenticationFailed() {
@@ -92,6 +139,25 @@ object FingerprintAuthHelper {
         try {
             prompt.authenticate(builder.build())
         } catch (e: Exception) {
+            // Fallback without DEVICE_CREDENTIAL if OEM ROM rejects the combination
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                try {
+                    val fallbackInfo = BiometricPrompt.PromptInfo.Builder()
+                        .setTitle(title)
+                        .setSubtitle(subtitle)
+                        .setConfirmationRequired(false)
+                        .setAllowedAuthenticators(
+                            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                                BiometricManager.Authenticators.BIOMETRIC_WEAK
+                        )
+                        .setNegativeButtonText(cancelButtonText)
+                        .build()
+                    prompt.authenticate(fallbackInfo)
+                    return
+                } catch (_: Exception) {
+                    // Fall through to error callback
+                }
+            }
             onError(e.localizedMessage ?: "")
         }
     }
