@@ -262,4 +262,9 @@
     <string name="deviations_harmonic_resonance">RÉSONANCE CÉLESTE : %1$d%% • Ascension : %2$s</string>
     <string name="deviations_baphomet_overload">ALERTE CRITIQUE : Baphomet a totalement saisi l\'ADN neuronal !</string>
     <string name="deviations_gabriel_ascension">SANCTIFIÉ : Gabriel a transmuté l\'ADN en pure lumière céleste !</string>
+    <string name="records_dashboard_window_title">Dashboard</string>
+    <string name="records_dashboard_banner_subtitle">Résumé, indicateurs clés et bilan annuel</string>
+    <string name="records_dashboard_open">Ouvrir</string>
+    <string name="expand_card">Développer les détails</string>
+    <string name="collapse_card">Réduire les détails</string>
 </resources>

@@ -95,6 +95,8 @@ import com.example.ui.components.FullscreenFingerprintUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.LuxurySettingsMenuButton
+import com.example.ui.components.RecordsDashboardBanner
+import com.example.ui.components.RecordsDashboardDialog
 import com.example.ui.components.SettingsSideDrawer
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
@@ -206,9 +208,11 @@ fun LiquidGlassApp(
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showShieldDropdown by remember { mutableStateOf(false) }
     var showStartDateDialog by remember { mutableStateOf(false) }
+    var showRecordsDashboardDialog by remember { mutableStateOf(false) }
     var startedUpdateFromModal by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
+    val allIndividuals by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Automatically check for updates when entering the app (including after fingerprint unlock)
@@ -316,7 +320,13 @@ fun LiquidGlassApp(
                             isDarkTheme = isDarkTheme,
                             isHapticEnabled = isHapticEnabled
                         )
-                        if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
+                        if (currentScreen == AppScreen.DASHBOARD) {
+                            RecordsDashboardBanner(
+                                totalCount = allIndividuals.size,
+                                onClick = { showRecordsDashboardDialog = true },
+                                isDarkTheme = isDarkTheme
+                            )
+                        } else if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
                             FlameEnergyBanner(
                                 flameScore = flameScore,
                                 onClick = { currentScreen = AppScreen.FLAME },
@@ -425,6 +435,20 @@ fun LiquidGlassApp(
             viewModel = viewModel,
             onDismiss = { showSettingsDialog = false },
             onLockAppNow = { viewModel.lockApp() }
+        )
+    }
+
+    // Records Dashboard Modal Window (Total Records, Top Striker, Highest BOOST, Avg Size & Yearly Strikes)
+    if (showRecordsDashboardDialog) {
+        RecordsDashboardDialog(
+            allList = allIndividuals,
+            currentLang = currentLang,
+            onOpenYearlyDashboard = {
+                viewModel.selectStrikeIndividual(allIndividuals.firstOrNull()?.id ?: 1L)
+                currentScreen = AppScreen.STRIKE
+            },
+            onDismiss = { showRecordsDashboardDialog = false },
+            isDarkTheme = isDarkTheme
         )
     }
 

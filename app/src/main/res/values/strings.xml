@@ -262,4 +262,9 @@
     <string name="deviations_harmonic_resonance">CELESTIAL HARMONY: Resonance at %1$d%% • Ascending: %2$s</string>
     <string name="deviations_baphomet_overload">OVERLOAD: Baphomet has fully seized the neural DNA!</string>
     <string name="deviations_gabriel_ascension">SANCTIFIED: Gabriel has touched the genetic code into pure diamond light!</string>
+    <string name="records_dashboard_window_title">Dashboard</string>
+    <string name="records_dashboard_banner_subtitle">Summary, Key Metrics &amp; Yearly Strikes</string>
+    <string name="records_dashboard_open">Open</string>
+    <string name="expand_card">Expand details</string>
+    <string name="collapse_card">Collapse details</string>
 </resources>

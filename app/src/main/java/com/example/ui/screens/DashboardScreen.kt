@@ -5,8 +5,14 @@ import android.provider.ContactsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,17 +39,15 @@ import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Contacts
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterAlt
-import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -55,6 +59,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,19 +68,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
 import com.example.util.HapticHelper
-import com.example.ui.components.GlassStatSummaryCard
 import com.example.ui.components.GlassTypeBadge
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.LiquidGlassInnerPanel
@@ -120,136 +126,16 @@ fun DashboardScreen(
     var individualToDelete by remember { mutableStateOf<Individual?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showDataEntryDialog by remember { mutableStateOf(false) }
+    var expandedCardIds by remember { mutableStateOf(setOf<Long>()) }
 
-    // Summary calculations
     val totalCount = allList.size
-    val topStriker = allList.maxByOrNull { it.strikeCount }
-    val highestBoost = allList.maxByOrNull { it.boost }
-    val avgSize = if (allList.isNotEmpty()) {
-        (allList.map { it.size }.average() * 10.0).toLong() / 10.0
-    } else 0.0
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Telemetry Stat Cards Grid
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    GlassStatSummaryCard(
-                        title = stringResource(R.string.total_records),
-                        value = "$totalCount",
-                        icon = Icons.Default.People,
-                        accentColor = NeonCyan,
-                        modifier = Modifier.weight(1f),
-                        testTag = "stat_total_records"
-                    )
-                    GlassStatSummaryCard(
-                        title = stringResource(R.string.top_striker),
-                        value = topStriker?.let { "${it.strikeCount} (${it.fullName.take(6)})" } ?: "—",
-                        icon = Icons.Default.Bolt,
-                        accentColor = NeonAmber,
-                        modifier = Modifier.weight(1f),
-                        testTag = "stat_top_striker"
-                    )
-                }
-            }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    GlassStatSummaryCard(
-                        title = stringResource(R.string.highest_boost),
-                        value = highestBoost?.let { "${it.boost}" } ?: "—",
-                        icon = Icons.Default.Speed,
-                        accentColor = NeonEmerald,
-                        modifier = Modifier.weight(1f),
-                        testTag = "stat_highest_boost"
-                    )
-                    GlassStatSummaryCard(
-                        title = stringResource(R.string.avg_size),
-                        value = "$avgSize",
-                        icon = Icons.Default.FitnessCenter,
-                        accentColor = NeonViolet,
-                        modifier = Modifier.weight(1f),
-                        testTag = "stat_avg_size"
-                    )
-                }
-            }
-
-            // Yearly Strikes Analytics Quick Banner
-            item {
-                LiquidGlassCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onNavigateToStrike(allList.firstOrNull()?.id ?: 1L) },
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(NeonEmerald.copy(alpha = 0.2f))
-                                    .border(1.dp, NeonEmerald, RoundedCornerShape(10.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Bolt,
-                                    contentDescription = null,
-                                    tint = NeonEmerald,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = stringResource(R.string.yearly_dashboard_title),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = if (isAr) {
-                                        "تتبع إجمالي الضربات لكل سنة • اضغط للعرض"
-                                    } else {
-                                        "Track total strikes by year • Tap to view"
-                                    },
-                                    fontSize = 11.sp,
-                                    color = NeonEmerald
-                                )
-                            }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(NeonCyan.copy(alpha = 0.2f))
-                                .border(1.dp, NeonCyan, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = if (isAr) "عرض اللوحة" else "View Board",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = NeonCyan
-                            )
-                        }
-                    }
-                }
-            }
 
             // Search Bar & Sort Button
             item {
@@ -637,9 +523,18 @@ fun DashboardScreen(
             } else {
                 items(individuals, key = { it.id }) { item ->
                     val status = viewModel.getStatusForIndividual(item, lastStrikeMap)
+                    val isExpanded = item.id in expandedCardIds
                     IndividualRecordCard(
                         individual = item,
                         status = status,
+                        isExpanded = isExpanded,
+                        onToggleExpand = {
+                            expandedCardIds = if (isExpanded) {
+                                expandedCardIds - item.id
+                            } else {
+                                expandedCardIds + item.id
+                            }
+                        },
                         onStrike = {
                             HapticHelper.triggerStrikeHaptic(context, isHapticFeedbackEnabled)
                             viewModel.incrementStrikeForId(item.id, 1)
@@ -723,6 +618,8 @@ fun DashboardScreen(
 fun IndividualRecordCard(
     individual: Individual,
     status: StrikerStatus,
+    isExpanded: Boolean,
+    onToggleExpand: () -> Unit,
     onStrike: () -> Unit,
     onGoToStrike: () -> Unit,
     onCompare: () -> Unit,
@@ -732,6 +629,19 @@ fun IndividualRecordCard(
     darkTheme: Boolean = isSystemInDarkTheme(),
     isAr: Boolean = true
 ) {
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "record_card_chevron_rot"
+    )
+
+    val boostBg = if (darkTheme) {
+        Brush.linearGradient(listOf(NeonEmerald.copy(alpha = 0.25f), NeonCyan.copy(alpha = 0.2f)))
+    } else {
+        Brush.linearGradient(listOf(DayEmerald.copy(alpha = 0.18f), DayCyan.copy(alpha = 0.14f)))
+    }
+    val boostColor = if (darkTheme) NeonEmerald else DayEmerald
+
     DynamicAnimatedProfileCard(
         status = status,
         modifier = modifier
@@ -740,134 +650,203 @@ fun IndividualRecordCard(
         shape = RoundedCornerShape(18.dp),
         darkTheme = darkTheme
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // Header: Name, Status Badge, Type, and BOOST Badge
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+        ) {
+            // Always-Visible Collapsed Summary Area (Name, Status, Phone, BOOST at bottom + Expand/Collapse)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggleExpand)
             ) {
+                // Top Row: Name + Status Badge + Expand/Collapse Toggle
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    GlassTypeBadge(type = individual.type)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = individual.fullName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = PlusJakartaSans,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = if (isExpanded) 2 else 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        StrikerStatusBadge(status = status, darkTheme = darkTheme)
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(if (darkTheme) Color(0x2238BDF8) else Color(0x140284C7))
+                            .border(
+                                1.dp,
+                                if (darkTheme) Color(0x4538BDF8) else Color(0x450284C7),
+                                CircleShape
+                            )
+                            .clickable(onClick = onToggleExpand)
+                            .testTag("record_expand_btn_${individual.id}"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = stringResource(
+                                if (isExpanded) R.string.collapse_card else R.string.expand_card
+                            ),
+                            tint = if (darkTheme) NeonCyan else DayCyan,
+                            modifier = Modifier
+                                .size(20.dp)
+                                .rotate(chevronRotation)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Bottom Row of Collapsed View: Phone Number & BOOST Badge moved to bottom
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        if (individual.phoneNumber.isNotBlank()) {
+                            Icon(
+                                imageVector = Icons.Default.Phone,
+                                contentDescription = null,
+                                tint = if (darkTheme) NeonCyan else DayCyan,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = individual.phoneNumber,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (darkTheme) NeonCyan else DayCyan,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Phone,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "—",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.width(8.dp))
-                    Column {
+
+                    // BOOST Badge repositioned to bottom
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(boostBg)
+                            .border(1.dp, boostColor.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (isAr) "التعزيز: " else "BOOST: ",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                fontFamily = PlusJakartaSans,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "${individual.boost}",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = PlusJakartaSans,
+                                color = boostColor
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Expandable Detailed Telemetry & Actions
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Metrics Row: Type, Dimensions & Size (Length x Width) in a frosted inner tier
+                    LiquidGlassInnerPanel(
+                        modifier = Modifier.fillMaxWidth(),
+                        darkTheme = darkTheme
+                    ) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = individual.fullName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = PlusJakartaSans,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            StrikerStatusBadge(status = status, darkTheme = darkTheme)
-                        }
-                        if (individual.phoneNumber.isNotBlank()) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Phone,
-                                    contentDescription = null,
-                                    tint = NeonCyan,
-                                    modifier = Modifier.size(11.dp)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
+                                GlassTypeBadge(type = individual.type)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "${stringResource(R.string.length)} × ${stringResource(R.string.width)}",
+                                        fontSize = 10.sp,
+                                        fontFamily = PlusJakartaSans,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = "${individual.length} × ${individual.width}",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = PlusJakartaSans,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+
+                            Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    text = individual.phoneNumber,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = NeonCyan
+                                    text = stringResource(R.string.size),
+                                    fontSize = 10.sp,
+                                    fontFamily = PlusJakartaSans,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "${individual.size}",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = PlusJakartaSans,
+                                    color = if (darkTheme) NeonCyan else DayCyan
                                 )
                             }
                         }
                     }
-                }
 
-                // BOOST Badge
-                val boostBg = if (darkTheme) {
-                    Brush.linearGradient(listOf(NeonEmerald.copy(alpha = 0.25f), NeonCyan.copy(alpha = 0.2f)))
-                } else {
-                    Brush.linearGradient(listOf(DayEmerald.copy(alpha = 0.18f), DayCyan.copy(alpha = 0.14f)))
-                }
-                val boostColor = if (darkTheme) NeonEmerald else DayEmerald
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(boostBg)
-                        .border(1.dp, boostColor.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 4.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = if (isAr) "التعزيز: " else "BOOST: ",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            fontFamily = PlusJakartaSans,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "${individual.boost}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = PlusJakartaSans,
-                            color = boostColor
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Metrics Row: Dimensions & Size (Length x Width) in a frosted inner tier
-            LiquidGlassInnerPanel(
-                modifier = Modifier.fillMaxWidth(),
-                darkTheme = darkTheme
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "${stringResource(R.string.length)} × ${stringResource(R.string.width)}",
-                            fontSize = 10.sp,
-                            fontFamily = PlusJakartaSans,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "${individual.length} × ${individual.width}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            fontFamily = PlusJakartaSans,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = stringResource(R.string.size),
-                            fontSize = 10.sp,
-                            fontFamily = PlusJakartaSans,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "${individual.size}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = PlusJakartaSans,
-                            color = if (darkTheme) NeonCyan else DayCyan
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
             // Scores breakdown pills (S, F, C)
             Row(
@@ -1056,6 +1035,8 @@ fun IndividualRecordCard(
                             modifier = Modifier.size(18.dp)
                         )
                     }
+                }
+            }
                 }
             }
         }
