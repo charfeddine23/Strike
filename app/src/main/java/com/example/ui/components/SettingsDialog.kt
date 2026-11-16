@@ -1,22 +1,38 @@
 package com.example.ui.components
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -62,7 +78,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,11 +90,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -100,11 +122,187 @@ import com.example.ui.viewmodel.IndividualViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/**
+ * Right-Anchored Partial-Width Slide-Out Settings Drawer:
+ * Slides out smoothly from the physical right edge of the screen, covers ~82% width (max 350dp)
+ * with a dimmed scrim on the left, preserving full RTL/LTR direction inside the panel.
+ */
+@Composable
+fun SettingsSideDrawer(
+    visible: Boolean,
+    viewModel: IndividualViewModel,
+    onDismiss: () -> Unit,
+    onLockAppNow: () -> Unit
+) {
+    val appLayoutDirection = LocalLayoutDirection.current
+
+    BackHandler(enabled = visible) {
+        onDismiss()
+    }
+
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Dimmed Scrim Overlay (tapping outside closes drawer)
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(animationSpec = tween(220)),
+                exit = fadeOut(animationSpec = tween(200))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.56f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onDismiss
+                        )
+                        .testTag("settings_drawer_scrim")
+                )
+            }
+
+            // Sliding Partial-Width Right-Edge Panel
+            AnimatedVisibility(
+                visible = visible,
+                modifier = Modifier.align(Alignment.CenterEnd),
+                enter = slideInHorizontally(
+                    animationSpec = spring(
+                        dampingRatio = 0.88f,
+                        stiffness = Spring.StiffnessMediumLow
+                    ),
+                    initialOffsetX = { fullWidth -> fullWidth }
+                ) + fadeIn(animationSpec = tween(180)),
+                exit = slideOutHorizontally(
+                    animationSpec = tween(durationMillis = 220),
+                    targetOffsetX = { fullWidth -> fullWidth }
+                ) + fadeOut(animationSpec = tween(160))
+            ) {
+                CompositionLocalProvider(LocalLayoutDirection provides appLayoutDirection) {
+                    val isDarkTheme = isSystemInDarkTheme()
+                    val panelShape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)
+                    val panelBrush = if (isDarkTheme) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFA091226),
+                                Color(0xFA0D1831),
+                                Color(0xFA070D1B)
+                            )
+                        )
+                    } else {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFAF4F7FC),
+                                Color(0xFAEEF2F6)
+                            )
+                        )
+                    }
+                    val panelBorderBrush = if (isDarkTheme) {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                NeonCyan.copy(alpha = 0.68f),
+                                NeonViolet.copy(alpha = 0.48f),
+                                NeonCyan.copy(alpha = 0.35f)
+                            )
+                        )
+                    } else {
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF0EA5E9).copy(alpha = 0.45f),
+                                Color(0xFFCBD5E1)
+                            )
+                        )
+                    }
+
+                    // Wrap in LTR for rounded corners strictly on physical left face of drawer
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(0.82f)
+                                .widthIn(min = 270.dp, max = 350.dp)
+                                .clip(panelShape)
+                                .background(panelBrush)
+                                .border(1.4.dp, panelBorderBrush, panelShape)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {} // Consume taps inside panel so scrim doesn't trigger
+                                )
+                                .testTag("settings_drawer_panel")
+                        ) {
+                            Canvas(modifier = Modifier.matchParentSize()) {
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            NeonCyan.copy(alpha = if (isDarkTheme) 0.14f else 0.08f),
+                                            Color.Transparent
+                                        ),
+                                        center = Offset(size.width * 0.2f, 0f),
+                                        radius = size.width * 0.85f
+                                    ),
+                                    center = Offset(size.width * 0.2f, 0f),
+                                    radius = size.width * 0.85f
+                                )
+                            }
+
+                            CompositionLocalProvider(LocalLayoutDirection provides appLayoutDirection) {
+                                SettingsPanelBody(
+                                    viewModel = viewModel,
+                                    onDismiss = onDismiss,
+                                    onLockAppNow = onLockAppNow,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .statusBarsPadding()
+                                        .navigationBarsPadding()
+                                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun SettingsDialog(
     viewModel: IndividualViewModel,
     onDismiss: () -> Unit,
     onLockAppNow: () -> Unit
+) {
+    val isDarkTheme = isSystemInDarkTheme()
+    val dialogBg = if (isDarkTheme) Color(0xF00B132B) else Color(0xFFEEF2F6)
+    val dialogBorder = if (isDarkTheme) Color(0x6038BDF8) else Color(0xFFCBD5E1)
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.94f)
+                .clip(RoundedCornerShape(24.dp))
+                .background(dialogBg)
+                .border(1.5.dp, dialogBorder, RoundedCornerShape(24.dp))
+                .padding(20.dp)
+        ) {
+            SettingsPanelBody(
+                viewModel = viewModel,
+                onDismiss = onDismiss,
+                onLockAppNow = onLockAppNow,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsPanelBody(
+    viewModel: IndividualViewModel,
+    onDismiss: () -> Unit,
+    onLockAppNow: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val isPatternLockEnabled by viewModel.isPatternLockEnabled
@@ -160,85 +358,75 @@ fun SettingsDialog(
     }
 
     // Liquid Glass v3 Design Aesthetic Color Tokens
-    val dialogBg = if (isDarkTheme) Color(0xF00B132B) else Color(0xFFEEF2F6) // #EEF2F6 soft bluish-gray
-    val dialogBorder = if (isDarkTheme) Color(0x6038BDF8) else Color(0xFFCBD5E1) // #CBD5E1 subtle glass border
-    val cardBg = if (isDarkTheme) Color(0x221E293B) else Color(0xFFFFFFFF) // #FFFFFF clean white card
-    val cardBorder = if (isDarkTheme) Color(0x3538BDF8) else Color(0xFFCBD5E1) // #CBD5E1
-    val titleColor = if (isDarkTheme) Color(0xFFF8FAFC) else Color(0xFF1E293B) // #1E293B Deep Slate
-    val descColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF475569) // #475569 Medium Dark Gray
-    val activeCyan = Color(0xFF0EA5E9) // #0EA5E9 Vibrant Turquoise/Cyan
-    val activeTurquoise = Color(0xFF06B6D4) // #06B6D4
-    val primaryActionTeal = Color(0xFF0F766E) // #0F766E
-    val sensitiveRed = Color(0xFFE11D48) // #E11D48 Soft Coral Red
+    val cardBg = if (isDarkTheme) Color(0x221E293B) else Color(0xFFFFFFFF)
+    val cardBorder = if (isDarkTheme) Color(0x3538BDF8) else Color(0xFFCBD5E1)
+    val titleColor = if (isDarkTheme) Color(0xFFF8FAFC) else Color(0xFF1E293B)
+    val descColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF475569)
+    val activeCyan = Color(0xFF0EA5E9)
+    val activeTurquoise = Color(0xFF06B6D4)
+    val primaryActionTeal = Color(0xFF0F766E)
+    val sensitiveRed = Color(0xFFE11D48)
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .clip(RoundedCornerShape(24.dp))
-                .background(dialogBg)
-                .border(1.5.dp, dialogBorder, RoundedCornerShape(24.dp))
-                .padding(20.dp)
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(activeCyan.copy(alpha = 0.15f))
+                        .border(1.dp, activeCyan, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(activeCyan.copy(alpha = 0.15f))
-                                .border(1.dp, activeCyan, RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = null,
-                                tint = activeCyan,
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = stringResource(R.string.settings),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = titleColor
-                            )
-                            Text(
-                                text = stringResource(R.string.app_name),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = activeCyan
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = stringResource(R.string.cancel),
-                            tint = descColor
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = activeCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = stringResource(R.string.settings),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = titleColor
+                    )
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = activeCyan
+                    )
+                }
+            }
+
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .minimumInteractiveComponentSize()
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(if (isDarkTheme) Color(0x1E38BDF8) else Color(0x140284C7))
+                    .testTag("settings_drawer_close_btn")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.cancel),
+                    tint = descColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
 
                 // 1. Pattern Lock Section (قفل التطبيق بالنقش)
                 Column(
@@ -1296,20 +1484,18 @@ fun SettingsDialog(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = Color(0x6094A3B8),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "StrikePulse v${BuildConfig.VERSION_NAME} • Developed by Charfeddine Kahlessenane",
-                        fontSize = 10.sp,
-                        color = Color(0x8094A3B8)
-                    )
-                }
-            }
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = Color(0x6094A3B8),
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "StrikePulse v${BuildConfig.VERSION_NAME} • Developed by Charfeddine Kahlessenane",
+                fontSize = 10.sp,
+                color = Color(0x8094A3B8)
+            )
         }
     }
 

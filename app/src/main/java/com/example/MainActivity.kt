@@ -17,10 +17,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -74,6 +71,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -92,7 +90,8 @@ import com.example.ui.components.FlameEnergyBanner
 import com.example.ui.components.FullscreenPatternUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
-import com.example.ui.components.SettingsDialog
+import com.example.ui.components.LuxurySettingsMenuButton
+import com.example.ui.components.SettingsSideDrawer
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.DeviationsScreen
@@ -262,6 +261,8 @@ fun LiquidGlassApp(
         }
     }
 
+    val isHapticEnabled by viewModel.isHapticFeedbackEnabled
+
     // Hardware/gesture BackHandler: return from TASKS_LEDGER to ROADMAP, otherwise return to DASHBOARD
     BackHandler(enabled = currentScreen != AppScreen.DASHBOARD) {
         currentScreen = if (currentScreen == AppScreen.TASKS_LEDGER) {
@@ -271,52 +272,7 @@ fun LiquidGlassApp(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                val triggerThresholdPx = 42.dp.toPx()
-                val bailoutThresholdPx = 28.dp.toPx()
-                awaitPointerEventScope {
-                    while (true) {
-                        val down = awaitFirstDown(
-                            requireUnconsumed = false,
-                            pass = PointerEventPass.Initial
-                        )
-                        val pointerId = down.id
-                        val startX = down.position.x
-                        val startY = down.position.y
-                        val isInLeftHalf = startX <= size.width * 0.5f
-
-                        if (isInLeftHalf && !showSettingsDialog) {
-                            while (true) {
-                                val event = awaitPointerEvent(pass = PointerEventPass.Initial)
-                                val change = event.changes.firstOrNull { it.id == pointerId } ?: break
-                                if (!change.pressed) break
-
-                                val dx = change.position.x - startX
-                                val dy = change.position.y - startY
-
-                                // Abort early if vertical scrolling or swiping left
-                                if (dx < -bailoutThresholdPx) break
-                                if (kotlin.math.abs(dy) > bailoutThresholdPx &&
-                                    kotlin.math.abs(dy) > kotlin.math.abs(dx)
-                                ) {
-                                    break
-                                }
-
-                                // Trigger Settings when swiping left-to-right across left half of screen
-                                if (dx >= triggerThresholdPx && dx > kotlin.math.abs(dy) * 1.2f) {
-                                    showSettingsDialog = true
-                                    change.consume()
-                                    break
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
@@ -335,13 +291,15 @@ fun LiquidGlassApp(
                             showShieldDropdown = showShieldDropdown,
                             onOpenShieldDropdown = { showShieldDropdown = true },
                             onDismissShieldDropdown = { showShieldDropdown = false },
-                            onOpenSettings = { currentScreen = AppScreen.PROFILE },
+                            onOpenProfile = { currentScreen = AppScreen.PROFILE },
+                            onOpenSettings = { showSettingsDialog = true },
                             onLongPressProfile5s = { viewModel.hardResetAllTaskCompletionStates() },
                             onOpenFlame = { currentScreen = AppScreen.FLAME },
                             onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
                             onLongPressFlame = { showStartDateDialog = true },
                             currentLang = currentLang,
-                            isDarkTheme = isDarkTheme
+                            isDarkTheme = isDarkTheme,
+                            isHapticEnabled = isHapticEnabled
                         )
                         if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
                             FlameEnergyBanner(
@@ -444,12 +402,11 @@ fun LiquidGlassApp(
                 }
             }
         }
-    }
-    }
+        }
 
-    // Settings Dialog
-    if (showSettingsDialog) {
-        SettingsDialog(
+        // Right-Side Partial Slide-Out Settings Drawer (overlays Scaffold edge-to-edge)
+        SettingsSideDrawer(
+            visible = showSettingsDialog,
             viewModel = viewModel,
             onDismiss = { showSettingsDialog = false },
             onLockAppNow = { viewModel.lockApp() }
@@ -509,13 +466,15 @@ fun LiquidGlassTopBar(
     showShieldDropdown: Boolean = false,
     onOpenShieldDropdown: () -> Unit = {},
     onDismissShieldDropdown: () -> Unit = {},
+    onOpenProfile: () -> Unit,
     onOpenSettings: () -> Unit,
     onLongPressProfile5s: () -> Unit = {},
     onOpenFlame: () -> Unit,
     onOpenDeviations: () -> Unit,
     onLongPressFlame: () -> Unit = {},
     currentLang: String = "ar",
-    isDarkTheme: Boolean = isSystemInDarkTheme()
+    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    isHapticEnabled: Boolean = true
 ) {
     val title = when (currentScreen) {
         AppScreen.DASHBOARD -> stringResource(R.string.nav_dashboard)
@@ -538,8 +497,6 @@ fun LiquidGlassTopBar(
     }
 
     val cyanColor = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan
-    val iconBg = if (isDarkTheme) Color(0xFF0F1E36) else Color(0x2000B4D8)
-    val iconBorder = if (isDarkTheme) NeonCyan else com.example.ui.theme.DayCyan.copy(alpha = 0.5f)
 
     val equippedAvatar by com.example.data.profile.ProfileManager.equippedAvatar.collectAsStateWithLifecycle()
     val equippedTitle by com.example.data.profile.ProfileManager.equippedTitle.collectAsStateWithLifecycle()
@@ -548,27 +505,25 @@ fun LiquidGlassTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(iconBg)
-                    .border(1.dp, iconBorder, RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Bolt,
-                    contentDescription = null,
-                    tint = cyanColor,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(10.dp))
+        // Profile Avatar replaces the old Bolt app icon next to App Name & Screen Title
+        Row(
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            com.example.ui.components.ProfileAvatarHeaderIcon(
+                avatar = equippedAvatar,
+                title = equippedTitle,
+                onClick = onOpenProfile,
+                onLongClick5s = onLongPressProfile5s,
+                size = 40.dp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
             Column {
                 Text(
                     text = stringResource(R.string.app_name),
@@ -576,7 +531,9 @@ fun LiquidGlassTopBar(
                     fontWeight = FontWeight.ExtraBold,
                     fontFamily = com.example.ui.theme.PlusJakartaSans,
                     color = MaterialTheme.colorScheme.onSurface,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = title,
@@ -584,37 +541,38 @@ fun LiquidGlassTopBar(
                     color = cyanColor,
                     fontFamily = com.example.ui.theme.CaveatHandwriting,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Sleek, vertical, 3D-styled DNA double helix icon on the left of main flame icon
-            DnaHeaderIcon(
-                onClick = onOpenDeviations,
-                isDarkTheme = isDarkTheme
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Adaptive Glowing Animated "Fire" Header Icon (with 2-second hold detector)
-            GlowingFlameHeaderIcon(
-                flameScore = flameScore,
-                onClick = onOpenFlame,
-                onLongClick2s = onLongPressFlame,
-                isDarkTheme = isDarkTheme
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Dynamic Streak Shield Element + Strictly Read-Only Monitoring Dropdown
-            Box {
-                DynamicStreakShieldHeaderButton(
-                    isShieldActive = isStreakShieldActive,
-                    onClick = onOpenShieldDropdown,
-                    isDarkTheme = isDarkTheme
-                )
+        // Right/End Cluster: Telemetry Pill (Shield -> Flame -> DNA) + Luxury 3-Line Settings Button
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (isDarkTheme) Color(0x660F1E36) else Color(0x1800B4D8))
+                    .border(
+                        1.dp,
+                        if (isDarkTheme) Color(0x3338BDF8) else Color(0x330077B6),
+                        RoundedCornerShape(50)
+                    )
+                    .padding(horizontal = 7.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                // Dynamic Streak Shield Element + Strictly Read-Only Monitoring Dropdown
+                Box {
+                    DynamicStreakShieldHeaderButton(
+                        isShieldActive = isStreakShieldActive,
+                        onClick = onOpenShieldDropdown,
+                        isDarkTheme = isDarkTheme
+                    )
 
                 DropdownMenu(
                     expanded = showShieldDropdown,
@@ -729,15 +687,26 @@ fun LiquidGlassTopBar(
                 }
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            // Adaptive Glowing Animated "Fire" Header Icon (centered between Shield & DNA)
+            GlowingFlameHeaderIcon(
+                flameScore = flameScore,
+                onClick = onOpenFlame,
+                onLongClick2s = onLongPressFlame,
+                isDarkTheme = isDarkTheme
+            )
 
-            // Dynamic Circular Profile Avatar Icon (Short tap -> Profile, 5s hold -> Hard Task Reset)
-            com.example.ui.components.ProfileAvatarHeaderIcon(
-                avatar = equippedAvatar,
-                title = equippedTitle,
+            // Sleek, vertical, 3D-styled DNA double helix icon
+            DnaHeaderIcon(
+                onClick = onOpenDeviations,
+                isDarkTheme = isDarkTheme
+            )
+        }
+
+            // Luxury 3-stacked-lines Settings Menu Button at the outer right edge
+            LuxurySettingsMenuButton(
                 onClick = onOpenSettings,
-                onLongClick5s = onLongPressProfile5s,
-                size = 38.dp
+                isDarkTheme = isDarkTheme,
+                isHapticEnabled = isHapticEnabled
             )
         }
     }

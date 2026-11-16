@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,7 +36,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.foundation.horizontalScroll
@@ -78,7 +78,6 @@ import com.example.data.roadmap.TaskItem
 import com.example.data.roadmap.TaskPeriod
 import com.example.data.roadmap.TaskPools
 import com.example.data.roadmap.TaskStatus
-import com.example.ui.components.CycleScheduleBanner
 import com.example.ui.components.ElectricMint
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.NeonAqua
@@ -131,11 +130,6 @@ fun RoadmapScreen(
     val woodenKeys by viewModel.woodenKeys.collectAsStateWithLifecycle()
     val bronzeKeys by viewModel.bronzeKeys.collectAsStateWithLifecycle()
     val silverKeys by viewModel.silverKeys.collectAsStateWithLifecycle()
-
-    val shields24h by viewModel.available1DayShields.collectAsStateWithLifecycle()
-    val shields48h by viewModel.available48hShields.collectAsStateWithLifecycle()
-    val shields72h by viewModel.availableManualShields.collectAsStateWithLifecycle()
-    val totalShieldsCount = shields24h + shields48h + shields72h
 
     var selectedMainTab by remember(initialMainTab) { mutableStateOf(initialMainTab) } // 0: Wavy Roadmap, 1: Dynamic Tasks
     var selectedTaskPeriod by remember { mutableStateOf(TaskPeriod.DAILY) }
@@ -294,29 +288,46 @@ fun RoadmapScreen(
                         }
                     }
 
-                    // Top-Right Frosted Shield Pill Badge
-                    Row(
+                    // Top-Right Frosted Tasks Ledger Button (replaces Shield badge opposite Roadmap title)
+                    Box(
                         modifier = Modifier
+                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                             .clip(RoundedCornerShape(50))
-                            .background(Color(0xAA0E1929))
-                            .border(1.2.dp, NeonAqua.copy(alpha = 0.75f), RoundedCornerShape(50))
-                            .padding(horizontal = 11.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            .clickable {
+                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                onOpenTasksLedger()
+                            }
+                            .testTag("roadmap_header_ledger_btn"),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Shield,
-                            contentDescription = null,
-                            tint = NeonAqua,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Text(
-                            text = "$totalShieldsCount",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = PlusJakartaSans,
-                            color = Color.White
-                        )
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(Color(0xBB0D1D24))
+                                .border(1.2.dp, ElectricMint.copy(alpha = 0.8f), RoundedCornerShape(50))
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MenuBook,
+                                contentDescription = if (isAr) "دفتر المهام" else "Tasks Ledger",
+                                tint = ElectricMint,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = when {
+                                    isAr -> "دفتر المهام"
+                                    currentLang == "fr" -> "Registre"
+                                    else -> "Tasks Ledger"
+                                },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = PlusJakartaSans,
+                                color = ElectricMint
+                            )
+                        }
                     }
                 }
 
@@ -418,7 +429,7 @@ fun RoadmapScreen(
                 ) {
                     var everlastingFilter by remember { mutableStateOf(0) } // 0: All active, 1: Ready to Collect, 2: Pending
 
-                    // Period & Ledger Selector Chips (Scrollable row of 5 pills)
+                    // Period Selector Chips
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -454,27 +465,10 @@ fun RoadmapScreen(
                                 selectedTaskPeriod = TaskPeriod.YEARLY
                             }
                         )
-                        PeriodFilterChip(
-                            label = if (isAr) "📒 دفتر المهام" else "📒 Tasks Ledger",
-                            isSelected = false,
-                            accentColor = ElectricMint,
-                            onClick = {
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                onMainTabChanged(1)
-                                onOpenTasksLedger()
-                            }
-                        )
                     }
 
-                    // Grant Day Schedule & Countdown Banner (Daily 12 AM, Weekly Sunday, Monthly 1st)
-                    if (selectedTaskPeriod != TaskPeriod.YEARLY) {
-                        CycleScheduleBanner(
-                            period = selectedTaskPeriod,
-                            nowMillis = nowMillis,
-                            currentLang = currentLang
-                        )
-                    } else {
+                    // Eternal Master Goals Header Banner (Schedule countdown lives directly inside locked task containers)
+                    if (selectedTaskPeriod == TaskPeriod.YEARLY) {
                         // Eternal Master Goals Header Banner
                         val readyEternalCount = yearlyTasks.count { it.isReadyToClaim }
                         val claimedEternalCount = (TaskPools.ALL_EVERLASTING_TASKS.size - yearlyTasks.size).coerceAtLeast(0)
@@ -707,10 +701,10 @@ fun TaskItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (isReady) {
-                    Modifier.border(1.4.dp, ElectricMint, RoundedCornerShape(16.dp))
-                } else {
-                    Modifier
+                when {
+                    isReady -> Modifier.border(1.4.dp, ElectricMint, RoundedCornerShape(16.dp))
+                    isLocked -> Modifier.border(1.1.dp, NeonAmber.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                    else -> Modifier
                 }
             )
             .testTag("task_card_${task.id}"),
@@ -881,56 +875,113 @@ fun TaskItemCard(
                     }
                 }
                 isLocked -> {
+                    val isFr = currentLang == "fr"
                     val countdown = TaskPools.formatRemainingCountdown(task.unlockAtMillis, nowMillis, currentLang)
-                    val scheduleHint = when (task.period) {
-                        TaskPeriod.DAILY -> if (isAr) "تُمنح صلاحية الإنجاز الساعة 12:00 ليلاً" else "Unlocks at 12:00 AM midnight"
-                        TaskPeriod.WEEKLY -> if (isAr) "تُمنح صلاحية الإنجاز يوم الأحد 12:00 ليلاً" else "Unlocks Sunday 12:00 AM"
-                        TaskPeriod.MONTHLY -> if (isAr) "تُمنح صلاحية الإنجاز يوم 1 من الشهر 12:00 ليلاً" else "Unlocks on 1st of month 12:00 AM"
-                        else -> ""
+                    val (grantTitle, grantSubtitle) = when (task.period) {
+                        TaskPeriod.DAILY -> Pair(
+                            when {
+                                isAr -> "منح وتجديد اليومي • الساعة 12:00 ليلاً"
+                                isFr -> "Attribution quotidienne • Minuit (00h00)"
+                                else -> "Daily Grant & Unlock • 12:00 AM Midnight"
+                            },
+                            when {
+                                isAr -> "تفتح المهمة البديلة في اليوم الجديد بعد:"
+                                isFr -> "Nouvelle permission à minuit dans :"
+                                else -> "Replacement task unlocks in:"
+                            }
+                        )
+                        TaskPeriod.WEEKLY -> Pair(
+                            when {
+                                isAr -> "يوم منح مهام 7 أيام • كل يوم أحد (12:00 ليلاً)"
+                                isFr -> "Attribution hebdo • Chaque Dimanche"
+                                else -> "Weekly Grant Day • Sunday (12:00 AM)"
+                            },
+                            when {
+                                isAr -> "تُمنح صلاحية الإنجاز بعد:"
+                                isFr -> "Ouverture dans :"
+                                else -> "Permission unlocks in:"
+                            }
+                        )
+                        TaskPeriod.MONTHLY -> Pair(
+                            when {
+                                isAr -> "يوم منح مهام الشهر • 1 من كل شهر (12:00 ليلاً)"
+                                isFr -> "Attribution mensuelle • 1er du mois"
+                                else -> "Monthly Grant Day • 1st of Month (12:00 AM)"
+                            },
+                            when {
+                                isAr -> "تُمنح صلاحية الإنجاز بعد:"
+                                isFr -> "Ouverture dans :"
+                                else -> "Permission unlocks in:"
+                            }
+                        )
+                        else -> "" to ""
                     }
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0x24F59E0B))
-                            .border(1.dp, NeonAmber.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
-                            .padding(horizontal = 10.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x22F59E0B))
+                            .border(1.dp, NeonAmber.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 10.dp, vertical = 9.dp)
                             .testTag("task_cooldown_timer_${task.id}"),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Schedule,
+                                imageVector = Icons.Default.Lock,
                                 contentDescription = null,
                                 tint = NeonAmber,
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(14.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = scheduleHint,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
+                                text = grantTitle,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
                                 color = NeonAmber
                             )
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(7.dp))
-                                .background(Color(0x330F172A))
-                                .border(0.8.dp, NeonAmber, RoundedCornerShape(7.dp))
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = countdown,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Black,
-                                color = Color.White
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Schedule,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFDE68A),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = grantSubtitle,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFE2E8F0)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xCC0B1324))
+                                    .border(1.dp, NeonAmber, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 9.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = countdown,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = PlusJakartaSans,
+                                    color = NeonAmber
+                                )
+                            }
                         }
                     }
                 }

@@ -545,9 +545,9 @@ fun LedgerTaskCard(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("ledger_card_${task.id}"),
-        shape = RoundedCornerShape(15.dp)
+        shape = RoundedCornerShape(12.dp)
     ) {
-        Column(modifier = Modifier.padding(13.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 11.dp, vertical = 9.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -560,29 +560,29 @@ fun LedgerTaskCard(
                     ) {
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(5.dp))
                                 .background(periodColor.copy(alpha = 0.16f))
-                                .border(0.8.dp, periodColor.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                .border(0.8.dp, periodColor.copy(alpha = 0.55f), RoundedCornerShape(5.dp))
+                                .padding(horizontal = 5.dp, vertical = 1.5.dp)
                         ) {
                             Text(
                                 text = periodLabel,
-                                fontSize = 9.sp,
+                                fontSize = 8.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = periodColor
                             )
                         }
                         if (task.isCompleted) {
                             Text(
-                                text = if (isAr) "منجزة ✓" else "Completed ✓",
-                                fontSize = 10.sp,
+                                text = if (isAr) "منجزة ✓" else if (isFr) "Terminée ✓" else "Completed ✓",
+                                fontSize = 9.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = NeonEmerald
                             )
                         } else if (task.isReadyToClaim) {
                             Text(
-                                text = if (isAr) "جاهزة للجمع ✨" else "Ready to Collect ✨",
-                                fontSize = 10.sp,
+                                text = if (isAr) "جاهزة للجمع ✨" else if (isFr) "Prête ✨" else "Ready ✨",
+                                fontSize = 9.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = ElectricMint
                             )
@@ -590,61 +590,61 @@ fun LedgerTaskCard(
                             val cd = TaskPools.formatRemainingCountdown(task.unlockAtMillis, nowMillis, currentLang)
                             Text(
                                 text = if (isAr) "تفتح بعد $cd" else "Unlocks in $cd",
-                                fontSize = 10.sp,
+                                fontSize = 9.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = NeonAmber
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(5.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
 
                     Text(
                         text = task.getLocalizedTitle(currentLang),
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = PlusJakartaSans,
                         color = Color.White,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = task.getLocalizedDescription(currentLang),
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         color = Color(0xFF94A3B8),
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp)
+                        modifier = Modifier.padding(top = 1.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
-                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(6.dp))
                             .background(Color(0x3310B981))
-                            .border(1.dp, NeonEmerald, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                            .border(0.8.dp, NeonEmerald, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = "+${task.xpBounty} XP",
                             fontWeight = FontWeight.Black,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             color = NeonEmerald
                         )
                     }
                     Text(
                         text = "$percent%",
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = if (task.isCompleted || task.isReadyToClaim) ElectricMint else Color(0xFFCBD5E1)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(9.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Progress Bar + Count
             Row(
@@ -654,14 +654,14 @@ fun LedgerTaskCard(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .height(6.dp)
+                        .height(5.dp)
                         .clip(RoundedCornerShape(3.dp))
                         .background(Color(0x331E293B))
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(task.progressFraction)
-                            .height(6.dp)
+                            .height(5.dp)
                             .background(
                                 when {
                                     task.isCompleted -> NeonEmerald
@@ -671,38 +671,39 @@ fun LedgerTaskCard(
                             )
                     )
                 }
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "${task.currentCount} / ${task.targetCount}",
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFE2E8F0)
                 )
             }
 
             if (task.isReadyToClaim) {
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Button(
                     onClick = onClaimTask,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ElectricMint,
                         contentColor = Color(0xFF041418)
                     ),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(42.dp)
+                        .height(34.dp)
                         .testTag("btn_ledger_claim_${task.id}")
                 ) {
                     Icon(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(14.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
                     Text(
-                        text = if (isAr) "جمع المكافأة (+${task.xpBounty} XP)" else "Collect Reward (+${task.xpBounty} XP)",
-                        fontSize = 12.sp,
+                        text = if (isAr) "جمع المكافأة (+${task.xpBounty} XP)" else "Collect (+${task.xpBounty} XP)",
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Black
                     )
                 }
@@ -710,20 +711,20 @@ fun LedgerTaskCard(
                 val formattedDate = remember(entry.completedAtMillis) {
                     SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(entry.completedAtMillis))
                 }
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = null,
                         tint = NeonEmerald,
-                        modifier = Modifier.size(13.dp)
+                        modifier = Modifier.size(11.dp)
                     )
                     Text(
                         text = if (isAr) "نُقلت إلى السجل في $formattedDate" else "Recorded in ledger at $formattedDate",
-                        fontSize = 10.sp,
+                        fontSize = 9.5.sp,
                         color = Color(0xFF94A3B8)
                     )
                 }

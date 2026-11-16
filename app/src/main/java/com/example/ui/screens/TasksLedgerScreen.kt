@@ -471,8 +471,8 @@ fun TasksLedgerScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .testTag("tasks_ledger_list"),
-                        contentPadding = PaddingValues(top = 2.dp, bottom = 24.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        contentPadding = PaddingValues(top = 2.dp, bottom = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
                         items(filteredEntries, key = { it.task.id }) { entry ->
                             LedgerTaskCard(
