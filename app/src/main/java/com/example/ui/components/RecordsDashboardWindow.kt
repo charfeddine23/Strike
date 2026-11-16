@@ -1,19 +1,25 @@
 package com.example.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +27,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -36,13 +43,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Speed
@@ -52,7 +59,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -60,6 +69,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -70,8 +80,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
@@ -100,8 +108,14 @@ fun RecordsDashboardBanner(
     totalCount: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    isExpanded: Boolean = false,
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "records_dash_chevron_rotation"
+    )
     val infiniteTransition = rememberInfiniteTransition(label = "records_dash_banner_anim")
     val borderAngle by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -262,10 +276,12 @@ fun RecordsDashboardBanner(
                 Spacer(modifier = Modifier.width(6.dp))
 
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                    imageVector = Icons.Default.KeyboardArrowDown,
                     contentDescription = null,
-                    tint = primaryAccent.copy(alpha = 0.85f),
-                    modifier = Modifier.size(13.dp)
+                    tint = primaryAccent.copy(alpha = 0.9f),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .rotate(chevronRotation)
                 )
             }
         }
@@ -273,11 +289,12 @@ fun RecordsDashboardBanner(
 }
 
 /**
- * Dashboard Modal Window containing Total Records, Top Striker, Highest BOOST,
- * Avg Size, and the complete Yearly Strikes Dashboard (Yearly Analytics moved from StrikeScreen).
+ * Downward-expanding Liquid Glass Dashboard panel anchored right below the Dashboard banner.
+ * Expands downward smoothly from the top without popping up from the bottom of the screen.
  */
 @Composable
-fun RecordsDashboardDialog(
+fun RecordsDashboardExpandablePanel(
+    visible: Boolean,
     viewModel: IndividualViewModel,
     allList: List<Individual>,
     currentLang: String,
@@ -298,6 +315,20 @@ fun RecordsDashboardDialog(
 
     var showYearlyAnalytics by remember { mutableStateOf(false) }
 
+    LaunchedEffect(visible) {
+        if (!visible) {
+            showYearlyAnalytics = false
+        }
+    }
+
+    BackHandler(enabled = visible) {
+        if (showYearlyAnalytics) {
+            showYearlyAnalytics = false
+        } else {
+            onDismiss()
+        }
+    }
+
     val dialogBg = if (isDarkTheme) Color(0xF50B1324) else Color(0xFFF8FAFC)
     val dialogBorder = if (isDarkTheme) NeonCyan.copy(alpha = 0.45f) else Color(0xFFCBD5E1)
     val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
@@ -305,33 +336,69 @@ fun RecordsDashboardDialog(
     val accentAmber = if (isDarkTheme) NeonAmber else DayOrange
     val accentViolet = if (isDarkTheme) NeonViolet else DayPurple
 
-    Dialog(
-        onDismissRequest = {
-            if (showYearlyAnalytics) {
-                showYearlyAnalytics = false
-            } else {
-                onDismiss()
-            }
-        },
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .widthIn(max = 560.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(dialogBg)
-                .border(1.5.dp, dialogBorder, RoundedCornerShape(24.dp))
-                .padding(18.dp)
-                .testTag("records_dashboard_dialog")
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Subtle scrim below the banner; tapping outside collapses the panel upward
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(180)),
+            exit = fadeOut(animationSpec = tween(160)),
+            label = "dashboard_scrim_anim"
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = if (isDarkTheme) 0.42f else 0.22f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss
+                    )
+            )
+        }
+
+        // Panel expanding downwards directly below the Dashboard button
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(180)) + expandVertically(
+                expandFrom = Alignment.Top,
+                animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+            ),
+            exit = fadeOut(animationSpec = tween(150)) + shrinkVertically(
+                shrinkTowards = Alignment.Top,
+                animationSpec = tween(durationMillis = 210, easing = FastOutSlowInEasing)
+            ),
+            modifier = Modifier.align(Alignment.TopCenter),
+            label = "dashboard_dropdown_expand"
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .widthIn(max = 560.dp)
+                    .shadow(
+                        elevation = if (isDarkTheme) 18.dp else 12.dp,
+                        shape = RoundedCornerShape(22.dp),
+                        ambientColor = accentCyan.copy(alpha = 0.22f),
+                        spotColor = accentViolet.copy(alpha = 0.2f)
+                    )
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(dialogBg)
+                    .border(1.3.dp, dialogBorder, RoundedCornerShape(22.dp))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {}
+                    )
+                    .padding(16.dp)
+                    .testTag("records_dashboard_dialog")
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.weight(1f)
@@ -688,9 +755,19 @@ fun RecordsDashboardDialog(
                         }
                     }
                 }
+                }
             }
         }
     }
+}
+
+/**
+ * Formats a yearly winner name so long names are capped and suffixed with exactly two dots "..".
+ */
+fun formatYearlyWinnerName(rawName: String, maxChars: Int = 12): String {
+    val trimmed = rawName.trim()
+    if (trimmed.length <= maxChars) return trimmed
+    return trimmed.take((maxChars - 2).coerceAtLeast(1)).trimEnd() + ".."
 }
 
 @Composable
@@ -742,31 +819,35 @@ fun YearlyStatCard(
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = if (isAr) "${stat.totalStrikes} ضربة" else "${stat.totalStrikes} strikes",
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = PlusJakartaSans,
-                            fontSize = 16.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = if (isAr) "${stat.eventCount} عملية تسجيل في السنة" else "${stat.eventCount} recorded events this year",
-                            fontSize = 11.sp,
-                            fontFamily = PlusJakartaSans,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = if (isAr) "${stat.totalStrikes} ضربة" else "${stat.totalStrikes} strikes",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // Fixed-size winner container: never changes size; truncates long names with ".."
+                var winnerCharLimit by remember(stat.topIndividualName) { mutableIntStateOf(12) }
+                val winnerDisplayText = remember(stat.topIndividualName, winnerCharLimit) {
+                    formatYearlyWinnerName(stat.topIndividualName, maxChars = winnerCharLimit)
                 }
 
                 Box(
                     modifier = Modifier
+                        .width(128.dp)
+                        .height(28.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(topBadgeBg)
                         .border(1.dp, topBadgeBorder, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .padding(horizontal = 8.dp),
+                    contentAlignment = Alignment.CenterStart
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Icon(
                             imageVector = Icons.Default.EmojiEvents,
                             contentDescription = null,
@@ -775,11 +856,20 @@ fun YearlyStatCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = stat.topIndividualName,
+                            text = winnerDisplayText,
                             fontSize = 11.sp,
                             fontFamily = PlusJakartaSans,
                             fontWeight = FontWeight.Bold,
-                            color = topBadgeColor
+                            color = topBadgeColor,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
+                            onTextLayout = { layoutResult ->
+                                if (layoutResult.hasVisualOverflow && winnerCharLimit > 4) {
+                                    winnerCharLimit -= 1
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }

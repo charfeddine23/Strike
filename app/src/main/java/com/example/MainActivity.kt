@@ -96,7 +96,7 @@ import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.LuxurySettingsMenuButton
 import com.example.ui.components.RecordsDashboardBanner
-import com.example.ui.components.RecordsDashboardDialog
+import com.example.ui.components.RecordsDashboardExpandablePanel
 import com.example.ui.components.SettingsSideDrawer
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
@@ -323,7 +323,8 @@ fun LiquidGlassApp(
                         if (currentScreen == AppScreen.DASHBOARD) {
                             RecordsDashboardBanner(
                                 totalCount = allIndividuals.size,
-                                onClick = { showRecordsDashboardDialog = true },
+                                onClick = { showRecordsDashboardDialog = !showRecordsDashboardDialog },
+                                isExpanded = showRecordsDashboardDialog,
                                 isDarkTheme = isDarkTheme
                             )
                         } else if (currentScreen != AppScreen.INVENTORY && currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
@@ -341,6 +342,9 @@ fun LiquidGlassApp(
                     LiquidGlassBottomBar(
                         currentScreen = currentScreen,
                         onScreenSelected = { screen ->
+                            if (screen != AppScreen.DASHBOARD) {
+                                showRecordsDashboardDialog = false
+                            }
                             currentScreen = screen
                         }
                     )
@@ -426,6 +430,16 @@ fun LiquidGlassApp(
                     )
                 }
             }
+
+            // Downward-expanding Dashboard Panel anchored directly below the Dashboard banner
+            RecordsDashboardExpandablePanel(
+                visible = currentScreen == AppScreen.DASHBOARD && showRecordsDashboardDialog,
+                viewModel = viewModel,
+                allList = allIndividuals,
+                currentLang = currentLang,
+                onDismiss = { showRecordsDashboardDialog = false },
+                isDarkTheme = isDarkTheme
+            )
         }
         }
 
@@ -435,17 +449,6 @@ fun LiquidGlassApp(
             viewModel = viewModel,
             onDismiss = { showSettingsDialog = false },
             onLockAppNow = { viewModel.lockApp() }
-        )
-    }
-
-    // Records Dashboard Modal Window (Total Records, Top Striker, Highest BOOST, Avg Size & Yearly Strikes Dashboard)
-    if (showRecordsDashboardDialog) {
-        RecordsDashboardDialog(
-            viewModel = viewModel,
-            allList = allIndividuals,
-            currentLang = currentLang,
-            onDismiss = { showRecordsDashboardDialog = false },
-            isDarkTheme = isDarkTheme
         )
     }
 
