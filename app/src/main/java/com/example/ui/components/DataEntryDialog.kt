@@ -1,7 +1,8 @@
 package com.example.ui.components
 
+import android.Manifest
+import android.app.Activity
 import android.net.Uri
-import android.provider.ContactsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -53,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,6 +79,11 @@ import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonViolet
 import com.example.ui.viewmodel.IndividualViewModel
+import com.example.util.ContactsPickerHelper
+import com.example.util.ImportedContact
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 
 /**
@@ -108,65 +115,80 @@ fun DataEntryDialog(
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
 
-    val pickContactLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickContact()
-    ) { contactUri: Uri? ->
-        if (contactUri != null) {
-            try {
-                var contactName = ""
-                var contactPhone = ""
+    val coroutineScope = rememberCoroutineScope()
+    var showInAppContactsPicker by remember { mutableStateOf(false) }
+    var inAppContactsList by remember { mutableStateOf<List<ImportedContact>>(emptyList()) }
+    var showContactsPermissionDialog by remember { mutableStateOf(false) }
 
-                val cursor = context.contentResolver.query(
-                    contactUri,
-                    arrayOf(
-                        ContactsContract.Contacts._ID,
-                        ContactsContract.Contacts.DISPLAY_NAME,
-                        ContactsContract.Contacts.HAS_PHONE_NUMBER
-                    ),
-                    null,
-                    null,
-                    null
-                )
-                cursor?.use {
-                    if (it.moveToFirst()) {
-                        val nameIdx = it.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
-                        if (nameIdx != -1) {
-                            contactName = it.getString(nameIdx) ?: ""
-                        }
-                        val idIdx = it.getColumnIndex(ContactsContract.Contacts._ID)
-                        val hasPhoneIdx = it.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER)
-                        val contactId = if (idIdx != -1) it.getString(idIdx) else null
-                        val hasPhone = if (hasPhoneIdx != -1) it.getInt(hasPhoneIdx) else 0
+    fun applyImportedContact(imported: ImportedContact) {
+        if (imported.name.isNotBlank()) {
+            viewModel.formName.value = imported.name
+        }
+        if (imported.phone.isNotBlank()) {
+            viewModel.formPhoneNumber.value = imported.phone
+        }
+        viewModel.formError.value = null
+        viewModel.notifyContactImported(imported.name, imported.phone)
+    }
 
-                        if (!contactId.isNullOrBlank() && hasPhone > 0) {
-                            val phoneCursor = context.contentResolver.query(
-                                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                                arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
-                                "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
-                                arrayOf(contactId),
-                                null
-                            )
-                            phoneCursor?.use { pCursor ->
-                                if (pCursor.moveToFirst()) {
-                                    val numIdx = pCursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-                                    if (numIdx != -1) {
-                                        contactPhone = pCursor.getString(numIdx) ?: ""
-                                    }
-                                }
-                            }
-                        }
+    val contactActivityLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val contactUri: Uri? = result.data?.data
+            if (contactUri != null) {
+                val imported = ContactsPickerHelper.extractContactFromUri(context, contactUri)
+                if (imported != null) {
+                    applyImportedContact(imported)
+                } else if (!ContactsPickerHelper.hasReadContactsPermission(context)) {
+                    showContactsPermissionDialog = true
+                } else {
+                    viewModel.formError.value = when (currentLang) {
+                        "ar" -> "تعذر قراءة بيانات جهة الاتصال المختارة"
+                        "fr" -> "Impossible de lire le contact sélectionné"
+                        else -> "Could not read selected contact details"
                     }
                 }
+            }
+        }
+    }
 
-                if (contactName.isNotBlank()) {
-                    viewModel.formName.value = contactName
+    fun launchContactsFlow(hasPermission: Boolean) {
+        val launched = ContactsPickerHelper.tryLaunchExternalPicker(
+            context = context,
+            launcher = contactActivityLauncher,
+            hasPermission = hasPermission
+        )
+        if (!launched) {
+            if (hasPermission) {
+                coroutineScope.launch {
+                    val loaded = withContext(Dispatchers.IO) {
+                        ContactsPickerHelper.loadDeviceContacts(context)
+                    }
+                    inAppContactsList = loaded
+                    showInAppContactsPicker = true
                 }
-                if (contactPhone.isNotBlank()) {
-                    viewModel.formPhoneNumber.value = contactPhone
-                }
-                viewModel.notifyContactImported(contactName, contactPhone)
+            } else {
+                showContactsPermissionDialog = true
+            }
+        }
+    }
+
+    val readContactsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        launchContactsFlow(hasPermission = isGranted)
+    }
+
+    fun onOpenContacts() {
+        val hasPerm = ContactsPickerHelper.hasReadContactsPermission(context)
+        if (hasPerm) {
+            launchContactsFlow(hasPermission = true)
+        } else {
+            try {
+                readContactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
             } catch (_: Exception) {
-                // Ignore gracefully
+                launchContactsFlow(hasPermission = false)
             }
         }
     }
@@ -313,12 +335,7 @@ fun DataEntryDialog(
                                         )
 
                                         OutlinedButton(
-                                            onClick = {
-                                                try {
-                                                    pickContactLauncher.launch(null)
-                                                } catch (_: Exception) {
-                                                }
-                                            },
+                                            onClick = { onOpenContacts() },
                                             shape = RoundedCornerShape(10.dp),
                                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                                             border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f)),
@@ -351,12 +368,7 @@ fun DataEntryDialog(
                                         placeholder = { Text(stringResource(R.string.full_name_hint)) },
                                         trailingIcon = {
                                             IconButton(
-                                                onClick = {
-                                                    try {
-                                                        pickContactLauncher.launch(null)
-                                                    } catch (_: Exception) {
-                                                    }
-                                                },
+                                                onClick = { onOpenContacts() },
                                                 modifier = Modifier.testTag("trailing_pick_contact_btn")
                                             ) {
                                                 Icon(
@@ -412,12 +424,7 @@ fun DataEntryDialog(
                                         },
                                         trailingIcon = {
                                             IconButton(
-                                                onClick = {
-                                                    try {
-                                                        pickContactLauncher.launch(null)
-                                                    } catch (_: Exception) {
-                                                    }
-                                                },
+                                                onClick = { onOpenContacts() },
                                                 modifier = Modifier.testTag("pick_phone_contact_btn")
                                             ) {
                                                 Icon(
@@ -985,5 +992,30 @@ fun DataEntryDialog(
                 }
             }
         }
+    }
+
+    if (showInAppContactsPicker) {
+        InAppContactsPickerDialog(
+            contacts = inAppContactsList,
+            currentLang = currentLang,
+            onSelectContact = { imported ->
+                applyImportedContact(imported)
+                showInAppContactsPicker = false
+            },
+            onDismiss = { showInAppContactsPicker = false },
+            isDarkTheme = isDarkTheme
+        )
+    }
+
+    if (showContactsPermissionDialog) {
+        ContactsPermissionRequiredDialog(
+            currentLang = currentLang,
+            onOpenSettings = {
+                showContactsPermissionDialog = false
+                ContactsPickerHelper.openAppSettings(context)
+            },
+            onDismiss = { showContactsPermissionDialog = false },
+            isDarkTheme = isDarkTheme
+        )
     }
 }
