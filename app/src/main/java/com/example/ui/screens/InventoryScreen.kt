@@ -41,7 +41,6 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Shield
@@ -204,57 +203,6 @@ fun InventoryScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Header Banner
-        item {
-            LiquidGlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Box(
-                            modifier = Modifier
-                                .size(46.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(NeonCyan.copy(alpha = 0.25f), NeonViolet.copy(alpha = 0.25f))
-                                    )
-                                )
-                                .border(1.2.dp, NeonCyan.copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Inventory2,
-                                contentDescription = "Cyber Inventory",
-                                tint = NeonCyan,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = if (isAr) "المخزون السيبراني" else "Cyber Inventory",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontFamily = PlusJakartaSans,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = if (isAr) "الدروع • مفاتيح التجاوز • الجرعات التكتيكية" else "Shields • Skip-Keys • Tactical Potions",
-                                fontSize = 11.sp,
-                                color = NeonCyan
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
         // ============================================================
         // SECTION 1: PROTECTIVE SHIELDS (24h, 48h, 72h, Luxury 7-Day)
         // ============================================================

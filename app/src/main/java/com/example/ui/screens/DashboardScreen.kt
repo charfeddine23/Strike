@@ -1,9 +1,5 @@
 package com.example.ui.screens
 
-import android.net.Uri
-import android.provider.ContactsContract
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -29,28 +25,33 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -68,9 +69,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -78,6 +83,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
@@ -127,8 +134,6 @@ fun DashboardScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var showDataEntryDialog by remember { mutableStateOf(false) }
     var expandedCardIds by remember { mutableStateOf(setOf<Long>()) }
-
-    val totalCount = allList.size
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -190,63 +195,46 @@ fun DashboardScreen(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    Box {
-                        IconButton(
-                            onClick = { showSortMenu = true },
+                    Box(contentAlignment = Alignment.TopEnd) {
+                        val sortAccent = if (isDarkTheme) NeonCyan else DayCyan
+                        Box(
                             modifier = Modifier
                                 .size(48.dp)
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(Color(0x221E293B))
-                                .border(1.dp, Color(0x4038BDF8), RoundedCornerShape(16.dp))
-                                .testTag("sort_button")
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            sortAccent.copy(alpha = if (isDarkTheme) 0.18f else 0.14f),
+                                            NeonViolet.copy(alpha = if (isDarkTheme) 0.12f else 0.08f)
+                                        )
+                                    )
+                                )
+                                .border(
+                                    1.2.dp,
+                                    sortAccent.copy(alpha = if (showSortMenu) 0.9f else 0.45f),
+                                    RoundedCornerShape(16.dp)
+                                )
+                                .clickable {
+                                    HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                                    showSortMenu = true
+                                }
+                                .testTag("sort_button"),
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Sort,
                                 contentDescription = "Sort",
-                                tint = NeonCyan
+                                tint = sortAccent,
+                                modifier = Modifier.size(22.dp)
                             )
                         }
-
-                        DropdownMenu(
-                            expanded = showSortMenu,
-                            onDismissRequest = { showSortMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_score)) },
-                                onClick = {
-                                    viewModel.setSortOrder(SortOrder.SCORE_DESC)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_boost)) },
-                                onClick = {
-                                    viewModel.setSortOrder(SortOrder.BOOST_DESC)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_strikes)) },
-                                onClick = {
-                                    viewModel.setSortOrder(SortOrder.STRIKES_DESC)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_size)) },
-                                onClick = {
-                                    viewModel.setSortOrder(SortOrder.SIZE_DESC)
-                                    showSortMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_name)) },
-                                onClick = {
-                                    viewModel.setSortOrder(SortOrder.NAME_ASC)
-                                    showSortMenu = false
-                                }
-                            )
-                        }
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 6.dp, end = 6.dp)
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(if (isDarkTheme) NeonAmber else DayOrange)
+                        )
                     }
                 }
             }
@@ -256,38 +244,22 @@ fun DashboardScreen(
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.FilterAlt,
-                                contentDescription = null,
-                                tint = NeonCyan,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (isAr) "تصفية حسب النوع" else "FILTER BY TYPE",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-
-                        if (filterType != "ALL" || searchQuery.isNotEmpty()) {
-                            Text(
-                                text = if (isAr) "مسح الكل" else "Clear All",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = NeonRose,
-                                modifier = Modifier
-                                    .clickable { viewModel.resetFilters() }
-                                    .padding(4.dp)
-                                    .testTag("reset_all_filters_btn")
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.FilterAlt,
+                            contentDescription = null,
+                            tint = NeonCyan,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isAr) "تصفية حسب النوع" else "FILTER BY TYPE",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            letterSpacing = 0.5.sp
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -360,45 +332,6 @@ fun DashboardScreen(
                                 }
                             }
                         }
-                    }
-                }
-            }
-
-            // Active Filter Result Feedback Bar
-            if (searchQuery.isNotBlank() || filterType != "ALL") {
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0x181E293B))
-                            .border(1.dp, Color(0x3038BDF8), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = if (isAr) {
-                                "تم العثور على ${individuals.size} من أصل $totalCount" +
-                                        (if (filterType != "ALL") " • النوع: $filterType" else "") +
-                                        (if (searchQuery.isNotBlank()) " • البحث: \"$searchQuery\"" else "")
-                            } else {
-                                "Found ${individuals.size} of $totalCount individuals" +
-                                        (if (filterType != "ALL") " • Type: $filterType" else "") +
-                                        (if (searchQuery.isNotBlank()) " • Query: \"$searchQuery\"" else "")
-                            },
-                            fontSize = 11.sp,
-                            color = NeonCyan,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Clear",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clickable { viewModel.resetFilters() }
-                        )
                     }
                 }
             }
@@ -584,6 +517,21 @@ fun DashboardScreen(
             viewModel = viewModel,
             onDismiss = { showDataEntryDialog = false },
             isDarkTheme = isDarkTheme
+        )
+    }
+
+    // Luxury Sort Selector Modal
+    if (showSortMenu) {
+        LuxurySortSelectorDialog(
+            currentSortOrder = sortOrder,
+            currentLang = currentLang,
+            onSelectSortOrder = { selected ->
+                HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                viewModel.setSortOrder(selected)
+                showSortMenu = false
+            },
+            onDismiss = { showSortMenu = false },
+            darkTheme = isDarkTheme
         )
     }
 
@@ -1082,6 +1030,338 @@ fun ScorePill(
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
             )
+        }
+    }
+}
+
+private data class LuxurySortOptionSpec(
+    val order: SortOrder,
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val accent: Color
+)
+
+@Composable
+private fun LuxurySortSelectorDialog(
+    currentSortOrder: SortOrder,
+    currentLang: String,
+    onSelectSortOrder: (SortOrder) -> Unit,
+    onDismiss: () -> Unit,
+    darkTheme: Boolean = isSystemInDarkTheme()
+) {
+    val isAr = currentLang == "ar"
+    val isFr = currentLang == "fr"
+
+    val headerTitle = when {
+        isAr -> "ترتيب السجلات حسب"
+        isFr -> "Trier les fiches par"
+        else -> "Sort Records By"
+    }
+    val headerSubtitle = when {
+        isAr -> "اختر معيار الترتيب المفضل لقائمة الأسماء"
+        isFr -> "Choisissez le critère d'affichage"
+        else -> "Select your preferred ranking criterion"
+    }
+
+    val options = listOf(
+        LuxurySortOptionSpec(
+            order = SortOrder.SCORE_DESC,
+            title = stringResource(R.string.sort_score),
+            subtitle = when {
+                isAr -> "أعلى نتيجة إجمالية أولاً (التنازلي)"
+                isFr -> "Score total le plus élevé en premier"
+                else -> "Highest combined score first"
+            },
+            icon = Icons.Default.EmojiEvents,
+            accent = if (darkTheme) NeonAmber else DayOrange
+        ),
+        LuxurySortOptionSpec(
+            order = SortOrder.BOOST_DESC,
+            title = stringResource(R.string.sort_boost),
+            subtitle = when {
+                isAr -> "الأقوى في قيمة التعزيز BOOST"
+                isFr -> "Valeur BOOST maximale en premier"
+                else -> "Strongest BOOST multiplier first"
+            },
+            icon = Icons.Default.Speed,
+            accent = if (darkTheme) NeonEmerald else DayEmerald
+        ),
+        LuxurySortOptionSpec(
+            order = SortOrder.STRIKES_DESC,
+            title = stringResource(R.string.sort_strikes),
+            subtitle = when {
+                isAr -> "الأكثر عدداً في الضربات المسجلة"
+                isFr -> "Nombre de strikes le plus élevé"
+                else -> "Most recorded strikes first"
+            },
+            icon = Icons.Default.Bolt,
+            accent = if (darkTheme) NeonRose else Color(0xFFE11D48)
+        ),
+        LuxurySortOptionSpec(
+            order = SortOrder.SIZE_DESC,
+            title = stringResource(R.string.sort_size),
+            subtitle = when {
+                isAr -> "الأكبر مساحةً (الطول × العرض)"
+                isFr -> "Plus grande taille calculée en premier"
+                else -> "Largest calculated dimensions first"
+            },
+            icon = Icons.Default.FitnessCenter,
+            accent = if (darkTheme) NeonViolet else DayPurple
+        ),
+        LuxurySortOptionSpec(
+            order = SortOrder.NAME_ASC,
+            title = stringResource(R.string.sort_name),
+            subtitle = when {
+                isAr -> "ترتيب أبجدي تصاعدي للأسماء"
+                isFr -> "Ordre alphabétique croissant"
+                else -> "Alphabetical A to Z ordering"
+            },
+            icon = Icons.Default.SortByAlpha,
+            accent = if (darkTheme) NeonCyan else DayCyan
+        )
+    )
+
+    val containerBg = if (darkTheme) Color(0xF50B1324) else Color(0xFFF8FAFC)
+    val accentCyan = if (darkTheme) NeonCyan else DayCyan
+    val accentViolet = if (darkTheme) NeonViolet else DayPurple
+    val borderBrush = Brush.linearGradient(
+        listOf(
+            accentCyan.copy(alpha = 0.75f),
+            accentViolet.copy(alpha = 0.55f),
+            NeonEmerald.copy(alpha = 0.65f)
+        )
+    )
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .widthIn(max = 460.dp)
+                .shadow(
+                    elevation = if (darkTheme) 16.dp else 12.dp,
+                    shape = RoundedCornerShape(26.dp),
+                    ambientColor = accentCyan.copy(alpha = 0.25f),
+                    spotColor = accentViolet.copy(alpha = 0.25f)
+                )
+                .clip(RoundedCornerShape(26.dp))
+                .background(containerBg)
+                .drawBehind {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                accentCyan.copy(alpha = if (darkTheme) 0.16f else 0.10f),
+                                accentViolet.copy(alpha = if (darkTheme) 0.08f else 0.04f),
+                                Color.Transparent
+                            ),
+                            center = Offset(size.width * 0.85f, size.height * 0.12f),
+                            radius = size.width * 0.8f
+                        )
+                    )
+                    drawLine(
+                        color = if (darkTheme) Color(0x38FFFFFF) else Color(0x99FFFFFF),
+                        start = Offset(24.dp.toPx(), 1.dp.toPx()),
+                        end = Offset(size.width - 24.dp.toPx(), 1.dp.toPx()),
+                        strokeWidth = 1.4.dp.toPx()
+                    )
+                }
+                .border(1.4.dp, borderBrush, RoundedCornerShape(26.dp))
+                .padding(18.dp)
+                .testTag("luxury_sort_dialog")
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            accentCyan.copy(alpha = 0.24f),
+                                            accentViolet.copy(alpha = 0.20f)
+                                        )
+                                    )
+                                )
+                                .border(1.dp, accentCyan.copy(alpha = 0.7f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sort,
+                                contentDescription = null,
+                                tint = accentCyan,
+                                modifier = Modifier.size(21.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column {
+                            Text(
+                                text = headerTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = PlusJakartaSans,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = headerSubtitle,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (darkTheme) Color(0x1E38BDF8) else Color(0x140284C7))
+                            .testTag("close_sort_dialog_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.cancel),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Luxury Option Cards
+                options.forEach { option ->
+                    val isSelected = currentSortOrder == option.order
+                    val itemBg = if (isSelected) {
+                        Brush.horizontalGradient(
+                            listOf(
+                                option.accent.copy(alpha = if (darkTheme) 0.24f else 0.16f),
+                                option.accent.copy(alpha = if (darkTheme) 0.08f else 0.05f)
+                            )
+                        )
+                    } else {
+                        Brush.horizontalGradient(
+                            listOf(
+                                if (darkTheme) Color(0x14FFFFFF) else Color(0xFFFFFFFF),
+                                if (darkTheme) Color(0x0AFFFFFF) else Color(0xFFF1F5F9)
+                            )
+                        )
+                    }
+                    val itemBorderColor = if (isSelected) {
+                        option.accent.copy(alpha = 0.85f)
+                    } else {
+                        if (darkTheme) Color(0x2438BDF8) else Color(0xFFCBD5E1)
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(itemBg)
+                            .border(if (isSelected) 1.5.dp else 1.dp, itemBorderColor, RoundedCornerShape(16.dp))
+                            .clickable { onSelectSortOrder(option.order) }
+                            .padding(horizontal = 12.dp, vertical = 12.dp)
+                            .testTag("sort_option_${option.order.name}"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(RoundedCornerShape(11.dp))
+                                    .background(
+                                        option.accent.copy(
+                                            alpha = if (isSelected) 0.24f else if (darkTheme) 0.13f else 0.12f
+                                        )
+                                    )
+                                    .border(
+                                        1.dp,
+                                        option.accent.copy(alpha = if (isSelected) 0.8f else 0.35f),
+                                        RoundedCornerShape(11.dp)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = option.icon,
+                                    contentDescription = null,
+                                    tint = option.accent,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = option.title,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                    fontFamily = PlusJakartaSans,
+                                    color = if (isSelected) option.accent else MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = option.subtitle,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = option.accent,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .border(
+                                        1.5.dp,
+                                        if (darkTheme) Color(0x4094A3B8) else Color(0xFF94A3B8),
+                                        CircleShape
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

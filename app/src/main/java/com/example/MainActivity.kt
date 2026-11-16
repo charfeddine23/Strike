@@ -326,7 +326,7 @@ fun LiquidGlassApp(
                                 onClick = { showRecordsDashboardDialog = true },
                                 isDarkTheme = isDarkTheme
                             )
-                        } else if (currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
+                        } else if (currentScreen != AppScreen.INVENTORY && currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
                             FlameEnergyBanner(
                                 flameScore = flameScore,
                                 onClick = { currentScreen = AppScreen.FLAME },
