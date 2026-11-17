@@ -133,7 +133,8 @@ fun DashboardScreen(
     viewModel: IndividualViewModel,
     onNavigateToStrike: (Long) -> Unit,
     onNavigateToCompare: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hostDataEntryExternally: Boolean = false
 ) {
     val individuals by viewModel.filteredIndividuals.collectAsStateWithLifecycle()
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
@@ -141,6 +142,7 @@ fun DashboardScreen(
     val filterType by viewModel.filterType.collectAsStateWithLifecycle()
     val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
+    val isDataEntryOpen by viewModel.isDataEntryOpen.collectAsStateWithLifecycle()
     val isDarkTheme = isSystemInDarkTheme()
     val context = LocalContext.current
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
@@ -149,7 +151,6 @@ fun DashboardScreen(
 
     var individualToDelete by remember { mutableStateOf<Individual?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
-    var showDataEntryDialog by remember { mutableStateOf(false) }
     var expandedCardIds by remember { mutableStateOf(setOf<Long>()) }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -373,7 +374,8 @@ fun DashboardScreen(
                     LiquidGlassCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 32.dp),
+                            .padding(vertical = 32.dp)
+                            .testTag("empty_records_card"),
                         shape = RoundedCornerShape(20.dp)
                     ) {
                         Column(
@@ -402,27 +404,6 @@ fun DashboardScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        Brush.linearGradient(
-                                            listOf(NeonCyan, NeonViolet)
-                                        )
-                                    )
-                                    .clickable { viewModel.seedSampleData() }
-                                    .padding(horizontal = 20.dp, vertical = 10.dp)
-                                    .testTag("seed_sample_btn"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.seed_sample_data),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
-                            }
                         }
                     }
                 }
@@ -506,8 +487,7 @@ fun DashboardScreen(
                         onGoToStrike = { onNavigateToStrike(item.id) },
                         onCompare = { onNavigateToCompare(item.id) },
                         onEdit = {
-                            viewModel.initFormForEdit(item)
-                            showDataEntryDialog = true
+                            viewModel.openDataEntryForEdit(item)
                         },
                         onDelete = { individualToDelete = item },
                         isHapticFeedbackEnabled = isHapticFeedbackEnabled,
@@ -524,8 +504,7 @@ fun DashboardScreen(
         // Floating Action Button to Add New
         FloatingActionButton(
             onClick = {
-                viewModel.initFormForNew()
-                showDataEntryDialog = true
+                viewModel.openDataEntryForNew()
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -543,11 +522,11 @@ fun DashboardScreen(
         }
     }
 
-    // Integrated Data Entry Modal Dialog (+ button & Edit action)
-    if (showDataEntryDialog) {
+    // Integrated Data Entry Modal Overlay (+ button & Edit action) when hosted standalone
+    if (!hostDataEntryExternally && isDataEntryOpen) {
         com.example.ui.components.DataEntryDialog(
             viewModel = viewModel,
-            onDismiss = { showDataEntryDialog = false },
+            onDismiss = { viewModel.closeDataEntry() },
             isDarkTheme = isDarkTheme
         )
     }

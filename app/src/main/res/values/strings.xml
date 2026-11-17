@@ -46,7 +46,7 @@
     <string name="arabic">العربية</string>
     <string name="french">Français</string>
     <string name="empty_records_title">No Records Found</string>
-    <string name="empty_records_desc">Start by adding your first individual or load sample data to explore analytics.</string>
+    <string name="empty_records_desc">Tap + below to add your first individual and start tracking metrics.</string>
     <string name="seed_sample_data">Load Sample Data</string>
     <string name="reset_all_levels_btn">Reset All Levels to Zero</string>
     <string name="reset_all_levels_desc">Resets XP, Stations (0/500), Tasks, Flame Score, Shields, Keys, Potions, Titles &amp; Avatars to initial state (preserves individuals &amp; strike logs)</string>

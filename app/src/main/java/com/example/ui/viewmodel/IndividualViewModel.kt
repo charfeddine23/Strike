@@ -38,6 +38,7 @@ import java.util.Date
 import java.util.Locale
 import com.example.ui.components.StrikerStatus
 import com.example.ui.components.StrikerStatusEvaluator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -46,6 +47,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 
 enum class SortOrder {
@@ -290,6 +292,13 @@ class IndividualViewModel(
         initialValue = null
     )
 
+    // Data Entry Modal & Saving State
+    private val _isDataEntryOpen = MutableStateFlow(false)
+    val isDataEntryOpen: StateFlow<Boolean> = _isDataEntryOpen.asStateFlow()
+
+    private val _isSavingForm = MutableStateFlow(false)
+    val isSavingForm: StateFlow<Boolean> = _isSavingForm.asStateFlow()
+
     // Data Entry Form State
     var editingId: Long? = null
         private set
@@ -309,8 +318,8 @@ class IndividualViewModel(
 
     // Live Auto-Calculations
     val liveCalculatedSize: StateFlow<Double> = combine(formLength, formWidth) { l, w ->
-        val lengthVal = l.toDoubleOrNull() ?: 0.0
-        val widthVal = w.toDoubleOrNull() ?: 0.0
+        val lengthVal = parseLocalizedDouble(l) ?: 0.0
+        val widthVal = parseLocalizedDouble(w) ?: 0.0
         Individual.calculateSize(lengthVal, widthVal)
     }.stateIn(
         scope = viewModelScope,
@@ -324,9 +333,9 @@ class IndividualViewModel(
         formCScore,
         liveCalculatedSize
     ) { s, f, c, sizeVal ->
-        val sVal = s.toDoubleOrNull() ?: 0.0
-        val fVal = f.toDoubleOrNull() ?: 0.0
-        val cVal = c.toDoubleOrNull() ?: 0.0
+        val sVal = parseLocalizedDouble(s) ?: 0.0
+        val fVal = parseLocalizedDouble(f) ?: 0.0
+        val cVal = parseLocalizedDouble(c) ?: 0.0
         Individual.calculateBoost(sVal, fVal, cVal, sizeVal)
     }.stateIn(
         scope = viewModelScope,
@@ -383,11 +392,11 @@ class IndividualViewModel(
         RoadmapManager.init(application)
         XpCalculationEngine.init(application)
         viewModelScope.launch {
-            repository.seedSampleDataIfEmpty()
-            repository.normalizeBatchStrikeEventsToLiteral()
-            val latestStrikeDate = repository.getLatestStrikeDate()
-            FlameManager.evaluateDailyInactivity(application, latestStrikeDate)
-            val trackingStartDate = FlameManager.getStreakStartDate(application)
+            withContext(Dispatchers.IO) {
+                repository.normalizeBatchStrikeEventsToLiteral()
+                val latestStrikeDate = repository.getLatestStrikeDate()
+                FlameManager.evaluateDailyInactivity(application, latestStrikeDate)
+                val trackingStartDate = FlameManager.getStreakStartDate(application)
             if (!trackingStartDate.isNullOrBlank()) {
                 val cfg = FlameManager.getSavedRecalculationConfig(application)
                 val endDate = FlameManager.getStreakEndDate(application)
@@ -406,6 +415,7 @@ class IndividualViewModel(
                     deflameStartDate = cfg.deflameRange?.takeIf { it.isCustom }?.startDate ?: trackingStartDate,
                     deflameEndDate = cfg.deflameRange?.takeIf { it.isCustom }?.endDate ?: endDate
                 )
+            }
             }
         }
     }
@@ -1096,6 +1106,20 @@ class IndividualViewModel(
         }
     }
 
+    fun openDataEntryForNew() {
+        initFormForNew()
+        _isDataEntryOpen.value = true
+    }
+
+    fun openDataEntryForEdit(individual: Individual) {
+        initFormForEdit(individual)
+        _isDataEntryOpen.value = true
+    }
+
+    fun closeDataEntry() {
+        _isDataEntryOpen.value = false
+    }
+
     fun initFormForNew() {
         editingId = null
         formName.value = ""
@@ -1125,10 +1149,13 @@ class IndividualViewModel(
     }
 
     fun saveCurrentForm(onSuccess: () -> Unit) {
+        if (_isSavingForm.value) return
+
+        val lang = currentLanguage.value
         val name = formName.value.trim()
         val phone = formPhoneNumber.value.trim()
         if (name.isEmpty()) {
-            formError.value = when (currentLanguage.value) {
+            formError.value = when (lang) {
                 "ar" -> "الاسم واللقب حقل إلزامي."
                 "fr" -> "Le nom complet est obligatoire."
                 else -> "Full name is required."
@@ -1136,22 +1163,22 @@ class IndividualViewModel(
             return
         }
 
-        val length = formLength.value.toDoubleOrNull()
-        val width = formWidth.value.toDoubleOrNull()
-        val s = formSScore.value.toDoubleOrNull()
-        val f = formFScore.value.toDoubleOrNull()
-        val c = formCScore.value.toDoubleOrNull()
+        val length = parseLocalizedDouble(formLength.value)
+        val width = parseLocalizedDouble(formWidth.value)
+        val s = parseLocalizedDouble(formSScore.value)
+        val f = parseLocalizedDouble(formFScore.value)
+        val c = parseLocalizedDouble(formCScore.value)
 
-        if (length == null || length <= 0 || width == null || width <= 0) {
-            formError.value = when (currentLanguage.value) {
+        if (length == null || length <= 0 || !length.isFinite() || width == null || width <= 0 || !width.isFinite()) {
+            formError.value = when (lang) {
                 "ar" -> "يجب إدخال أبعاد موجبة صحيحة."
                 "fr" -> "Veuillez entrer des dimensions valides et positives."
                 else -> "Please enter valid positive dimensions."
             }
             return
         }
-        if (s == null || f == null || c == null) {
-            formError.value = when (currentLanguage.value) {
+        if (s == null || !s.isFinite() || f == null || !f.isFinite() || c == null || !c.isFinite()) {
+            formError.value = when (lang) {
                 "ar" -> "يرجى إدخال قيم صحيحة للدرجات (S, F, C)."
                 "fr" -> "Veuillez entrer des scores valides (S, F, C)."
                 else -> "Please enter valid score values (S, F, C)."
@@ -1160,66 +1187,96 @@ class IndividualViewModel(
         }
 
         formError.value = null
+        _isSavingForm.value = true
 
-        val historicalStrikesTotal = formHistoricalEntries.value.sumOf { it.second }
+        val currentEditingId = editingId
+        val isNewRecord = currentEditingId == null || currentEditingId == 0L
+        val historicalSnapshot = formHistoricalEntries.value.toList()
+        val historicalStrikesTotal = historicalSnapshot.sumOf { it.second.toLong().coerceAtLeast(0L) }
+            .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        val safeType = formType.value.takeIf { it in Individual.VALID_TYPES } ?: "M"
+        val calculatedSize = Individual.calculateSize(length, width)
+        val calculatedBoost = Individual.calculateBoost(s, f, c, calculatedSize)
+
+        val existingStrikeCount = if (!isNewRecord) {
+            allIndividuals.value.find { it.id == currentEditingId }?.strikeCount ?: 0
+        } else {
+            0
+        }
+        val effectiveStrikeCount = if (!isNewRecord) {
+            (existingStrikeCount.toLong() + historicalStrikesTotal.toLong())
+                .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        } else {
+            historicalStrikesTotal
+        }
 
         val individualToSave = Individual(
-            id = editingId ?: 0,
+            id = currentEditingId ?: 0L,
             fullName = name,
             phoneNumber = phone,
-            type = formType.value,
+            type = safeType,
             length = length,
             width = width,
-            size = Individual.calculateSize(length, width),
+            size = calculatedSize,
             sScore = s,
             fScore = f,
             cScore = c,
-            boost = Individual.calculateBoost(s, f, c, Individual.calculateSize(length, width)),
-            strikeCount = if (editingId != null && historicalStrikesTotal == 0) {
-                allIndividuals.value.find { it.id == editingId }?.strikeCount ?: 0
-            } else {
-                historicalStrikesTotal
-            }
+            boost = calculatedBoost,
+            strikeCount = effectiveStrikeCount
         )
 
         viewModelScope.launch {
-            val savedId = repository.save(individualToSave)
-            val effectiveId = if (editingId != null && editingId != 0L) editingId!! else savedId
+            try {
+                withContext(Dispatchers.IO) {
+                    val savedId = repository.save(individualToSave)
+                    val effectiveId = if (!isNewRecord) currentEditingId!! else savedId
 
-            if (formHistoricalEntries.value.isNotEmpty()) {
-                repository.recordHistoricalStrikes(effectiveId, formHistoricalEntries.value, currentLanguage.value)
-            }
+                    if (historicalSnapshot.isNotEmpty()) {
+                        repository.recordHistoricalStrikes(effectiveId, historicalSnapshot, lang)
+                    }
 
-            if (editingId == null) {
-                RoadmapManager.onActionOccurred(getApplication(), "PERSON")
-                XpCalculationEngine.onNewPersonAdded(
-                    context = getApplication(),
-                    size = individualToSave.size,
-                    personName = individualToSave.fullName
-                )
-            }
+                    val appCtx = getApplication<Application>()
+                    if (isNewRecord) {
+                        RoadmapManager.onActionOccurred(appCtx, "PERSON")
+                        XpCalculationEngine.onNewPersonAdded(
+                            context = appCtx,
+                            size = individualToSave.size,
+                            personName = individualToSave.fullName
+                        )
+                    }
 
-            if (formHistoricalEntries.value.isNotEmpty()) {
-                val startDate = FlameManager.getStreakStartDate(getApplication())
-                if (!startDate.isNullOrBlank()) {
-                    XpCalculationEngine.syncRetroactiveTelemetry(
-                        context = getApplication(),
-                        trackingStartDate = startDate,
-                        flameLogs = FlameManager.flameLogs.value,
-                        strikeEvents = repository.getAllStrikeEventsList(),
-                        individuals = repository.getAllIndividualsList(),
-                        recalculateExact = false
-                    )
+                    if (historicalSnapshot.isNotEmpty()) {
+                        val startDate = FlameManager.getStreakStartDate(appCtx)
+                        if (!startDate.isNullOrBlank()) {
+                            XpCalculationEngine.syncRetroactiveTelemetry(
+                                context = appCtx,
+                                trackingStartDate = startDate,
+                                flameLogs = FlameManager.flameLogs.value,
+                                strikeEvents = repository.getAllStrikeEventsList(),
+                                individuals = repository.getAllIndividualsList(),
+                                recalculateExact = false
+                            )
+                        }
+                    }
                 }
-            }
 
-            val savedMsg = when (currentLanguage.value) {
-                "ar" -> "تم حفظ السجل بنجاح"
-                "fr" -> "Enregistrement sauvegardé avec succès"
-                else -> "Record saved successfully"
+                val savedMsg = when (lang) {
+                    "ar" -> "تم حفظ السجل بنجاح"
+                    "fr" -> "Enregistrement sauvegardé avec succès"
+                    else -> "Record saved successfully"
+                }
+                emitMessage(savedMsg)
+                _isDataEntryOpen.value = false
+                onSuccess()
+            } catch (e: Exception) {
+                formError.value = when (lang) {
+                    "ar" -> "تعذر حفظ السجل: ${e.localizedMessage ?: "خطأ غير متوقع"}"
+                    "fr" -> "Impossible d'enregistrer : ${e.localizedMessage ?: "Erreur inattendue"}"
+                    else -> "Could not save record: ${e.localizedMessage ?: "Unexpected error"}"
+                }
+            } finally {
+                _isSavingForm.value = false
             }
-            emitMessage(savedMsg)
-            onSuccess()
         }
     }
 
@@ -1341,20 +1398,6 @@ class IndividualViewModel(
         }
     }
 
-    fun reloadSampleData() {
-        viewModelScope.launch {
-            repository.seedSampleData()
-            val msg = when (currentLanguage.value) {
-                "ar" -> "تم إعادة تحميل البيانات النموذجية بنجاح"
-                "fr" -> "Données d'exemple rechargées avec succès"
-                else -> "Sample data reloaded successfully"
-            }
-            emitMessage(msg)
-        }
-    }
-
-    fun seedSampleData() = reloadSampleData()
-
     /**
      * Literally resets all game levels, consumables, unlocked titles, and unlocked avatars
      * back to their initial base state WITHOUT touching individuals or strike records.
@@ -1405,6 +1448,29 @@ class IndividualViewModel(
     }
 
     companion object {
+        fun normalizeNumericInput(raw: String): String {
+            if (raw.isEmpty()) return ""
+            val sb = StringBuilder(raw.length)
+            for (ch in raw.trim()) {
+                when (ch) {
+                    in '٠'..'٩' -> sb.append(('0'.code + (ch.code - '٠'.code)).toChar())
+                    in '۰'..'۹' -> sb.append(('0'.code + (ch.code - '۰'.code)).toChar())
+                    '٫', '،', ',' -> sb.append('.')
+                    '−', '–' -> sb.append('-')
+                    else -> if (!ch.isWhitespace()) sb.append(ch)
+                }
+            }
+            return sb.toString()
+        }
+
+        fun parseLocalizedDouble(raw: String): Double? {
+            return normalizeNumericInput(raw).toDoubleOrNull()
+        }
+
+        fun parseLocalizedInt(raw: String): Int? {
+            return normalizeNumericInput(raw).toIntOrNull()
+        }
+
         fun provideFactory(application: Application): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

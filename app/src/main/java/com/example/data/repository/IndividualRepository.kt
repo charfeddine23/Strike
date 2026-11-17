@@ -52,7 +52,12 @@ class IndividualRepository(
             boost = calculatedBoost,
             updatedAt = System.currentTimeMillis()
         )
-        return dao.insert(prepared)
+        return if (prepared.id > 0L) {
+            dao.update(prepared)
+            prepared.id
+        } else {
+            dao.insert(prepared)
+        }
     }
 
     suspend fun delete(individual: Individual) {
@@ -315,63 +320,6 @@ class IndividualRepository(
         return strikeEventDao.insertEvent(event)
     }
 
-    suspend fun seedSampleDataIfEmpty() {
-        if (dao.getCount() == 0) {
-            seedSampleData()
-        }
-    }
-
-    suspend fun seedSampleData() {
-        val samples = listOf(
-            createSample("Tariq Al-Mansoor", "M", 24.5, 12.0, 88.0, 76.5, 92.0, 42, "+15550198"),
-            createSample("Alexandre Moreau", "TS", 30.0, 15.5, 94.0, 85.0, 89.5, 38, "+33612345678"),
-            createSample("Fatima Zahra", "FG", 18.0, 14.2, 82.5, 91.0, 78.0, 55, "+213555123456"),
-            createSample("Karim Ben Salah", "G", 28.0, 16.0, 79.0, 83.5, 87.0, 29, "+213555987654"),
-            createSample("Sarah Jenkins", "M", 22.0, 11.5, 90.0, 88.0, 93.0, 47, "+15550244"),
-            createSample("Yassine Trabelsi", "FG", 26.5, 13.8, 86.0, 79.5, 84.0, 31, "+21698123456")
-        )
-        dao.insertAll(samples)
-
-        // Seed realistic literal 1-by-1 multi-year strike events (each row has count = 1)
-        val groupedSeeds = listOf(
-            Triple(1L to "Tariq Al-Mansoor", 2026 to "2026-10-15", 18 to (94.5 to "Current season strike")),
-            Triple(1L to "Tariq Al-Mansoor", 2025 to "2025-08-20", 14 to (90.0 to "2025 tournament strike")),
-            Triple(1L to "Tariq Al-Mansoor", 2024 to "2024-05-12", 10 to (88.0 to "2024 qualification strike")),
-            Triple(3L to "Fatima Zahra", 2026 to "2026-09-10", 25 to (91.0 to "Championship strike")),
-            Triple(3L to "Fatima Zahra", 2025 to "2025-11-04", 20 to (87.5 to "2025 league strike")),
-            Triple(3L to "Fatima Zahra", 2024 to "2024-07-22", 10 to (82.5 to "2024 debut strike")),
-            Triple(2L to "Alexandre Moreau", 2026 to "2026-06-18", 22 to (89.5 to "Power strike")),
-            Triple(2L to "Alexandre Moreau", 2025 to "2025-04-10", 16 to (85.0 to "Mid-season strike"))
-        )
-        val nowTs = System.currentTimeMillis()
-        var tsOffset = 0L
-        val sampleEvents = groupedSeeds.flatMap { (personPair, datePair, metaPair) ->
-            val (indId, indName) = personPair
-            val (year, dateStr) = datePair
-            val (totalCount, perfNotes) = metaPair
-            val (perfVal, noteText) = perfNotes
-            val strikeType = if (year >= 2026) "Auto-Recorded" else "Historical Entry"
-            (0 until totalCount).map {
-                tsOffset++
-                StrikeEvent(
-                    individualId = indId,
-                    individualName = indName,
-                    year = year,
-                    date = dateStr,
-                    time = "14:22:10",
-                    count = 1,
-                    strikeType = strikeType,
-                    performanceValue = perfVal,
-                    notes = noteText,
-                    timestamp = nowTs - ((groupedSeeds.sumOf { g -> g.third.first } - tsOffset) * 1000L)
-                )
-            }
-        }
-        sampleEvents.chunked(DB_INSERT_CHUNK_SIZE).forEach { chunk ->
-            strikeEventDao.insertAll(chunk)
-        }
-    }
-
     suspend fun getAllIndividualsList(): List<Individual> = dao.getAllIndividualsList()
 
     suspend fun getAllStrikeEventsList(): List<StrikeEvent> = strikeEventDao.getAllStrikeEventsList()
@@ -393,32 +341,4 @@ class IndividualRepository(
     }
 
     suspend fun getIndividualsWithPhone(): List<Individual> = dao.getIndividualsWithPhone()
-
-    private fun createSample(
-        name: String,
-        type: String,
-        length: Double,
-        width: Double,
-        sScore: Double,
-        fScore: Double,
-        cScore: Double,
-        strikes: Int,
-        phone: String = ""
-    ): Individual {
-        val size = Individual.calculateSize(length, width)
-        val boost = Individual.calculateBoost(sScore, fScore, cScore, size)
-        return Individual(
-            fullName = name,
-            type = type,
-            length = length,
-            width = width,
-            size = size,
-            sScore = sScore,
-            fScore = fScore,
-            cScore = cScore,
-            boost = boost,
-            strikeCount = strikes,
-            phoneNumber = phone
-        )
-    }
 }

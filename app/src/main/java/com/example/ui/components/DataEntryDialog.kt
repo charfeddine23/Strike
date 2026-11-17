@@ -3,12 +3,14 @@ package com.example.ui.components
 import android.Manifest
 import android.app.Activity
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,16 +22,18 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Calculate
@@ -69,8 +73,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
@@ -110,6 +112,7 @@ fun DataEntryDialog(
 
     val calculatedSize by viewModel.liveCalculatedSize.collectAsStateWithLifecycle()
     val calculatedBoost by viewModel.liveCalculatedBoost.collectAsStateWithLifecycle()
+    val isSaving by viewModel.isSavingForm.collectAsStateWithLifecycle()
 
     val isEditing = viewModel.editingId != null
     val context = LocalContext.current
@@ -138,16 +141,24 @@ fun DataEntryDialog(
         if (result.resultCode == Activity.RESULT_OK) {
             val contactUri: Uri? = result.data?.data
             if (contactUri != null) {
-                val imported = ContactsPickerHelper.extractContactFromUri(context, contactUri)
-                if (imported != null) {
-                    applyImportedContact(imported)
-                } else if (!ContactsPickerHelper.hasReadContactsPermission(context)) {
-                    showContactsPermissionDialog = true
-                } else {
-                    viewModel.formError.value = when (currentLang) {
-                        "ar" -> "تعذر قراءة بيانات جهة الاتصال المختارة"
-                        "fr" -> "Impossible de lire le contact sélectionné"
-                        else -> "Could not read selected contact details"
+                coroutineScope.launch {
+                    val imported = try {
+                        withContext(Dispatchers.IO) {
+                            ContactsPickerHelper.extractContactFromUri(context, contactUri)
+                        }
+                    } catch (_: Throwable) {
+                        null
+                    }
+                    if (imported != null) {
+                        applyImportedContact(imported)
+                    } else if (!ContactsPickerHelper.hasReadContactsPermission(context)) {
+                        showContactsPermissionDialog = true
+                    } else {
+                        viewModel.formError.value = when (currentLang) {
+                            "ar" -> "تعذر قراءة بيانات جهة الاتصال المختارة"
+                            "fr" -> "Impossible de lire le contact sélectionné"
+                            else -> "Could not read selected contact details"
+                        }
                     }
                 }
             }
@@ -163,8 +174,12 @@ fun DataEntryDialog(
         if (!launched) {
             if (hasPermission) {
                 coroutineScope.launch {
-                    val loaded = withContext(Dispatchers.IO) {
-                        ContactsPickerHelper.loadDeviceContacts(context)
+                    val loaded = try {
+                        withContext(Dispatchers.IO) {
+                            ContactsPickerHelper.loadDeviceContacts(context)
+                        }
+                    } catch (_: Throwable) {
+                        emptyList()
                     }
                     inAppContactsList = loaded
                     showInAppContactsPicker = true
@@ -182,13 +197,17 @@ fun DataEntryDialog(
     }
 
     fun onOpenContacts() {
-        val hasPerm = ContactsPickerHelper.hasReadContactsPermission(context)
+        val hasPerm = try {
+            ContactsPickerHelper.hasReadContactsPermission(context)
+        } catch (_: Throwable) {
+            false
+        }
         if (hasPerm) {
             launchContactsFlow(hasPermission = true)
         } else {
             try {
                 readContactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
-            } catch (_: Exception) {
+            } catch (_: Throwable) {
                 launchContactsFlow(hasPermission = false)
             }
         }
@@ -200,13 +219,22 @@ fun DataEntryDialog(
     val totalHistoricalStrikes = historicalEntries.sumOf { it.second }
 
     val modalBg = if (isDarkTheme) Color(0xFF070B14) else Color(0xFFF1F5F9)
+    val scrollState = rememberScrollState()
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
+    BackHandler(enabled = !showInAppContactsPicker && !showContactsPermissionDialog) {
+        onDismiss()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(modalBg)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            )
+            .testTag("data_entry_overlay")
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
@@ -255,6 +283,7 @@ fun DataEntryDialog(
                                             onDismiss()
                                         }
                                     },
+                                    enabled = !isSaving,
                                     shape = RoundedCornerShape(12.dp),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                     colors = ButtonDefaults.buttonColors(
@@ -314,46 +343,46 @@ fun DataEntryDialog(
                         }
                     }
 
-                    LazyColumn(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
-                        contentPadding = PaddingValues(16.dp),
+                            .weight(1f)
+                            .verticalScroll(scrollState)
+                            .imePadding()
+                            .padding(16.dp)
+                            .testTag("data_entry_scroll_container"),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         // Error message banner
                         if (error != null) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(NeonRose.copy(alpha = 0.15f))
-                                        .border(1.dp, NeonRose, RoundedCornerShape(12.dp))
-                                        .padding(12.dp)
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Default.ErrorOutline,
-                                            contentDescription = null,
-                                            tint = NeonRose,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = error ?: "",
-                                            color = NeonRose,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                    }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(NeonRose.copy(alpha = 0.15f))
+                                    .border(1.dp, NeonRose, RoundedCornerShape(12.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.ErrorOutline,
+                                        contentDescription = null,
+                                        tint = NeonRose,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = error ?: "",
+                                        color = NeonRose,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 }
                             }
                         }
 
                         // Section 1: Individual Profile & Type
-                        item {
-                            LiquidGlassCard(
+                        LiquidGlassCard(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(20.dp)
                             ) {
@@ -522,12 +551,10 @@ fun DataEntryDialog(
                                         }
                                     }
                                 }
-                            }
                         }
 
                         // Section 2: Physical Dimensions & Live SIZE Calculation
-                        item {
-                            LiquidGlassCard(
+                        LiquidGlassCard(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(20.dp)
                             ) {
@@ -626,12 +653,10 @@ fun DataEntryDialog(
                                         )
                                     }
                                 }
-                            }
                         }
 
                         // Section 3: Scores & Live BOOST Calculation
-                        item {
-                            LiquidGlassCard(
+                        LiquidGlassCard(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(20.dp)
                             ) {
@@ -755,9 +780,9 @@ fun DataEntryDialog(
 
                                         Spacer(modifier = Modifier.height(6.dp))
 
-                                        val s = sScore.toDoubleOrNull() ?: 0.0
-                                        val f = fScore.toDoubleOrNull() ?: 0.0
-                                        val c = cScore.toDoubleOrNull() ?: 0.0
+                                        val s = IndividualViewModel.parseLocalizedDouble(sScore) ?: 0.0
+                                        val f = IndividualViewModel.parseLocalizedDouble(fScore) ?: 0.0
+                                        val c = IndividualViewModel.parseLocalizedDouble(cScore) ?: 0.0
                                         val sumScores = ((s + f + c) * 100.0).toLong() / 100.0
                                         val sizeBonus = ((calculatedSize / 100.0) * 100.0).toLong() / 100.0
 
@@ -772,12 +797,10 @@ fun DataEntryDialog(
                                         )
                                     }
                                 }
-                            }
                         }
 
                         // Section 4: Historical Strikes Entry per Year
-                        item {
-                            LiquidGlassCard(
+                        LiquidGlassCard(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(20.dp)
                             ) {
@@ -870,12 +893,18 @@ fun DataEntryDialog(
 
                                         Button(
                                             onClick = {
-                                                val y = inputYear.toIntOrNull()
-                                                val c = inputStrikeCount.toIntOrNull()
-                                                if (y != null && y in 2000..2050 && c != null && c > 0) {
+                                                val y = IndividualViewModel.parseLocalizedInt(inputYear)
+                                                val c = IndividualViewModel.parseLocalizedInt(inputStrikeCount)
+                                                if (y != null && y in 2000..2050 && c != null && c in 1..100_000) {
                                                     viewModel.addHistoricalYearEntry(y, c)
                                                     inputYear = (y - 1).toString()
                                                     inputStrikeCount = "10"
+                                                } else {
+                                                    viewModel.formError.value = when (currentLang) {
+                                                        "ar" -> "يرجى إدخال سنة صحيحة (2000-2050) وعدد ضربات صالح"
+                                                        "fr" -> "Veuillez saisir une année valide (2000-2050) et un nombre positif"
+                                                        else -> "Please enter a valid year (2000-2050) and strike count"
+                                                    }
                                                 }
                                             },
                                             modifier = Modifier
@@ -962,98 +991,97 @@ fun DataEntryDialog(
                                         }
                                     }
                                 }
-                            }
                         }
 
                         // Action Buttons: Save & Cancel
-                        item {
-                            Row(
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = onDismiss,
+                                enabled = !isSaving,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    .weight(1f)
+                                    .height(52.dp)
+                                    .testTag("cancel_btn"),
+                                shape = RoundedCornerShape(14.dp)
                             ) {
-                                OutlinedButton(
-                                    onClick = onDismiss,
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.cancel))
+                            }
+
+                            if (!isEditing) {
+                                Button(
+                                    onClick = {
+                                        viewModel.saveCurrentForm {
+                                            onDismiss()
+                                        }
+                                    },
+                                    enabled = !isSaving,
                                     modifier = Modifier
-                                        .weight(1f)
+                                        .weight(2f)
                                         .height(52.dp)
-                                        .testTag("cancel_btn"),
-                                    shape = RoundedCornerShape(14.dp)
+                                        .testTag("save_record_btn"),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = NeonCyan,
+                                        contentColor = Color(0xFF021B26)
+                                    )
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Close,
+                                        imageVector = Icons.Default.Check,
                                         contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(20.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(stringResource(R.string.cancel))
-                                }
-
-                                if (!isEditing) {
-                                    Button(
-                                        onClick = {
-                                            viewModel.saveCurrentForm {
-                                                onDismiss()
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .weight(2f)
-                                            .height(52.dp)
-                                            .testTag("save_record_btn"),
-                                        shape = RoundedCornerShape(14.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = NeonCyan,
-                                            contentColor = Color(0xFF021B26)
-                                        )
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = stringResource(R.string.save_record),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 16.sp
-                                        )
-                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = stringResource(R.string.save_record),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp
+                                    )
                                 }
                             }
                         }
 
-                        item {
-                            Spacer(modifier = Modifier.height(24.dp))
-                        }
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
                 }
             }
         }
-    }
 
-    if (showInAppContactsPicker) {
-        InAppContactsPickerDialog(
-            contacts = inAppContactsList,
-            currentLang = currentLang,
-            onSelectContact = { imported ->
-                applyImportedContact(imported)
-                showInAppContactsPicker = false
-            },
-            onDismiss = { showInAppContactsPicker = false },
-            isDarkTheme = isDarkTheme
-        )
-    }
+        if (showInAppContactsPicker) {
+            InAppContactsPickerDialog(
+                contacts = inAppContactsList,
+                currentLang = currentLang,
+                onSelectContact = { imported ->
+                    applyImportedContact(imported)
+                    showInAppContactsPicker = false
+                },
+                onDismiss = { showInAppContactsPicker = false },
+                isDarkTheme = isDarkTheme,
+                useDialogWindow = false
+            )
+        }
 
-    if (showContactsPermissionDialog) {
-        ContactsPermissionRequiredDialog(
-            currentLang = currentLang,
-            onOpenSettings = {
-                showContactsPermissionDialog = false
-                ContactsPickerHelper.openAppSettings(context)
-            },
-            onDismiss = { showContactsPermissionDialog = false },
-            isDarkTheme = isDarkTheme
-        )
+        if (showContactsPermissionDialog) {
+            ContactsPermissionRequiredDialog(
+                currentLang = currentLang,
+                onOpenSettings = {
+                    showContactsPermissionDialog = false
+                    ContactsPickerHelper.openAppSettings(context)
+                },
+                onDismiss = { showContactsPermissionDialog = false },
+                isDarkTheme = isDarkTheme,
+                useDialogWindow = false
+            )
+        }
     }
 }

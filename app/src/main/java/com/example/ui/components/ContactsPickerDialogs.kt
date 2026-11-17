@@ -1,9 +1,11 @@
 package com.example.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,9 +13,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -78,7 +82,8 @@ fun InAppContactsPickerDialog(
     currentLang: String,
     onSelectContact: (ImportedContact) -> Unit,
     onDismiss: () -> Unit,
-    isDarkTheme: Boolean = isSystemInDarkTheme()
+    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    useDialogWindow: Boolean = false
 ) {
     val isAr = currentLang == "ar"
     val isFr = currentLang == "fr"
@@ -96,15 +101,17 @@ fun InAppContactsPickerDialog(
     val panelBg = if (isDarkTheme) Color(0xF50B1324) else Color(0xFFF8FAFC)
     val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
+    val cardContent: @Composable () -> Unit = {
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
                 .widthIn(max = 460.dp)
                 .heightIn(max = 560.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {}
+                )
                 .shadow(
                     elevation = 24.dp,
                     shape = RoundedCornerShape(24.dp),
@@ -347,6 +354,31 @@ fun InAppContactsPickerDialog(
             }
         }
     }
+
+    if (useDialogWindow) {
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            cardContent()
+        }
+    } else {
+        BackHandler(onBack = onDismiss)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.62f))
+                .imePadding()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            cardContent()
+        }
+    }
 }
 
 /**
@@ -357,21 +389,24 @@ fun ContactsPermissionRequiredDialog(
     currentLang: String,
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
-    isDarkTheme: Boolean = isSystemInDarkTheme()
+    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    useDialogWindow: Boolean = false
 ) {
     val isAr = currentLang == "ar"
     val isFr = currentLang == "fr"
     val panelBg = if (isDarkTheme) Color(0xF50B1324) else Color(0xFFF8FAFC)
     val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
+    val cardContent: @Composable () -> Unit = {
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.88f)
                 .widthIn(max = 420.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {}
+                )
                 .shadow(20.dp, RoundedCornerShape(24.dp))
                 .clip(RoundedCornerShape(24.dp))
                 .background(panelBg)
@@ -480,6 +515,30 @@ fun ContactsPermissionRequiredDialog(
                     }
                 }
             }
+        }
+    }
+
+    if (useDialogWindow) {
+        Dialog(
+            onDismissRequest = onDismiss,
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            cardContent()
+        }
+    } else {
+        BackHandler(onBack = onDismiss)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.62f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            cardContent()
         }
     }
 }

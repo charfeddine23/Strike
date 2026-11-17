@@ -46,7 +46,7 @@
     <string name="arabic">العربية</string>
     <string name="french">Français</string>
     <string name="empty_records_title">لا توجد سجلات بعد</string>
-    <string name="empty_records_desc">ابدأ بإضافة أول فرد أو قم بتحميل بيانات تجريبية لاستكشاف التحليلات.</string>
+    <string name="empty_records_desc">اضغط على زر + بالأسفل لإضافة أول فرد والبدء في تتبع الإحصائيات.</string>
     <string name="seed_sample_data">تحميل بيانات نموذجية</string>
     <string name="reset_all_levels_btn">تصفير كل المستويات إلى الصفر</string>
     <string name="reset_all_levels_desc">إرجاع الخبرة، المحطات، المهام، الشعلة، الدروع، المفاتيح، الجرعات، والألقاب والأفاتارات إلى الحالة الأولية (مع الحفاظ على الأفراد وسجلات السترايك)</string>

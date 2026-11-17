@@ -215,6 +215,7 @@ fun LiquidGlassApp(
     val allIndividuals by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val strikeSearchQuery by viewModel.strikeSearchQuery.collectAsStateWithLifecycle()
     val filteredStrikeIndividuals by viewModel.filteredStrikeIndividuals.collectAsStateWithLifecycle()
+    val isDataEntryOpen by viewModel.isDataEntryOpen.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Automatically check for updates when entering the app (including after fingerprint unlock)
@@ -388,7 +389,8 @@ fun LiquidGlassApp(
                         onNavigateToCompare = { id ->
                             viewModel.selectPersonA(id)
                             currentScreen = AppScreen.COMPARISON
-                        }
+                        },
+                        hostDataEntryExternally = true
                     )
 
                     AppScreen.INVENTORY -> InventoryScreen(
@@ -456,6 +458,15 @@ fun LiquidGlassApp(
             onDismiss = { showSettingsDialog = false },
             onLockAppNow = { viewModel.lockApp() }
         )
+
+        // Full-Screen In-Tree Data Entry Overlay (overlays Scaffold & bars cleanly without Dialog window leaks)
+        if (isDataEntryOpen) {
+            com.example.ui.components.DataEntryDialog(
+                viewModel = viewModel,
+                onDismiss = { viewModel.closeDataEntry() },
+                isDarkTheme = isDarkTheme
+            )
+        }
     }
 
     // Streak Start Date Dialog (Launched by 2-second hold on the flame icon)

@@ -46,7 +46,7 @@
     <string name="arabic">العربية</string>
     <string name="french">Français</string>
     <string name="empty_records_title">Aucun Enregistrement</string>
-    <string name="empty_records_desc">Commencez par ajouter un individu ou chargez les données d\'exemple pour explorer les métriques.</string>
+    <string name="empty_records_desc">Appuyez sur + ci-dessous pour ajouter votre premier individu et suivre les statistiques.</string>
     <string name="seed_sample_data">Charger Données Modèles</string>
     <string name="reset_all_levels_btn">Réinitialiser les Niveaux à Zéro</string>
     <string name="reset_all_levels_desc">Remet XP, Stations, Missions, Flamme, Boucliers, Clés, Potions, Titres et Avatars à l\'état initial (conserve individus et strikes)</string>
