@@ -40,22 +40,27 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
+import com.example.data.repository.IndividualRepository
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.example.ui.components.CosmicStrikeButton
 import com.example.ui.components.GlassTypeBadge
@@ -76,6 +81,10 @@ import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.util.HapticHelper
+import com.example.util.SmartMatchReason
+import com.example.util.SmartSearchResult
+import java.text.NumberFormat
+import java.util.Locale
 
 @Composable
 fun StrikeScreen(
@@ -86,10 +95,14 @@ fun StrikeScreen(
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
     val currentTarget by viewModel.currentStrikeIndividual.collectAsStateWithLifecycle()
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
+    val strikeSearchQuery by viewModel.strikeSearchQuery.collectAsStateWithLifecycle()
+    val filteredSearchResults by viewModel.filteredStrikeIndividuals.collectAsStateWithLifecycle()
     val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
+    val isSearchActive = strikeSearchQuery.isNotBlank()
+    val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
 
     fun triggerHapticFeedback() {
         HapticHelper.triggerStrikeHaptic(context, isHapticFeedbackEnabled)
@@ -105,15 +118,51 @@ fun StrikeScreen(
             // STRIKE ARENA
             // ==========================================
 
-                // Individual Selector Carousel
+                // Individual Selector Carousel (Shows live Smart Search results when searching)
                 item {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = stringResource(R.string.select_person),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("select_individual_section")
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isSearchActive) {
+                                    when (currentLang) {
+                                        "ar" -> "نتائج البحث (${filteredSearchResults.size})"
+                                        "fr" -> "Résultats (${filteredSearchResults.size})"
+                                        else -> "Search Results (${filteredSearchResults.size})"
+                                    }
+                                } else {
+                                    stringResource(R.string.select_person)
+                                },
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSearchActive) NeonCyan else MaterialTheme.colorScheme.onSurface
+                            )
+
+                            if (isSearchActive) {
+                                TextButton(
+                                    onClick = { viewModel.clearStrikeSearch() },
+                                    modifier = Modifier.testTag("strike_clear_search_results")
+                                ) {
+                                    Text(
+                                        text = when (currentLang) {
+                                            "ar" -> "عرض الكل"
+                                            "fr" -> "Tout afficher"
+                                            else -> "Show All"
+                                        },
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = NeonViolet
+                                    )
+                                }
+                            }
+                        }
                         Spacer(modifier = Modifier.height(10.dp))
 
                         if (allList.isEmpty()) {
@@ -127,13 +176,67 @@ fun StrikeScreen(
                                     fontSize = 13.sp
                                 )
                             }
+                        } else if (isSearchActive && filteredSearchResults.isEmpty()) {
+                            LiquidGlassCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("strike_search_empty"),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = when (currentLang) {
+                                            "ar" -> "لم يتم العثور على فرد مطابق لـ \"$strikeSearchQuery\""
+                                            "fr" -> "Aucun résultat pour « $strikeSearchQuery »"
+                                            else -> "No individual matching \"$strikeSearchQuery\""
+                                        },
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 12.5.sp,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(onClick = { viewModel.clearStrikeSearch() }) {
+                                        Text(
+                                            text = if (isAr) "مسح" else "Clear",
+                                            color = NeonCyan,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
                         } else {
+                            val displayedItems: List<SmartSearchResult> = if (isSearchActive) {
+                                filteredSearchResults
+                            } else {
+                                allList.map { SmartSearchResult(it, 0, SmartMatchReason.EXACT_NAME) }
+                            }
+
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag(if (isSearchActive) "strike_smart_search_results" else "strike_individuals_carousel")
                             ) {
-                                items(allList) { individual ->
+                                items(displayedItems, key = { it.individual.id }) { searchItem ->
+                                    val individual = searchItem.individual
                                     val isSelected = currentTarget?.id == individual.id
+                                    val matchTag = if (isSearchActive) {
+                                        when (searchItem.reason) {
+                                            SmartMatchReason.EXACT_NAME -> if (isAr) "مطابق" else "Exact"
+                                            SmartMatchReason.PREFIX_NAME, SmartMatchReason.TOKEN_MATCH -> if (isAr) "مباشر" else "Direct"
+                                            SmartMatchReason.CONTAINS_NAME -> if (isAr) "بالاسم" else "Name"
+                                            SmartMatchReason.TYPE_MATCH -> if (isAr) "الفئة" else "Type"
+                                            SmartMatchReason.PHONE_MATCH -> if (isAr) "هاتف" else "Phone"
+                                            SmartMatchReason.FUZZY_NAME -> if (isAr) "ذكي" else "Smart"
+                                            SmartMatchReason.STAT_MATCH -> if (isAr) "رقم" else "Stat"
+                                        }
+                                    } else {
+                                        null
+                                    }
+
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(16.dp))
@@ -142,22 +245,45 @@ fun StrikeScreen(
                                             )
                                             .border(
                                                 1.5.dp,
-                                                if (isSelected) NeonCyan else Color(0x2838BDF8),
+                                                if (isSelected) NeonCyan else if (isSearchActive) NeonViolet.copy(alpha = 0.55f) else Color(0x2838BDF8),
                                                 RoundedCornerShape(16.dp)
                                             )
                                             .clickable { viewModel.selectStrikeIndividual(individual.id) }
                                             .padding(horizontal = 14.dp, vertical = 10.dp)
+                                            .testTag("strike_person_chip_${individual.id}")
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             GlassTypeBadge(type = individual.type)
                                             Spacer(modifier = Modifier.width(10.dp))
                                             Column {
-                                                Text(
-                                                    text = individual.fullName,
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                    color = if (isSelected) NeonCyan else MaterialTheme.colorScheme.onSurface,
-                                                    fontSize = 13.sp
-                                                )
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                                ) {
+                                                    Text(
+                                                        text = individual.fullName,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                        color = if (isSelected) NeonCyan else MaterialTheme.colorScheme.onSurface,
+                                                        fontSize = 13.sp,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    if (matchTag != null) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .clip(RoundedCornerShape(6.dp))
+                                                                .background(NeonViolet.copy(alpha = 0.2f))
+                                                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = matchTag,
+                                                                fontSize = 9.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = NeonViolet
+                                                            )
+                                                        }
+                                                    }
+                                                }
                                                 Text(
                                                     text = if (isAr) "${individual.strikeCount} ضربة" else "${individual.strikeCount} strikes",
                                                     fontSize = 11.sp,
@@ -365,7 +491,7 @@ fun StrikeScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "(${allStrikeEvents.size})",
+                                    text = "(${nf.format(allStrikeEvents.size)} / ${nf.format(IndividualRepository.MAX_LITERAL_RECENT_STRIKES)})",
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

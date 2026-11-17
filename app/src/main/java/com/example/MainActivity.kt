@@ -90,7 +90,6 @@ import com.example.data.update.AppUpdateState
 import com.example.ui.components.AppUpdateCardDialog
 import com.example.ui.components.DnaHeaderIcon
 import com.example.ui.components.DynamicStreakShieldHeaderButton
-import com.example.ui.components.FlameEnergyBanner
 import com.example.ui.components.FullscreenFingerprintUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
@@ -98,6 +97,7 @@ import com.example.ui.components.LuxurySettingsMenuButton
 import com.example.ui.components.RecordsDashboardBanner
 import com.example.ui.components.RecordsDashboardExpandablePanel
 import com.example.ui.components.SettingsSideDrawer
+import com.example.ui.components.SmartSearchBanner
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.DeviationsScreen
@@ -213,6 +213,8 @@ fun LiquidGlassApp(
     val snackbarHostState = remember { SnackbarHostState() }
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     val allIndividuals by viewModel.allIndividuals.collectAsStateWithLifecycle()
+    val strikeSearchQuery by viewModel.strikeSearchQuery.collectAsStateWithLifecycle()
+    val filteredStrikeIndividuals by viewModel.filteredStrikeIndividuals.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Automatically check for updates when entering the app (including after fingerprint unlock)
@@ -327,10 +329,14 @@ fun LiquidGlassApp(
                                 isExpanded = showRecordsDashboardDialog,
                                 isDarkTheme = isDarkTheme
                             )
-                        } else if (currentScreen != AppScreen.INVENTORY && currentScreen != AppScreen.FLAME && currentScreen != AppScreen.DEVIATIONS && currentScreen != AppScreen.ROADMAP && currentScreen != AppScreen.PROFILE) {
-                            FlameEnergyBanner(
-                                flameScore = flameScore,
-                                onClick = { currentScreen = AppScreen.FLAME },
+                        } else if (currentScreen == AppScreen.STRIKE || currentScreen == AppScreen.COMPARISON) {
+                            SmartSearchBanner(
+                                query = strikeSearchQuery,
+                                onQueryChange = { viewModel.setStrikeSearchQuery(it) },
+                                onClearQuery = { viewModel.clearStrikeSearch() },
+                                matchedCount = filteredStrikeIndividuals.size,
+                                totalCount = allIndividuals.size,
+                                currentLang = currentLang,
                                 isDarkTheme = isDarkTheme
                             )
                         }

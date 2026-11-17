@@ -13,6 +13,10 @@ class IndividualRepository(
     private val dao: IndividualDao,
     private val strikeEventDao: StrikeEventDao
 ) {
+    companion object {
+        const val MAX_LITERAL_RECENT_STRIKES = 10_000
+        private const val DB_INSERT_CHUNK_SIZE = 500
+    }
 
     val allIndividuals: Flow<List<Individual>> = dao.getAllIndividuals()
     val allStrikeEvents: Flow<List<StrikeEvent>> = strikeEventDao.getAllStrikeEvents()
@@ -56,8 +60,8 @@ class IndividualRepository(
     }
 
     /**
-     * Increments the individual's strike count and AUTOMATICALLY creates an audit StrikeEvent record
-     * with the current date, time, year, and individual details.
+     * Increments the individual's strike count and AUTOMATICALLY creates literal 1-by-1 audit
+     * [StrikeEvent] records (each with count = 1) up to [MAX_LITERAL_RECENT_STRIKES] (10,000).
      */
     suspend fun incrementStrike(id: Long, delta: Int = 1): Long {
         val countDelta = delta.coerceAtLeast(1)
@@ -68,27 +72,78 @@ class IndividualRepository(
         val year = now.get(Calendar.YEAR)
         val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now.time)
         val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(now.time)
+        val baseTimestamp = System.currentTimeMillis()
+        val personName = individual?.fullName ?: "Target #$id"
+        val boostVal = individual?.boost ?: 0.0
 
-        val typeLabel = when (countDelta) {
-            1 -> "Strike +1"
-            5 -> "Quick +5"
-            10 -> "Burst +10"
-            else -> "Batch +$countDelta"
+        val currentCount = strikeEventDao.getCount()
+        val availableSlots = (MAX_LITERAL_RECENT_STRIKES - currentCount).coerceAtLeast(0)
+        val eventsToInsertCount = minOf(countDelta, availableSlots)
+
+        if (eventsToInsertCount <= 0) {
+            // If log already hit 10,000 ceiling, trim oldest excess so the newest strike is always recorded literally
+            trimOldestStrikesBeyondLimit(MAX_LITERAL_RECENT_STRIKES - 1)
+            val single = StrikeEvent(
+                individualId = id,
+                individualName = personName,
+                year = year,
+                date = dateStr,
+                time = timeStr,
+                count = 1,
+                strikeType = "Strike +1",
+                performanceValue = boostVal,
+                notes = if (countDelta > 1) "Literal strike (batch +$countDelta)" else "Auto-recorded literal strike",
+                timestamp = baseTimestamp
+            )
+            return strikeEventDao.insertEvent(single)
         }
 
-        val event = StrikeEvent(
-            individualId = id,
-            individualName = individual?.fullName ?: "Target #$id",
-            year = year,
-            date = dateStr,
-            time = timeStr,
-            count = countDelta,
-            strikeType = typeLabel,
-            performanceValue = individual?.boost ?: 0.0,
-            notes = "Auto-recorded strike event",
-            timestamp = System.currentTimeMillis()
-        )
-        return strikeEventDao.insertEvent(event)
+        if (eventsToInsertCount == 1 && countDelta == 1) {
+            val event = StrikeEvent(
+                individualId = id,
+                individualName = personName,
+                year = year,
+                date = dateStr,
+                time = timeStr,
+                count = 1,
+                strikeType = "Strike +1",
+                performanceValue = boostVal,
+                notes = "Auto-recorded strike event",
+                timestamp = baseTimestamp
+            )
+            return strikeEventDao.insertEvent(event)
+        }
+
+        val literalEvents = (0 until eventsToInsertCount).map { idx ->
+            StrikeEvent(
+                individualId = id,
+                individualName = personName,
+                year = year,
+                date = dateStr,
+                time = timeStr,
+                count = 1,
+                strikeType = "Strike +1",
+                performanceValue = boostVal,
+                notes = if (countDelta > 1) "Literal strike #${idx + 1}/$countDelta" else "Auto-recorded strike event",
+                timestamp = baseTimestamp + idx
+            )
+        }
+
+        val lastEvent = literalEvents.last()
+        val bulk = literalEvents.dropLast(1)
+        if (bulk.isNotEmpty()) {
+            bulk.chunked(DB_INSERT_CHUNK_SIZE).forEach { chunk ->
+                strikeEventDao.insertAll(chunk)
+            }
+        }
+        return strikeEventDao.insertEvent(lastEvent)
+    }
+
+    private suspend fun trimOldestStrikesBeyondLimit(targetMaxCount: Int) {
+        val all = strikeEventDao.getAllStrikeEventsList()
+        if (all.size <= targetMaxCount) return
+        val excess = all.drop(targetMaxCount.coerceAtLeast(0))
+        excess.forEach { strikeEventDao.deleteEvent(it) }
     }
 
     suspend fun setStrikeCount(id: Long, count: Int) {
@@ -102,7 +157,8 @@ class IndividualRepository(
     suspend fun updateEventNotes(id: Long, notes: String) = strikeEventDao.updateEventNotes(id, notes)
 
     /**
-     * Stores past/historical strikes per year for an individual.
+     * Stores past/historical strikes per year for an individual, expanding every strike literally (count = 1)
+     * up to [MAX_LITERAL_RECENT_STRIKES] (10,000).
      */
     suspend fun recordHistoricalStrikes(
         individualId: Long,
@@ -111,26 +167,79 @@ class IndividualRepository(
     ) {
         val individual = dao.getIndividualById(individualId)
         val name = individual?.fullName ?: "Target #$individualId"
-        val events = historicalEntries.filter { it.second > 0 }.map { (year, count) ->
-            StrikeEvent(
-                individualId = individualId,
-                individualName = name,
-                year = year,
-                date = "$year-06-15",
-                time = "12:00:00",
-                count = count,
-                strikeType = "Historical Entry",
-                performanceValue = individual?.boost ?: 0.0,
-                notes = if (lang == "ar") {
-                    "سجلات سابقة لسنة $year ($count ضربة)"
-                } else {
-                    "Historical records for $year ($count strikes)"
-                },
-                timestamp = System.currentTimeMillis() - ((Calendar.getInstance().get(Calendar.YEAR) - year).coerceAtLeast(0) * 31536000000L)
-            )
+        val boostVal = individual?.boost ?: 0.0
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        val nowMillis = System.currentTimeMillis()
+        val existingCount = strikeEventDao.getCount()
+        var remainingBudget = (MAX_LITERAL_RECENT_STRIKES - existingCount).coerceAtLeast(0)
+
+        val expandedEvents = mutableListOf<StrikeEvent>()
+        for ((year, rawCount) in historicalEntries.sortedByDescending { it.first }) {
+            if (rawCount <= 0 || remainingBudget <= 0) continue
+            val takeCount = minOf(rawCount, remainingBudget)
+            val yearBaseMillis = nowMillis - ((currentYear - year).coerceAtLeast(0) * 31_536_000_000L)
+            for (idx in 0 until takeCount) {
+                expandedEvents.add(
+                    StrikeEvent(
+                        individualId = individualId,
+                        individualName = name,
+                        year = year,
+                        date = "$year-06-15",
+                        time = "12:00:00",
+                        count = 1,
+                        strikeType = "Historical Entry",
+                        performanceValue = boostVal,
+                        notes = if (lang == "ar") {
+                            "ضربة سابقة مسجلة حرفياً لسنة $year (${idx + 1}/$rawCount)"
+                        } else {
+                            "Historical literal strike $year (${idx + 1}/$rawCount)"
+                        },
+                        timestamp = yearBaseMillis + idx
+                    )
+                )
+            }
+            remainingBudget -= takeCount
         }
-        if (events.isNotEmpty()) {
-            strikeEventDao.insertAll(events)
+        if (expandedEvents.isNotEmpty()) {
+            expandedEvents.chunked(DB_INSERT_CHUNK_SIZE).forEach { chunk ->
+                strikeEventDao.insertAll(chunk)
+            }
+        }
+    }
+
+    /**
+     * Expands any legacy grouped StrikeEvent rows (where count > 1) into literal individual rows (count = 1)
+     * up to [MAX_LITERAL_RECENT_STRIKES] (10,000) so Recent Strikes literally displays every strike.
+     */
+    suspend fun normalizeBatchStrikeEventsToLiteral(maxTotal: Int = MAX_LITERAL_RECENT_STRIKES) {
+        val all = strikeEventDao.getAllStrikeEventsList()
+        val batchRows = all.filter { it.count > 1 }
+        if (batchRows.isEmpty()) return
+
+        val singleRowsCount = all.count { it.count <= 1 }
+        var remainingBudget = (maxTotal - singleRowsCount).coerceAtLeast(0)
+        val newLiterals = mutableListOf<StrikeEvent>()
+
+        for (ev in batchRows) {
+            strikeEventDao.deleteEvent(ev)
+            val expandCount = ev.count.coerceAtLeast(1)
+            val take = minOf(expandCount, remainingBudget)
+            for (i in 0 until take) {
+                newLiterals.add(
+                    ev.copy(
+                        id = 0L,
+                        count = 1,
+                        strikeType = if (ev.strikeType.startsWith("Historical")) "Historical Entry" else "Strike +1",
+                        timestamp = ev.timestamp + i
+                    )
+                )
+            }
+            remainingBudget -= take
+        }
+        if (newLiterals.isNotEmpty()) {
+            newLiterals.chunked(DB_INSERT_CHUNK_SIZE).forEach { chunk ->
+                strikeEventDao.insertAll(chunk)
+            }
         }
     }
 
@@ -182,98 +291,44 @@ class IndividualRepository(
         )
         dao.insertAll(samples)
 
-        // Seed realistic multi-year strike events for the Yearly Dashboard
-        val sampleEvents = listOf(
-            StrikeEvent(
-                individualId = 1,
-                individualName = "Tariq Al-Mansoor",
-                year = 2026,
-                date = "2026-10-15",
-                time = "14:22:10",
-                count = 18,
-                strikeType = "Auto-Recorded",
-                performanceValue = 94.5,
-                notes = "Current season strikes"
-            ),
-            StrikeEvent(
-                individualId = 1,
-                individualName = "Tariq Al-Mansoor",
-                year = 2025,
-                date = "2025-08-20",
-                time = "11:15:30",
-                count = 14,
-                strikeType = "Historical Entry",
-                performanceValue = 90.0,
-                notes = "2025 tournament strikes"
-            ),
-            StrikeEvent(
-                individualId = 1,
-                individualName = "Tariq Al-Mansoor",
-                year = 2024,
-                date = "2024-05-12",
-                time = "16:45:00",
-                count = 10,
-                strikeType = "Historical Entry",
-                performanceValue = 88.0,
-                notes = "2024 qualification strikes"
-            ),
-            StrikeEvent(
-                individualId = 3,
-                individualName = "Fatima Zahra",
-                year = 2026,
-                date = "2026-09-10",
-                time = "09:30:15",
-                count = 25,
-                strikeType = "Auto-Recorded",
-                performanceValue = 91.0,
-                notes = "Championship strikes"
-            ),
-            StrikeEvent(
-                individualId = 3,
-                individualName = "Fatima Zahra",
-                year = 2025,
-                date = "2025-11-04",
-                time = "17:10:00",
-                count = 20,
-                strikeType = "Historical Entry",
-                performanceValue = 87.5,
-                notes = "2025 league strikes"
-            ),
-            StrikeEvent(
-                individualId = 3,
-                individualName = "Fatima Zahra",
-                year = 2024,
-                date = "2024-07-22",
-                time = "13:20:45",
-                count = 10,
-                strikeType = "Historical Entry",
-                performanceValue = 82.5,
-                notes = "2024 debut strikes"
-            ),
-            StrikeEvent(
-                individualId = 2,
-                individualName = "Alexandre Moreau",
-                year = 2026,
-                date = "2026-06-18",
-                time = "15:00:20",
-                count = 22,
-                strikeType = "Auto-Recorded",
-                performanceValue = 89.5,
-                notes = "Power strikes"
-            ),
-            StrikeEvent(
-                individualId = 2,
-                individualName = "Alexandre Moreau",
-                year = 2025,
-                date = "2025-04-10",
-                time = "10:14:00",
-                count = 16,
-                strikeType = "Historical Entry",
-                performanceValue = 85.0,
-                notes = "Mid-season strikes"
-            )
+        // Seed realistic literal 1-by-1 multi-year strike events (each row has count = 1)
+        val groupedSeeds = listOf(
+            Triple(1L to "Tariq Al-Mansoor", 2026 to "2026-10-15", 18 to (94.5 to "Current season strike")),
+            Triple(1L to "Tariq Al-Mansoor", 2025 to "2025-08-20", 14 to (90.0 to "2025 tournament strike")),
+            Triple(1L to "Tariq Al-Mansoor", 2024 to "2024-05-12", 10 to (88.0 to "2024 qualification strike")),
+            Triple(3L to "Fatima Zahra", 2026 to "2026-09-10", 25 to (91.0 to "Championship strike")),
+            Triple(3L to "Fatima Zahra", 2025 to "2025-11-04", 20 to (87.5 to "2025 league strike")),
+            Triple(3L to "Fatima Zahra", 2024 to "2024-07-22", 10 to (82.5 to "2024 debut strike")),
+            Triple(2L to "Alexandre Moreau", 2026 to "2026-06-18", 22 to (89.5 to "Power strike")),
+            Triple(2L to "Alexandre Moreau", 2025 to "2025-04-10", 16 to (85.0 to "Mid-season strike"))
         )
-        strikeEventDao.insertAll(sampleEvents)
+        val nowTs = System.currentTimeMillis()
+        var tsOffset = 0L
+        val sampleEvents = groupedSeeds.flatMap { (personPair, datePair, metaPair) ->
+            val (indId, indName) = personPair
+            val (year, dateStr) = datePair
+            val (totalCount, perfNotes) = metaPair
+            val (perfVal, noteText) = perfNotes
+            val strikeType = if (year >= 2026) "Auto-Recorded" else "Historical Entry"
+            (0 until totalCount).map {
+                tsOffset++
+                StrikeEvent(
+                    individualId = indId,
+                    individualName = indName,
+                    year = year,
+                    date = dateStr,
+                    time = "14:22:10",
+                    count = 1,
+                    strikeType = strikeType,
+                    performanceValue = perfVal,
+                    notes = noteText,
+                    timestamp = nowTs - ((groupedSeeds.sumOf { g -> g.third.first } - tsOffset) * 1000L)
+                )
+            }
+        }
+        sampleEvents.chunked(DB_INSERT_CHUNK_SIZE).forEach { chunk ->
+            strikeEventDao.insertAll(chunk)
+        }
     }
 
     suspend fun getAllIndividualsList(): List<Individual> = dao.getAllIndividualsList()

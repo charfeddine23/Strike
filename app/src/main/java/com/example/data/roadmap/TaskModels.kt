@@ -101,3 +101,31 @@ data class TaskLedgerEntry(
     val task: TaskItem,
     val completedAtMillis: Long? = null
 )
+
+enum class XpSourceCategory {
+    TASK,
+    SKIP_KEY,
+    DEFLAME,
+    GIRL,
+    STRIKE,
+    PERSON,
+    RETROACTIVE,
+    SYSTEM
+}
+
+data class XpHistoryEntry(
+    val id: String,
+    val amount: Long,
+    val category: XpSourceCategory,
+    val concernedParty: String,
+    val concernedPartyEn: String = concernedParty,
+    val detail: String = "",
+    val detailEn: String = detail,
+    val timestamp: Long = System.currentTimeMillis()
+) {
+    fun getLocalizedConcernedParty(lang: String): String =
+        if (lang == "ar") concernedParty else concernedPartyEn.ifBlank { concernedParty }
+
+    fun getLocalizedDetail(lang: String): String =
+        if (lang == "ar") detail else detailEn.ifBlank { detail }
+}

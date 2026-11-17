@@ -160,6 +160,8 @@ fun StreakStartDateDialog(
 
     var activePickerTarget by remember { mutableStateOf<PickerTarget?>(null) }
 
+    val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
+
     val previewResult = remember(
         globalStartDate,
         globalEndDate,
@@ -168,7 +170,8 @@ fun StreakStartDateDialog(
         girlRange,
         deflameRange,
         girlPerMonth,
-        deflamePerMonth
+        deflamePerMonth,
+        allStrikeEvents
     ) {
         viewModel.previewStartDateRecalculation(
             startDateStr = globalStartDate,
@@ -761,6 +764,54 @@ fun StreakStartDateDialog(
                                     .height(1.dp)
                                     .background(Color(0x33FFFFFF))
                             )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = when {
+                                        isAr -> "ذروة الشعلة المقدرة:"
+                                        isFr -> "Pic estimé :"
+                                        else -> "Estimated Peak:"
+                                    },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = NeonAmber
+                                )
+                                Text(
+                                    text = "${String.format(Locale.US, "%.1f", previewResult.estimatedPeakScore)} " + if (isAr) "نقطة" else "PTS",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = NeonAmber,
+                                    fontFamily = PlusJakartaSans
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = when {
+                                        isAr -> "إجمالي الإطفاء:"
+                                        isFr -> "Total éteint :"
+                                        else -> "Total Extinguished:"
+                                    },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF38BDF8)
+                                )
+                                Text(
+                                    text = "-${String.format(Locale.US, "%.1f", previewResult.totalExtinguishedPoints)} " + if (isAr) "نقطة" else "PTS",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF38BDF8),
+                                    fontFamily = PlusJakartaSans
+                                )
+                            }
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

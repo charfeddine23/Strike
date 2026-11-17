@@ -68,11 +68,18 @@ fun ComparisonScreen(
     modifier: Modifier = Modifier
 ) {
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
+    val strikeSearchQuery by viewModel.strikeSearchQuery.collectAsStateWithLifecycle()
+    val filteredSearchResults by viewModel.filteredStrikeIndividuals.collectAsStateWithLifecycle()
     val personA by viewModel.personA.collectAsStateWithLifecycle()
     val personB by viewModel.personB.collectAsStateWithLifecycle()
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
+    val selectableList = if (strikeSearchQuery.isNotBlank() && filteredSearchResults.isNotEmpty()) {
+        filteredSearchResults.map { it.individual }
+    } else {
+        allList
+    }
 
     var showMenuA by remember { mutableStateOf(false) }
     var showMenuB by remember { mutableStateOf(false) }
@@ -148,7 +155,7 @@ fun ComparisonScreen(
                         expanded = showMenuA,
                         onDismissRequest = { showMenuA = false }
                     ) {
-                        allList.forEach { item ->
+                        selectableList.forEach { item ->
                             DropdownMenuItem(
                                 text = { Text("${item.fullName} (${item.type})") },
                                 onClick = {
@@ -192,7 +199,7 @@ fun ComparisonScreen(
                         expanded = showMenuB,
                         onDismissRequest = { showMenuB = false }
                     ) {
-                        allList.forEach { item ->
+                        selectableList.forEach { item ->
                             DropdownMenuItem(
                                 text = { Text("${item.fullName} (${item.type})") },
                                 onClick = {

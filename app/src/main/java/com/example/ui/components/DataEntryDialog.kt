@@ -66,6 +66,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -226,38 +227,73 @@ fun DataEntryDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = if (isEditing) stringResource(R.string.update_record) else stringResource(R.string.nav_entry),
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = stringResource(R.string.auto_calculated),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = NeonCyan
+                                color = NeonCyan,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isEditing) NeonViolet.copy(alpha = 0.2f) else NeonCyan.copy(alpha = 0.2f))
-                                    .border(1.dp, if (isEditing) NeonViolet else NeonCyan, RoundedCornerShape(12.dp))
-                                    .padding(horizontal = 10.dp, vertical = 5.dp)
-                            ) {
-                                Text(
-                                    text = if (isEditing) {
-                                        if (isAr) "وضع التعديل" else "EDIT MODE"
-                                    } else {
-                                        if (isAr) "إدخال جديد" else "NEW ENTRY"
+                            if (isEditing) {
+                                Button(
+                                    onClick = {
+                                        viewModel.saveCurrentForm {
+                                            onDismiss()
+                                        }
                                     },
-                                    color = if (isEditing) NeonViolet else NeonCyan,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
-                                )
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = NeonCyan,
+                                        contentColor = Color(0xFF021B26)
+                                    ),
+                                    modifier = Modifier
+                                        .height(40.dp)
+                                        .testTag("save_record_btn")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = stringResource(R.string.update_record),
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(NeonCyan.copy(alpha = 0.2f))
+                                        .border(1.dp, NeonCyan, RoundedCornerShape(12.dp))
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Text(
+                                        text = if (isAr) "إدخال جديد" else "NEW ENTRY",
+                                        color = NeonCyan,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             IconButton(
@@ -954,33 +990,35 @@ fun DataEntryDialog(
                                     Text(stringResource(R.string.cancel))
                                 }
 
-                                Button(
-                                    onClick = {
-                                        viewModel.saveCurrentForm {
-                                            onDismiss()
-                                        }
-                                    },
-                                    modifier = Modifier
-                                        .weight(2f)
-                                        .height(52.dp)
-                                        .testTag("save_record_btn"),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = NeonCyan,
-                                        contentColor = Color(0xFF021B26)
-                                    )
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = if (isEditing) stringResource(R.string.update_record) else stringResource(R.string.save_record),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp
-                                    )
+                                if (!isEditing) {
+                                    Button(
+                                        onClick = {
+                                            viewModel.saveCurrentForm {
+                                                onDismiss()
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .weight(2f)
+                                            .height(52.dp)
+                                            .testTag("save_record_btn"),
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = NeonCyan,
+                                            contentColor = Color(0xFF021B26)
+                                        )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = stringResource(R.string.save_record),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp
+                                        )
+                                    }
                                 }
                             }
                         }

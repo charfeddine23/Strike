@@ -16,6 +16,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,7 +46,6 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -70,6 +71,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +85,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -120,6 +125,8 @@ import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.ui.viewmodel.SortOrder
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun DashboardScreen(
@@ -503,6 +510,7 @@ fun DashboardScreen(
                             showDataEntryDialog = true
                         },
                         onDelete = { individualToDelete = item },
+                        isHapticFeedbackEnabled = isHapticFeedbackEnabled,
                         isAr = isAr
                     )
                 }
@@ -584,8 +592,13 @@ fun IndividualRecordCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     darkTheme: Boolean = isSystemInDarkTheme(),
+    isHapticFeedbackEnabled: Boolean = true,
     isAr: Boolean = true
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val currentOnEdit by rememberUpdatedState(onEdit)
+
     val chevronRotation by animateFloatAsState(
         targetValue = if (isExpanded) 180f else 0f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
@@ -611,6 +624,44 @@ fun IndividualRecordCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                .pointerInput(individual.id) {
+                    val touchSlop = viewConfiguration.touchSlop
+                    awaitEachGesture {
+                        val down = awaitFirstDown(
+                            requireUnconsumed = false,
+                            pass = PointerEventPass.Initial
+                        )
+                        val downPos = down.position
+                        var triggered = false
+                        val holdJob = coroutineScope.launch {
+                            delay(500L)
+                            triggered = true
+                            HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                            currentOnEdit()
+                        }
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                if (triggered) {
+                                    event.changes.forEach { it.consume() }
+                                    if (event.changes.none { it.pressed }) {
+                                        break
+                                    }
+                                } else {
+                                    val movedTooFar = event.changes.any { change ->
+                                        (change.position - downPos).getDistance() > touchSlop
+                                    }
+                                    if (movedTooFar || event.changes.none { it.pressed }) {
+                                        holdJob.cancel()
+                                        break
+                                    }
+                                }
+                            }
+                        } finally {
+                            holdJob.cancel()
+                        }
+                    }
+                }
         ) {
             // Always-Visible Collapsed Summary Area (Name, Status, Phone, BOOST at bottom + Expand/Collapse)
             Column(
@@ -966,18 +1017,6 @@ fun IndividualRecordCard(
                             contentDescription = stringResource(R.string.nav_compare),
                             tint = if (darkTheme) NeonViolet else DayPurple,
                             modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = onEdit,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = stringResource(R.string.edit),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
                         )
                     }
 

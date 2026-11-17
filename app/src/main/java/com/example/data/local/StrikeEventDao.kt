@@ -10,13 +10,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface StrikeEventDao {
-    @Query("SELECT * FROM strike_events ORDER BY timestamp DESC")
+    @Query("SELECT * FROM strike_events ORDER BY timestamp DESC, id DESC LIMIT 10000")
     fun getAllStrikeEvents(): Flow<List<StrikeEvent>>
 
-    @Query("SELECT * FROM strike_events WHERE individualId = :id ORDER BY timestamp DESC")
+    @Query("SELECT * FROM strike_events WHERE individualId = :id ORDER BY timestamp DESC, id DESC")
     fun getEventsForIndividual(id: Long): Flow<List<StrikeEvent>>
 
-    @Query("SELECT * FROM strike_events WHERE year = :year ORDER BY timestamp DESC")
+    @Query("SELECT * FROM strike_events WHERE year = :year ORDER BY timestamp DESC, id DESC")
     fun getEventsForYear(year: Int): Flow<List<StrikeEvent>>
 
     @Query("SELECT * FROM strike_events WHERE id = :id")
@@ -40,7 +40,7 @@ interface StrikeEventDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(events: List<StrikeEvent>)
 
-    @Query("SELECT * FROM strike_events")
+    @Query("SELECT * FROM strike_events ORDER BY timestamp DESC, id DESC")
     suspend fun getAllStrikeEventsList(): List<StrikeEvent>
 
     @Query("SELECT MAX(date) FROM strike_events")

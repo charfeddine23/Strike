@@ -23,6 +23,9 @@ import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.RewardType
 import com.example.data.roadmap.TaskItem
 import com.example.data.roadmap.XpCalculationEngine
+import com.example.data.roadmap.XpHistoryEntry
+import com.example.util.SmartSearchMatcher
+import com.example.util.SmartSearchResult
 import com.example.data.update.AppUpdateManager
 import com.example.data.update.AppUpdateState
 import com.example.data.update.GitHubReleaseInfo
@@ -199,23 +202,35 @@ class IndividualViewModel(
         _filterType,
         _sortOrder
     ) { list, query, filter, sort ->
-        val trimmedQuery = query.trim().lowercase()
-
-        list.filter { item ->
-            val matchesFilter = (filter == "ALL" || item.type.equals(filter, ignoreCase = true))
-            val matchesSearch = trimmedQuery.isEmpty() ||
-                item.fullName.lowercase().contains(trimmedQuery) ||
-                item.type.lowercase().contains(trimmedQuery)
-            matchesFilter && matchesSearch
-        }.let { filtered ->
-            when (sort) {
-                SortOrder.NAME_ASC -> filtered.sortedBy { it.fullName.lowercase() }
-                SortOrder.STRIKES_DESC -> filtered.sortedByDescending { it.strikeCount }
-                SortOrder.BOOST_DESC -> filtered.sortedByDescending { it.boost }
-                SortOrder.SIZE_DESC -> filtered.sortedByDescending { it.size }
-                SortOrder.SCORE_DESC -> filtered.sortedByDescending { it.totalScore }
-            }
+        val typeFiltered = list.filter { item ->
+            filter == "ALL" || item.type.equals(filter, ignoreCase = true)
         }
+        if (query.isBlank()) {
+            when (sort) {
+                SortOrder.NAME_ASC -> typeFiltered.sortedBy { it.fullName.lowercase() }
+                SortOrder.STRIKES_DESC -> typeFiltered.sortedByDescending { it.strikeCount }
+                SortOrder.BOOST_DESC -> typeFiltered.sortedByDescending { it.boost }
+                SortOrder.SIZE_DESC -> typeFiltered.sortedByDescending { it.size }
+                SortOrder.SCORE_DESC -> typeFiltered.sortedByDescending { it.totalScore }
+            }
+        } else {
+            SmartSearchMatcher.filterAndRank(typeFiltered, query).map { it.individual }
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    // Instant Smart Search Engine State (replaces the old FlameEnergyBanner header slot)
+    private val _strikeSearchQuery = MutableStateFlow("")
+    val strikeSearchQuery: StateFlow<String> = _strikeSearchQuery.asStateFlow()
+
+    val filteredStrikeIndividuals: StateFlow<List<SmartSearchResult>> = combine(
+        allIndividuals,
+        _strikeSearchQuery
+    ) { list, query ->
+        SmartSearchMatcher.filterAndRank(list, query)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -337,6 +352,7 @@ class IndividualViewModel(
 
     // 500-Station Wavy Roadmap & XP Progression Engine State
     val totalXp: StateFlow<Long> = RoadmapManager.totalXp
+    val xpHistory: StateFlow<List<XpHistoryEntry>> = RoadmapManager.xpHistory
     val claimedStations: StateFlow<Set<Int>> = RoadmapManager.claimedStations
     val dailyTasks: StateFlow<List<TaskItem>> = RoadmapManager.dailyTasks
     val weeklyTasks: StateFlow<List<TaskItem>> = RoadmapManager.weeklyTasks
@@ -366,6 +382,7 @@ class IndividualViewModel(
         XpCalculationEngine.init(application)
         viewModelScope.launch {
             repository.seedSampleDataIfEmpty()
+            repository.normalizeBatchStrikeEventsToLiteral()
             val latestStrikeDate = repository.getLatestStrikeDate()
             FlameManager.evaluateDailyInactivity(application, latestStrikeDate)
             val trackingStartDate = FlameManager.getStreakStartDate(application)
@@ -859,6 +876,14 @@ class IndividualViewModel(
         _searchQuery.value = ""
     }
 
+    fun setStrikeSearchQuery(query: String) {
+        _strikeSearchQuery.value = query
+    }
+
+    fun clearStrikeSearch() {
+        _strikeSearchQuery.value = ""
+    }
+
     fun setFilterType(type: String) {
         _filterType.value = type
     }
@@ -1139,7 +1164,11 @@ class IndividualViewModel(
 
             if (editingId == null) {
                 RoadmapManager.onActionOccurred(getApplication(), "PERSON")
-                XpCalculationEngine.onNewPersonAdded(getApplication(), individualToSave.size)
+                XpCalculationEngine.onNewPersonAdded(
+                    context = getApplication(),
+                    size = individualToSave.size,
+                    personName = individualToSave.fullName
+                )
             }
 
             if (formHistoricalEntries.value.isNotEmpty()) {

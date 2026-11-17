@@ -70,7 +70,9 @@ data class FlameRecalculationResult(
     val deflamePerMonth: Int = 0,
     val deflamePressesCount: Int = 0,
     val deflamePointsDeducted: Double = 0.0,
-    val resultingScore: Double
+    val resultingScore: Double,
+    val estimatedPeakScore: Double = resultingScore,
+    val totalExtinguishedPoints: Double = totalDeductions + girlPointsDeducted + deflamePointsDeducted
 )
 
 enum class ActiveShieldType(val labelAr: String, val labelEn: String) {
@@ -758,7 +760,8 @@ object FlameManager {
             details = "Manual instant decrease (-$formatted pts)$bonusNote",
             title = "Deflame Button Action"
         )
-        com.example.data.roadmap.XpCalculationEngine.onDeflameAction(context)
+        val bonusArg = if (pulseElixirBonus > 0) "Pulse Elixir +5" else ""
+        com.example.data.roadmap.XpCalculationEngine.onDeflameAction(context, bonusNote = bonusArg)
         return updated
     }
 
@@ -1008,8 +1011,12 @@ object FlameManager {
             }
         }
 
-        // Award +100 XP per recorded Strike
-        com.example.data.roadmap.XpCalculationEngine.onStrikeRecorded(context, strikeCount)
+        // Award +100 XP per recorded Strike with concerned individual's name
+        com.example.data.roadmap.XpCalculationEngine.onStrikeRecorded(
+            context = context,
+            strikeCount = strikeCount,
+            personName = personName
+        )
 
         // Update last strike date & reset inactivity baseline date to this strike's date
         prefs.edit()
@@ -1163,9 +1170,16 @@ object FlameManager {
         val relevantStrikes = strikeEvents.filter { it.date >= strikesStart && it.date <= strikesEnd }
         val strikesByDate = relevantStrikes.groupBy { it.date }
 
+        val dailyStrikePenalties = mutableMapOf<String, Double>()
         var totalDeductions = 0.0
-        for ((_, dayStrikes) in strikesByDate) {
+        var totalStrikeUnitsCount = 0
+        for ((date, dayStrikesRaw) in strikesByDate) {
+            val dayStrikes = dayStrikesRaw.flatMap { ev ->
+                val n = ev.count.coerceAtLeast(1)
+                if (n == 1) listOf(ev) else List(n) { ev }
+            }
             val count = dayStrikes.size
+            totalStrikeUnitsCount += count
             val dayPenalty = when {
                 count >= 6 -> {
                     dayStrikes.sumOf { it.performanceValue.coerceAtLeast(0.1) } * count
@@ -1184,6 +1198,7 @@ object FlameManager {
                 }
                 else -> 0.0
             }
+            dailyStrikePenalties[date] = dayPenalty
             totalDeductions += dayPenalty
         }
 
@@ -1208,7 +1223,63 @@ object FlameManager {
         val girlPointsDeducted = girlPressesCount * 3.0
         val deflamePointsDeducted = deflamePressesCount * 3.0
 
-        val resultingScore = sanitizeScore(inactivityPointsAdded - totalDeductions - girlPointsDeducted - deflamePointsDeducted)
+        val totalExtinguishedPoints = sanitizeScore(totalDeductions + girlPointsDeducted + deflamePointsDeducted)
+        val resultingScore = sanitizeScore(inactivityPointsAdded - totalExtinguishedPoints)
+
+        // Compute chronological peak score across [effectiveGlobalStart..effectiveGlobalEnd]
+        val timelineDates = sortedSetOf<String>().apply {
+            add(effectiveGlobalStart)
+            add(effectiveGlobalEnd)
+            add(inactStart)
+            add(inactEnd)
+            add(girlStart)
+            add(girlEnd)
+            add(deflameStart)
+            add(deflameEnd)
+            addAll(dailyStrikePenalties.keys)
+        }.toList()
+
+        var runningScore = 0.0
+        var peakAcrossPeriod = resultingScore
+        for (idx in timelineDates.indices) {
+            val d = timelineDates[idx]
+            if (idx > 0) {
+                val prev = timelineDates[idx - 1]
+                // Inactivity accrued inside overlap of (prev..d] with [inactStart..inactEnd]
+                val oInactStart = maxOf(prev, inactStart)
+                val oInactEnd = minOf(d, inactEnd)
+                if (oInactEnd > oInactStart) {
+                    val addDays = daysBetween(oInactStart, oInactEnd).toDouble()
+                    runningScore = sanitizeScore(runningScore + addDays * 3.0)
+                }
+                // Proportional Girl deductions inside overlap with [girlStart..girlEnd]
+                if (girlDays > 0 && girlPointsDeducted > 0.0) {
+                    val oGirlStart = maxOf(prev, girlStart)
+                    val oGirlEnd = minOf(d, girlEnd)
+                    if (oGirlEnd > oGirlStart) {
+                        val frac = daysBetween(oGirlStart, oGirlEnd).toDouble() / girlDays.toDouble()
+                        runningScore = sanitizeScore(runningScore - girlPointsDeducted * frac)
+                    }
+                }
+                // Proportional Deflame deductions inside overlap with [deflameStart..deflameEnd]
+                if (deflameDays > 0 && deflamePointsDeducted > 0.0) {
+                    val oDefStart = maxOf(prev, deflameStart)
+                    val oDefEnd = minOf(d, deflameEnd)
+                    if (oDefEnd > oDefStart) {
+                        val frac = daysBetween(oDefStart, oDefEnd).toDouble() / deflameDays.toDouble()
+                        runningScore = sanitizeScore(runningScore - deflamePointsDeducted * frac)
+                    }
+                }
+            }
+            if (runningScore > peakAcrossPeriod) {
+                peakAcrossPeriod = runningScore
+            }
+            val strikeDed = dailyStrikePenalties[d] ?: 0.0
+            if (strikeDed > 0.0) {
+                runningScore = sanitizeScore(runningScore - strikeDed)
+            }
+        }
+        val estimatedPeakScore = maxOf(peakAcrossPeriod, resultingScore)
 
         return FlameRecalculationResult(
             startDate = effectiveGlobalStart,
@@ -1220,7 +1291,7 @@ object FlameManager {
             inactivityPointsAdded = inactivityPointsAdded,
             strikesStartDate = strikesStart,
             strikesEndDate = strikesEnd,
-            totalStrikesCount = relevantStrikes.size,
+            totalStrikesCount = totalStrikeUnitsCount,
             totalDeductions = totalDeductions,
             girlStartDate = girlStart,
             girlEndDate = girlEnd,
@@ -1234,7 +1305,9 @@ object FlameManager {
             deflamePerMonth = safeDeflamePerMonth,
             deflamePressesCount = deflamePressesCount,
             deflamePointsDeducted = deflamePointsDeducted,
-            resultingScore = resultingScore
+            resultingScore = resultingScore,
+            estimatedPeakScore = estimatedPeakScore,
+            totalExtinguishedPoints = totalExtinguishedPoints
         )
     }
 
@@ -1275,34 +1348,24 @@ object FlameManager {
         val oldScore = _flameScore.value
         val newScore = result.resultingScore
         val diff = newScore - oldScore
+        val syncedPeak = sanitizeScore(maxOf(result.estimatedPeakScore, newScore))
+        val syncedGained = sanitizeScore(result.inactivityPointsAdded)
+        val syncedExtinguished = sanitizeScore(result.totalExtinguishedPoints)
 
         _flameScore.value = newScore
-        if (newScore > _peakScore.value) {
-            _peakScore.value = newScore
-            getPrefs(context).edit().apply {
-                saveDouble(this, KEY_PEAK_SCORE, KEY_PEAK_SCORE_BITS, newScore)
-                apply()
-            }
+        _peakScore.value = syncedPeak
+        _totalPointsGained.value = syncedGained
+        _totalPointsExtinguished.value = syncedExtinguished
+
+        getPrefs(context).edit().apply {
+            saveDouble(this, KEY_PEAK_SCORE, KEY_PEAK_SCORE_BITS, syncedPeak)
+            saveDouble(this, KEY_TOTAL_POINTS_GAINED, KEY_TOTAL_POINTS_GAINED_BITS, syncedGained)
+            saveDouble(this, KEY_TOTAL_POINTS_EXTINGUISHED, KEY_TOTAL_POINTS_EXTINGUISHED_BITS, syncedExtinguished)
+            apply()
         }
 
         // Check Milestone Peak Title unlock at 20,000+ pts
-        com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(context, newScore)
-
-        if (diff > 0) {
-            val updatedGained = _totalPointsGained.value + diff
-            _totalPointsGained.value = updatedGained
-            getPrefs(context).edit().apply {
-                saveDouble(this, KEY_TOTAL_POINTS_GAINED, KEY_TOTAL_POINTS_GAINED_BITS, updatedGained)
-                apply()
-            }
-        } else if (diff < 0) {
-            val updatedExt = _totalPointsExtinguished.value + (-diff)
-            _totalPointsExtinguished.value = updatedExt
-            getPrefs(context).edit().apply {
-                saveDouble(this, KEY_TOTAL_POINTS_EXTINGUISHED, KEY_TOTAL_POINTS_EXTINGUISHED_BITS, updatedExt)
-                apply()
-            }
-        }
+        com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(context, syncedPeak)
 
         val rangesJson = JSONObject().apply {
             fun putRange(key: String, range: DateRangeConfig?) {

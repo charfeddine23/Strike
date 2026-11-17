@@ -11,15 +11,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -31,6 +35,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -60,10 +65,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.roadmap.RoadmapManager
+import com.example.data.roadmap.XpHistoryEntry
+import com.example.data.roadmap.XpSourceCategory
+import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 /**
@@ -421,6 +432,9 @@ fun XpEarningGuideDialog(
     onDismiss: () -> Unit
 ) {
     val effectiveDir = if (isAr || currentLang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
+    val xpHistory by RoadmapManager.xpHistory.collectAsStateWithLifecycle()
+    val totalXp by RoadmapManager.totalXp.collectAsStateWithLifecycle()
+    val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -675,9 +689,322 @@ fun XpEarningGuideDialog(
                                 fontSize = 14.sp
                             )
                         }
+
+                        // XP HISTORY SECTION AT THE BOTTOM OF XP EARNING GUIDE
+                        XpHistoryLedgerSection(
+                            xpHistory = xpHistory,
+                            totalXpFormatted = nf.format(totalXp.coerceAtLeast(0L)),
+                            currentLang = currentLang
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun XpHistoryLedgerSection(
+    xpHistory: List<XpHistoryEntry>,
+    totalXpFormatted: String,
+    currentLang: String
+) {
+    val dateFmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color(0xA60E172A))
+            .border(
+                width = 1.dp,
+                brush = Brush.linearGradient(
+                    listOf(NeonViolet.copy(alpha = 0.45f), NeonCyan.copy(alpha = 0.35f))
+                ),
+                shape = RoundedCornerShape(18.dp)
+            )
+            .padding(12.dp)
+            .testTag("xp_history_section"),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(NeonViolet.copy(alpha = 0.18f))
+                        .border(1.dp, NeonViolet.copy(alpha = 0.65f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.History,
+                        contentDescription = null,
+                        tint = NeonViolet,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = when (currentLang) {
+                            "ar" -> "سجل نقاط الخبرة (XP History)"
+                            "fr" -> "Historique XP (XP History)"
+                            else -> "XP History"
+                        },
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = PlusJakartaSans,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = when (currentLang) {
+                            "ar" -> "توثيق كل XP مكتسب في اللعبة والجهة المعنية (${xpHistory.size})"
+                            "fr" -> "Chaque XP gagné & entité concernée (${xpHistory.size})"
+                            else -> "Every XP earned & concerned source (${xpHistory.size})"
+                        },
+                        fontSize = 10.sp,
+                        color = Color(0xFF94A3B8),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(ElectricMint.copy(alpha = 0.15f))
+                    .border(1.dp, ElectricMint.copy(alpha = 0.5f), RoundedCornerShape(50))
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    text = "$totalXpFormatted XP",
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = PlusJakartaSans,
+                    color = ElectricMint
+                )
+            }
+        }
+
+        if (xpHistory.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0x66162033))
+                    .padding(14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = when (currentLang) {
+                        "ar" -> "لا توجد عمليات XP مسجلة بعد. سيظهر هنا كل XP تجنيه مع الجهة المعنية."
+                        "fr" -> "Aucun XP enregistré pour l'instant."
+                        else -> "No XP earned recorded yet. Every XP gain and its source will appear here."
+                    },
+                    fontSize = 11.5.sp,
+                    color = Color(0xFF94A3B8)
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 90.dp, max = 250.dp)
+                    .testTag("xp_history_list"),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(xpHistory, key = { it.id }) { entry ->
+                    XpHistoryEntryRow(
+                        entry = entry,
+                        formattedTime = dateFmt.format(Date(entry.timestamp)),
+                        currentLang = currentLang
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun XpHistoryEntryRow(
+    entry: XpHistoryEntry,
+    formattedTime: String,
+    currentLang: String
+) {
+    val (icon, accent, categoryLabel) = when (entry.category) {
+        XpSourceCategory.TASK -> Triple(
+            Icons.Default.TaskAlt,
+            ElectricMint,
+            when (currentLang) {
+                "ar" -> "مهمة"
+                "fr" -> "Mission"
+                else -> "Task"
+            }
+        )
+        XpSourceCategory.SKIP_KEY -> Triple(
+            Icons.Default.VpnKey,
+            MilestoneGold,
+            when (currentLang) {
+                "ar" -> "مفتاح تخطي"
+                "fr" -> "Clé"
+                else -> "Skip Key"
+            }
+        )
+        XpSourceCategory.DEFLAME -> Triple(
+            Icons.Default.AcUnit,
+            NeonAqua,
+            "Deflame"
+        )
+        XpSourceCategory.GIRL -> Triple(
+            Icons.Default.Female,
+            Color(0xFFFF66B2),
+            "Girl"
+        )
+        XpSourceCategory.STRIKE -> Triple(
+            Icons.Default.Bolt,
+            WarmFireOrange,
+            when (currentLang) {
+                "ar" -> "سترايك"
+                else -> "Strike"
+            }
+        )
+        XpSourceCategory.PERSON -> Triple(
+            Icons.Default.PersonAdd,
+            NeonViolet,
+            when (currentLang) {
+                "ar" -> "فرد جديد"
+                "fr" -> "Individu"
+                else -> "Person"
+            }
+        )
+        XpSourceCategory.RETROACTIVE -> Triple(
+            Icons.Default.History,
+            NeonCyan,
+            when (currentLang) {
+                "ar" -> "مزامنة"
+                "fr" -> "Synchro"
+                else -> "Sync"
+            }
+        )
+        XpSourceCategory.SYSTEM -> Triple(
+            Icons.Default.AutoAwesome,
+            Color(0xFFCBD5E1),
+            when (currentLang) {
+                "ar" -> "النظام"
+                "fr" -> "Système"
+                else -> "System"
+            }
+        )
+    }
+
+    val amountPrefix = if (entry.amount >= 0L) "+" else ""
+    val amountColor = if (entry.amount >= 0L) accent else Color(0xFFF87171)
+    val concernedPartyText = entry.getLocalizedConcernedParty(currentLang)
+    val detailText = entry.getLocalizedDetail(currentLang)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0x88161E31))
+            .border(1.dp, accent.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(30.dp)
+                .clip(RoundedCornerShape(9.dp))
+                .background(accent.copy(alpha = 0.16f))
+                .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(9.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = categoryLabel,
+                tint = accent,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(accent.copy(alpha = 0.18f))
+                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        text = categoryLabel,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accent
+                    )
+                }
+                Text(
+                    text = formattedTime,
+                    fontSize = 9.sp,
+                    color = Color(0xFF64748B),
+                    maxLines = 1
+                )
+            }
+
+            Text(
+                text = when (currentLang) {
+                    "ar" -> "الجهة المعنية: $concernedPartyText"
+                    "fr" -> "Entité : $concernedPartyText"
+                    else -> "Source: $concernedPartyText"
+                },
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFF1F5F9),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            if (detailText.isNotBlank()) {
+                Text(
+                    text = detailText,
+                    fontSize = 10.sp,
+                    color = Color(0xFF94A3B8),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(amountColor.copy(alpha = 0.16f))
+                .border(1.dp, amountColor.copy(alpha = 0.5f), RoundedCornerShape(50))
+                .padding(horizontal = 8.dp, vertical = 3.dp)
+        ) {
+            Text(
+                text = "$amountPrefix${entry.amount} XP",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = PlusJakartaSans,
+                color = amountColor,
+                maxLines = 1
+            )
         }
     }
 }

@@ -122,13 +122,29 @@ object XpCalculationEngine {
     }
 
     @Synchronized
-    private fun recordLiveTelemetryXp(context: Context, xpAmount: Long): Long {
+    private fun recordLiveTelemetryXp(
+        context: Context,
+        xpAmount: Long,
+        category: XpSourceCategory = XpSourceCategory.SYSTEM,
+        concernedParty: String = "نقاط اللعبة المباشرة",
+        concernedPartyEn: String = "Live Game Telemetry",
+        detail: String = "",
+        detailEn: String = detail
+    ): Long {
         if (xpAmount <= 0L) return 0L
         init(context)
         val updatedCredited = (_creditedTelemetryXp.value + xpAmount).coerceAtLeast(0L)
         _creditedTelemetryXp.value = updatedCredited
         getPrefs(context).edit().putLong(KEY_CREDITED_TELEMETRY_XP, updatedCredited).apply()
-        RoadmapManager.addXp(context, xpAmount)
+        RoadmapManager.addXp(
+            context = context,
+            amount = xpAmount,
+            category = category,
+            concernedParty = concernedParty,
+            concernedPartyEn = concernedPartyEn,
+            detail = detail,
+            detailEn = detailEn
+        )
         return xpAmount
     }
 
@@ -136,8 +152,18 @@ object XpCalculationEngine {
      * Awards +20 XP for a single Deflame button tap.
      */
     @Synchronized
-    fun onDeflameAction(context: Context): Long {
-        return recordLiveTelemetryXp(context, XP_PER_DEFLAME)
+    fun onDeflameAction(context: Context, bonusNote: String = ""): Long {
+        val detailAr = if (bonusNote.isNotBlank()) "ضغطة زر التبريد • $bonusNote" else "ضغطة زر التبريد (Deflame)"
+        val detailEn = if (bonusNote.isNotBlank()) "Deflame tap • $bonusNote" else "Deflame button tap"
+        return recordLiveTelemetryXp(
+            context = context,
+            xpAmount = XP_PER_DEFLAME,
+            category = XpSourceCategory.DEFLAME,
+            concernedParty = "زر التبريد (Deflame)",
+            concernedPartyEn = "Deflame Action",
+            detail = detailAr,
+            detailEn = detailEn
+        )
     }
 
     /**
@@ -145,16 +171,41 @@ object XpCalculationEngine {
      */
     @Synchronized
     fun onGirlAction(context: Context): Long {
-        return recordLiveTelemetryXp(context, XP_PER_GIRL)
+        return recordLiveTelemetryXp(
+            context = context,
+            xpAmount = XP_PER_GIRL,
+            category = XpSourceCategory.GIRL,
+            concernedParty = "تفعيل (Girl)",
+            concernedPartyEn = "Girl Action",
+            detail = "تبريد عبر زر Girl",
+            detailEn = "Cooldown via Girl action"
+        )
     }
 
     /**
      * Awards +100 XP per recorded Strike (+100 * strikeCount).
      */
     @Synchronized
-    fun onStrikeRecorded(context: Context, strikeCount: Int = 1): Long {
+    fun onStrikeRecorded(
+        context: Context,
+        strikeCount: Int = 1,
+        personName: String? = null
+    ): Long {
         val count = strikeCount.coerceAtLeast(1)
-        return recordLiveTelemetryXp(context, XP_PER_STRIKE * count)
+        val cleanName = personName?.trim()?.takeIf { it.isNotEmpty() }
+        val partyAr = if (cleanName != null) "سترايك: $cleanName" else "تسجيل سترايك"
+        val partyEn = if (cleanName != null) "Strike: $cleanName" else "Strike Recorded"
+        val detailAr = if (count > 1) "تسجيل $count سترايك" else "تسجيل سترايك واحد (+100 XP)"
+        val detailEn = if (count > 1) "$count strikes recorded" else "Single strike recorded (+100 XP)"
+        return recordLiveTelemetryXp(
+            context = context,
+            xpAmount = XP_PER_STRIKE * count,
+            category = XpSourceCategory.STRIKE,
+            concernedParty = partyAr,
+            concernedPartyEn = partyEn,
+            detail = detailAr,
+            detailEn = detailEn
+        )
     }
 
     /**
@@ -162,8 +213,34 @@ object XpCalculationEngine {
      * if their total Size is strictly greater than 200 (1,500 XP total).
      */
     @Synchronized
-    fun onNewPersonAdded(context: Context, size: Double): Long {
-        return recordLiveTelemetryXp(context, calculatePersonAdditionXp(size))
+    fun onNewPersonAdded(
+        context: Context,
+        size: Double,
+        personName: String? = null
+    ): Long {
+        val cleanName = personName?.trim()?.takeIf { it.isNotEmpty() }
+        val hasSizeBonus = size > PERSON_SIZE_BONUS_THRESHOLD
+        val partyAr = if (cleanName != null) "فرد جديد: $cleanName" else "إضافة فرد جديد"
+        val partyEn = if (cleanName != null) "New Person: $cleanName" else "New Person Added"
+        val detailAr = if (hasSizeBonus) {
+            "إضافة فرد (+500 XP) + مكافأة الحجم Size > 200 (+1,000 XP)"
+        } else {
+            "إضافة فرد جديد (+500 XP)"
+        }
+        val detailEn = if (hasSizeBonus) {
+            "New person (+500 XP) + Size > 200 bonus (+1,000 XP)"
+        } else {
+            "New person added (+500 XP)"
+        }
+        return recordLiveTelemetryXp(
+            context = context,
+            xpAmount = calculatePersonAdditionXp(size),
+            category = XpSourceCategory.PERSON,
+            concernedParty = partyAr,
+            concernedPartyEn = partyEn,
+            detail = detailAr,
+            detailEn = detailEn
+        )
     }
 
     /**
@@ -303,7 +380,28 @@ object XpCalculationEngine {
         val delta = targetCredited - prevCredited
 
         if (delta != 0L) {
-            RoadmapManager.addXp(context, delta)
+            val partsAr = buildList {
+                if (computed.strikeCount > 0) add("${computed.strikeCount} سترايك")
+                if (computed.deflameCount > 0) add("${computed.deflameCount} Deflame")
+                if (computed.girlCount > 0) add("${computed.girlCount} Girl")
+                if (computed.personCount > 0) add("${computed.personCount} أفراد")
+            }.joinToString(" • ").ifBlank { "فحص السجلات التاريخية" }
+            val partsEn = buildList {
+                if (computed.strikeCount > 0) add("${computed.strikeCount} strikes")
+                if (computed.deflameCount > 0) add("${computed.deflameCount} Deflame")
+                if (computed.girlCount > 0) add("${computed.girlCount} Girl")
+                if (computed.personCount > 0) add("${computed.personCount} persons")
+            }.joinToString(" • ").ifBlank { "Historical log scan" }
+            val rangeLabel = if (!trackingEndDate.isNullOrBlank()) "$trackingStartDate → $trackingEndDate" else trackingStartDate
+            RoadmapManager.addXp(
+                context = context,
+                amount = delta,
+                category = XpSourceCategory.RETROACTIVE,
+                concernedParty = "مزامنة السجل التاريخي ($rangeLabel)",
+                concernedPartyEn = "Retroactive Sync ($rangeLabel)",
+                detail = partsAr,
+                detailEn = partsEn
+            )
         }
 
         _creditedTelemetryXp.value = targetCredited

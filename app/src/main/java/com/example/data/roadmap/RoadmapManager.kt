@@ -41,10 +41,15 @@ object RoadmapManager {
     private const val KEY_SHIELDS_24H = "key_shields_24h"
     private const val KEY_SHIELDS_48H = "key_shields_48h"
     private const val KEY_SHIELDS_72H = "key_shields_72h"
+    private const val KEY_XP_HISTORY_JSON = "key_xp_history_json"
+    private const val MAX_XP_HISTORY_ENTRIES = 5000
 
     // Flows (Tasks XP strictly starts at 0L; Roadmap stations only act as unlock thresholds)
     private val _totalXp = MutableStateFlow(0L)
     val totalXp: StateFlow<Long> = _totalXp.asStateFlow()
+
+    private val _xpHistory = MutableStateFlow<List<XpHistoryEntry>>(emptyList())
+    val xpHistory: StateFlow<List<XpHistoryEntry>> = _xpHistory.asStateFlow()
 
     private val _claimedStations = MutableStateFlow<Set<Int>>(emptySet())
     val claimedStations: StateFlow<Set<Int>> = _claimedStations.asStateFlow()
@@ -178,6 +183,8 @@ object RoadmapManager {
         val annualTasks = TaskPools.getEverlastingTasks(_completedTaskIds.value, savedYearly.orEmpty())
         _yearlyTasks.value = annualTasks
         saveTasks(context, KEY_YEARLY_TASKS_JSON, annualTasks)
+
+        _xpHistory.value = loadXpHistory(prefs.getString(KEY_XP_HISTORY_JSON, null))
 
         isInitialized = true
     }
@@ -364,6 +371,7 @@ object RoadmapManager {
         _shields24h.value = 0
         _shields48h.value = 0
         _shields72h.value = 0
+        _xpHistory.value = emptyList()
 
         val today = TaskPools.todayDateString()
         val currentWeek = TaskPools.currentWeekString()
@@ -388,6 +396,7 @@ object RoadmapManager {
             .remove(KEY_WEEKLY_TASKS_JSON)
             .remove(KEY_MONTHLY_TASKS_JSON)
             .remove(KEY_YEARLY_TASKS_JSON)
+            .remove(KEY_XP_HISTORY_JSON)
             .putString(KEY_LAST_DAILY_DATE, today)
             .putString(KEY_LAST_WEEKLY_CODE, currentWeek)
             .putString(KEY_LAST_MONTHLY_CODE, currentMonth)
@@ -492,10 +501,50 @@ object RoadmapManager {
 
     @Synchronized
     fun addXp(context: Context, amount: Long): Long {
+        return addXp(
+            context = context,
+            amount = amount,
+            category = XpSourceCategory.SYSTEM,
+            concernedParty = "تعديل النظام / مكافأة مباشرة",
+            concernedPartyEn = "System / Direct Reward",
+            detail = "",
+            detailEn = ""
+        )
+    }
+
+    @Synchronized
+    fun addXp(
+        context: Context,
+        amount: Long,
+        category: XpSourceCategory,
+        concernedParty: String,
+        concernedPartyEn: String = concernedParty,
+        detail: String = "",
+        detailEn: String = detail
+    ): Long {
         init(context)
         val newXp = (_totalXp.value + amount).coerceAtLeast(0L)
         _totalXp.value = newXp
-        getPrefs(context).edit().putLong(KEY_TOTAL_XP, newXp).apply()
+        val editor = getPrefs(context).edit().putLong(KEY_TOTAL_XP, newXp)
+
+        if (amount != 0L) {
+            val now = System.currentTimeMillis()
+            val entry = XpHistoryEntry(
+                id = "${now}_${(1000..9999).random()}_${_xpHistory.value.size}",
+                amount = amount,
+                category = category,
+                concernedParty = concernedParty.ifBlank { "النظام" },
+                concernedPartyEn = concernedPartyEn.ifBlank { concernedParty.ifBlank { "System" } },
+                detail = detail,
+                detailEn = detailEn,
+                timestamp = now
+            )
+            val updatedHistory = (listOf(entry) + _xpHistory.value).take(MAX_XP_HISTORY_ENTRIES)
+            _xpHistory.value = updatedHistory
+            editor.putString(KEY_XP_HISTORY_JSON, xpHistoryToJsonArray(updatedHistory).toString())
+        }
+
+        editor.apply()
         return newXp
     }
 
@@ -582,6 +631,7 @@ object RoadmapManager {
         val now = System.currentTimeMillis()
         var found = false
         var awardedXp = 0
+        var claimedTask: TaskItem? = null
 
         val updatedCompleted = _completedTaskIds.value.toMutableSet()
         updatedCompleted.add(taskId)
@@ -599,6 +649,7 @@ object RoadmapManager {
             val target = currentList[idx]
             found = true
             awardedXp = target.xpBounty
+            claimedTask = target
 
             val remaining = currentList.filterNot { it.id == taskId }.toMutableList()
             val excludedIds = updatedCompleted + remaining.map { it.id }
@@ -644,6 +695,7 @@ object RoadmapManager {
             if (targetYearly != null) {
                 found = true
                 awardedXp = targetYearly.xpBounty
+                claimedTask = targetYearly
                 // Transfer directly out of active Eternal list into Completed Tasks Ledger
                 val remainingYearly = TaskPools.sortTasksProgressively(
                     _yearlyTasks.value.filterNot { it.id == taskId },
@@ -667,7 +719,20 @@ object RoadmapManager {
                 .apply()
 
             if (awardedXp > 0) {
-                addXp(context, awardedXp)
+                val t = claimedTask
+                if (t != null) {
+                    addXp(
+                        context = context,
+                        amount = awardedXp.toLong(),
+                        category = XpSourceCategory.TASK,
+                        concernedParty = t.title,
+                        concernedPartyEn = t.titleEn,
+                        detail = "إنجاز مهمة ${periodLabelAr(t.period)}",
+                        detailEn = "Completed ${periodLabelEn(t.period)} Task"
+                    )
+                } else {
+                    addXp(context, awardedXp)
+                }
             }
         }
         return found
@@ -738,7 +803,15 @@ object RoadmapManager {
             .apply()
 
         if (awardedXp > 0) {
-            addXp(context, awardedXp)
+            addXp(
+                context = context,
+                amount = awardedXp.toLong(),
+                category = XpSourceCategory.SKIP_KEY,
+                concernedParty = task.title,
+                concernedPartyEn = task.titleEn,
+                detail = "تجاوز بمفتاح تخطي (${keyLabelAr(task.requiredSkipKey)})",
+                detailEn = "Skipped with ${keyLabelEn(task.requiredSkipKey)}"
+            )
         }
         onActionOccurred(context, "KEY")
         return true
@@ -987,6 +1060,87 @@ object RoadmapManager {
             put("shields24h", _shields24h.value)
             put("shields48h", _shields48h.value)
             put("shields72h", _shields72h.value)
+            put("xpHistory", xpHistoryToJsonArray(_xpHistory.value))
+        }
+    }
+
+    private fun periodLabelAr(period: TaskPeriod): String = when (period) {
+        TaskPeriod.DAILY -> "يومي"
+        TaskPeriod.WEEKLY -> "أسبوعي"
+        TaskPeriod.MONTHLY -> "شهري"
+        TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> "سنوي"
+    }
+
+    private fun periodLabelEn(period: TaskPeriod): String = when (period) {
+        TaskPeriod.DAILY -> "Daily"
+        TaskPeriod.WEEKLY -> "Weekly"
+        TaskPeriod.MONTHLY -> "Monthly"
+        TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> "Annual"
+    }
+
+    private fun keyLabelAr(type: SkipKeyType): String = when (type) {
+        SkipKeyType.WOODEN -> "خشبي"
+        SkipKeyType.BRONZE -> "برونزي"
+        SkipKeyType.SILVER -> "فضي"
+    }
+
+    private fun keyLabelEn(type: SkipKeyType): String = when (type) {
+        SkipKeyType.WOODEN -> "Wooden Key"
+        SkipKeyType.BRONZE -> "Bronze Key"
+        SkipKeyType.SILVER -> "Silver Key"
+    }
+
+    private fun xpHistoryToJsonArray(list: List<XpHistoryEntry>): JSONArray {
+        val array = JSONArray()
+        for (item in list) {
+            val obj = JSONObject().apply {
+                put("id", item.id)
+                put("amount", item.amount)
+                put("category", item.category.name)
+                put("concernedParty", item.concernedParty)
+                put("concernedPartyEn", item.concernedPartyEn)
+                put("detail", item.detail)
+                put("detailEn", item.detailEn)
+                put("timestamp", item.timestamp)
+            }
+            array.put(obj)
+        }
+        return array
+    }
+
+    private fun jsonArrayToXpHistory(array: JSONArray?): List<XpHistoryEntry> {
+        if (array == null) return emptyList()
+        val result = mutableListOf<XpHistoryEntry>()
+        for (i in 0 until array.length()) {
+            val obj = array.optJSONObject(i) ?: continue
+            val catName = obj.optString("category", XpSourceCategory.SYSTEM.name)
+            val category = XpSourceCategory.entries.find { it.name == catName } ?: XpSourceCategory.SYSTEM
+            val party = obj.optString("concernedParty", "النظام")
+            val partyEn = obj.optString("concernedPartyEn", party)
+            val detail = obj.optString("detail", "")
+            val detailEn = obj.optString("detailEn", detail)
+            result.add(
+                XpHistoryEntry(
+                    id = obj.optString("id", "xp_${i}_${obj.optLong("timestamp", 0L)}"),
+                    amount = obj.optLong("amount", 0L),
+                    category = category,
+                    concernedParty = party,
+                    concernedPartyEn = partyEn,
+                    detail = detail,
+                    detailEn = detailEn,
+                    timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                )
+            )
+        }
+        return result.sortedByDescending { it.timestamp }.take(MAX_XP_HISTORY_ENTRIES)
+    }
+
+    private fun loadXpHistory(raw: String?): List<XpHistoryEntry> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return try {
+            jsonArrayToXpHistory(JSONArray(raw))
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 
@@ -1066,6 +1220,16 @@ object RoadmapManager {
         val s48 = if (replaceExisting) json.optInt("shields48h", 0) else (_shields48h.value + json.optInt("shields48h", 0))
         val s72 = if (replaceExisting) json.optInt("shields72h", 0) else (_shields72h.value + json.optInt("shields72h", 0))
 
+        val importedXpHistory = jsonArrayToXpHistory(json.optJSONArray("xpHistory"))
+        val finalXpHistory = if (replaceExisting) {
+            importedXpHistory
+        } else {
+            (importedXpHistory + _xpHistory.value)
+                .distinctBy { it.id }
+                .sortedByDescending { it.timestamp }
+                .take(MAX_XP_HISTORY_ENTRIES)
+        }
+
         _totalXp.value = finalXp
         _claimedStations.value = finalStations
         _completedTaskIds.value = finalCompleted
@@ -1073,6 +1237,7 @@ object RoadmapManager {
         _shields24h.value = s24.coerceAtLeast(0)
         _shields48h.value = s48.coerceAtLeast(0)
         _shields72h.value = s72.coerceAtLeast(0)
+        _xpHistory.value = finalXpHistory
 
         _dailyTasks.value = finalDaily
         _weeklyTasks.value = finalWeekly
@@ -1091,6 +1256,7 @@ object RoadmapManager {
             putString(KEY_WEEKLY_TASKS_JSON, tasksToJsonArray(finalWeekly).toString())
             putString(KEY_MONTHLY_TASKS_JSON, tasksToJsonArray(finalMonthly).toString())
             putString(KEY_YEARLY_TASKS_JSON, tasksToJsonArray(finalYearly).toString())
+            putString(KEY_XP_HISTORY_JSON, xpHistoryToJsonArray(finalXpHistory).toString())
             putInt(KEY_SHIELDS_24H, _shields24h.value)
             putInt(KEY_SHIELDS_48H, _shields48h.value)
             putInt(KEY_SHIELDS_72H, _shields72h.value)
