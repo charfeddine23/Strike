@@ -11,6 +11,7 @@ import com.example.data.profile.ProfileManager
 import com.example.data.profile.SkipKeyType
 import com.example.data.repository.IndividualRepository
 import com.example.data.roadmap.RoadmapManager
+import com.example.data.roadmap.TaskStatus
 import com.example.data.roadmap.XpCalculationEngine
 import com.example.data.roadmap.XpSourceCategory
 import com.example.util.SmartMatchReason
@@ -19,6 +20,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -230,5 +234,132 @@ class FeatureVerificationTest {
         assertEquals(preview.estimatedPeakScore, FlameManager.peakScore.value, 0.001)
         assertEquals(preview.inactivityPointsAdded, FlameManager.totalPointsGained.value, 0.001)
         assertEquals(preview.totalExtinguishedPoints, FlameManager.totalPointsExtinguished.value, 0.001)
+    }
+
+    @Test
+    fun historicalLogHandles10000StrikesAndSqlAnalyticsCalculatesAllTimeWithoutFilters() = runBlocking {
+        val alphaId = repository.save(
+            Individual(
+                fullName = "Alpha Striker",
+                type = "M",
+                length = 22.0,
+                width = 10.0,
+                size = 220.0,
+                sScore = 70.0,
+                fScore = 70.0,
+                cScore = 70.0,
+                boost = 212.2
+            )
+        )
+        val betaId = repository.save(
+            Individual(
+                fullName = "Beta Striker",
+                type = "FG",
+                length = 20.0,
+                width = 10.0,
+                size = 200.0,
+                sScore = 65.0,
+                fScore = 65.0,
+                cScore = 65.0,
+                boost = 197.0
+            )
+        )
+
+        // Store 10,000 historical strikes literally across multiple years (2023..2026)
+        repository.recordHistoricalStrikes(
+            alphaId,
+            listOf(2023 to 1500, 2024 to 3500, 2025 to 5000),
+            lang = "en"
+        )
+        val logged10k = repository.allStrikeEvents.first()
+        assertEquals(10_000, logged10k.size)
+        assertTrue(logged10k.all { it.count == 1 })
+
+        // Add additional strikes beyond 10,000: historical log displays latest 10,000, while
+        // unfiltered SQL DAO queries calculate ALL historical strikes (> 10,000) without truncation!
+        repository.recordHistoricalStrikes(betaId, listOf(2022 to 250, 2026 to 300), lang = "en")
+        repository.incrementStrike(betaId, delta = 5)
+
+        val latestDisplayLog = repository.allStrikeEvents.first()
+        assertEquals(10_000, latestDisplayLog.size)
+
+        val sqlAllTimeTotal = repository.allTimeStrikesCountFlow.first()
+        assertEquals(10_555, sqlAllTimeTotal)
+
+        val sqlYearly = repository.yearlyPersonAggregatesFlow.first()
+        val totalsByYear = sqlYearly.groupBy { it.year }.mapValues { (_, list) -> list.sumOf { it.totalStrikes } }
+        assertEquals(1500, totalsByYear[2023])
+        assertEquals(3500, totalsByYear[2024])
+        assertEquals(5000, totalsByYear[2025])
+        assertEquals(250, totalsByYear[2022])
+        assertEquals(305, totalsByYear[2026])
+    }
+
+    @Test
+    fun resetAllProgressLocksUnlockedTitlesAndAvatarsBackToInitialState() {
+        ProfileManager.unlockAvatar(context, "av_gabriel_wings")
+        ProfileManager.equipAvatar(context, "av_gabriel_wings")
+        ProfileManager.unlockTitle(context, 25)
+        ProfileManager.equipTitle(context, 25)
+
+        assertTrue(ProfileManager.unlockedAvatarIds.value.contains("av_gabriel_wings"))
+        assertTrue(ProfileManager.unlockedTitleIds.value.contains(25))
+        assertEquals("av_gabriel_wings", ProfileManager.equippedAvatar.value.id)
+        assertEquals(25, ProfileManager.equippedTitle.value.id)
+
+        ProfileManager.resetAllProgressToZero(context)
+
+        assertEquals(setOf("av_core_node"), ProfileManager.unlockedAvatarIds.value)
+        assertEquals(setOf(1), ProfileManager.unlockedTitleIds.value)
+        assertEquals("av_core_node", ProfileManager.equippedAvatar.value.id)
+        assertEquals(1, ProfileManager.equippedTitle.value.id)
+
+        // Verify persistence after reload
+        ProfileManager.resetForTesting(context)
+        assertEquals(setOf("av_core_node"), ProfileManager.unlockedAvatarIds.value)
+        assertEquals(setOf(1), ProfileManager.unlockedTitleIds.value)
+        assertEquals("av_core_node", ProfileManager.equippedAvatar.value.id)
+        assertEquals(1, ProfileManager.equippedTitle.value.id)
+    }
+
+    @Test
+    fun ledgerToggleChangesTaskCompletionBothWaysWhileKeepingEarnedXpIntact() {
+        // Earn XP legitimately first
+        val dailyTask = RoadmapManager.dailyTasks.value.first()
+        assertTrue(RoadmapManager.completeTask(context, dailyTask.id))
+        val expectedXp = RoadmapManager.totalXp.value
+        val expectedHistoryCount = RoadmapManager.xpHistory.value.size
+        assertTrue(expectedXp > 0L)
+        assertEquals(1, expectedHistoryCount)
+
+        // 1. Toggle COMPLETED -> UNCOMPLETED via ledger toggle: status reverts to PENDING, XP stays intact!
+        val revertedState = RoadmapManager.toggleTaskCompletionPreservingXp(context, dailyTask.id)
+        assertEquals(false, revertedState)
+        assertEquals(expectedXp, RoadmapManager.totalXp.value)
+        assertEquals(expectedHistoryCount, RoadmapManager.xpHistory.value.size)
+        val afterRevert = RoadmapManager.getTasksLedgerSnapshot().first { it.task.id == dailyTask.id }
+        assertFalse(afterRevert.task.isCompleted)
+        assertEquals(TaskStatus.PENDING, afterRevert.task.status)
+
+        // 2. Toggle UNCOMPLETED -> COMPLETED on an active pending task & an eternal task without changing XP!
+        val eternalTask = RoadmapManager.yearlyTasks.value.first { !it.isCompleted }
+        val completedState = RoadmapManager.toggleTaskCompletionPreservingXp(context, eternalTask.id)
+        assertEquals(true, completedState)
+        assertEquals(expectedXp, RoadmapManager.totalXp.value)
+        assertEquals(expectedHistoryCount, RoadmapManager.xpHistory.value.size)
+        val afterComplete = RoadmapManager.getTasksLedgerSnapshot().first { it.task.id == eternalTask.id }
+        assertTrue(afterComplete.task.isCompleted)
+        assertNotNull(afterComplete.completedAtMillis)
+
+        // 3. Reload from SharedPreferences and verify both XP and toggled task states persisted cleanly
+        RoadmapManager.resetForTesting(context)
+        assertEquals(expectedXp, RoadmapManager.totalXp.value)
+        assertEquals(expectedHistoryCount, RoadmapManager.xpHistory.value.size)
+        val snapshotAfterReload = RoadmapManager.getTasksLedgerSnapshot()
+        assertFalse(snapshotAfterReload.first { it.task.id == dailyTask.id }.task.isCompleted)
+        assertTrue(snapshotAfterReload.first { it.task.id == eternalTask.id }.task.isCompleted)
+
+        // Unknown task ID returns null cleanly without modifying state
+        assertNull(RoadmapManager.toggleTaskCompletionPreservingXp(context, "non_existent_task_id"))
     }
 }

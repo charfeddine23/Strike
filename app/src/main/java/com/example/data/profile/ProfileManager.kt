@@ -469,14 +469,20 @@ object ProfileManager {
     }
 
     /**
-     * Resets consumables (potions, active potion effects, and skip-keys) to zero.
-     * PERMANENT UNLOCK PERSISTENCE RULE:
-     * Unlocked Titles and Avatars (plus currently equipped title/avatar & username) are immutable
-     * player legacy collectibles and are STRICTLY EXEMPT from any reset or wipe.
+     * Resets consumables (potions, active potion effects, and skip-keys) to zero,
+     * and clears/locks all unlocked Titles and Avatars back to their initial starter state.
      */
     @Synchronized
     fun resetAllProgressToZero(context: Context) {
         init(context)
+
+        val initialAvatar = ProfileMasterInventory.MASTER_AVATARS.first()
+        val initialTitle = ProfileMasterInventory.MASTER_TITLES.first()
+
+        _equippedAvatar.value = initialAvatar
+        _equippedTitle.value = initialTitle
+        _unlockedAvatarIds.value = setOf(initialAvatar.id)
+        _unlockedTitleIds.value = setOf(initialTitle.id)
 
         _pulseElixirCount.value = 0
         _shadowSerumCount.value = 0
@@ -495,6 +501,10 @@ object ProfileManager {
         _silverKeysCount.value = 0
 
         getPrefs(context).edit()
+            .putString(KEY_EQUIPPED_AVATAR_ID, initialAvatar.id)
+            .putInt(KEY_EQUIPPED_TITLE_ID, initialTitle.id)
+            .putStringSet(KEY_UNLOCKED_AVATARS, setOf(initialAvatar.id))
+            .putStringSet(KEY_UNLOCKED_TITLES, setOf(initialTitle.id.toString()))
             .putInt(KEY_POTION_PULSE_ELIXIR, 0)
             .putInt(KEY_POTION_SHADOW_SERUM, 0)
             .putInt(KEY_POTION_GABRIEL_DROPLET, 0)

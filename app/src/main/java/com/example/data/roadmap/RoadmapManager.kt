@@ -919,6 +919,142 @@ object RoadmapManager {
         }
     }
 
+    /**
+     * Toggles any task card state (uncompleted <-> completed) via the Tasks Ledger 10-second
+     * long-press interaction while strictly preserving all previously earned XP and XP history.
+     *
+     * @return `true` if the task is now COMPLETED, `false` if now UNCOMPLETED, or `null` if not found.
+     */
+    @Synchronized
+    fun toggleTaskCompletionPreservingXp(context: Context, taskId: String): Boolean? {
+        init(context)
+        val catalogTask = TaskPools.findById(taskId) ?: return null
+        val now = System.currentTimeMillis()
+        val activeLive = (_dailyTasks.value + _weeklyTasks.value + _monthlyTasks.value + _yearlyTasks.value)
+            .find { it.id == taskId }
+        val wasCompleted = (taskId in _completedTaskIds.value) || (activeLive?.isCompleted == true)
+        val prefs = getPrefs(context)
+
+        return if (wasCompleted) {
+            // Toggle COMPLETED -> UNCOMPLETED (PENDING) without deducting any earned XP
+            val updatedCompleted = _completedTaskIds.value.toMutableSet().apply { remove(taskId) }
+            val updatedTimestamps = _completedTaskTimestamps.value.toMutableMap().apply { remove(taskId) }
+            _completedTaskIds.value = updatedCompleted
+            _completedTaskTimestamps.value = updatedTimestamps
+
+            fun resetIfInRotationalList(list: List<TaskItem>): Pair<List<TaskItem>, Boolean> {
+                var matched = false
+                val updated = list.map { item ->
+                    if (item.id == taskId) {
+                        matched = true
+                        item.copy(status = TaskStatus.PENDING, currentCount = 0, unlockAtMillis = 0L)
+                    } else {
+                        item
+                    }
+                }
+                return if (matched) TaskPools.sortTasksProgressively(updated, now) to true else list to false
+            }
+
+            when (catalogTask.period) {
+                TaskPeriod.DAILY -> {
+                    val (next, changed) = resetIfInRotationalList(_dailyTasks.value)
+                    if (changed) {
+                        _dailyTasks.value = next
+                        saveTasks(context, KEY_DAILY_TASKS_JSON, next)
+                    }
+                }
+                TaskPeriod.WEEKLY -> {
+                    val (next, changed) = resetIfInRotationalList(_weeklyTasks.value)
+                    if (changed) {
+                        _weeklyTasks.value = next
+                        saveTasks(context, KEY_WEEKLY_TASKS_JSON, next)
+                    }
+                }
+                TaskPeriod.MONTHLY -> {
+                    val (next, changed) = resetIfInRotationalList(_monthlyTasks.value)
+                    if (changed) {
+                        _monthlyTasks.value = next
+                        saveTasks(context, KEY_MONTHLY_TASKS_JSON, next)
+                    }
+                }
+                TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> {
+                    val currentYearly = _yearlyTasks.value.toMutableList()
+                    val existingIdx = currentYearly.indexOfFirst { it.id == taskId }
+                    val pendingCopy = catalogTask.copy(
+                        status = TaskStatus.PENDING,
+                        currentCount = 0,
+                        unlockAtMillis = 0L
+                    )
+                    if (existingIdx >= 0) {
+                        currentYearly[existingIdx] = pendingCopy
+                    } else {
+                        currentYearly.add(pendingCopy)
+                    }
+                    val sortedYearly = TaskPools.sortTasksProgressively(currentYearly, now)
+                    _yearlyTasks.value = sortedYearly
+                    saveTasks(context, KEY_YEARLY_TASKS_JSON, sortedYearly)
+                }
+            }
+
+            prefs.edit()
+                .putStringSet(KEY_COMPLETED_TASK_IDS, updatedCompleted)
+                .putString(KEY_COMPLETED_TASK_TIMESTAMPS, timestampsToJson(updatedTimestamps))
+                .apply()
+            false
+        } else {
+            // Toggle UNCOMPLETED -> COMPLETED without granting or altering XP
+            val updatedCompleted = _completedTaskIds.value.toMutableSet().apply { add(taskId) }
+            val updatedTimestamps = _completedTaskTimestamps.value.toMutableMap().apply { put(taskId, now) }
+            _completedTaskIds.value = updatedCompleted
+            _completedTaskTimestamps.value = updatedTimestamps
+
+            fun replaceIfInRotationalList(list: List<TaskItem>, period: TaskPeriod): List<TaskItem>? {
+                if (list.none { it.id == taskId }) return null
+                val remaining = list.filterNot { it.id == taskId }.toMutableList()
+                val excludedIds = updatedCompleted + remaining.map { it.id }
+                val replacement = TaskPools.drawReplacementTask(
+                    period = period,
+                    excludedIds = excludedIds,
+                    unlockAtMillis = TaskPools.getNextCycleResetMillis(period, now),
+                    seedMillis = now
+                )
+                if (replacement != null) {
+                    remaining.add(replacement)
+                }
+                return TaskPools.sortTasksProgressively(remaining, now)
+            }
+
+            when (catalogTask.period) {
+                TaskPeriod.DAILY -> replaceIfInRotationalList(_dailyTasks.value, TaskPeriod.DAILY)?.let {
+                    _dailyTasks.value = it
+                    saveTasks(context, KEY_DAILY_TASKS_JSON, it)
+                }
+                TaskPeriod.WEEKLY -> replaceIfInRotationalList(_weeklyTasks.value, TaskPeriod.WEEKLY)?.let {
+                    _weeklyTasks.value = it
+                    saveTasks(context, KEY_WEEKLY_TASKS_JSON, it)
+                }
+                TaskPeriod.MONTHLY -> replaceIfInRotationalList(_monthlyTasks.value, TaskPeriod.MONTHLY)?.let {
+                    _monthlyTasks.value = it
+                    saveTasks(context, KEY_MONTHLY_TASKS_JSON, it)
+                }
+                TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> {
+                    val remainingYearly = TaskPools.sortTasksProgressively(
+                        _yearlyTasks.value.filterNot { it.id == taskId },
+                        now
+                    )
+                    _yearlyTasks.value = remainingYearly
+                    saveTasks(context, KEY_YEARLY_TASKS_JSON, remainingYearly)
+                }
+            }
+
+            prefs.edit()
+                .putStringSet(KEY_COMPLETED_TASK_IDS, updatedCompleted)
+                .putString(KEY_COMPLETED_TASK_TIMESTAMPS, timestampsToJson(updatedTimestamps))
+                .apply()
+            true
+        }
+    }
+
     private fun shouldIncrement(item: TaskItem, actionType: String): Boolean {
         return when (actionType) {
             "DEFLAME" -> item.actionTag == "DEFLAME" || item.actionTag == "BALANCE"

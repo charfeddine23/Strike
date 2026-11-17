@@ -3,6 +3,8 @@ package com.example.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -36,15 +39,18 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,6 +69,9 @@ import com.example.ui.theme.PlusJakartaSans
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private const val TASK_TOGGLE_HOLD_DURATION_MS = 10_000L
+private const val TASK_HOLD_ACTIVATION_DELAY_MS = 180L
 
 /**
  * Displays the active cycle grant day rule and live countdown timer for Daily, Weekly (Sunday),
@@ -186,6 +195,7 @@ fun TasksLedgerSection(
     nowMillis: Long,
     currentLang: String,
     onClaimTask: (String) -> Unit,
+    onToggleTaskCompletion: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isAr = currentLang == "ar"
@@ -513,7 +523,8 @@ fun TasksLedgerSection(
                         entry = entry,
                         nowMillis = nowMillis,
                         currentLang = currentLang,
-                        onClaimTask = { onClaimTask(entry.task.id) }
+                        onClaimTask = { onClaimTask(entry.task.id) },
+                        onLongPressToggle = { onToggleTaskCompletion(entry.task.id) }
                     )
                 }
             }
@@ -526,7 +537,8 @@ fun LedgerTaskCard(
     entry: TaskLedgerEntry,
     nowMillis: Long,
     currentLang: String,
-    onClaimTask: () -> Unit
+    onClaimTask: () -> Unit,
+    onLongPressToggle: (() -> Unit)? = null
 ) {
     val isAr = currentLang == "ar"
     val isFr = currentLang == "fr"
@@ -541,10 +553,72 @@ fun LedgerTaskCard(
         TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> (if (isAr) "الأبدية" else if (isFr) "Éternelle" else "Eternal") to NeonAmber
     }
 
+    var holdProgress by remember(task.id) { mutableFloatStateOf(0f) }
+    var isHolding by remember(task.id) { mutableStateOf(false) }
+    val latestOnToggle by rememberUpdatedState(onLongPressToggle)
+    val holdHighlightColor = if (task.isCompleted) NeonAmber else ElectricMint
+
+    val cardModifier = Modifier
+        .fillMaxWidth()
+        .then(
+            if (isHolding && holdProgress > 0f) {
+                Modifier.border(1.6.dp, holdHighlightColor, RoundedCornerShape(12.dp))
+            } else {
+                Modifier
+            }
+        )
+        .then(
+            if (onLongPressToggle != null) {
+                Modifier.pointerInput(task.id, task.isCompleted) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = true)
+                        val pointerId = down.id
+                        val startPos = down.position
+                        val startTime = System.currentTimeMillis()
+                        val touchSlop = viewConfiguration.touchSlop
+                        isHolding = true
+                        holdProgress = 0f
+
+                        try {
+                            var triggered = false
+                            while (!triggered) {
+                                val elapsed = System.currentTimeMillis() - startTime
+                                if (elapsed >= TASK_TOGGLE_HOLD_DURATION_MS) {
+                                    holdProgress = 1f
+                                    triggered = true
+                                    latestOnToggle?.invoke()
+                                    break
+                                } else if (elapsed >= TASK_HOLD_ACTIVATION_DELAY_MS) {
+                                    holdProgress = ((elapsed - TASK_HOLD_ACTIVATION_DELAY_MS).toFloat() /
+                                        (TASK_TOGGLE_HOLD_DURATION_MS - TASK_HOLD_ACTIVATION_DELAY_MS).toFloat())
+                                        .coerceIn(0f, 1f)
+                                }
+
+                                val event = withTimeoutOrNull(45L) { awaitPointerEvent() }
+                                if (event != null) {
+                                    val change = event.changes.firstOrNull { it.id == pointerId }
+                                        ?: event.changes.firstOrNull()
+                                    if (change == null || !change.pressed ||
+                                        (change.position - startPos).getDistance() > touchSlop
+                                    ) {
+                                        break
+                                    }
+                                }
+                            }
+                        } finally {
+                            isHolding = false
+                            holdProgress = 0f
+                        }
+                    }
+                }
+            } else {
+                Modifier
+            }
+        )
+        .testTag("ledger_card_${task.id}")
+
     LiquidGlassCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("ledger_card_${task.id}"),
+        modifier = cardModifier,
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(horizontal = 11.dp, vertical = 9.dp)) {
@@ -726,6 +800,100 @@ fun LedgerTaskCard(
                         text = if (isAr) "نُقلت إلى السجل في $formattedDate" else "Recorded in ledger at $formattedDate",
                         fontSize = 9.5.sp,
                         color = Color(0xFF94A3B8)
+                    )
+                }
+            }
+
+            if (isHolding && holdProgress > 0f) {
+                val heldSeconds = (holdProgress * 10f).coerceIn(0f, 10f)
+                val formattedHeld = String.format(Locale.US, "%.1f", heldSeconds)
+                Spacer(modifier = Modifier.height(6.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(holdHighlightColor.copy(alpha = 0.12f))
+                        .border(0.8.dp, holdHighlightColor.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                        .testTag("ledger_hold_progress_${task.id}")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = when {
+                                isAr -> if (task.isCompleted) {
+                                    "استمر بالضغط لإرجاعها غير منجزة (XP محفوظ)"
+                                } else {
+                                    "استمر بالضغط لإنجازها (XP محفوظ)"
+                                }
+                                isFr -> if (task.isCompleted) {
+                                    "Maintenez pour réactiver (XP gardé)"
+                                } else {
+                                    "Maintenez pour terminer (XP gardé)"
+                                }
+                                else -> if (task.isCompleted) {
+                                    "Holding to mark uncompleted (XP kept)"
+                                } else {
+                                    "Holding to mark completed (XP kept)"
+                                }
+                            },
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = holdHighlightColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "${formattedHeld}s / 10s",
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = PlusJakartaSans,
+                            color = holdHighlightColor
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color(0x401E293B))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(holdProgress)
+                                .height(5.dp)
+                                .background(holdHighlightColor)
+                        )
+                    }
+                }
+            } else if (onLongPressToggle != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.TouchApp,
+                        contentDescription = null,
+                        tint = Color(0xFF64748B),
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = when {
+                            isAr -> "ضغط مطوّل 10ث: تبديل الحالة دون مساس بـ XP"
+                            isFr -> "Appui long 10s : basculer l'état (XP conservé)"
+                            else -> "Hold 10s to toggle status (earned XP intact)"
+                        },
+                        fontSize = 9.sp,
+                        color = Color(0xFF64748B),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

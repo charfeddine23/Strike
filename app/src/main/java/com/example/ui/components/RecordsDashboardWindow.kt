@@ -311,7 +311,6 @@ fun RecordsDashboardExpandablePanel(
 
     val yearlyStats by viewModel.yearlyStrikeStats.collectAsStateWithLifecycle()
     val allTimeStrikes by viewModel.allTimeStrikesCount.collectAsStateWithLifecycle()
-    val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
 
     var showYearlyAnalytics by remember { mutableStateOf(false) }
 
@@ -621,6 +620,9 @@ fun RecordsDashboardExpandablePanel(
                             }
                         }
                     } else {
+                        val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
+                        val nf = remember { java.text.NumberFormat.getNumberInstance(java.util.Locale.US) }
+
                         // Complete Yearly Strikes Dashboard (Moved Yearly Analytics from StrikeScreen)
                         LazyColumn(
                             modifier = Modifier
@@ -718,12 +720,16 @@ fun RecordsDashboardExpandablePanel(
                                     }
                                 }
                             } else {
-                                items(yearlyStats, key = { "year_${it.year}" }) { stat ->
+                                items(
+                                    items = yearlyStats,
+                                    key = { "year_${it.year}" },
+                                    contentType = { "yearly_stat_card" }
+                                ) { stat ->
                                     YearlyStatCard(stat = stat, darkTheme = isDarkTheme, isAr = isAr)
                                 }
                             }
 
-                            // Detailed Historical Strike Log List
+                            // Detailed Historical Strike Log List (up to 10,000 strikes)
                             item {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Row(
@@ -731,12 +737,26 @@ fun RecordsDashboardExpandablePanel(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = if (isAr) "سجل الضربات التاريخي المفصّل" else "Detailed Historical Strike Log",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = if (isAr) "سجل الضربات التاريخي المفصّل" else "Detailed Historical Strike Log",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "(${nf.format(allStrikeEvents.size)} / 10,000)",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = accentCyan
+                                        )
+                                    }
                                     Text(
                                         text = stringResource(R.string.swipe_to_delete_hint),
                                         fontSize = 11.sp,
@@ -746,10 +766,15 @@ fun RecordsDashboardExpandablePanel(
                                 }
                             }
 
-                            items(allStrikeEvents, key = { "yearly_hist_${it.id}" }) { event ->
+                            items(
+                                items = allStrikeEvents,
+                                key = { "yearly_hist_${it.id}" },
+                                contentType = { "historical_strike_log" }
+                            ) { event ->
                                 SwipeableStrikeLogItem(
                                     event = event,
-                                    onDelete = { viewModel.deleteStrikeEvent(it) }
+                                    onDelete = { viewModel.deleteStrikeEvent(it) },
+                                    darkTheme = isDarkTheme
                                 )
                             }
                         }

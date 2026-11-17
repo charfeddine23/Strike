@@ -483,6 +483,11 @@ fun TasksLedgerScreen(
                                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
                                     viewModel.claimTaskReward(entry.task.id)
+                                },
+                                onLongPressToggle = {
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    viewModel.toggleTaskCompletionLedger(entry.task.id)
                                 }
                             )
                         }

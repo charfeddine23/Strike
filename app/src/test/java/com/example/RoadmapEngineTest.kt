@@ -569,7 +569,9 @@ class RoadmapEngineTest {
         ProfileManager.grantPotion(app, com.example.data.profile.PotionType.SHADOW_GRIP_SERUM, 1)
         ProfileManager.usePulseElixir(app)
         ProfileManager.unlockAvatar(app, "av_gabriel_wings")
+        ProfileManager.equipAvatar(app, "av_gabriel_wings")
         ProfileManager.unlockTitle(app, 21)
+        ProfileManager.equipTitle(app, 21)
 
         // Sanity check that state is non-zero before reset
         assertTrue(RoadmapManager.totalXp.value > 0L)
@@ -620,9 +622,11 @@ class RoadmapEngineTest {
         assertFalse(ProfileManager.hasCryoBuffArmed.value)
         assertFalse(ProfileManager.hasRebirthImmunity.value)
 
-        // Permanent Unlock Persistence Rule: unlocked Titles & Avatars NEVER get wiped on reset
-        assertTrue(ProfileManager.unlockedAvatarIds.value.containsAll(setOf("av_core_node", "av_gabriel_wings")))
-        assertTrue(ProfileManager.unlockedTitleIds.value.containsAll(setOf(1, 21)))
+        // Reset All Levels to Zero clears & locks unlocked Titles and Avatars back to initial state
+        assertEquals(setOf("av_core_node"), ProfileManager.unlockedAvatarIds.value)
+        assertEquals(setOf(1), ProfileManager.unlockedTitleIds.value)
+        assertEquals("av_core_node", ProfileManager.equippedAvatar.value.id)
+        assertEquals(1, ProfileManager.equippedTitle.value.id)
     }
 
     @Test

@@ -120,25 +120,33 @@ class IndividualViewModel(
         initialValue = emptyList()
     )
 
-    // Yearly Strike Dashboard Analytics
-    val yearlyStrikeStats: StateFlow<List<YearlyStrikeStat>> = allStrikeEvents.map { events ->
-        if (events.isEmpty()) return@map emptyList()
+    // All-Time Strikes Count directly from unfiltered SQL aggregate query (no limits or date restrictions)
+    val allTimeStrikesCount: StateFlow<Int> = repository.allTimeStrikesCountFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
 
-        val allTimeTotal = events.sumOf { it.count }.coerceAtLeast(1)
-        val groupedByYear = events.groupBy { it.year }
+    // Yearly Strike Dashboard Analytics computed directly from unfiltered SQL aggregation
+    val yearlyStrikeStats: StateFlow<List<YearlyStrikeStat>> = combine(
+        repository.yearlyPersonAggregatesFlow,
+        allTimeStrikesCount
+    ) { rows, allTimeRaw ->
+        if (rows.isEmpty()) return@combine emptyList()
 
-        groupedByYear.map { (year, yearEvents) ->
-            val yearTotal = yearEvents.sumOf { it.count }
-            val topPersonEntry = yearEvents.groupBy { it.individualName }
-                .mapValues { entry -> entry.value.sumOf { it.count } }
-                .maxByOrNull { it.value }
+        val allTimeTotal = maxOf(allTimeRaw, rows.sumOf { it.totalStrikes }).coerceAtLeast(1)
+
+        rows.groupBy { it.year }.map { (year, yearRows) ->
+            val yearTotal = yearRows.sumOf { it.totalStrikes }
+            val eventTotal = yearRows.sumOf { it.eventCount }
+            val topPerson = yearRows.maxByOrNull { it.totalStrikes }
 
             YearlyStrikeStat(
                 year = year,
                 totalStrikes = yearTotal,
-                eventCount = yearEvents.size,
-                topIndividualName = topPersonEntry?.key ?: "—",
-                topIndividualStrikes = topPersonEntry?.value ?: 0,
+                eventCount = eventTotal,
+                topIndividualName = topPerson?.individualName ?: "—",
+                topIndividualStrikes = topPerson?.totalStrikes ?: 0,
                 percentageOfAllTime = (yearTotal.toFloat() / allTimeTotal.toFloat()).coerceIn(0f, 1f)
             )
         }.sortedByDescending { it.year }
@@ -148,31 +156,25 @@ class IndividualViewModel(
         initialValue = emptyList()
     )
 
-    val allTimeStrikesCount: StateFlow<Int> = allStrikeEvents.map { events ->
-        events.sumOf { it.count }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = 0
-    )
-
-    // Map of individualId to timestamp of latest recorded strike event
-    val individualLastStrikeMap: StateFlow<Map<Long, Long>> = allStrikeEvents.map { events ->
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        events.groupBy { it.individualId }.mapValues { (_, evList) ->
-            evList.mapNotNull { ev ->
-                try {
-                    dateFormat.parse(ev.date)?.time
-                } catch (e: Exception) {
-                    null
-                }
-            }.maxOrNull() ?: 0L
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyMap()
-    )
+    // Map of individualId to timestamp of latest recorded strike event via SQL aggregation
+    val individualLastStrikeMap: StateFlow<Map<Long, Long>> =
+        repository.latestStrikeDateByIndividualFlow.map { rows ->
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            rows.associate { tuple ->
+                val ts = tuple.latestDate?.let { dateStr ->
+                    try {
+                        dateFormat.parse(dateStr)?.time
+                    } catch (_: Exception) {
+                        null
+                    }
+                } ?: 0L
+                tuple.individualId to ts
+            }
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
 
     fun getStatusForIndividual(
         individual: Individual,
@@ -673,6 +675,32 @@ class IndividualViewModel(
                     "ar" -> "تم إنجاز المهمة وحصد نقاط الـ XP بنجاح! ⚡"
                     "fr" -> "Mission accomplie et XP récolté avec succès ! ⚡"
                     else -> "Task Completed and XP awarded successfully! ⚡"
+                }
+                emitMessage(msg)
+            }
+        }
+    }
+
+    fun toggleTaskCompletionLedger(taskId: String) {
+        val newCompletedState = RoadmapManager.toggleTaskCompletionPreservingXp(getApplication(), taskId)
+        if (newCompletedState != null) {
+            viewModelScope.launch {
+                val msg = when (currentLanguage.value) {
+                    "ar" -> if (newCompletedState) {
+                        "تم تعيين المهمة كمنجزة مع الحفاظ الكامل على رصيد XP المكتسب ✓"
+                    } else {
+                        "تمت إعادة المهمة إلى غير منجزة مع بقاء كامل XP المكتسب محفوظاً ↺"
+                    }
+                    "fr" -> if (newCompletedState) {
+                        "Mission marquée terminée (XP acquis conservé intact) ✓"
+                    } else {
+                        "Mission remise en attente (XP acquis conservé intact) ↺"
+                    }
+                    else -> if (newCompletedState) {
+                        "Task marked completed (all earned XP kept intact) ✓"
+                    } else {
+                        "Task marked uncompleted (all earned XP kept intact) ↺"
+                    }
                 }
                 emitMessage(msg)
             }
@@ -1328,8 +1356,8 @@ class IndividualViewModel(
     fun seedSampleData() = reloadSampleData()
 
     /**
-     * Literally resets all game levels and consumables back to zero WITHOUT touching individuals,
-     * strike records, or permanent unlocked Titles & Avatars.
+     * Literally resets all game levels, consumables, unlocked titles, and unlocked avatars
+     * back to their initial base state WITHOUT touching individuals or strike records.
      */
     fun resetAllGameLevelsToZero() {
         val app = getApplication<android.app.Application>()
@@ -1338,9 +1366,9 @@ class IndividualViewModel(
             FlameManager.resetAllLevelsToZero(app)
             ProfileManager.resetAllProgressToZero(app)
             val msg = when (currentLanguage.value) {
-                "ar" -> "تم تصفير كافة المستويات والمخزون إلى الصفر (مع الحفاظ على الأفراد، سجلات السترايك، والألقاب والأفاتارات الدائمة)!"
-                "fr" -> "Tous les niveaux et consommables remis à zéro (individus, strikes et déblocages permanents conservés) !"
-                else -> "All game levels & consumables reset to zero (individuals, strike logs & permanent unlocks preserved)!"
+                "ar" -> "تم تصفير كافة المستويات والمخزون وإعادة قفل الألقاب والأفاتارات إلى حالتها الأولية (مع الحفاظ على الأفراد وسجلات السترايك)!"
+                "fr" -> "Tous les niveaux, consommables, titres et avatars ont été réinitialisés à l'état initial (individus et strikes conservés) !"
+                else -> "All game levels, consumables, titles & avatars reset to initial state (individuals & strike logs preserved)!"
             }
             emitMessage(msg)
         }

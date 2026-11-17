@@ -1,7 +1,9 @@
 package com.example.data.repository
 
 import com.example.data.local.IndividualDao
+import com.example.data.local.IndividualLatestDateTuple
 import com.example.data.local.StrikeEventDao
+import com.example.data.local.YearlyPersonAggregate
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +22,15 @@ class IndividualRepository(
 
     val allIndividuals: Flow<List<Individual>> = dao.getAllIndividuals()
     val allStrikeEvents: Flow<List<StrikeEvent>> = strikeEventDao.getAllStrikeEvents()
+    val allTimeStrikesCountFlow: Flow<Int> = strikeEventDao.getAllTimeStrikesCountFlow()
+    val yearlyPersonAggregatesFlow: Flow<List<YearlyPersonAggregate>> = strikeEventDao.getYearlyPersonAggregatesFlow()
+    val latestStrikeDateByIndividualFlow: Flow<List<IndividualLatestDateTuple>> =
+        strikeEventDao.getLatestStrikeDateByIndividualFlow()
+
+    suspend fun getAllTimeStrikesCount(): Int = strikeEventDao.getAllTimeStrikesCount()
+
+    suspend fun getYearlyPersonAggregates(): List<YearlyPersonAggregate> =
+        strikeEventDao.getYearlyPersonAggregates()
 
     suspend fun getIndividualById(id: Long): Individual? = dao.getIndividualById(id)
 
@@ -61,7 +72,8 @@ class IndividualRepository(
 
     /**
      * Increments the individual's strike count and AUTOMATICALLY creates literal 1-by-1 audit
-     * [StrikeEvent] records (each with count = 1) up to [MAX_LITERAL_RECENT_STRIKES] (10,000).
+     * [StrikeEvent] records (each with count = 1) up to [MAX_LITERAL_RECENT_STRIKES] (10,000)
+     * without deleting older historical records so All-Time and Yearly Analytics remain 100% intact.
      */
     suspend fun incrementStrike(id: Long, delta: Int = 1): Long {
         val countDelta = delta.coerceAtLeast(1)
@@ -76,29 +88,7 @@ class IndividualRepository(
         val personName = individual?.fullName ?: "Target #$id"
         val boostVal = individual?.boost ?: 0.0
 
-        val currentCount = strikeEventDao.getCount()
-        val availableSlots = (MAX_LITERAL_RECENT_STRIKES - currentCount).coerceAtLeast(0)
-        val eventsToInsertCount = minOf(countDelta, availableSlots)
-
-        if (eventsToInsertCount <= 0) {
-            // If log already hit 10,000 ceiling, trim oldest excess so the newest strike is always recorded literally
-            trimOldestStrikesBeyondLimit(MAX_LITERAL_RECENT_STRIKES - 1)
-            val single = StrikeEvent(
-                individualId = id,
-                individualName = personName,
-                year = year,
-                date = dateStr,
-                time = timeStr,
-                count = 1,
-                strikeType = "Strike +1",
-                performanceValue = boostVal,
-                notes = if (countDelta > 1) "Literal strike (batch +$countDelta)" else "Auto-recorded literal strike",
-                timestamp = baseTimestamp
-            )
-            return strikeEventDao.insertEvent(single)
-        }
-
-        if (eventsToInsertCount == 1 && countDelta == 1) {
+        if (countDelta == 1) {
             val event = StrikeEvent(
                 individualId = id,
                 individualName = personName,
@@ -114,36 +104,53 @@ class IndividualRepository(
             return strikeEventDao.insertEvent(event)
         }
 
-        val literalEvents = (0 until eventsToInsertCount).map { idx ->
-            StrikeEvent(
-                individualId = id,
-                individualName = personName,
-                year = year,
-                date = dateStr,
-                time = timeStr,
-                count = 1,
-                strikeType = "Strike +1",
-                performanceValue = boostVal,
-                notes = if (countDelta > 1) "Literal strike #${idx + 1}/$countDelta" else "Auto-recorded strike event",
-                timestamp = baseTimestamp + idx
+        val currentCount = strikeEventDao.getCount()
+        val availableLiteralSlots = (MAX_LITERAL_RECENT_STRIKES - currentCount).coerceAtLeast(1)
+        val literalCount = minOf(countDelta, availableLiteralSlots)
+        val overflowCount = countDelta - literalCount
+
+        val eventsToInsert = ArrayList<StrikeEvent>(literalCount + if (overflowCount > 0) 1 else 0)
+        for (idx in 0 until literalCount) {
+            eventsToInsert.add(
+                StrikeEvent(
+                    individualId = id,
+                    individualName = personName,
+                    year = year,
+                    date = dateStr,
+                    time = timeStr,
+                    count = 1,
+                    strikeType = "Strike +1",
+                    performanceValue = boostVal,
+                    notes = "Literal strike #${idx + 1}/$countDelta",
+                    timestamp = baseTimestamp + idx
+                )
+            )
+        }
+        if (overflowCount > 0) {
+            eventsToInsert.add(
+                StrikeEvent(
+                    individualId = id,
+                    individualName = personName,
+                    year = year,
+                    date = dateStr,
+                    time = timeStr,
+                    count = overflowCount,
+                    strikeType = "Batch +$overflowCount",
+                    performanceValue = boostVal,
+                    notes = "Historical overflow (+$overflowCount strikes)",
+                    timestamp = baseTimestamp + literalCount
+                )
             )
         }
 
-        val lastEvent = literalEvents.last()
-        val bulk = literalEvents.dropLast(1)
+        val lastEvent = eventsToInsert.last()
+        val bulk = eventsToInsert.dropLast(1)
         if (bulk.isNotEmpty()) {
             bulk.chunked(DB_INSERT_CHUNK_SIZE).forEach { chunk ->
                 strikeEventDao.insertAll(chunk)
             }
         }
         return strikeEventDao.insertEvent(lastEvent)
-    }
-
-    private suspend fun trimOldestStrikesBeyondLimit(targetMaxCount: Int) {
-        val all = strikeEventDao.getAllStrikeEventsList()
-        if (all.size <= targetMaxCount) return
-        val excess = all.drop(targetMaxCount.coerceAtLeast(0))
-        excess.forEach { strikeEventDao.deleteEvent(it) }
     }
 
     suspend fun setStrikeCount(id: Long, count: Int) {
@@ -158,7 +165,8 @@ class IndividualRepository(
 
     /**
      * Stores past/historical strikes per year for an individual, expanding every strike literally (count = 1)
-     * up to [MAX_LITERAL_RECENT_STRIKES] (10,000).
+     * up to [MAX_LITERAL_RECENT_STRIKES] (10,000) and preserving any overflow above 10,000 in grouped
+     * overflow records so no historical strikes are ever dropped from analytics.
      */
     suspend fun recordHistoricalStrikes(
         individualId: Long,
@@ -171,15 +179,16 @@ class IndividualRepository(
         val currentYear = Calendar.getInstance().get(Calendar.YEAR)
         val nowMillis = System.currentTimeMillis()
         val existingCount = strikeEventDao.getCount()
-        var remainingBudget = (MAX_LITERAL_RECENT_STRIKES - existingCount).coerceAtLeast(0)
+        var remainingLiteralBudget = (MAX_LITERAL_RECENT_STRIKES - existingCount).coerceAtLeast(0)
 
-        val expandedEvents = mutableListOf<StrikeEvent>()
+        val eventsToInsert = mutableListOf<StrikeEvent>()
         for ((year, rawCount) in historicalEntries.sortedByDescending { it.first }) {
-            if (rawCount <= 0 || remainingBudget <= 0) continue
-            val takeCount = minOf(rawCount, remainingBudget)
+            if (rawCount <= 0) continue
+            val takeLiteral = minOf(rawCount, remainingLiteralBudget)
+            val overflowCount = rawCount - takeLiteral
             val yearBaseMillis = nowMillis - ((currentYear - year).coerceAtLeast(0) * 31_536_000_000L)
-            for (idx in 0 until takeCount) {
-                expandedEvents.add(
+            for (idx in 0 until takeLiteral) {
+                eventsToInsert.add(
                     StrikeEvent(
                         individualId = individualId,
                         individualName = name,
@@ -198,10 +207,30 @@ class IndividualRepository(
                     )
                 )
             }
-            remainingBudget -= takeCount
+            if (overflowCount > 0) {
+                eventsToInsert.add(
+                    StrikeEvent(
+                        individualId = individualId,
+                        individualName = name,
+                        year = year,
+                        date = "$year-06-15",
+                        time = "12:00:00",
+                        count = overflowCount,
+                        strikeType = "Historical Batch +$overflowCount",
+                        performanceValue = boostVal,
+                        notes = if (lang == "ar") {
+                            "أرشيف ضربات تاريخية إضافية لسنة $year (+$overflowCount)"
+                        } else {
+                            "Historical overflow archive $year (+$overflowCount)"
+                        },
+                        timestamp = yearBaseMillis + takeLiteral
+                    )
+                )
+            }
+            remainingLiteralBudget = (remainingLiteralBudget - takeLiteral).coerceAtLeast(0)
         }
-        if (expandedEvents.isNotEmpty()) {
-            expandedEvents.chunked(DB_INSERT_CHUNK_SIZE).forEach { chunk ->
+        if (eventsToInsert.isNotEmpty()) {
+            eventsToInsert.chunked(DB_INSERT_CHUNK_SIZE).forEach { chunk ->
                 strikeEventDao.insertAll(chunk)
             }
         }
@@ -209,7 +238,7 @@ class IndividualRepository(
 
     /**
      * Expands any legacy grouped StrikeEvent rows (where count > 1) into literal individual rows (count = 1)
-     * up to [MAX_LITERAL_RECENT_STRIKES] (10,000) so Recent Strikes literally displays every strike.
+     * up to [MAX_LITERAL_RECENT_STRIKES] (10,000) without ever losing or truncating overflow strikes.
      */
     suspend fun normalizeBatchStrikeEventsToLiteral(maxTotal: Int = MAX_LITERAL_RECENT_STRIKES) {
         val all = strikeEventDao.getAllStrikeEventsList()
@@ -218,14 +247,17 @@ class IndividualRepository(
 
         val singleRowsCount = all.count { it.count <= 1 }
         var remainingBudget = (maxTotal - singleRowsCount).coerceAtLeast(0)
-        val newLiterals = mutableListOf<StrikeEvent>()
+        if (remainingBudget <= 0) return
 
+        val newEvents = mutableListOf<StrikeEvent>()
         for (ev in batchRows) {
+            if (remainingBudget <= 0) break
             strikeEventDao.deleteEvent(ev)
             val expandCount = ev.count.coerceAtLeast(1)
             val take = minOf(expandCount, remainingBudget)
+            val remainder = expandCount - take
             for (i in 0 until take) {
-                newLiterals.add(
+                newEvents.add(
                     ev.copy(
                         id = 0L,
                         count = 1,
@@ -234,10 +266,19 @@ class IndividualRepository(
                     )
                 )
             }
+            if (remainder > 0) {
+                newEvents.add(
+                    ev.copy(
+                        id = 0L,
+                        count = remainder,
+                        timestamp = ev.timestamp + take
+                    )
+                )
+            }
             remainingBudget -= take
         }
-        if (newLiterals.isNotEmpty()) {
-            newLiterals.chunked(DB_INSERT_CHUNK_SIZE).forEach { chunk ->
+        if (newEvents.isNotEmpty()) {
+            newEvents.chunked(DB_INSERT_CHUNK_SIZE).forEach { chunk ->
                 strikeEventDao.insertAll(chunk)
             }
         }
@@ -345,7 +386,9 @@ class IndividualRepository(
             strikeEventDao.clearAll()
         }
         dao.insertAll(individuals)
-        strikeEventDao.insertAll(strikeEvents)
+        strikeEvents.chunked(DB_INSERT_CHUNK_SIZE).forEach { chunk ->
+            strikeEventDao.insertAll(chunk)
+        }
         return Pair(individuals.size, strikeEvents.size)
     }
 

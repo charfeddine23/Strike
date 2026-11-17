@@ -102,6 +102,7 @@ fun StrikeScreen(
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
     val isSearchActive = strikeSearchQuery.isNotBlank()
+    val isDarkTheme = isSystemInDarkTheme()
     val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
 
     fun triggerHapticFeedback() {
@@ -520,10 +521,15 @@ fun StrikeScreen(
                         }
                     }
                 } else {
-                    items(allStrikeEvents, key = { "recent_${it.id}" }) { event ->
+                    items(
+                        items = allStrikeEvents,
+                        key = { "recent_${it.id}" },
+                        contentType = { "recent_strike_log" }
+                    ) { event ->
                         SwipeableStrikeLogItem(
                             event = event,
-                            onDelete = { viewModel.deleteStrikeEvent(it) }
+                            onDelete = { viewModel.deleteStrikeEvent(it) },
+                            darkTheme = isDarkTheme
                         )
                     }
                 }
@@ -561,7 +567,10 @@ fun StrikeLogItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
                 Box(
                     modifier = Modifier
                         .size(34.dp)
@@ -578,13 +587,15 @@ fun StrikeLogItem(
                     )
                 }
                 Spacer(modifier = Modifier.width(10.dp))
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = event.individualName,
                         fontWeight = FontWeight.Bold,
                         fontFamily = PlusJakartaSans,
                         fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -604,6 +615,8 @@ fun StrikeLogItem(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
 
             Box(
                 modifier = Modifier
@@ -629,7 +642,8 @@ fun StrikeLogItem(
 fun SwipeableStrikeLogItem(
     event: StrikeEvent,
     onDelete: (StrikeEvent) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    darkTheme: Boolean = isSystemInDarkTheme()
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { dismissValue ->
@@ -682,7 +696,7 @@ fun SwipeableStrikeLogItem(
             }
         }
     ) {
-        StrikeLogItem(event = event)
+        StrikeLogItem(event = event, darkTheme = darkTheme)
     }
 }
 
