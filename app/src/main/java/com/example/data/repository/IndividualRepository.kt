@@ -87,8 +87,8 @@ class IndividualRepository(
         val individual = dao.getIndividualById(id)
         val now = Calendar.getInstance()
         val year = now.get(Calendar.YEAR)
-        val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now.time)
-        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(now.time)
+        val dateStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(now.time)
+        val timeStr = SimpleDateFormat("HH:mm:ss", Locale.US).format(now.time)
         val baseTimestamp = System.currentTimeMillis()
         val personName = individual?.fullName ?: "Target #$id"
         val boostVal = individual?.boost ?: 0.0

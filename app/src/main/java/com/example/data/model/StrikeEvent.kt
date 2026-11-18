@@ -47,12 +47,12 @@ data class StrikeEvent(
         val STRIKE_TYPES = listOf("Automatic", "Quick +1", "Quick +5", "Quick +10", "Historical", "Power", "Precision")
 
         fun currentDateString(): String {
-            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
             return sdf.format(Date())
         }
 
         fun currentTimeString(): String {
-            val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            val sdf = SimpleDateFormat("HH:mm:ss", Locale.US)
             return sdf.format(Date())
         }
 

@@ -880,31 +880,45 @@ object FlameManager {
     ): StrikeRegistrationResult {
         init(context)
         val prefs = getPrefs(context)
+        val liveToday = todayString()
+        val isLiveToday = (strikeDate == liveToday)
+        val isFutureDate = (strikeDate > liveToday)
+        val isPastDate = (strikeDate < liveToday)
+        val effectiveLatestBefore = latestDateBeforeInsert?.takeIf { it.isNotBlank() && it <= liveToday }
+        val isBeforeLatest = effectiveLatestBefore != null && strikeDate < effectiveLatestBefore
 
-        // Evaluate whether this entry is retroactive
-        val isRetroactive = if (latestDateBeforeInsert.isNullOrBlank()) {
-            false
-        } else {
-            strikeDate < latestDateBeforeInsert
-        }
-
-        if (isRetroactive) {
-            // Retroactive Entry Rule: DO NOT trigger any Flame points or deductions!
+        // Strictly isolate Double Strike, Multi-Strike Combo, Extreme Overload, and live deductions
+        // to the current live calendar day (Real-Time Today). Past and future days never trigger live penalties.
+        if (!isLiveToday || isBeforeLatest) {
+            val detailsMsg = when {
+                isFutureDate -> "Future date ($strikeDate > today $liveToday). Isolated from live today flame penalties, combos, & overload triggers."
+                isBeforeLatest -> "Date ($strikeDate) is before latest ($effectiveLatestBefore). Protected from flame deduction & combo triggers."
+                isPastDate -> "Historical/past date ($strikeDate < today $liveToday). Isolated from live today combo/overload triggers."
+                else -> "Date ($strikeDate != today $liveToday). Isolated from live today combo/overload triggers."
+            }
             logEvent(
                 context = context,
-                title = "Retroactive Strike Ignored",
+                title = if (isFutureDate) "Future Strike Isolated" else "Retroactive Strike Ignored",
                 change = 0.0,
                 resultingScore = _flameScore.value,
                 reason = "RETROACTIVE",
-                details = "Date ($strikeDate) is before latest ($latestDateBeforeInsert). Protected from flame deduction."
+                details = detailsMsg
             )
             return StrikeRegistrationResult(0.0, "RETROACTIVE")
         }
 
-        val strikesCount = strikesToday.size.coerceAtLeast(1)
+        // Only count real-time non-historical strikes matching live today's calendar date
+        val liveTodayStrikes = strikesToday.filter {
+            it.date == liveToday && !it.strikeType.startsWith("Historical", ignoreCase = true)
+        }
+        val expandedToday = liveTodayStrikes.flatMap { ev ->
+            val n = ev.count.coerceAtLeast(1).coerceAtMost(20)
+            if (n == 1) listOf(ev) else List(n) { ev }
+        }
+        val strikesCount = liveTodayStrikes.sumOf { it.count.coerceAtLeast(1) }.coerceAtLeast(1)
 
         val result = when {
-            // Case 4: Extreme Overload Reset Rule (6 or more Strikes on exact same day)
+            // Case 4: Extreme Overload Reset Rule (6 or more Strikes on live today)
             strikesCount >= 6 -> {
                 val oldScore = _flameScore.value
                 _flameScore.value = 0.0
@@ -916,7 +930,7 @@ object FlameManager {
                     apply()
                 }
 
-                val namesList = strikesToday.joinToString(", ") { it.individualName }
+                val namesList = expandedToday.distinctBy { it.individualId to it.id }.joinToString(", ") { it.individualName }
                 val details = "Extreme system overload triggered! $strikesCount strikes registered today ($namesList). Flame score completely reset to 0.0 PTS. Visuals frozen to initial static state. Counting restarts from zero."
                 logEvent(
                     context = context,
@@ -929,9 +943,9 @@ object FlameManager {
                 StrikeRegistrationResult(oldScore, "EXTREME_OVERLOAD")
             }
 
-            // Case 3: Multi-Strike Combo Penalty Rule (3 to 5 Strikes on exact same day)
-            strikesCount in 3..5 -> {
-                val sumBoosts = strikesToday.sumOf {
+            // Case 3: Multi-Strike Combo Penalty Rule (3 to 5 Strikes on live today)
+            strikesCount in 3..5 && expandedToday.size >= 3 -> {
+                val sumBoosts = expandedToday.sumOf {
                     if (it.performanceValue > 0.0) it.performanceValue else boost.coerceAtLeast(0.1)
                 }
                 val penalty = sumBoosts * strikesCount
@@ -947,7 +961,7 @@ object FlameManager {
                 val expiresAt = grantAndActivateAutoShield(context, days = 7, reason = "Multi-Strike Combo Reward")
                 val expiryStr = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(expiresAt))
                 val countdown = formatRemaining(expiresAt - System.currentTimeMillis())
-                val namesList = strikesToday.joinToString(", ") {
+                val namesList = expandedToday.joinToString(", ") {
                     "${it.individualName} (BOOST ${format(if (it.performanceValue > 0.0) it.performanceValue else boost)})"
                 }
 
@@ -964,10 +978,10 @@ object FlameManager {
                 StrikeRegistrationResult(penalty, "MULTI_STRIKE_COMBO", "7_DAYS_AUTO")
             }
 
-            // Case 2: Double Strike Penalty Rule (2 Strikes on exact same day)
-            strikesCount == 2 -> {
-                val s1 = strikesToday[0]
-                val s2 = strikesToday[1]
+            // Case 2: Double Strike Penalty Rule (2 Strikes on live today)
+            strikesCount == 2 && expandedToday.size >= 2 -> {
+                val s1 = expandedToday[0]
+                val s2 = expandedToday[1]
                 val b1 = if (s1.performanceValue > 0.0) s1.performanceValue else boost.coerceAtLeast(0.1)
                 val b2 = if (s2.performanceValue > 0.0) s2.performanceValue else boost.coerceAtLeast(0.1)
                 val sumBoosts = b1 + b2
@@ -996,7 +1010,7 @@ object FlameManager {
                 StrikeRegistrationResult(penalty, "DOUBLE_STRIKE", "3_DAYS_MANUAL")
             }
 
-            // Case 1: Normal Single Strike
+            // Case 1: Normal Single Strike on live today
             else -> {
                 val rawDeduction = boost.coerceAtLeast(0.0)
                 deductPoints(
@@ -1018,10 +1032,10 @@ object FlameManager {
             personName = personName
         )
 
-        // Update last strike date & reset inactivity baseline date to this strike's date
+        // Update last strike date & reset inactivity baseline date strictly to liveToday
         prefs.edit()
-            .putString(KEY_LAST_STRIKE_DATE, strikeDate)
-            .putString(KEY_LAST_INACTIVITY_DATE, strikeDate)
+            .putString(KEY_LAST_STRIKE_DATE, liveToday)
+            .putString(KEY_LAST_INACTIVITY_DATE, liveToday)
             .apply()
 
         return result
@@ -1132,16 +1146,21 @@ object FlameManager {
     private fun resolveEffectiveRange(
         globalStart: String,
         globalEnd: String,
-        overrideRange: DateRangeConfig?
+        overrideRange: DateRangeConfig?,
+        maxAllowedDate: String
     ): Pair<String, String> {
         val rawStart = if (overrideRange != null && overrideRange.isCustom) overrideRange.startDate else globalStart
         val rawEnd = if (overrideRange != null && overrideRange.isCustom) overrideRange.endDate else globalEnd
-        return if (rawStart <= rawEnd) rawStart to rawEnd else rawStart to rawStart
+        val clampedEnd = minOf(rawEnd, maxAllowedDate)
+        val clampedStart = minOf(rawStart, clampedEnd)
+        return clampedStart to clampedEnd
     }
 
     /**
      * Preview recalculation using a single start date (up to today) or full per-item custom ranges
      * without modifying persistent state.
+     * Historical, custom-range, and retroactive recalculations strictly disable daily combo/overload
+     * multipliers (Double Strike, Multi-Strike Combo, Extreme Overload) and exclude future days.
      */
     fun previewRecalculation(
         startDateStr: String,
@@ -1158,46 +1177,32 @@ object FlameManager {
         val effectiveGlobalEnd = endDateStr?.takeIf { it.isNotBlank() && it <= today } ?: today
         val effectiveGlobalStart = if (startDateStr <= effectiveGlobalEnd) startDateStr else effectiveGlobalEnd
 
-        val (inactStart, inactEnd) = resolveEffectiveRange(effectiveGlobalStart, effectiveGlobalEnd, inactivityRange)
-        val (strikesStart, strikesEnd) = resolveEffectiveRange(effectiveGlobalStart, effectiveGlobalEnd, strikesRange)
-        val (girlStart, girlEnd) = resolveEffectiveRange(effectiveGlobalStart, effectiveGlobalEnd, girlRange)
-        val (deflameStart, deflameEnd) = resolveEffectiveRange(effectiveGlobalStart, effectiveGlobalEnd, deflameRange)
+        val (inactStart, inactEnd) = resolveEffectiveRange(effectiveGlobalStart, effectiveGlobalEnd, inactivityRange, today)
+        val (strikesStart, strikesEnd) = resolveEffectiveRange(effectiveGlobalStart, effectiveGlobalEnd, strikesRange, today)
+        val (girlStart, girlEnd) = resolveEffectiveRange(effectiveGlobalStart, effectiveGlobalEnd, girlRange, today)
+        val (deflameStart, deflameEnd) = resolveEffectiveRange(effectiveGlobalStart, effectiveGlobalEnd, deflameRange, today)
 
         val daysElapsed = daysBetween(inactStart, inactEnd).toInt().coerceAtLeast(0)
         val inactivityPointsAdded = daysElapsed * 3.0
 
-        // Filter strikes strictly within [strikesStart, strikesEnd]
-        val relevantStrikes = strikeEvents.filter { it.date >= strikesStart && it.date <= strikesEnd }
+        // Filter strikes strictly within [strikesStart, strikesEnd] and exclude future dates (> today)
+        val relevantStrikes = strikeEvents.filter {
+            it.date >= strikesStart && it.date <= strikesEnd && it.date <= today
+        }
         val strikesByDate = relevantStrikes.groupBy { it.date }
 
         val dailyStrikePenalties = mutableMapOf<String, Double>()
         var totalDeductions = 0.0
         var totalStrikeUnitsCount = 0
         for ((date, dayStrikesRaw) in strikesByDate) {
-            val dayStrikes = dayStrikesRaw.flatMap { ev ->
+            var count = 0
+            var dayPenalty = 0.0
+            for (ev in dayStrikesRaw) {
                 val n = ev.count.coerceAtLeast(1)
-                if (n == 1) listOf(ev) else List(n) { ev }
+                count += n
+                dayPenalty += ev.performanceValue.coerceAtLeast(0.1) * n
             }
-            val count = dayStrikes.size
             totalStrikeUnitsCount += count
-            val dayPenalty = when {
-                count >= 6 -> {
-                    dayStrikes.sumOf { it.performanceValue.coerceAtLeast(0.1) } * count
-                }
-                count in 3..5 -> {
-                    val sumBoosts = dayStrikes.sumOf { it.performanceValue.coerceAtLeast(0.1) }
-                    sumBoosts * count
-                }
-                count == 2 -> {
-                    val b1 = dayStrikes[0].performanceValue.coerceAtLeast(0.1)
-                    val b2 = dayStrikes[1].performanceValue.coerceAtLeast(0.1)
-                    (b1 + b2) * 3.0
-                }
-                count == 1 -> {
-                    dayStrikes[0].performanceValue.coerceAtLeast(0.1)
-                }
-                else -> 0.0
-            }
             dailyStrikePenalties[date] = dayPenalty
             totalDeductions += dayPenalty
         }

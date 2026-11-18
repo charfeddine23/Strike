@@ -111,13 +111,13 @@ class StreakStartDateRecalculationTest {
         assertEquals(30, result.daysElapsed)
         assertEquals(90.0, result.inactivityPointsAdded, 0.001)
         assertEquals(3, result.totalStrikesCount) // Strikes 2, 3, and 4
-        // Total deductions = 8.0 (single) + (5.0 + 7.0) * 3.0 (double) = 8.0 + 36.0 = 44.0
-        assertEquals(44.0, result.totalDeductions, 0.001)
-        // Resulting score = 90.0 - 44.0 = 46.0
-        assertEquals(46.0, result.resultingScore, 0.001)
+        // Historical recalculation disables combo multipliers: 8.0 + (5.0 + 7.0) = 20.0
+        assertEquals(20.0, result.totalDeductions, 0.001)
+        // Resulting score = 90.0 - 20.0 = 70.0
+        assertEquals(70.0, result.resultingScore, 0.001)
 
         // Verify score is persisted in FlameManager
-        assertEquals(46.0, FlameManager.getScore(context), 0.001)
+        assertEquals(70.0, FlameManager.getScore(context), 0.001)
         assertEquals(startDate, FlameManager.getStreakStartDate(context))
 
         // Verify log entry was created
@@ -132,16 +132,16 @@ class StreakStartDateRecalculationTest {
         val startDate = getDateDaysAgo(10) // 10 days = 30 pts
 
         val strikes = listOf(
-            // Triple strike 2 days ago: (10 + 10 + 10) * 3 = 90 pts deduction
-            StrikeEvent(id = 1, individualId = 1, individualName = "P1", date = getDateDaysAgo(2), year = 2026, count = 1, performanceValue = 10.0),
-            StrikeEvent(id = 2, individualId = 2, individualName = "P2", date = getDateDaysAgo(2), year = 2026, count = 1, performanceValue = 10.0),
-            StrikeEvent(id = 3, individualId = 3, individualName = "P3", date = getDateDaysAgo(2), year = 2026, count = 1, performanceValue = 10.0)
+            // Triple strike 2 days ago: base BOOST sum = 15 + 15 + 15 = 45.0 (no historical *3 combo multiplier)
+            StrikeEvent(id = 1, individualId = 1, individualName = "P1", date = getDateDaysAgo(2), year = 2026, count = 1, performanceValue = 15.0),
+            StrikeEvent(id = 2, individualId = 2, individualName = "P2", date = getDateDaysAgo(2), year = 2026, count = 1, performanceValue = 15.0),
+            StrikeEvent(id = 3, individualId = 3, individualName = "P3", date = getDateDaysAgo(2), year = 2026, count = 1, performanceValue = 15.0)
         )
 
         val result = FlameManager.recalculateFromStartDate(context, startDate, strikes)
         assertEquals(10, result.daysElapsed)
         assertEquals(30.0, result.inactivityPointsAdded, 0.001)
-        assertEquals(90.0, result.totalDeductions, 0.001)
+        assertEquals(45.0, result.totalDeductions, 0.001)
         assertEquals(0.0, result.resultingScore, 0.001) // Clamped to 0.0 minimum
         assertEquals(0.0, FlameManager.getScore(context), 0.001)
     }
@@ -361,5 +361,79 @@ class StreakStartDateRecalculationTest {
         assertEquals(3, xpBreakdown.deflameCount) // +60 XP
         assertEquals(460L, xpBreakdown.totalTelemetryXp)
         assertEquals(baselineXp + 460L, RoadmapManager.totalXp.value)
+    }
+
+    @Test
+    fun `test custom ranges historical logs and future dates never inflate combo or overload penalties`() {
+        val startDate = getDateDaysAgo(40) // 40 * 3.0 = 120.0 pts
+        val futureDate = getDateDaysAgo(-5) // 5 days in the future
+
+        // 8 historical strikes on same past date + 3 strikes on today + 6 strikes on a future date
+        val strikes = buildList {
+            repeat(8) { idx ->
+                add(
+                    StrikeEvent(
+                        id = idx + 1L,
+                        individualId = 1L,
+                        individualName = "Historical",
+                        date = getDateDaysAgo(20),
+                        year = 2026,
+                        count = 1,
+                        strikeType = "Historical Entry",
+                        performanceValue = 5.0
+                    )
+                )
+            }
+            repeat(3) { idx ->
+                add(
+                    StrikeEvent(
+                        id = 100L + idx,
+                        individualId = 2L,
+                        individualName = "Today",
+                        date = getDateDaysAgo(0),
+                        year = 2026,
+                        count = 1,
+                        strikeType = "Strike +1",
+                        performanceValue = 10.0
+                    )
+                )
+            }
+            repeat(6) { idx ->
+                add(
+                    StrikeEvent(
+                        id = 200L + idx,
+                        individualId = 3L,
+                        individualName = "Future",
+                        date = futureDate,
+                        year = 2026,
+                        count = 1,
+                        strikeType = "Strike +1",
+                        performanceValue = 20.0
+                    )
+                )
+            }
+        }
+
+        // Custom range tries to extend into the future -> must clamp at today and exclude future strikes
+        val futureStrikesRange = com.example.data.flame.DateRangeConfig(
+            startDate = startDate,
+            endDate = futureDate,
+            isCustom = true
+        )
+
+        val result = FlameManager.recalculateFromStartDate(
+            context = context,
+            startDateStr = startDate,
+            strikeEvents = strikes,
+            endDateStr = futureDate,
+            strikesRange = futureStrikesRange
+        )
+
+        // Total strikes = 8 (past) + 3 (today) = 11 (6 future strikes completely excluded)
+        assertEquals(11, result.totalStrikesCount)
+        // Strict base deduction without any combo/overload multipliers: (8 * 5.0) + (3 * 10.0) = 70.0
+        assertEquals(70.0, result.totalDeductions, 0.001)
+        // Score = 120.0 - 70.0 = 50.0 (no overload inflation or future leakage)
+        assertEquals(50.0, result.resultingScore, 0.001)
     }
 }

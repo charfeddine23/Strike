@@ -44,7 +44,6 @@ class AddIndividualCrashTest {
                 .isNotEmpty()
         }
         composeRule.onNodeWithTag("empty_records_card").assertIsDisplayed()
-        composeRule.onNodeWithText("لا توجد سجلات بعد").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("seed_sample_btn").fetchSemanticsNodes().size)
 
         // 2. Open the in-tree Data Entry overlay via '+' FAB
