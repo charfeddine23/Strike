@@ -451,7 +451,8 @@ fun CosmicStrikeButton(
                     color = NeonAmber,
                     fontFamily = PlusJakartaSans,
                     fontWeight = FontWeight.ExtraBold,
-                    fontSize = 19.sp
+                    fontSize = 19.sp,
+                    modifier = Modifier.testTag("strike_button_total_count")
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 // Handwritten secondary subtitle for artisanal flair

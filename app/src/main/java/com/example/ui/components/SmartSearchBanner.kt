@@ -10,10 +10,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -105,6 +109,8 @@ fun SmartSearchBanner(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
+            .height(56.dp)
+            .testTag("smart_search_banner")
             .shadow(
                 elevation = if (isFocused || query.isNotBlank()) 8.dp else 4.dp,
                 shape = shape,
@@ -114,15 +120,15 @@ fun SmartSearchBanner(
             .clip(shape)
             .background(bgBrush)
             .border(
-                width = if (isFocused || query.isNotBlank()) 1.5.dp else 1.1.dp,
+                width = 1.25.dp,
                 brush = borderBrush,
                 shape = shape
             )
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-            .testTag("smart_search_banner")
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Glowing search emblem
@@ -144,11 +150,11 @@ fun SmartSearchBanner(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // Instant text input field
+            // Instant text input field (single-line, vertically locked inside fixed-height banner)
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(vertical = 8.dp),
+                    .fillMaxHeight(),
                 contentAlignment = Alignment.CenterStart
             ) {
                 if (query.isEmpty()) {
@@ -182,93 +188,101 @@ fun SmartSearchBanner(
                 )
             }
 
-            // Live results indicator chip when searching
-            AnimatedVisibility(
-                visible = query.isNotBlank(),
-                enter = fadeIn(),
-                exit = fadeOut()
+            // Fixed-height trailing slot so typing/clearing never resizes the banner
+            Box(
+                modifier = Modifier
+                    .height(48.dp)
+                    .widthIn(min = 96.dp),
+                contentAlignment = Alignment.CenterEnd
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(
-                                if (matchedCount > 0) NeonEmerald.copy(alpha = 0.18f)
-                                else Color(0x33EF4444)
-                            )
-                            .border(
-                                1.dp,
-                                if (matchedCount > 0) NeonEmerald.copy(alpha = 0.6f)
-                                else Color(0x88EF4444),
-                                RoundedCornerShape(50)
-                            )
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = "$matchedCount/$totalCount",
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = PlusJakartaSans,
-                            color = if (matchedCount > 0) NeonEmerald else Color(0xFFF87171)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = {
-                            onClearQuery()
-                            focusManager.clearFocus()
-                        },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("smart_top_search_clear")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = when (currentLang) {
-                                "ar" -> "مسح البحث"
-                                "fr" -> "Effacer"
-                                else -> "Clear search"
-                            },
-                            tint = if (isDarkTheme) Color(0xFFCBD5E1) else Color(0xFF475569),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            }
-
-            // Subtle AI-style Sparkle icon when idle (purely visual cue for Smart Search)
-            if (query.isBlank()) {
-                Box(
-                    modifier = Modifier
-                        .padding(end = 4.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(NeonViolet.copy(alpha = if (isDarkTheme) 0.16f else 0.1f))
-                        .border(1.dp, NeonViolet.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 7.dp, vertical = 4.dp)
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = query.isNotBlank(),
+                    enter = fadeIn(),
+                    exit = fadeOut()
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = NeonViolet,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Text(
-                            text = when (currentLang) {
-                                "ar" -> "ذكي"
-                                "fr" -> "Smart"
-                                else -> "Smart"
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(
+                                    if (matchedCount > 0) NeonEmerald.copy(alpha = 0.18f)
+                                    else Color(0x33EF4444)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (matchedCount > 0) NeonEmerald.copy(alpha = 0.6f)
+                                    else Color(0x88EF4444),
+                                    RoundedCornerShape(50)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "$matchedCount/$totalCount",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = PlusJakartaSans,
+                                maxLines = 1,
+                                color = if (matchedCount > 0) NeonEmerald else Color(0xFFF87171)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                onClearQuery()
+                                focusManager.clearFocus()
                             },
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = NeonViolet
-                        )
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("smart_top_search_clear")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = when (currentLang) {
+                                    "ar" -> "مسح البحث"
+                                    "fr" -> "Effacer"
+                                    else -> "Clear search"
+                                },
+                                tint = if (isDarkTheme) Color(0xFFCBD5E1) else Color(0xFF475569),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Subtle AI-style Sparkle icon when idle (purely visual cue for Smart Search)
+                if (query.isBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(NeonViolet.copy(alpha = if (isDarkTheme) 0.16f else 0.1f))
+                            .border(1.dp, NeonViolet.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 7.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = NeonViolet,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = when (currentLang) {
+                                    "ar" -> "ذكي"
+                                    "fr" -> "Smart"
+                                    else -> "Smart"
+                                },
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = NeonViolet
+                            )
+                        }
                     }
                 }
             }

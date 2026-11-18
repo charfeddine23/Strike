@@ -480,10 +480,6 @@ fun DashboardScreen(
                                 expandedCardIds + item.id
                             }
                         },
-                        onStrike = {
-                            HapticHelper.triggerStrikeHaptic(context, isHapticFeedbackEnabled)
-                            viewModel.incrementStrikeForId(item.id, 1)
-                        },
                         onGoToStrike = { onNavigateToStrike(item.id) },
                         onCompare = { onNavigateToCompare(item.id) },
                         onEdit = {
@@ -564,7 +560,6 @@ fun IndividualRecordCard(
     status: StrikerStatus,
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
-    onStrike: () -> Unit,
     onGoToStrike: () -> Unit,
     onCompare: () -> Unit,
     onEdit: () -> Unit,
@@ -924,13 +919,13 @@ fun IndividualRecordCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Bottom Actions: Strike Count + Quick +1 Strike Button + Compare & Edit
+            // Bottom Actions: Read-only Strike Count + Navigation / Compare & Delete
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Strike info with Quick +1 Action
+                // Read-only Strike Count badge
                 val strikeBtnColor = if (darkTheme) NeonAmber else DayOrange
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -939,6 +934,7 @@ fun IndividualRecordCard(
                         .background(if (darkTheme) Color(0x20F59E0B) else Color(0x24F59E0B))
                         .border(1.dp, strikeBtnColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                         .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .testTag("record_strike_count_${individual.id}")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Bolt,
@@ -954,23 +950,6 @@ fun IndividualRecordCard(
                         fontSize = 14.sp,
                         color = strikeBtnColor
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(strikeBtnColor)
-                            .clickable { onStrike() }
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                            .testTag("quick_strike_${individual.id}")
-                    ) {
-                        Text(
-                            text = "+1",
-                            color = Color.White,
-                            fontFamily = PlusJakartaSans,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 11.sp
-                        )
-                    }
                 }
 
                 // Action Icons

@@ -1063,9 +1063,9 @@ class IndividualViewModel(
                         }
                     }
                     else -> when (currentLanguage.value) {
-                        "ar" -> "تم تسجيل ضربة +$delta"
-                        "fr" -> "Strike +$delta"
-                        else -> "Strike +$delta"
+                        "ar" -> "تم تسجيل ضربة +$delta (${target.fullName})"
+                        "fr" -> "Strike enregistré +$delta (${target.fullName})"
+                        else -> "Strike registered +$delta (${target.fullName})"
                     }
                 }
                 emitMessage(msg)

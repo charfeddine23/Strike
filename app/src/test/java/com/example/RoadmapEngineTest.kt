@@ -753,10 +753,11 @@ class RoadmapEngineTest {
         assertEquals(70L, RoadmapManager.totalXp.value)
         assertEquals(70L, XpCalculationEngine.creditedTelemetryXp.value)
 
-        // 3. Strike Recorded: +100 XP per single strike (and scaled for batch strikes)
+        // 3. Strike Recorded: +100 XP per single strike (and scaled for batch strikes) on live today
+        val liveToday = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
         FlameManager.onStrikeRegistered(
             context = app,
-            strikeDate = "2026-11-15",
+            strikeDate = liveToday,
             boost = 90.0,
             personName = "Target A",
             latestDateBeforeInsert = null,
@@ -767,7 +768,7 @@ class RoadmapEngineTest {
 
         FlameManager.onStrikeRegistered(
             context = app,
-            strikeDate = "2026-11-15",
+            strikeDate = liveToday,
             boost = 90.0,
             personName = "Target B",
             latestDateBeforeInsert = null,

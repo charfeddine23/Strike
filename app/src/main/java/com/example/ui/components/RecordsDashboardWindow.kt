@@ -313,10 +313,12 @@ fun RecordsDashboardExpandablePanel(
     val allTimeStrikes by viewModel.allTimeStrikesCount.collectAsStateWithLifecycle()
 
     var showYearlyAnalytics by remember { mutableStateOf(false) }
+    var pendingDeleteEvent by remember { mutableStateOf<com.example.data.model.StrikeEvent?>(null) }
 
     LaunchedEffect(visible) {
         if (!visible) {
             showYearlyAnalytics = false
+            pendingDeleteEvent = null
         }
     }
 
@@ -773,7 +775,7 @@ fun RecordsDashboardExpandablePanel(
                             ) { event ->
                                 SwipeableStrikeLogItem(
                                     event = event,
-                                    onDelete = { viewModel.deleteStrikeEvent(it) },
+                                    onRequestDelete = { target -> pendingDeleteEvent = target },
                                     darkTheme = isDarkTheme
                                 )
                             }
@@ -783,6 +785,19 @@ fun RecordsDashboardExpandablePanel(
                 }
             }
         }
+    }
+
+    pendingDeleteEvent?.let { targetEvent ->
+        com.example.ui.screens.BiometricDeleteStrikeDialog(
+            event = targetEvent,
+            currentLang = currentLang,
+            isDarkTheme = isDarkTheme,
+            onDismiss = { pendingDeleteEvent = null },
+            onConfirmDelete = { confirmedEvent ->
+                viewModel.deleteStrikeEvent(confirmedEvent)
+                pendingDeleteEvent = null
+            }
+        )
     }
 }
 

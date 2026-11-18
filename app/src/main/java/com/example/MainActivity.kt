@@ -330,7 +330,7 @@ fun LiquidGlassApp(
                                 isExpanded = showRecordsDashboardDialog,
                                 isDarkTheme = isDarkTheme
                             )
-                        } else if (currentScreen == AppScreen.STRIKE || currentScreen == AppScreen.COMPARISON) {
+                        } else if (currentScreen == AppScreen.COMPARISON) {
                             SmartSearchBanner(
                                 query = strikeSearchQuery,
                                 onQueryChange = { viewModel.setStrikeSearchQuery(it) },

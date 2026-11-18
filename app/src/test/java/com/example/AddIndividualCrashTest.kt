@@ -17,21 +17,41 @@ import com.example.data.local.AppDatabase
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 import com.example.data.repository.IndividualRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.rules.TestWatcher
+import org.junit.runner.Description
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "w412dp-h915dp-xxhdpi")
 class AddIndividualCrashTest {
 
+    private val composeRule = createAndroidComposeRule<MainActivity>()
+
     @get:Rule
-    val composeRule = createAndroidComposeRule<MainActivity>()
+    val ruleChain: RuleChain = RuleChain.outerRule(object : TestWatcher() {
+        override fun starting(description: Description) {
+            val ctx = ApplicationProvider.getApplicationContext<Context>()
+            runBlocking(Dispatchers.IO) {
+                AppDatabase.getDatabase(ctx).clearAllTables()
+            }
+        }
+
+        override fun finished(description: Description) {
+            val ctx = ApplicationProvider.getApplicationContext<Context>()
+            runBlocking(Dispatchers.IO) {
+                AppDatabase.getDatabase(ctx).clearAllTables()
+            }
+        }
+    }).around(composeRule)
 
     @Test
     fun freshAppStartsEmptyAndAddingNewIndividualWorksWithoutCrash() {
@@ -43,7 +63,7 @@ class AddIndividualCrashTest {
                 .fetchSemanticsNodes()
                 .isNotEmpty()
         }
-        composeRule.onNodeWithTag("empty_records_card").assertIsDisplayed()
+        composeRule.onNodeWithTag("empty_records_card").performScrollTo().assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("seed_sample_btn").fetchSemanticsNodes().size)
 
         // 2. Open the in-tree Data Entry overlay via '+' FAB
@@ -80,6 +100,16 @@ class AddIndividualCrashTest {
             composeRule.onAllNodesWithText("أحمد علي").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithText("أحمد علي").assertIsDisplayed()
+
+        // 6. Expand the individual's card in Records and verify direct strike-addition button (+1) is removed
+        val mainActivity = composeRule.activity
+        val savedId = runBlocking(Dispatchers.IO) {
+            AppDatabase.getDatabase(mainActivity).individualDao().getAllIndividualsList().first().id
+        }
+        composeRule.onNodeWithTag("record_expand_btn_$savedId").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("record_strike_count_$savedId").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("quick_strike_$savedId").fetchSemanticsNodes().size)
     }
 
     @Test

@@ -472,7 +472,8 @@ fun ContactsPermissionRequiredDialog(
                         onClick = onDismiss,
                         modifier = Modifier
                             .weight(1f)
-                            .height(48.dp),
+                            .height(48.dp)
+                            .testTag("btn_contacts_perm_cancel"),
                         shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(1.dp, accentCyan.copy(alpha = 0.45f))
                     ) {
