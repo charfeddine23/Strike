@@ -56,11 +56,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.flame.ActiveShieldType
 import com.example.data.flame.FlameManager
+import com.example.data.profile.AvatarItem
 import com.example.data.profile.PotionType
 import com.example.data.profile.ProfileManager
 import com.example.data.profile.ProfileMasterInventory
 import com.example.data.profile.SkipKeyType
 import com.example.data.profile.TitleItem
+import com.example.ui.components.getAvatarVector
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -1554,3 +1556,285 @@ private fun InventoryTitleCard(
         }
     }
 }
+
+@Composable
+fun AvatarsSubPage(
+    currentLang: String,
+    isDarkTheme: Boolean,
+    isHapticEnabled: Boolean,
+    unlockedAvatarIds: Set<String>,
+    equippedAvatar: AvatarItem,
+    onBack: () -> Unit,
+    onOpenGuide: () -> Unit,
+    onShowTooltip: (InventoryTooltipSpec) -> Unit
+) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    val allGameAvatars = ProfileMasterInventory.MASTER_AVATARS
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("inv_subpage_avatars"),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        item {
+            SubPageTopBar(
+                title = locText(currentLang, "الأفاتار", "Avatars", "Avatars"),
+                subtitle = locText(
+                    currentLang,
+                    "المتوفر: ${unlockedAvatarIds.size} / ${allGameAvatars.size} • المفعّل: ${equippedAvatar.getLocalizedName(currentLang)}",
+                    "Débloqués : ${unlockedAvatarIds.size} / ${allGameAvatars.size} • Actif : ${equippedAvatar.getLocalizedName(currentLang)}",
+                    "Unlocked: ${unlockedAvatarIds.size} / ${allGameAvatars.size} • Active: ${equippedAvatar.getLocalizedName(currentLang)}"
+                ),
+                accentColor = Color(0xFFEC4899),
+                icon = getAvatarVector(equippedAvatar.badgeIconName),
+                currentLang = currentLang,
+                isDarkTheme = isDarkTheme,
+                isHapticEnabled = isHapticEnabled,
+                onBack = onBack,
+                onOpenGuide = onOpenGuide
+            )
+        }
+
+        items(allGameAvatars, key = { it.id }) { avatar ->
+            val isUnlocked = unlockedAvatarIds.contains(avatar.id)
+            val isEquipped = equippedAvatar.id == avatar.id
+
+            InventoryAvatarCard(
+                avatar = avatar,
+                currentLang = currentLang,
+                isDarkTheme = isDarkTheme,
+                isUnlocked = isUnlocked,
+                isEquipped = isEquipped,
+                onActivate = {
+                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    ProfileManager.equipAvatar(context, avatar.id)
+                },
+                onLongPress1s = {
+                    onShowTooltip(InventoryTooltipFactory.forAvatar(avatar, currentLang, isUnlocked))
+                }
+            )
+        }
+
+        item { Spacer(modifier = Modifier.height(72.dp)) }
+    }
+}
+
+@Composable
+private fun InventoryAvatarCard(
+    avatar: AvatarItem,
+    currentLang: String,
+    isDarkTheme: Boolean,
+    isUnlocked: Boolean,
+    isEquipped: Boolean,
+    onActivate: () -> Unit,
+    onLongPress1s: () -> Unit
+) {
+    val accentColor = avatar.rarity.primaryColor
+    val rarityLabel = avatar.rarity.getLocalizedLabel(currentLang)
+    val statusText = when {
+        isEquipped -> locText(currentLang, "مفعّل على ملفك الشخصي", "Équipé sur votre profil", "Equipped on your profile")
+        isUnlocked -> locText(currentLang, "متوفر وجاهز للتفعيل", "Disponible et prêt à activer", "Available & ready to activate")
+        else -> locText(
+            currentLang,
+            "يُفتح عند المحطة #${avatar.unlockStation}",
+            "Débloqué à la Station #${avatar.unlockStation}",
+            "Unlocks at Station #${avatar.unlockStation}"
+        )
+    }
+
+    LongPressTooltipContainer(onLongPress1s = onLongPress1s) { isHolding, progress ->
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(
+                    if (isEquipped) accentColor.copy(alpha = if (isDarkTheme) 0.18f else 0.12f)
+                    else cardGlassBackground(isDarkTheme)
+                )
+                .border(
+                    width = if (isEquipped) 1.8.dp else 1.1.dp,
+                    color = when {
+                        isEquipped -> accentColor
+                        isUnlocked -> accentColor.copy(alpha = 0.55f)
+                        else -> Color(0x4464748B)
+                    },
+                    shape = RoundedCornerShape(18.dp)
+                )
+                .testTag("inv_avatar_card_${avatar.id}")
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isUnlocked) accentColor.copy(alpha = 0.18f)
+                                else Color(0x2264748B)
+                            )
+                            .border(
+                                1.3.dp,
+                                if (isUnlocked) accentColor else Color(0x6664748B),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = getAvatarVector(avatar.badgeIconName),
+                            contentDescription = avatar.getLocalizedName(currentLang),
+                            tint = if (isUnlocked) accentColor else Color(0xFF64748B),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = avatar.getLocalizedName(currentLang),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (isUnlocked) cardPrimaryTextColor(isDarkTheme) else Color(0xFF64748B),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(accentColor.copy(alpha = if (isUnlocked) 0.18f else 0.08f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = rarityLabel,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isUnlocked) accentColor else Color(0xFF64748B)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(3.dp))
+
+                        Text(
+                            text = statusText,
+                            fontSize = 11.sp,
+                            fontWeight = if (isEquipped) FontWeight.Bold else FontWeight.Medium,
+                            color = when {
+                                isEquipped -> accentColor
+                                isUnlocked -> NeonEmerald
+                                else -> cardSecondaryTextColor(isDarkTheme)
+                            },
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                when {
+                    isEquipped -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(accentColor.copy(alpha = 0.22f))
+                                .border(1.2.dp, accentColor, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 10.dp, vertical = 7.dp)
+                                .testTag("inv_avatar_active_${avatar.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = accentColor,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = locText(currentLang, "مفعّل", "Actif", "Active"),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black,
+                                color = accentColor
+                            )
+                        }
+                    }
+
+                    isUnlocked -> {
+                        Button(
+                            onClick = onActivate,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = accentColor,
+                                contentColor = Color(0xFF03141F)
+                            ),
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .height(40.dp)
+                                .testTag("inv_activate_avatar_${avatar.id}")
+                        ) {
+                            Text(
+                                text = locText(currentLang, "تفعيل", "Activer", "Activate"),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+
+                    else -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0x1864748B))
+                                .border(1.dp, Color(0x4464748B), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 10.dp, vertical = 7.dp)
+                                .testTag("inv_avatar_locked_${avatar.id}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = Color(0xFF64748B),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = locText(currentLang, "مقفل", "Verrouillé", "Locked"),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (isHolding) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(progress)
+                        .height(3.dp)
+                        .background(accentColor)
+                )
+            }
+        }
+    }
+}
+

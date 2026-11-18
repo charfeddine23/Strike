@@ -12,10 +12,12 @@ import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.example.data.profile.AvatarItem
 import com.example.data.profile.PotionType
 import com.example.data.profile.ProfileMasterInventory
 import com.example.data.profile.SkipKeyType
 import com.example.data.profile.TitleItem
+import com.example.ui.components.getAvatarVector
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -509,6 +511,62 @@ object InventoryTooltipFactory {
                     "مقفل حالياً؛ بمجرد استيفاء شرط الفتح سيصبح متاحاً للتفعيل الدائم.",
                     "Actuellement verrouillé ; il restera activable en permanence dès son déblocage.",
                     "Currently locked; once unlocked, it remains permanently available to equip."
+                )
+            },
+            howToObtain = howObtain
+        )
+    }
+
+    fun forAvatar(avatar: AvatarItem, lang: String, isUnlocked: Boolean): InventoryTooltipSpec {
+        val rarityLabel = avatar.rarity.getLocalizedLabel(lang)
+        val howObtain = if (avatar.unlockStation <= 1) {
+            locText(
+                lang,
+                "أفاتار ابتدائي متاح ومفتوح تلقائياً لجميع اللاعبين منذ البداية (المحطة #1).",
+                "Avatar de départ automatiquement débloqué dès la Station #1.",
+                "Starter avatar automatically unlocked for all players from the beginning (Station #1)."
+            )
+        } else {
+            locText(
+                lang,
+                "يُفتح تلقائياً عند جمع نقاط الخبرة (XP) والمطالبة بمكافأة المحطة #${avatar.unlockStation} في خارطة الطريق.",
+                "Débloqué automatiquement en atteignant et réclamant la Station #${avatar.unlockStation} sur la Feuille de route.",
+                "Unlocked automatically upon earning XP and claiming Station #${avatar.unlockStation} on the Roadmap."
+            )
+        }
+
+        return InventoryTooltipSpec(
+            title = avatar.getLocalizedName(lang),
+            subtitle = locText(lang, "أفاتار الملف الشخصي", "Avatar de Profil", "Profile Avatar"),
+            rarityLabel = rarityLabel,
+            accentColor = avatar.rarity.primaryColor,
+            secondaryColor = avatar.rarity.glowColor,
+            icon = getAvatarVector(avatar.badgeIconName),
+            mechanics = locText(
+                lang,
+                "أفاتار سيبراني من فئة «${avatar.rarity.labelAr}» يظهر في الشريط العلوي والملف الشخصي ويعكس مستوى تقدمك.",
+                "Avatar cyber de rareté «${avatar.rarity.labelEn}» affiché dans la barre supérieure et votre profil.",
+                "A ${avatar.rarity.labelEn}-tier cybernetic avatar displayed in the top header and your profile."
+            ),
+            bonuses = locText(
+                lang,
+                "يمنح بطاقتك وهالتك البصرية مظهراً مميزاً بلون ندرة ${avatar.rarity.labelAr}.",
+                "Personnalise votre profil avec un halo de rareté ${avatar.rarity.labelEn}.",
+                "Customizes your profile badge and outer ring with ${avatar.rarity.labelEn} accent visuals."
+            ),
+            expirationRules = if (isUnlocked) {
+                locText(
+                    lang,
+                    "متوفر في مخزونك للأبد ويمكنك تفعيله أو التبديل بينه وبين الأفاتارات المفتوحة في أي وقت.",
+                    "Disponible de façon permanente ; vous pouvez l'équiper à tout moment.",
+                    "Permanently unlocked in your inventory; equip or swap between unlocked avatars anytime."
+                )
+            } else {
+                locText(
+                    lang,
+                    "مقفل حالياً؛ بمجرد الوصول إلى المحطة #${avatar.unlockStation} سيصبح متاحاً للتفعيل الدائم.",
+                    "Actuellement verrouillé ; disponible en permanence dès la Station #${avatar.unlockStation}.",
+                    "Currently locked; permanently available once you reach Station #${avatar.unlockStation}."
                 )
             },
             howToObtain = howObtain

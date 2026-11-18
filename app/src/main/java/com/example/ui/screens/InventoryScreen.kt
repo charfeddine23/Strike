@@ -70,6 +70,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.flame.FlameManager
 import com.example.data.profile.ProfileManager
 import com.example.data.profile.ProfileMasterInventory
+import com.example.ui.components.getAvatarVector
+import com.example.ui.screens.inventory.AvatarsSubPage
 import com.example.ui.screens.inventory.InventoryCategoryTile
 import com.example.ui.screens.inventory.InventoryTooltipSheetContent
 import com.example.ui.screens.inventory.InventoryTooltipSpec
@@ -93,7 +95,8 @@ enum class InventoryCategory {
     SHIELDS,
     KEYS,
     POTIONS,
-    TITLES
+    TITLES,
+    AVATARS
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -155,9 +158,11 @@ fun InventoryScreen(
     val isShadowActive = shadowSerumExp != null && System.currentTimeMillis() < (shadowSerumExp ?: 0L)
     val isGabrielActive = gabrielDropletExp != null && System.currentTimeMillis() < (gabrielDropletExp ?: 0L)
 
-    // Titles State
+    // Titles & Avatars State
     val unlockedTitleIds by ProfileManager.unlockedTitleIds.collectAsStateWithLifecycle()
     val equippedTitle by ProfileManager.equippedTitle.collectAsStateWithLifecycle()
+    val unlockedAvatarIds by ProfileManager.unlockedAvatarIds.collectAsStateWithLifecycle()
+    val equippedAvatar by ProfileManager.equippedAvatar.collectAsStateWithLifecycle()
 
     // 1-Second Long-Press Tooltip Sheet State & Guide Dialog State
     var selectedTooltip by remember { mutableStateOf<InventoryTooltipSpec?>(null) }
@@ -224,6 +229,10 @@ fun InventoryScreen(
                         unlockedTitlesCount = unlockedTitleIds.size,
                         totalTitlesCount = ProfileMasterInventory.MASTER_TITLES.size + 1,
                         equippedTitleName = equippedTitle.getLocalizedTitle(currentLang),
+                        unlockedAvatarsCount = unlockedAvatarIds.size,
+                        totalAvatarsCount = ProfileMasterInventory.MASTER_AVATARS.size,
+                        equippedAvatarName = equippedAvatar.getLocalizedName(currentLang),
+                        equippedAvatarIconName = equippedAvatar.badgeIconName,
                         onOpenGuide = { showLongPressGuideDialog = true },
                         onSelectCategory = navigateToCategory,
                         onShowTooltip = { selectedTooltip = it }
@@ -295,6 +304,19 @@ fun InventoryScreen(
                         isHapticEnabled = isHapticEnabled,
                         unlockedTitleIds = unlockedTitleIds,
                         equippedTitle = equippedTitle,
+                        onBack = { activeCategory = null },
+                        onOpenGuide = { showLongPressGuideDialog = true },
+                        onShowTooltip = { selectedTooltip = it }
+                    )
+                }
+
+                InventoryCategory.AVATARS -> {
+                    AvatarsSubPage(
+                        currentLang = currentLang,
+                        isDarkTheme = isDarkTheme,
+                        isHapticEnabled = isHapticEnabled,
+                        unlockedAvatarIds = unlockedAvatarIds,
+                        equippedAvatar = equippedAvatar,
                         onBack = { activeCategory = null },
                         onOpenGuide = { showLongPressGuideDialog = true },
                         onShowTooltip = { selectedTooltip = it }
@@ -402,6 +424,10 @@ private fun InventoryHubContent(
     unlockedTitlesCount: Int,
     totalTitlesCount: Int,
     equippedTitleName: String,
+    unlockedAvatarsCount: Int,
+    totalAvatarsCount: Int,
+    equippedAvatarName: String,
+    equippedAvatarIconName: String,
     onOpenGuide: () -> Unit,
     onSelectCategory: (InventoryCategory) -> Unit,
     onShowTooltip: (InventoryTooltipSpec) -> Unit
@@ -680,6 +706,63 @@ private fun InventoryHubContent(
                     }
                 )
             }
+        }
+
+        // Row 3: Avatars full-width showcase container
+        item {
+            InventoryCategoryTile(
+                modifier = Modifier.fillMaxWidth(),
+                title = locText(currentLang, "الأفاتار", "Avatars", "Avatars"),
+                subtitle = locText(
+                    currentLang,
+                    "كل أفاتارات اللعبة ($totalAvatarsCount) • المفعّل: $equippedAvatarName",
+                    "Tous les avatars ($totalAvatarsCount) • Actif : $equippedAvatarName",
+                    "All Game Avatars ($totalAvatarsCount) • Active: $equippedAvatarName"
+                ),
+                badgeText = "$unlockedAvatarsCount/$totalAvatarsCount",
+                icon = getAvatarVector(equippedAvatarIconName),
+                accentColor = Color(0xFFEC4899),
+                secondaryColor = NeonViolet,
+                isDarkTheme = isDarkTheme,
+                testTag = "inv_cat_avatars",
+                onClick = { onSelectCategory(InventoryCategory.AVATARS) },
+                onLongPress1s = {
+                    onShowTooltip(
+                        InventoryTooltipSpec(
+                            title = locText(currentLang, "قسم الأفاتار", "Catégorie Avatars", "Avatars Category"),
+                            subtitle = locText(currentLang, "كل أفاتارات اللعبة", "Tous les avatars", "All Game Avatars"),
+                            rarityLabel = "$unlockedAvatarsCount / $totalAvatarsCount",
+                            accentColor = Color(0xFFEC4899),
+                            secondaryColor = NeonViolet,
+                            icon = getAvatarVector(equippedAvatarIconName),
+                            mechanics = locText(
+                                currentLang,
+                                "يجمع كل أفاتارات اللعبة ($totalAvatarsCount أفاتاراً) من الشائع إلى الأسطوري مع إمكانية تفعيل أي أفاتار متوفر.",
+                                "Rassemble tous les avatars du jeu ($totalAvatarsCount) et permet d'équiper ceux débloqués.",
+                                "Collects all $totalAvatarsCount avatars in the game with instant activation for unlocked avatars."
+                            ),
+                            bonuses = locText(
+                                currentLang,
+                                "يغيّر أيقونة وهالة حسابك في الشريط العلوي والملف الشخصي حسب ندرة الأفاتار.",
+                                "Personnalise l'icône et le halo de votre profil selon sa rareté.",
+                                "Customizes your top bar and profile badge icon with rarity-based neon glow."
+                            ),
+                            expirationRules = locText(
+                                currentLang,
+                                "الأفاتارات المفتوحة دائمة ولا تنتهي صلاحيتها ويمكن التبديل بينها في أي وقت.",
+                                "Les avatars débloqués sont permanents et interchangeables à tout moment.",
+                                "Unlocked avatars are permanent and can be swapped anytime."
+                            ),
+                            howToObtain = locText(
+                                currentLang,
+                                "تُفتح الأفاتارات تلقائياً عند التقدم عبر محطات خارطة الطريق (من المحطة #1 حتى المحطة #500).",
+                                "Débloqués automatiquement en progressant sur les stations (1 à 500).",
+                                "Unlocked automatically by progressing through Roadmap Stations (Station #1 to #500)."
+                            )
+                        )
+                    )
+                }
+            )
         }
 
         item { Spacer(modifier = Modifier.height(72.dp)) }

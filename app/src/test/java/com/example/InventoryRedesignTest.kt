@@ -111,6 +111,11 @@ class InventoryRedesignTest {
                 abs(potionsBounds.left.value - titlesBounds.left.value) > 40f
         )
         assertTrue("Row 2 must sit below Row 1", potionsBounds.top > shieldsBounds.bottom)
+
+        // 4. Avatars container is visible in hub below Row 2
+        composeRule.onNodeWithTag("inventory_hub").performScrollToNode(hasTestTag("inv_cat_avatars"))
+        val avatarsBounds = composeRule.onNodeWithTag("inv_cat_avatars").assertIsDisplayed().getUnclippedBoundsInRoot()
+        assertTrue("Avatars container sits below Row 2", avatarsBounds.top > potionsBounds.bottom)
     }
 
     @Test
@@ -276,6 +281,54 @@ class InventoryRedesignTest {
         }
         composeRule.onNodeWithTag("inv_shield_24h").performTouchInput { up() }
         composeRule.onNodeWithTag("inventory_tooltip_sheet").assertIsDisplayed()
+        composeRule.onNodeWithTag("inv_tooltip_how_to_obtain").assertIsDisplayed()
+    }
+
+    @Test
+    fun avatarsSubPageListsAllGameAvatarsAndEquipsUnlockedAvatars() {
+        val ctx = composeRule.activity
+        ProfileManager.unlockAvatar(ctx, "av_gabriel_wings")
+
+        openInventoryTab()
+        composeRule.onNodeWithTag("inventory_hub").performScrollToNode(hasTestTag("inv_cat_avatars"))
+        composeRule.onNodeWithTag("inv_cat_avatars").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("inv_subpage_avatars").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // Starter avatar is equipped initially
+        composeRule.onNodeWithTag("inv_avatar_card_av_core_node").assertIsDisplayed()
+        composeRule.onNodeWithTag("inv_avatar_active_av_core_node").assertIsDisplayed()
+
+        // Locked avatar shows Locked pill and NO Activate button
+        composeRule.onNodeWithTag("inv_subpage_avatars").performScrollToNode(hasTestTag("inv_avatar_card_av_std_circuit"))
+        composeRule.onNodeWithTag("inv_avatar_locked_av_std_circuit").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("inv_activate_avatar_av_std_circuit").fetchSemanticsNodes().size)
+
+        // Unlocked avatar shows Activate button -> clicking equips it
+        composeRule.onNodeWithTag("inv_subpage_avatars").performScrollToNode(hasTestTag("inv_avatar_card_av_gabriel_wings"))
+        composeRule.onNodeWithTag("inv_activate_avatar_av_gabriel_wings").assertIsEnabled().performClick()
+        composeRule.waitForIdle()
+
+        assertEquals("av_gabriel_wings", ProfileManager.equippedAvatar.value.id)
+        composeRule.onNodeWithTag("inv_avatar_active_av_gabriel_wings").assertIsDisplayed()
+
+        // Final legendary avatar in catalog is also listed
+        composeRule.onNodeWithTag("inv_subpage_avatars").performScrollToNode(hasTestTag("inv_avatar_card_av_eternal_flame"))
+        composeRule.onNodeWithTag("inv_avatar_card_av_eternal_flame").assertIsDisplayed()
+
+        // 1-second long press on avatar opens tooltip with How to Obtain
+        composeRule.onNodeWithTag("inv_avatar_card_av_eternal_flame").performTouchInput {
+            down(center)
+            advanceEventTime(1050L)
+        }
+        composeRule.mainClock.advanceTimeBy(1100L)
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("inventory_tooltip_sheet").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("inv_avatar_card_av_eternal_flame").performTouchInput { up() }
         composeRule.onNodeWithTag("inv_tooltip_how_to_obtain").assertIsDisplayed()
     }
 }
