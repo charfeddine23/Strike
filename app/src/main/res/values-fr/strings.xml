@@ -249,8 +249,10 @@
     <string name="roadmap_nav_title">Parcours</string>
     <string name="roadmap_title">Parcours Cyber &amp; Missions</string>
     <string name="roadmap_subtitle">500 Stations, Progression XP &amp; Œufs Cyber</string>
-    <string name="roadmap_tab_stations">Parcours Ondulé (500 Stations)</string>
-    <string name="roadmap_tab_tasks">Moteur de Missions Dynamique</string>
+    <string name="roadmap_tab_stations">Parcours</string>
+    <string name="roadmap_tab_tasks">Missions</string>
+    <string name="roadmap_tab_elite_missions">Missions Élite</string>
+    <string name="elite_missions_soon">Bientôt</string>
     <string name="roadmap_arsenal_title">Arsenal Cyber &amp; Boucliers</string>
     <string name="roadmap_claim_reward">Réclamer Récompense</string>
     <string name="roadmap_jump_current">Aller à ma Station</string>

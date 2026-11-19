@@ -6,17 +6,41 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
+    <!-- Obsidian Ring Band (29.5dp outer radius with generous breathing margin inside 72dp launcher container) -->
+    <path
+        android:fillType="evenOdd"
+        android:pathData="M54,24.5 A29.5,29.5 0 1,0 54,83.5 A29.5,29.5 0 1,0 54,24.5 Z M54,38.8 A15.2,15.2 0 1,1 54,69.2 A15.2,15.2 0 1,1 54,38.8 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="82"
+                android:endY="82"
+                android:startX="26"
+                android:startY="26"
+                android:type="linear">
+                <item
+                    android:color="#FF242632"
+                    android:offset="0.0" />
+                <item
+                    android:color="#FF15161E"
+                    android:offset="0.52" />
+                <item
+                    android:color="#FF0B0C10"
+                    android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
     <!-- Top-Left Soft Silver Specular Arc -->
     <path
-        android:pathData="M29.76,45.18 A25.8,25.8 0 0,1 44.34,30.08"
+        android:pathData="M33.00,46.36 A22.35,22.35 0 0,1 45.63,33.28"
         android:strokeLineCap="round"
-        android:strokeWidth="2.8">
+        android:strokeWidth="2.4">
         <aapt:attr name="android:strokeColor">
             <gradient
-                android:endX="44.34"
-                android:endY="30.08"
-                android:startX="29.76"
-                android:startY="45.18"
+                android:endX="45.63"
+                android:endY="33.28"
+                android:startX="33.00"
+                android:startY="46.36"
                 android:type="linear">
                 <item
                     android:color="#00E2E8F0"
@@ -32,15 +56,15 @@
     </path>
 
     <path
-        android:pathData="M31.10,43.00 A25.8,25.8 0 0,1 42.30,31.20"
+        android:pathData="M33.91,44.20 A22.35,22.35 0 0,1 43.51,34.27"
         android:strokeLineCap="round"
-        android:strokeWidth="1.4">
+        android:strokeWidth="1.2">
         <aapt:attr name="android:strokeColor">
             <gradient
-                android:endX="42.30"
-                android:endY="31.20"
-                android:startX="31.10"
-                android:startY="43.00"
+                android:endX="43.51"
+                android:endY="34.27"
+                android:startX="33.91"
+                android:startY="44.20"
                 android:type="linear">
                 <item
                     android:color="#00FFFFFF"
@@ -57,15 +81,15 @@
 
     <!-- Bottom-Right Warm Gold Specular Arc -->
     <path
-        android:pathData="M78.24,62.82 A25.8,25.8 0 0,1 63.66,77.92"
+        android:pathData="M75.00,61.64 A22.35,22.35 0 0,1 62.37,74.72"
         android:strokeLineCap="round"
-        android:strokeWidth="2.0">
+        android:strokeWidth="1.7">
         <aapt:attr name="android:strokeColor">
             <gradient
-                android:endX="63.66"
-                android:endY="77.92"
-                android:startX="78.24"
-                android:startY="62.82"
+                android:endX="62.37"
+                android:endY="74.72"
+                android:startX="75.00"
+                android:startY="61.64"
                 android:type="linear">
                 <item
                     android:color="#00D4AF37"
@@ -83,18 +107,18 @@
     <!-- Pure White Inner Core Circle -->
     <path
         android:fillColor="#FFFFFFFF"
-        android:pathData="M54,36.4 A17.6,17.6 0 1,0 54,71.6 A17.6,17.6 0 1,0 54,36.4 Z" />
+        android:pathData="M54,38.8 A15.2,15.2 0 1,0 54,69.2 A15.2,15.2 0 1,0 54,38.8 Z" />
 
     <!-- Inner Metallic Gold Rim -->
     <path
-        android:pathData="M54,36.4 A17.6,17.6 0 1,0 54,71.6 A17.6,17.6 0 1,0 54,36.4 Z"
-        android:strokeWidth="1.6">
+        android:pathData="M54,38.8 A15.2,15.2 0 1,0 54,69.2 A15.2,15.2 0 1,0 54,38.8 Z"
+        android:strokeWidth="1.5">
         <aapt:attr name="android:strokeColor">
             <gradient
-                android:endX="72"
-                android:endY="72"
-                android:startX="36"
-                android:startY="36"
+                android:endX="69"
+                android:endY="69"
+                android:startX="39"
+                android:startY="39"
                 android:type="linear">
                 <item
                     android:color="#FFE6CA7E"
@@ -109,16 +133,16 @@
         </aapt:attr>
     </path>
 
-    <!-- Outer Metallic Gold Rim (sized right inside adaptive safe mask so circle fills edge-to-edge) -->
+    <!-- Outer Metallic Gold Rim -->
     <path
-        android:pathData="M54,20.0 A34.0,34.0 0 1,0 54,88.0 A34.0,34.0 0 1,0 54,20.0 Z"
-        android:strokeWidth="1.7">
+        android:pathData="M54,24.5 A29.5,29.5 0 1,0 54,83.5 A29.5,29.5 0 1,0 54,24.5 Z"
+        android:strokeWidth="1.6">
         <aapt:attr name="android:strokeColor">
             <gradient
-                android:endX="88"
-                android:endY="88"
-                android:startX="20"
-                android:startY="20"
+                android:endX="84"
+                android:endY="84"
+                android:startX="24"
+                android:startY="24"
                 android:type="linear">
                 <item
                     android:color="#FFE6CA7E"

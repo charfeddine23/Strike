@@ -4,12 +4,9 @@ import android.view.SoundEffectConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -59,11 +56,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -130,9 +130,14 @@ fun InventoryScreen(
 
     var remainingMillis by remember { mutableLongStateOf(FlameManager.getActiveShieldRemainingMillis()) }
     LaunchedEffect(isShieldActive, activeShieldExpiresAt) {
-        while (true) {
-            remainingMillis = FlameManager.getActiveShieldRemainingMillis()
-            delay(1000L)
+        if (isShieldActive) {
+            while (true) {
+                remainingMillis = FlameManager.getActiveShieldRemainingMillis()
+                if (activeShieldExpiresAt != null && remainingMillis <= 0L) break
+                delay(1000L)
+            }
+        } else {
+            remainingMillis = 0L
         }
     }
     val shieldActuallyActive = isShieldActive && (activeShieldExpiresAt == null || remainingMillis > 0L)
@@ -169,26 +174,7 @@ fun InventoryScreen(
     var showLongPressGuideDialog by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // Infinite luxury animation driver for 7d auto shield & eternal potion
-    val infiniteTransition = rememberInfiniteTransition(label = "inventory_luxury_anim")
-    val animAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(3600, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "sweep_angle"
-    )
-    val pulseWave by infiniteTransition.animateFloat(
-        initialValue = 0.55f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1350, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_wave"
-    )
+    val rtlSign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1 else 1
 
     val navigateToCategory: (InventoryCategory) -> Unit = { category ->
         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -199,18 +185,28 @@ fun InventoryScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .clipToBounds()
             .testTag("inventory_screen")
     ) {
         AnimatedContent(
             targetState = activeCategory,
+            modifier = Modifier
+                .fillMaxSize()
+                .clipToBounds(),
             transitionSpec = {
-                if (targetState != null) {
-                    (fadeIn(tween(220)) + slideInHorizontally { it / 5 })
-                        .togetherWith(fadeOut(tween(180)) + slideOutHorizontally { -it / 5 })
-                } else {
-                    (fadeIn(tween(220)) + slideInHorizontally { -it / 5 })
-                        .togetherWith(fadeOut(tween(180)) + slideOutHorizontally { it / 5 })
-                }
+                val forward = targetState != null && initialState == null
+                val dir = (if (forward) 1 else -1) * rtlSign
+                val enter = fadeIn(
+                    animationSpec = tween(durationMillis = 155, delayMillis = 65, easing = FastOutSlowInEasing)
+                ) + slideInHorizontally(
+                    animationSpec = tween(durationMillis = 170, delayMillis = 65, easing = FastOutSlowInEasing)
+                ) { fullWidth -> dir * (fullWidth / 14) }
+                val exit = fadeOut(
+                    animationSpec = tween(durationMillis = 65, easing = FastOutLinearInEasing)
+                ) + slideOutHorizontally(
+                    animationSpec = tween(durationMillis = 70, easing = FastOutLinearInEasing)
+                ) { fullWidth -> -dir * (fullWidth / 18) }
+                enter.togetherWith(exit).using(SizeTransform(clip = true))
             },
             label = "inventory_category_transition"
         ) { category ->
@@ -252,8 +248,6 @@ fun InventoryScreen(
                         shields48h = shields48h,
                         shields72h = shields72h,
                         sevenDayAutoTriggers = sevenDayAutoTriggers,
-                        animAngle = animAngle,
-                        pulseWave = pulseWave,
                         onBack = { activeCategory = null },
                         onOpenGuide = { showLongPressGuideDialog = true },
                         onShowTooltip = { selectedTooltip = it }
@@ -289,8 +283,6 @@ fun InventoryScreen(
                         hasCryoArmed = hasCryoArmed,
                         eternalRebirthCount = eternalRebirthCount,
                         hasRebirthImmunity = hasRebirthImmunity,
-                        animAngle = animAngle,
-                        pulseWave = pulseWave,
                         onBack = { activeCategory = null },
                         onOpenGuide = { showLongPressGuideDialog = true },
                         onShowTooltip = { selectedTooltip = it }

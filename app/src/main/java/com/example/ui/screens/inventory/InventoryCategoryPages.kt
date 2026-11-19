@@ -1,6 +1,13 @@
 package com.example.ui.screens.inventory
 
 import android.view.SoundEffectConstants
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +44,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,8 +94,6 @@ fun ShieldsSubPage(
     shields48h: Int,
     shields72h: Int,
     sevenDayAutoTriggers: Int,
-    animAngle: Float,
-    pulseWave: Float,
     onBack: () -> Unit,
     onOpenGuide: () -> Unit,
     onShowTooltip: (InventoryTooltipSpec) -> Unit
@@ -139,8 +145,6 @@ fun ShieldsSubPage(
                 isActiveNow = is7dActive,
                 remainingText = if (is7dActive) FlameManager.formatRemaining(remainingMillis) else null,
                 totalTriggeredCount = sevenDayAutoTriggers,
-                animAngle = animAngle,
-                pulseWave = pulseWave,
                 onLongPress1s = { onShowTooltip(InventoryTooltipFactory.for7DayAutoShield(currentLang)) }
             )
         }
@@ -340,8 +344,6 @@ fun PotionsSubPage(
     hasCryoArmed: Boolean,
     eternalRebirthCount: Int,
     hasRebirthImmunity: Boolean,
-    animAngle: Float,
-    pulseWave: Float,
     onBack: () -> Unit,
     onOpenGuide: () -> Unit,
     onShowTooltip: (InventoryTooltipSpec) -> Unit
@@ -536,8 +538,6 @@ fun PotionsSubPage(
                         currentLang = currentLang,
                         count = eternalRebirthCount,
                         isActiveImmunity = hasRebirthImmunity,
-                        animAngle = animAngle,
-                        pulseWave = pulseWave,
                         onActivate = {
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -627,10 +627,27 @@ private fun Luxury7DayAutoShieldCard(
     isActiveNow: Boolean,
     remainingText: String?,
     totalTriggeredCount: Int,
-    animAngle: Float,
-    pulseWave: Float,
     onLongPress1s: () -> Unit
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "luxury_7d_shield_anim")
+    val animAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "sweep_angle"
+    )
+    val pulseWave by infiniteTransition.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1350, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_wave"
+    )
     val goldColor = Color(0xFFFFD700)
     val magentaGlow = Color(0xFFFF007A)
     val rad = Math.toRadians(animAngle.toDouble())
@@ -1176,11 +1193,28 @@ private fun EternalResurgenceLegendaryCard(
     currentLang: String,
     count: Int,
     isActiveImmunity: Boolean,
-    animAngle: Float,
-    pulseWave: Float,
     onActivate: () -> Unit,
     onLongPress1s: () -> Unit
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "eternal_potion_anim")
+    val animAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(3600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "sweep_angle"
+    )
+    val pulseWave by infiniteTransition.animateFloat(
+        initialValue = 0.55f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1350, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_wave"
+    )
     val crimsonMagenta = Color(0xFFFF007A)
     val gold = Color(0xFFFFD700)
     val violet = Color(0xFFD946EF)

@@ -249,8 +249,10 @@
     <string name="roadmap_nav_title">المسار</string>
     <string name="roadmap_title">المسار السيبراني والمهام</string>
     <string name="roadmap_subtitle">500 محطة، تدرج الـ XP، وجوائز البيض السيبراني</string>
-    <string name="roadmap_tab_stations">المسار المتموج (500 محطة)</string>
-    <string name="roadmap_tab_tasks">محرك المهام الديناميكي</string>
+    <string name="roadmap_tab_stations">المسار</string>
+    <string name="roadmap_tab_tasks">المهام</string>
+    <string name="roadmap_tab_elite_missions">مهام النخبة</string>
+    <string name="elite_missions_soon">قريباً</string>
     <string name="roadmap_arsenal_title">ترسانة الغنائم والدروع السيبرانية</string>
     <string name="roadmap_claim_reward">جني المكافأة</string>
     <string name="roadmap_jump_current">القفز لمحطتي</string>

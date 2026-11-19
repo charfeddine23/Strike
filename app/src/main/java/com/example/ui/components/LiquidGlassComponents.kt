@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -88,9 +89,11 @@ fun LiquidGlassBackground(
     content: @Composable BoxScope.() -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "ambient_liquid_glass")
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = if (darkTheme) 0.25f else 0.16f,
-        targetValue = if (darkTheme) 0.45f else 0.28f,
+    val minAlpha = if (darkTheme) 0.25f else 0.16f
+    val maxAlpha = if (darkTheme) 0.45f else 0.28f
+    val pulseAlphaState = infiniteTransition.animateFloat(
+        initialValue = minAlpha,
+        targetValue = maxAlpha,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 6000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -99,50 +102,49 @@ fun LiquidGlassBackground(
     )
 
     val baseBg = if (darkTheme) CosmicDarkBg else DayGlassBg
-    val cyanGlow = if (darkTheme) NeonCyan.copy(alpha = pulseAlpha) else DayCyanGlow.copy(alpha = pulseAlpha)
-    val violetGlow = if (darkTheme) NeonViolet.copy(alpha = pulseAlpha * 0.8f) else DayPurpleGlow.copy(alpha = pulseAlpha * 0.8f)
-    val orangeGlow = if (darkTheme) NeonEmerald.copy(alpha = pulseAlpha * 0.6f) else DayOrangeGlow.copy(alpha = pulseAlpha * 0.65f)
+    val cyanColor = if (darkTheme) NeonCyan else DayCyanGlow
+    val violetColor = if (darkTheme) NeonViolet else DayPurpleGlow
+    val orangeColor = if (darkTheme) NeonEmerald else DayOrangeGlow
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(baseBg)
-            .drawBehind {
+            .drawWithCache {
                 val canvasW = size.width
                 val canvasH = size.height
-
-                // Top-right Morning Cyan Glow
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(cyanGlow, Color.Transparent),
-                        center = Offset(canvasW * 0.85f, canvasH * 0.15f),
-                        radius = canvasW * 0.8f
-                    ),
-                    radius = canvasW * 0.8f,
-                    center = Offset(canvasW * 0.85f, canvasH * 0.15f)
+                val c1 = Offset(canvasW * 0.85f, canvasH * 0.15f)
+                val r1 = canvasW * 0.8f
+                val b1 = Brush.radialGradient(
+                    colors = listOf(cyanColor, Color.Transparent),
+                    center = c1,
+                    radius = r1
                 )
-
-                // Bottom-left Pastel Lilac Nebula
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(violetGlow, Color.Transparent),
-                        center = Offset(canvasW * 0.15f, canvasH * 0.82f),
-                        radius = canvasW * 0.85f
-                    ),
-                    radius = canvasW * 0.85f,
-                    center = Offset(canvasW * 0.15f, canvasH * 0.82f)
+                val c2 = Offset(canvasW * 0.15f, canvasH * 0.82f)
+                val r2 = canvasW * 0.85f
+                val b2 = Brush.radialGradient(
+                    colors = listOf(violetColor, Color.Transparent),
+                    center = c2,
+                    radius = r2
                 )
-
-                // Center-right Warm Peach-Amber Mist
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(orangeGlow, Color.Transparent),
-                        center = Offset(canvasW * 0.5f, canvasH * 0.45f),
-                        radius = canvasW * 0.6f
-                    ),
-                    radius = canvasW * 0.6f,
-                    center = Offset(canvasW * 0.5f, canvasH * 0.45f)
+                val c3 = Offset(canvasW * 0.5f, canvasH * 0.45f)
+                val r3 = canvasW * 0.6f
+                val b3 = Brush.radialGradient(
+                    colors = listOf(orangeColor, Color.Transparent),
+                    center = c3,
+                    radius = r3
                 )
+                onDrawBehind {
+                    val alpha = pulseAlphaState.value
+                    drawCircle(brush = b1, radius = r1, center = c1, alpha = alpha)
+                    drawCircle(brush = b2, radius = r2, center = c2, alpha = alpha * 0.8f)
+                    drawCircle(
+                        brush = b3,
+                        radius = r3,
+                        center = c3,
+                        alpha = alpha * (if (darkTheme) 0.6f else 0.65f)
+                    )
+                }
             }
     ) {
         content()

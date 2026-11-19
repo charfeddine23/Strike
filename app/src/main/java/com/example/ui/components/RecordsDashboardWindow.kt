@@ -58,6 +58,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -116,47 +117,22 @@ fun RecordsDashboardBanner(
         animationSpec = tween(durationMillis = 220),
         label = "records_dash_chevron_rotation"
     )
-    val infiniteTransition = rememberInfiniteTransition(label = "records_dash_banner_anim")
-    val borderAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 7000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "dash_border_angle"
-    )
-    val glowPulse by infiniteTransition.animateFloat(
-        initialValue = 0.55f,
-        targetValue = 0.95f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2200, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dash_glow_pulse"
-    )
-
-    val angleRad = Math.toRadians(borderAngle.toDouble())
-    val dirX = cos(angleRad).toFloat()
-    val dirY = sin(angleRad).toFloat()
-
     val primaryAccent = if (isDarkTheme) NeonCyan else DayCyan
     val secondaryAccent = if (isDarkTheme) NeonViolet else DayPurple
-
-    val dynamicBorderBrush = Brush.linearGradient(
-        colors = listOf(
-            primaryAccent.copy(alpha = glowPulse * 0.9f),
-            NeonEmerald.copy(alpha = 0.65f),
-            secondaryAccent.copy(alpha = glowPulse * 0.85f),
-            primaryAccent.copy(alpha = 0.7f)
-        ),
-        start = Offset(200f * (1f - dirX), 60f * (1f - dirY)),
-        end = Offset(200f * (1f + dirX), 60f * (1f + dirY))
-    )
-
     val shape = RoundedCornerShape(16.dp)
     val cardBgColor = if (isDarkTheme) Color(0xD90B1324) else Color(0xF2FFFFFF)
-    val shadowColor = if (isDarkTheme) primaryAccent.copy(alpha = 0.22f * glowPulse) else Color(0x180284C7)
+    val shadowColor = if (isDarkTheme) primaryAccent.copy(alpha = 0.20f) else Color(0x180284C7)
+
+    val staticBorderBrush = remember(isDarkTheme, primaryAccent, secondaryAccent) {
+        Brush.linearGradient(
+            colors = listOf(
+                primaryAccent.copy(alpha = 0.82f),
+                NeonEmerald.copy(alpha = 0.65f),
+                secondaryAccent.copy(alpha = 0.78f),
+                primaryAccent.copy(alpha = 0.70f)
+            )
+        )
+    }
 
     Box(
         modifier = modifier
@@ -170,26 +146,34 @@ fun RecordsDashboardBanner(
             )
             .clip(shape)
             .background(cardBgColor)
-            .drawBehind {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            primaryAccent.copy(alpha = 0.16f * glowPulse),
-                            secondaryAccent.copy(alpha = 0.08f * glowPulse),
-                            Color.Transparent
-                        ),
-                        center = Offset(size.width * 0.85f, size.height * 0.5f),
-                        radius = size.width * 0.65f
+            .drawWithCache {
+                val glowCenter = Offset(size.width * 0.85f, size.height * 0.5f)
+                val glowRadius = size.width * 0.65f
+                val glowBrush = Brush.radialGradient(
+                    colors = listOf(
+                        primaryAccent.copy(alpha = 0.16f),
+                        secondaryAccent.copy(alpha = 0.08f),
+                        Color.Transparent
+                    ),
+                    center = glowCenter,
+                    radius = glowRadius
+                )
+                val topHighlightColor = if (isDarkTheme) Color(0x33FFFFFF) else Color(0x80FFFFFF)
+                val startX = 16.dp.toPx()
+                val endX = size.width - 16.dp.toPx()
+                val lineY = 1.dp.toPx()
+                val lineStroke = 1.2.dp.toPx()
+                onDrawBehind {
+                    drawCircle(brush = glowBrush, radius = glowRadius, center = glowCenter)
+                    drawLine(
+                        color = topHighlightColor,
+                        start = Offset(startX, lineY),
+                        end = Offset(endX, lineY),
+                        strokeWidth = lineStroke
                     )
-                )
-                drawLine(
-                    color = if (isDarkTheme) Color(0x33FFFFFF) else Color(0x80FFFFFF),
-                    start = Offset(16.dp.toPx(), 1.dp.toPx()),
-                    end = Offset(size.width - 16.dp.toPx(), 1.dp.toPx()),
-                    strokeWidth = 1.2.dp.toPx()
-                )
+                }
             }
-            .border(1.2.dp, dynamicBorderBrush, shape)
+            .border(1.2.dp, staticBorderBrush, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 10.dp)
             .testTag("records_dashboard_banner")

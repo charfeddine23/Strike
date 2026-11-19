@@ -13,8 +13,18 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -55,6 +65,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -68,6 +79,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -249,9 +261,14 @@ fun LiquidGlassApp(
     var currentShieldRemainingMillis by remember { mutableLongStateOf(FlameManager.getActiveShieldRemainingMillis()) }
 
     LaunchedEffect(isStreakShieldActive, activeShieldExpiresAt) {
-        while (true) {
-            currentShieldRemainingMillis = FlameManager.getActiveShieldRemainingMillis()
-            delay(1000L)
+        if (isStreakShieldActive) {
+            while (true) {
+                currentShieldRemainingMillis = FlameManager.getActiveShieldRemainingMillis()
+                if (activeShieldExpiresAt != null && currentShieldRemainingMillis <= 0L) break
+                delay(1000L)
+            }
+        } else {
+            currentShieldRemainingMillis = 0L
         }
     }
 
@@ -285,6 +302,15 @@ fun LiquidGlassApp(
 
     val isHapticEnabled by viewModel.isHapticFeedbackEnabled
 
+    val rtlSign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1 else 1
+
+    LaunchedEffect(currentScreen) {
+        showShieldDropdown = false
+        if (currentScreen != AppScreen.DASHBOARD) {
+            showRecordsDashboardDialog = false
+        }
+    }
+
     // Hardware/gesture BackHandler: return from TASKS_LEDGER to ROADMAP, otherwise return to DASHBOARD
     BackHandler(enabled = currentScreen != AppScreen.DASHBOARD) {
         currentScreen = if (currentScreen == AppScreen.TASKS_LEDGER) {
@@ -298,7 +324,11 @@ fun LiquidGlassApp(
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                if (currentScreen != AppScreen.TASKS_LEDGER) {
+                AnimatedVisibility(
+                    visible = currentScreen != AppScreen.TASKS_LEDGER,
+                    enter = expandVertically(tween(170, easing = FastOutSlowInEasing)) + fadeIn(tween(150)),
+                    exit = shrinkVertically(tween(140, easing = FastOutLinearInEasing)) + fadeOut(tween(100))
+                ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         LiquidGlassTopBar(
                             currentScreen = currentScreen,
@@ -323,14 +353,23 @@ fun LiquidGlassApp(
                             isDarkTheme = isDarkTheme,
                             isHapticEnabled = isHapticEnabled
                         )
-                        if (currentScreen == AppScreen.DASHBOARD) {
+                        AnimatedVisibility(
+                            visible = currentScreen == AppScreen.DASHBOARD,
+                            enter = expandVertically(tween(160, easing = FastOutSlowInEasing)) + fadeIn(tween(150)),
+                            exit = shrinkVertically(tween(120, easing = FastOutLinearInEasing)) + fadeOut(tween(90))
+                        ) {
                             RecordsDashboardBanner(
                                 totalCount = allIndividuals.size,
                                 onClick = { showRecordsDashboardDialog = !showRecordsDashboardDialog },
                                 isExpanded = showRecordsDashboardDialog,
                                 isDarkTheme = isDarkTheme
                             )
-                        } else if (currentScreen == AppScreen.COMPARISON) {
+                        }
+                        AnimatedVisibility(
+                            visible = currentScreen == AppScreen.COMPARISON,
+                            enter = expandVertically(tween(160, easing = FastOutSlowInEasing)) + fadeIn(tween(150)),
+                            exit = shrinkVertically(tween(120, easing = FastOutLinearInEasing)) + fadeOut(tween(90))
+                        ) {
                             SmartSearchBanner(
                                 query = strikeSearchQuery,
                                 onQueryChange = { viewModel.setStrikeSearchQuery(it) },
@@ -345,7 +384,11 @@ fun LiquidGlassApp(
                 }
             },
             bottomBar = {
-                if (currentScreen != AppScreen.TASKS_LEDGER) {
+                AnimatedVisibility(
+                    visible = currentScreen != AppScreen.TASKS_LEDGER,
+                    enter = expandVertically(tween(170, easing = FastOutSlowInEasing)) + fadeIn(tween(150)),
+                    exit = shrinkVertically(tween(140, easing = FastOutLinearInEasing)) + fadeOut(tween(100))
+                ) {
                     LiquidGlassBottomBar(
                         currentScreen = currentScreen,
                         onScreenSelected = { screen ->
@@ -370,12 +413,26 @@ fun LiquidGlassApp(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .clipToBounds()
             ) {
             AnimatedContent(
                 targetState = currentScreen,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clipToBounds(),
                 transitionSpec = {
-                    (fadeIn() + slideInHorizontally { width -> if (targetState.ordinal > initialState.ordinal) width / 4 else -width / 4 })
-                        .togetherWith(fadeOut() + slideOutHorizontally { width -> if (targetState.ordinal > initialState.ordinal) -width / 4 else width / 4 })
+                    val dir = (if (targetState.ordinal >= initialState.ordinal) 1 else -1) * rtlSign
+                    val exitAnim = fadeOut(
+                        animationSpec = tween(durationMillis = 65, easing = FastOutLinearInEasing)
+                    ) + slideOutHorizontally(
+                        animationSpec = tween(durationMillis = 70, easing = FastOutLinearInEasing)
+                    ) { fullWidth -> -dir * (fullWidth / 18) }
+                    val enterAnim = fadeIn(
+                        animationSpec = tween(durationMillis = 165, delayMillis = 65, easing = FastOutSlowInEasing)
+                    ) + slideInHorizontally(
+                        animationSpec = tween(durationMillis = 180, delayMillis = 65, easing = FastOutSlowInEasing)
+                    ) { fullWidth -> dir * (fullWidth / 14) }
+                    enterAnim.togetherWith(exitAnim).using(SizeTransform(clip = true))
                 },
                 label = "screen_transition"
             ) { screen ->
@@ -602,16 +659,25 @@ fun LiquidGlassTopBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = cyanColor,
-                    fontFamily = com.example.ui.theme.CaveatHandwriting,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                AnimatedContent(
+                    targetState = title,
+                    transitionSpec = {
+                        fadeIn(tween(130, delayMillis = 40))
+                            .togetherWith(fadeOut(tween(40)))
+                    },
+                    label = "topbar_title_transition"
+                ) { animatedTitle ->
+                    Text(
+                        text = animatedTitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cyanColor,
+                        fontFamily = com.example.ui.theme.CaveatHandwriting,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
 
@@ -883,15 +949,28 @@ private fun BottomNavItem(
     testTag: String,
     onClick: () -> Unit
 ) {
+    val bgColor by animateColorAsState(
+        targetValue = if (isSelected) activeColor.copy(alpha = 0.2f) else Color.Transparent,
+        animationSpec = tween(160),
+        label = "nav_bg"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (isSelected) activeColor.copy(alpha = 0.8f) else Color.Transparent,
+        animationSpec = tween(160),
+        label = "nav_border"
+    )
+    val iconTint by animateColorAsState(
+        targetValue = if (isSelected) activeColor else Color(0xFF94A3B8),
+        animationSpec = tween(160),
+        label = "nav_tint"
+    )
+
     Box(
         modifier = Modifier
+            .minimumInteractiveComponentSize()
             .clip(RoundedCornerShape(14.dp))
-            .background(if (isSelected) activeColor.copy(alpha = 0.2f) else Color.Transparent)
-            .border(
-                1.dp,
-                if (isSelected) activeColor.copy(alpha = 0.8f) else Color.Transparent,
-                RoundedCornerShape(14.dp)
-            )
+            .background(bgColor)
+            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
             .testTag(testTag),
@@ -904,18 +983,26 @@ private fun BottomNavItem(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isSelected) activeColor else Color(0xFF94A3B8),
+                tint = iconTint,
                 modifier = Modifier.size(20.dp)
             )
-            if (isSelected) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = label,
-                    color = activeColor,
-                    fontFamily = com.example.ui.theme.PlusJakartaSans,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp
-                )
+            AnimatedVisibility(
+                visible = isSelected,
+                enter = expandHorizontally(tween(160, easing = FastOutSlowInEasing)) + fadeIn(tween(140)),
+                exit = shrinkHorizontally(tween(110, easing = FastOutLinearInEasing)) + fadeOut(tween(80))
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = label,
+                        color = activeColor,
+                        fontFamily = com.example.ui.theme.PlusJakartaSans,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
             }
         }
     }

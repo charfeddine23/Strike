@@ -1,6 +1,11 @@
 package com.example.ui.screens
 
 import android.view.SoundEffectConstants
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -8,9 +13,15 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,30 +36,33 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.MilitaryTech
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.VpnKey
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,13 +74,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -131,8 +150,13 @@ fun RoadmapScreen(
     val bronzeKeys by viewModel.bronzeKeys.collectAsStateWithLifecycle()
     val silverKeys by viewModel.silverKeys.collectAsStateWithLifecycle()
 
-    var selectedMainTab by remember(initialMainTab) { mutableStateOf(initialMainTab) } // 0: Wavy Roadmap, 1: Dynamic Tasks
+    var selectedMainTab by remember(initialMainTab) { mutableStateOf(initialMainTab) } // 0: Roadmap, 1: Tasks, 2: Elite Missions
     var selectedTaskPeriod by remember { mutableStateOf(TaskPeriod.DAILY) }
+
+    BackHandler(enabled = selectedMainTab != 0) {
+        selectedMainTab = 0
+        onMainTabChanged(0)
+    }
 
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(selectedMainTab) {
@@ -160,64 +184,8 @@ fun RoadmapScreen(
         RoadmapManager.generateStations(totalXp, claimedStations)
     }
 
-    val infiniteTransition = rememberInfiniteTransition(label = "roadmap_pulse")
-    val flowPhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "flow_phase"
-    )
-    val glowPulse by infiniteTransition.animateFloat(
-        initialValue = 0.65f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glow_pulse"
-    )
-    val rippleProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "ripple_progress"
-    )
-    val badgeBobDp by infiniteTransition.animateFloat(
-        initialValue = -3.5f,
-        targetValue = 2.5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "badge_bob"
-    )
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.07f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1350, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "egg_pulse"
-    )
-    val orbitRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 14000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "orbit_rotation"
-    )
-
     var hasAutoScrolledToFrontier by remember { mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(selectedMainTab, currentStationId) {
+    LaunchedEffect(selectedMainTab, currentStationId) {
         if (selectedMainTab == 0 && !hasAutoScrolledToFrontier && currentStationId > 2) {
             hasAutoScrolledToFrontier = true
             val targetIdx = (currentStationId - 2).coerceIn(0, stations.lastIndex)
@@ -225,9 +193,12 @@ fun RoadmapScreen(
         }
     }
 
+    val rtlSign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1 else 1
+
     Box(
         modifier = modifier
             .fillMaxSize()
+            .clipToBounds()
             .testTag("roadmap_screen")
     ) {
         // Deep OLED background & floating subtle glow dots
@@ -333,92 +304,106 @@ fun RoadmapScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // MAIN SEGMENTED GLASS PILL TABS: Wavy Snake Road vs Dynamic Tasks
+                // MAIN SEGMENTED GLASS PILL TABS: Roadmap vs Tasks vs Elite Missions
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     RoadmapPillTabButton(
                         label = stringResource(R.string.roadmap_tab_stations),
                         icon = Icons.Default.Timeline,
                         selected = selectedMainTab == 0,
+                        accentColor = NeonAqua,
                         onClick = {
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             selectedMainTab = 0
                             onMainTabChanged(0)
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(0.95f)
+                            .testTag("roadmap_tab_stations")
                     )
                     RoadmapPillTabButton(
                         label = stringResource(R.string.roadmap_tab_tasks),
                         icon = Icons.Default.Bolt,
                         selected = selectedMainTab == 1,
+                        accentColor = NeonAqua,
                         onClick = {
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             selectedMainTab = 1
                             onMainTabChanged(1)
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(0.8f)
+                            .testTag("roadmap_tab_tasks")
                     )
-                }
-
-                if (selectedMainTab == 0) {
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // TOP FROSTED LIQUID GLASS PROGRESS HEADER CARD WITH LEFT-ALIGNED XP GUIDE ICON
-                    RoadmapProgressHeader(
-                        currentStationId = currentStationId,
-                        totalXp = totalXp,
-                        isAr = isAr,
-                        currentLang = currentLang,
-                        glowPulse = glowPulse,
-                        onJumpToStation = { targetStation ->
+                    RoadmapPillTabButton(
+                        label = stringResource(R.string.roadmap_tab_elite_missions),
+                        icon = Icons.Default.MilitaryTech,
+                        selected = selectedMainTab == 2,
+                        accentColor = NeonAmber,
+                        onClick = {
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            coroutineScope.launch {
-                                val targetIdx = (targetStation - 2).coerceIn(0, stations.lastIndex)
-                                roadmapListState.animateScrollToItem(targetIdx)
-                            }
-                        }
+                            selectedMainTab = 2
+                            onMainTabChanged(2)
+                        },
+                        modifier = Modifier
+                            .weight(1.25f)
+                            .testTag("roadmap_tab_elite_missions")
                     )
                 }
             }
 
-            // CONTENT SECTION: TAB 0 (CONTINUOUS WAVY SNAKE ROAD) OR TAB 1 (TASKS)
-            if (selectedMainTab == 0) {
-                LazyColumn(
-                    state = roadmapListState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 8.dp, bottom = 72.dp),
-                    verticalArrangement = Arrangement.spacedBy(0.dp)
-                ) {
-                    itemsIndexed(stations, key = { _, station -> station.id }) { index, station ->
-                        val prevState = stations.getOrNull(index - 1)?.state
-                        val nextState = stations.getOrNull(index + 1)?.state
-                        val isFrontierStation = station.id == currentStationId.coerceAtLeast(1)
-
-                        WavySnakeStationRow(
-                            station = station,
-                            prevStationState = prevState,
-                            nextStationState = nextState,
-                            isCurrentMilestone = isFrontierStation,
-                            currentLang = currentLang,
-                            pulseScale = pulseScale,
-                            orbitRotation = orbitRotation,
-                            flowPhase = flowPhase,
-                            glowPulse = glowPulse,
-                            rippleProgress = rippleProgress,
-                            badgeBobDp = badgeBobDp,
+            // CONTENT SECTION: TAB 0 (ROADMAP) / TAB 1 (TASKS) / TAB 2 (ELITE MISSIONS)
+            AnimatedContent(
+                targetState = selectedMainTab,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .clipToBounds(),
+                transitionSpec = {
+                    val dir = (if (targetState > initialState) 1 else -1) * rtlSign
+                    val enter = fadeIn(
+                        animationSpec = tween(durationMillis = 155, delayMillis = 65, easing = FastOutSlowInEasing)
+                    ) + slideInHorizontally(
+                        animationSpec = tween(durationMillis = 170, delayMillis = 65, easing = FastOutSlowInEasing)
+                    ) { fullWidth -> dir * (fullWidth / 14) }
+                    val exit = fadeOut(
+                        animationSpec = tween(durationMillis = 65, easing = FastOutLinearInEasing)
+                    ) + slideOutHorizontally(
+                        animationSpec = tween(durationMillis = 70, easing = FastOutLinearInEasing)
+                    ) { fullWidth -> -dir * (fullWidth / 18) }
+                    enter.togetherWith(exit).using(SizeTransform(clip = true))
+                },
+                label = "roadmap_tab_transition"
+            ) { activeTab ->
+                when (activeTab) {
+                    0 -> {
+                        RoadmapStationsTabContent(
+                            stations = stations,
+                            roadmapListState = roadmapListState,
+                            currentStationId = currentStationId,
+                            totalXp = totalXp,
                             nextStationId = stageProgress.nextStationId,
                             currentStageXp = stageProgress.currentStageXp,
-                            onClaim = {
+                            isAr = isAr,
+                            currentLang = currentLang,
+                            onJumpToStation = { targetStation ->
+                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                coroutineScope.launch {
+                                    val targetIdx = (targetStation - 2).coerceIn(0, stations.lastIndex)
+                                    roadmapListState.animateScrollToItem(targetIdx)
+                                }
+                            },
+                            onClaimStation = { stationId ->
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
-                                viewModel.claimStation(station.id)
+                                viewModel.claimStation(stationId)
                             }
                         )
                     }
-                }
-            } else {
+
+                    1 -> {
                 // ==========================================
                 // TAB 1: DYNAMIC TASK ENGINE & TASKS LEDGER
                 // ==========================================
@@ -636,7 +621,237 @@ fun RoadmapScreen(
                         }
                     }
                 }
+                    }
+
+                    else -> {
+                        EliteMissionsSoonPage(
+                            currentLang = currentLang
+                        )
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun RoadmapStationsTabContent(
+    stations: List<RoadmapStation>,
+    roadmapListState: LazyListState,
+    currentStationId: Int,
+    totalXp: Long,
+    nextStationId: Int,
+    currentStageXp: Long,
+    isAr: Boolean,
+    currentLang: String,
+    onJumpToStation: (Int) -> Unit,
+    onClaimStation: (Int) -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "roadmap_pulse")
+    val flowPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "flow_phase"
+    )
+    val glowPulse by infiniteTransition.animateFloat(
+        initialValue = 0.65f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "glow_pulse"
+    )
+    val rippleProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ripple_progress"
+    )
+    val badgeBobDp by infiniteTransition.animateFloat(
+        initialValue = -3.5f,
+        targetValue = 2.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "badge_bob"
+    )
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.07f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1350, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "egg_pulse"
+    )
+    val orbitRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 14000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "orbit_rotation"
+    )
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            RoadmapProgressHeader(
+                currentStationId = currentStationId,
+                totalXp = totalXp,
+                isAr = isAr,
+                currentLang = currentLang,
+                glowPulse = glowPulse,
+                onJumpToStation = onJumpToStation
+            )
+        }
+
+        LazyColumn(
+            state = roadmapListState,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentPadding = PaddingValues(top = 8.dp, bottom = 72.dp),
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            itemsIndexed(stations, key = { _, station -> station.id }) { index, station ->
+                val prevState = stations.getOrNull(index - 1)?.state
+                val nextState = stations.getOrNull(index + 1)?.state
+                val isFrontierStation = station.id == currentStationId.coerceAtLeast(1)
+
+                WavySnakeStationRow(
+                    station = station,
+                    prevStationState = prevState,
+                    nextStationState = nextState,
+                    isCurrentMilestone = isFrontierStation,
+                    currentLang = currentLang,
+                    pulseScale = pulseScale,
+                    orbitRotation = orbitRotation,
+                    flowPhase = flowPhase,
+                    glowPulse = glowPulse,
+                    rippleProgress = rippleProgress,
+                    badgeBobDp = badgeBobDp,
+                    nextStationId = nextStationId,
+                    currentStageXp = currentStageXp,
+                    onClaim = { onClaimStation(station.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EliteMissionsSoonPage(
+    currentLang: String
+) {
+    val goldAccent = NeonAmber
+    val violetAccent = NeonViolet
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .testTag("elite_missions_page"),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 480.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color(0xEB15182B),
+                            Color(0xEB0E1222),
+                            Color(0xEB090D18)
+                        )
+                    )
+                )
+                .border(
+                    width = 1.5.dp,
+                    brush = Brush.linearGradient(listOf(goldAccent.copy(alpha = 0.8f), violetAccent.copy(alpha = 0.7f))),
+                    shape = RoundedCornerShape(28.dp)
+                )
+                .padding(horizontal = 24.dp, vertical = 36.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(76.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(goldAccent.copy(alpha = 0.28f), violetAccent.copy(alpha = 0.14f), Color.Transparent)
+                        )
+                    )
+                    .border(
+                        width = 1.6.dp,
+                        brush = Brush.linearGradient(listOf(goldAccent, violetAccent)),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MilitaryTech,
+                    contentDescription = stringResource(R.string.roadmap_tab_elite_missions),
+                    tint = goldAccent,
+                    modifier = Modifier.size(38.dp)
+                )
+            }
+
+            Text(
+                text = stringResource(R.string.roadmap_tab_elite_missions),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = PlusJakartaSans,
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(goldAccent.copy(alpha = 0.18f))
+                    .border(1.2.dp, goldAccent.copy(alpha = 0.8f), RoundedCornerShape(50))
+                    .padding(horizontal = 28.dp, vertical = 10.dp)
+                    .testTag("elite_missions_soon_badge")
+            ) {
+                Text(
+                    text = stringResource(R.string.elite_missions_soon),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = PlusJakartaSans,
+                    color = goldAccent,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Text(
+                text = when (currentLang) {
+                    "ar" -> "تحديات ومهام نخبوية عالية المستوى قيد التطوير حالياً."
+                    "fr" -> "Des missions d'élite à haut niveau de défi arrivent bientôt."
+                    else -> "High-stakes elite operations and prestige missions are arriving soon."
+                },
+                fontSize = 12.sp,
+                color = Color(0xFF94A3B8),
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp
+            )
         }
     }
 }
@@ -646,21 +861,35 @@ private fun RoadmapPillTabButton(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     selected: Boolean,
+    accentColor: Color = NeonAqua,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (selected) NeonAqua.copy(alpha = 0.14f) else Color(0xAA131A29)
-    val borderColor = if (selected) NeonAqua.copy(alpha = 0.85f) else Color(0x26FFFFFF)
-    val contentColor = if (selected) NeonAqua else Color(0xFFCBD5E1)
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) accentColor.copy(alpha = 0.16f) else Color(0xAA131A29),
+        animationSpec = tween(150),
+        label = "pill_bg"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) accentColor.copy(alpha = 0.85f) else Color(0x26FFFFFF),
+        animationSpec = tween(150),
+        label = "pill_border"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) accentColor else Color(0xFFCBD5E1),
+        animationSpec = tween(150),
+        label = "pill_content"
+    )
 
     Row(
         modifier = modifier
+            .minimumInteractiveComponentSize()
             .height(44.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(bgColor)
             .border(if (selected) 1.2.dp else 1.dp, borderColor, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
     ) {
@@ -668,15 +897,16 @@ private fun RoadmapPillTabButton(
             imageVector = icon,
             contentDescription = null,
             tint = contentColor,
-            modifier = Modifier.size(16.dp)
+            modifier = Modifier.size(15.dp)
         )
-        Spacer(modifier = Modifier.width(6.dp))
+        Spacer(modifier = Modifier.width(5.dp))
         Text(
             text = label,
-            fontSize = 12.sp,
+            fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             color = contentColor,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
