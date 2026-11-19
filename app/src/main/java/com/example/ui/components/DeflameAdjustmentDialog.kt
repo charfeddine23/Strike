@@ -7,8 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -65,7 +63,6 @@ import java.util.Locale
  * Allows selecting preset deduction options (-2, -3, -5, -10, -25, -50 PTS)
  * AND entering custom points manually via a styled text field.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DeflameAdjustmentDialog(
     currentFlameScore: Double,
@@ -73,7 +70,8 @@ fun DeflameAdjustmentDialog(
     onApply: (Double) -> Unit,
     isHapticEnabled: Boolean = true,
     isGirlMode: Boolean = true,
-    currentLang: String = "ar"
+    currentLang: String = "ar",
+    initialDeduction: Double = if (isGirlMode) 3.0 else 2.0
 ) {
     val isAr = currentLang == "ar"
     val context = LocalContext.current
@@ -86,10 +84,15 @@ fun DeflameAdjustmentDialog(
     val iconVector = if (isGirlMode) Icons.Default.Favorite else Icons.Default.AcUnit
     val iconBg = if (isGirlMode) Color(0x33E11D48) else Color(0x330284C7)
 
-    val defaultVal = if (isGirlMode) 3.0 else 2.0
+    val defaultVal = initialDeduction.coerceAtLeast(0.1)
     val presets = listOf(2.0, 3.0, 5.0, 10.0, 25.0, 50.0)
-    var selectedPreset by remember { mutableDoubleStateOf(defaultVal) }
-    var textInput by remember { mutableStateOf(if (defaultVal % 1.0 == 0.0) "${defaultVal.toInt()}" else "$defaultVal") }
+    var selectedPreset by remember(defaultVal) { mutableDoubleStateOf(defaultVal) }
+    var textInput by remember(defaultVal) {
+        mutableStateOf(
+            if (defaultVal % 1.0 == 0.0) "${defaultVal.toInt()}"
+            else String.format(Locale.US, "%.1f", defaultVal)
+        )
+    }
     var inputError by remember { mutableStateOf<String?>(null) }
 
     val dialogTitle = if (isGirlMode) stringResource(R.string.girl_adjustment_title) else stringResource(R.string.deflame_adjustment_title)
@@ -202,46 +205,54 @@ fun DeflameAdjustmentDialog(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                // Quick Preset Chips
-                FlowRow(
+                // Quick Preset Chips (clean 3x2 symmetrical grid)
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    presets.forEach { presetVal ->
-                        val isSelected = (selectedPreset == presetVal)
-                        val chipText = if (isAr) "-${presetVal.toInt()} نقطة" else "-${presetVal.toInt()} PTS"
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (isSelected) chipSelectedBg
-                                    else Color(0x221E293B)
-                                )
-                                .border(
-                                    1.dp,
-                                    if (isSelected) primaryColor
-                                    else primaryColor.copy(alpha = 0.35f),
-                                    RoundedCornerShape(10.dp)
-                                )
-                                .clickable {
-                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    selectedPreset = presetVal
-                                    textInput = if (presetVal % 1.0 == 0.0) "${presetVal.toInt()}" else "$presetVal"
-                                    inputError = null
-                                }
-                                .padding(horizontal = 12.dp, vertical = 7.dp)
-                                .testTag("adjustment_chip_${presetVal.toInt()}"),
-                            contentAlignment = Alignment.Center
+                    presets.chunked(3).forEach { rowPresets ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = chipText,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else primaryColor
-                            )
+                            rowPresets.forEach { presetVal ->
+                                val isSelected = (selectedPreset == presetVal)
+                                val chipText = if (isAr) "-${presetVal.toInt()} نقطة" else "-${presetVal.toInt()} PTS"
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (isSelected) chipSelectedBg
+                                            else Color(0x221E293B)
+                                        )
+                                        .border(
+                                            1.dp,
+                                            if (isSelected) primaryColor
+                                            else primaryColor.copy(alpha = 0.35f),
+                                            RoundedCornerShape(10.dp)
+                                        )
+                                        .clickable {
+                                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            selectedPreset = presetVal
+                                            textInput = if (presetVal % 1.0 == 0.0) "${presetVal.toInt()}" else "$presetVal"
+                                            inputError = null
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                                        .testTag("adjustment_chip_${presetVal.toInt()}"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = chipText,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else primaryColor,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
                         }
                     }
                 }

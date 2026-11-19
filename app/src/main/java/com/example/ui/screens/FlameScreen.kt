@@ -33,9 +33,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AcUnit
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Call
@@ -76,7 +74,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -91,8 +88,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import com.example.ui.components.DeflameAdjustmentDialog
-import com.example.ui.components.StreakShieldModalSheet
-import com.example.data.flame.FlameManager
 import kotlin.math.sin
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -134,11 +129,12 @@ private enum class FlameLogFilter {
     SIMULATOR
 }
 
+@Suppress("UNUSED_PARAMETER")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun FlameScreen(
     viewModel: IndividualViewModel,
-    onNavigateBack: () -> Unit,
+    onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier,
     isDarkTheme: Boolean = isSystemInDarkTheme()
 ) {
@@ -152,23 +148,11 @@ fun FlameScreen(
     val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
     val flameLogs by viewModel.flameLogs.collectAsStateWithLifecycle()
     val isStreakShieldActive by viewModel.isStreakShieldActive.collectAsStateWithLifecycle()
-    val activeShieldExpiresAt by viewModel.activeShieldExpiresAt.collectAsStateWithLifecycle()
-    val availableManualShields by viewModel.availableManualShields.collectAsStateWithLifecycle()
-    val available1DayShields by viewModel.available1DayShields.collectAsStateWithLifecycle()
     val peakScore by viewModel.peakFlameScore.collectAsStateWithLifecycle()
     val totalGained by viewModel.totalPointsGained.collectAsStateWithLifecycle()
     val totalExtinguished by viewModel.totalPointsExtinguished.collectAsStateWithLifecycle()
-
-    var showShieldModal by remember { mutableStateOf(false) }
-    var currentShieldRemainingMillis by remember { mutableLongStateOf(FlameManager.getActiveShieldRemainingMillis()) }
-
-    LaunchedEffect(isStreakShieldActive, activeShieldExpiresAt) {
-        while (true) {
-            currentShieldRemainingMillis = FlameManager.getActiveShieldRemainingMillis()
-            kotlinx.coroutines.delay(1000L)
-        }
-    }
-    val isShieldActive = isStreakShieldActive && (activeShieldExpiresAt == null || currentShieldRemainingMillis > 0L)
+    val girlDeductionPoints by viewModel.girlDeductionPoints.collectAsStateWithLifecycle()
+    val pulseElixirUsesLeft by viewModel.pulseElixirUsesLeft.collectAsStateWithLifecycle()
 
     val stage = getFlameStage(flameScore)
     val colors = getFlameColors(flameScore)
@@ -197,14 +181,6 @@ fun FlameScreen(
         animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f),
         label = "animated_score"
     )
-
-    val stageLabel = when (stage) {
-        FlameVisualStage.FROZEN_STATIC -> stringResource(R.string.flame_stage_frozen)
-        FlameVisualStage.ICE_CRACKING -> stringResource(R.string.flame_stage_cracking)
-        FlameVisualStage.COLOR_GRADIENT -> stringResource(R.string.flame_stage_gradient)
-        FlameVisualStage.FULLY_IGNITED -> stringResource(R.string.flame_stage_ignited)
-        FlameVisualStage.SUPERNOVA_OVERLOAD -> stringResource(R.string.flame_stage_supernova)
-    }
 
     val stageSub = when (stage) {
         FlameVisualStage.FROZEN_STATIC -> stringResource(R.string.flame_stage_frozen_sub)
@@ -310,48 +286,25 @@ fun FlameScreen(
         )
     }
 
-    // Streak Shield Modal Sheet (Detailed countdown, inventory & rules)
-    if (showShieldModal) {
-        StreakShieldModalSheet(
-            isShieldActive = isShieldActive,
-            activeShieldExpiresAt = activeShieldExpiresAt,
-            remainingMillis = currentShieldRemainingMillis,
-            availableManualShields = availableManualShields,
-            available1DayShields = available1DayShields,
-            onActivateManualShield = {
-                viewModel.activateManualShield()
-            },
-            onActivate1DayShield = {
-                viewModel.activate1DayShield()
-            },
-            onGrant1DayShield = {
-                viewModel.grant1DayShield()
-            },
-            onToggleShieldActive = { active ->
-                viewModel.setStreakShieldActive(active)
-            },
-            onDismiss = { showShieldModal = false },
-            isHapticEnabled = isHapticEnabled,
-            currentLang = currentLang
-        )
-    }
-
-    // Girl Points Adjustment Dialog (Opened on long press of the Girl button)
+    // Girl Points Adjustment Dialog (Opened on long press of the Girl button; saves points for subsequent taps)
     if (showGirlAdjustmentDialog) {
         DeflameAdjustmentDialog(
             currentFlameScore = flameScore,
             onDismiss = { showGirlAdjustmentDialog = false },
             onApply = { penaltyPoints ->
-                viewModel.girl(penaltyPoints)
+                viewModel.setGirlDeductionPoints(penaltyPoints)
             },
             isHapticEnabled = isHapticEnabled,
             isGirlMode = true,
-            currentLang = currentLang
+            currentLang = currentLang,
+            initialDeduction = girlDeductionPoints
         )
     }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .testTag("flame_lazy_column"),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -367,148 +320,6 @@ fun FlameScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Top Header Row inside Flame Card: Back Button & Stage Pill
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        IconButton(
-                            onClick = {
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                onNavigateBack()
-                            },
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(Color(0x221E293B))
-                                .border(1.dp, Color(0x3338BDF8), CircleShape)
-                                .testTag("flame_back_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = if (isAr) "رجوع" else "Back",
-                                tint = NeonCyan,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // Dynamic Streak Shield Element
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        if (isShieldActive) Color(0x3310B981)
-                                        else if (available1DayShields > 0 || availableManualShields > 0) Color(0x3338BDF8)
-                                        else Color(0x22F43F5E)
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (isShieldActive) NeonEmerald
-                                        else if (available1DayShields > 0 || availableManualShields > 0) Color(0xFF38BDF8)
-                                        else Color(0x66F43F5E),
-                                        RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable {
-                                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        showShieldModal = true
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                                    .testTag("flame_shield_status_badge")
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (isShieldActive) {
-                                        Icon(
-                                            imageVector = Icons.Default.Shield,
-                                            contentDescription = if (isAr) "الدرع مفعل" else "Shield Active",
-                                            tint = NeonEmerald,
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = FlameManager.formatRemaining(currentShieldRemainingMillis),
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 11.sp,
-                                            color = NeonEmerald
-                                        )
-                                    } else if (available1DayShields > 0 || availableManualShields > 0) {
-                                        val totalAvail = available1DayShields + availableManualShields
-                                        Icon(
-                                            imageVector = Icons.Default.Shield,
-                                            contentDescription = if (isAr) "درع متاح" else "Shield Available",
-                                            tint = Color(0xFF38BDF8),
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = if (available1DayShields > 0 && availableManualShields == 0) {
-                                                if (isAr) "${available1DayShields}× 1 يوم" else "${available1DayShields}x 1D"
-                                            } else if (availableManualShields > 0 && available1DayShields == 0) {
-                                                if (isAr) "${availableManualShields}× 3 أيام" else "${availableManualShields}x 3D"
-                                            } else {
-                                                if (isAr) "$totalAvail دروع" else "$totalAvail Shields"
-                                            },
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 11.sp,
-                                            color = Color(0xFF38BDF8)
-                                        )
-                                    } else {
-                                        Icon(
-                                            imageVector = Icons.Default.Add,
-                                            contentDescription = if (isAr) "غير محمي" else "Unprotected Streak",
-                                            tint = Color(0xFFFB7185),
-                                            modifier = Modifier.size(13.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = stringResource(R.string.shield_unprotected),
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 10.sp,
-                                            color = Color(0xFFFB7185)
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Stage Pill
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(stageBadgeColor.copy(alpha = 0.18f))
-                                    .border(1.dp, stageBadgeColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = when (stage) {
-                                            FlameVisualStage.FROZEN_STATIC -> Icons.Default.AcUnit
-                                            FlameVisualStage.SUPERNOVA_OVERLOAD -> Icons.Default.Bolt
-                                            else -> Icons.Default.LocalFireDepartment
-                                        },
-                                        contentDescription = null,
-                                        tint = stageBadgeColor,
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = stageLabel,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 11.sp,
-                                        color = stageBadgeColor
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
                     // Animated Flame Canvas with 2-second hold detector to open settings
                     Box(
                         modifier = Modifier
@@ -632,6 +443,21 @@ fun FlameScreen(
 
         // 3. Manual Instant Control Buttons ("Deflame" & "Girl" - placed directly below the Flame!)
         item {
+            val pulseBonus = if (pulseElixirUsesLeft > 0) 5.0 else 0.0
+            val effectiveDeflamePoints = 3.0 + pulseBonus
+            val effectiveGirlPoints = girlDeductionPoints.coerceAtLeast(0.1)
+
+            fun formatControlPts(value: Double): String {
+                return if (value % 1.0 == 0.0 && value <= Long.MAX_VALUE.toDouble()) {
+                    "${value.toLong()}"
+                } else {
+                    String.format(Locale.US, "%.1f", value)
+                }
+            }
+
+            val deflameFormatted = formatControlPts(effectiveDeflamePoints)
+            val girlFormatted = formatControlPts(effectiveGirlPoints)
+
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = stringResource(R.string.manual_controls_title),
@@ -645,7 +471,7 @@ fun FlameScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // "Deflame" Button (reverted to original instant 3 PTS deduction, no dialog/settings)
+                    // "Deflame" Button (Displays true effective points including active Pulse Elixir +5 bonus)
                     LiquidGlassCard(
                         modifier = Modifier
                             .weight(1f)
@@ -688,23 +514,44 @@ fun FlameScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0x2238BDF8))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Text(
-                                    text = if (isAr) "-3 نقطة" else "-3 PTS",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color(0xFF38BDF8)
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(
+                                            if (pulseBonus > 0.0) Color(0x3300E5FF) else Color(0x2238BDF8)
+                                        )
+                                        .border(
+                                            width = if (pulseBonus > 0.0) 1.dp else 0.dp,
+                                            color = if (pulseBonus > 0.0) NeonCyan.copy(alpha = 0.65f) else Color.Transparent,
+                                            shape = RoundedCornerShape(6.dp)
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = if (isAr) "-$deflameFormatted نقطة" else "-$deflameFormatted PTS",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (pulseBonus > 0.0) NeonCyan else Color(0xFF38BDF8),
+                                        modifier = Modifier.testTag("deflame_points_badge")
+                                    )
+                                }
+                                if (pulseBonus > 0.0) {
+                                    Icon(
+                                        imageVector = Icons.Default.Bolt,
+                                        contentDescription = if (isAr) "معزز بإكسير النبض" else "Pulse Elixir Boosted",
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
                             }
                         }
                     }
 
-                    // "Girl" Button (Normal tap: -3 pts, Long press: adjust deduction points up to 10000)
+                    // "Girl" Button (Normal tap: deducts configured points; Long press: configure points for next taps)
                     LiquidGlassCard(
                         modifier = Modifier
                             .weight(1f)
@@ -762,10 +609,11 @@ fun FlameScreen(
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = if (isAr) "-3 نقطة" else "-3 PTS",
+                                        text = if (isAr) "-$girlFormatted نقطة" else "-$girlFormatted PTS",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Black,
-                                        color = Color(0xFFFB7185)
+                                        color = Color(0xFFFB7185),
+                                        modifier = Modifier.testTag("girl_points_badge")
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(4.dp))

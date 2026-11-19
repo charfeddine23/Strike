@@ -104,6 +104,8 @@ object FlameManager {
     private const val KEY_TOTAL_POINTS_EXTINGUISHED = "key_total_points_extinguished"
     private const val KEY_GIRL_PER_MONTH = "key_start_date_girl_per_month"
     private const val KEY_DEFLAME_PER_MONTH = "key_start_date_deflame_per_month"
+    private const val KEY_GIRL_DEDUCTION_POINTS = "key_girl_deduction_points"
+    private const val KEY_GIRL_DEDUCTION_POINTS_BITS = "key_girl_deduction_points_bits"
     private const val KEY_SCORE_BITS = "key_flame_score_bits"
     private const val KEY_PEAK_SCORE_BITS = "key_peak_flame_score_bits"
     private const val KEY_TOTAL_POINTS_GAINED_BITS = "key_total_points_gained_bits"
@@ -111,6 +113,9 @@ object FlameManager {
 
     private val _flameScore = MutableStateFlow(45.0) // Initial starting score
     val flameScore: StateFlow<Double> = _flameScore.asStateFlow()
+
+    private val _girlDeductionPoints = MutableStateFlow(3.0)
+    val girlDeductionPoints: StateFlow<Double> = _girlDeductionPoints.asStateFlow()
 
     private val _flameLogs = MutableStateFlow<List<FlameLogEntry>>(emptyList())
     val flameLogs: StateFlow<List<FlameLogEntry>> = _flameLogs.asStateFlow()
@@ -293,6 +298,12 @@ object FlameManager {
         _peakScore.value = maxOf(savedScore, savedPeak)
         _totalPointsGained.value = loadDouble(prefs, KEY_TOTAL_POINTS_GAINED, KEY_TOTAL_POINTS_GAINED_BITS, 0.0)
         _totalPointsExtinguished.value = loadDouble(prefs, KEY_TOTAL_POINTS_EXTINGUISHED, KEY_TOTAL_POINTS_EXTINGUISHED_BITS, 0.0)
+        _girlDeductionPoints.value = loadDouble(
+            prefs,
+            KEY_GIRL_DEDUCTION_POINTS,
+            KEY_GIRL_DEDUCTION_POINTS_BITS,
+            3.0
+        ).coerceAtLeast(0.1)
 
         val logsJson = prefs.getString(KEY_FLAME_LOGS, null)
         if (!logsJson.isNullOrBlank()) {
@@ -367,6 +378,7 @@ object FlameManager {
         _available48hShields.value = 0
         _available1DayShields.value = 0
         _sevenDayAutoShieldCount.value = 0
+        _girlDeductionPoints.value = 3.0
 
         getPrefs(context).edit().apply {
             saveDouble(this, KEY_SCORE, KEY_SCORE_BITS, 0.0)
@@ -388,6 +400,8 @@ object FlameManager {
             remove(KEY_LAST_STRIKE_DATE)
             remove(KEY_GIRL_PER_MONTH)
             remove(KEY_DEFLAME_PER_MONTH)
+            remove(KEY_GIRL_DEDUCTION_POINTS)
+            remove(KEY_GIRL_DEDUCTION_POINTS_BITS)
             putString(KEY_LAST_INACTIVITY_DATE, today)
             apply()
         }
@@ -743,11 +757,24 @@ object FlameManager {
         return updated
     }
 
+    @Synchronized
+    fun setGirlDeductionPoints(context: Context, points: Double): Double {
+        init(context)
+        val safe = if (!points.isFinite()) 3.0 else points.coerceAtLeast(0.1)
+        _girlDeductionPoints.value = safe
+        getPrefs(context).edit().apply {
+            saveDouble(this, KEY_GIRL_DEDUCTION_POINTS, KEY_GIRL_DEDUCTION_POINTS_BITS, safe)
+            apply()
+        }
+        return safe
+    }
+
     /**
      * "Deflame" Button: Each tap instantly decreases the total Flame score by 3 points (ensuring score >= 0).
      * If Pulse Elixir is active, grants +5 extra points (consumes 1 of 3 uses). Also awards +20 XP.
      */
     fun deflame(context: Context, delta: Double = 3.0): Double {
+        init(context)
         com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "DEFLAME")
         val pulseElixirBonus = com.example.data.profile.ProfileManager.consumePulseElixirUseIfActive(context)
         val safeDelta = (delta + pulseElixirBonus).coerceAtLeast(0.1)
@@ -766,12 +793,13 @@ object FlameManager {
     }
 
     /**
-     * "Girl" Button / Custom Points Adjustment: Each tap decreases the total Flame score by [delta] (default 3.0).
-     * Also awards +50 XP.
+     * "Girl" Button / Custom Points Adjustment: Each tap decreases the total Flame score by [delta]
+     * (defaulting to the persisted [_girlDeductionPoints] setting). Also awards +50 XP.
      */
-    fun girl(context: Context, delta: Double = 3.0): Double {
+    fun girl(context: Context, delta: Double? = null): Double {
+        init(context)
         com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "GIRL")
-        val safeDelta = delta.coerceAtLeast(0.1)
+        val safeDelta = (delta ?: _girlDeductionPoints.value).coerceAtLeast(0.1)
         val formatted = if (safeDelta % 1.0 == 0.0) "${safeDelta.toInt()}" else String.format(Locale.US, "%.1f", safeDelta)
         val updated = deductPoints(
             context = context,
@@ -1602,6 +1630,7 @@ object FlameManager {
             put("lastStrikeDate", prefs.getString(KEY_LAST_STRIKE_DATE, "") ?: "")
             put("girlPerMonth", prefs.getInt(KEY_GIRL_PER_MONTH, 0))
             put("deflamePerMonth", prefs.getInt(KEY_DEFLAME_PER_MONTH, 0))
+            put("girlDeductionPoints", _girlDeductionPoints.value)
             put("logs", logsToJsonArray(_flameLogs.value))
         }
     }
@@ -1699,12 +1728,22 @@ object FlameManager {
         val lastStrike = json.optString("lastStrikeDate", "").trim()
         val importedGirlPerMonth = json.optInt("girlPerMonth", 0).coerceAtLeast(0)
         val importedDeflamePerMonth = json.optInt("deflamePerMonth", 0).coerceAtLeast(0)
+        val hasImportedGirlDeduction = json.has("girlDeductionPoints")
+        val importedGirlDeduction = json.optDouble("girlDeductionPoints", 3.0)
+            .takeIf { it.isFinite() && it >= 0.1 } ?: 3.0
+        val finalGirlDeduction = if (replaceExisting || hasImportedGirlDeduction) {
+            importedGirlDeduction
+        } else {
+            _girlDeductionPoints.value
+        }
+        _girlDeductionPoints.value = finalGirlDeduction
 
         prefs.edit().apply {
             saveDouble(this, KEY_SCORE, KEY_SCORE_BITS, finalScore)
             saveDouble(this, KEY_PEAK_SCORE, KEY_PEAK_SCORE_BITS, finalPeak)
             saveDouble(this, KEY_TOTAL_POINTS_GAINED, KEY_TOTAL_POINTS_GAINED_BITS, finalGained)
             saveDouble(this, KEY_TOTAL_POINTS_EXTINGUISHED, KEY_TOTAL_POINTS_EXTINGUISHED_BITS, finalExt)
+            saveDouble(this, KEY_GIRL_DEDUCTION_POINTS, KEY_GIRL_DEDUCTION_POINTS_BITS, finalGirlDeduction)
             putBoolean(KEY_STREAK_SHIELD, finalShieldActive)
             if (finalExpires != null) putLong(KEY_ACTIVE_SHIELD_EXPIRES_AT, finalExpires) else remove(KEY_ACTIVE_SHIELD_EXPIRES_AT)
             if (finalShieldActive && finalType != ActiveShieldType.NONE) {

@@ -385,6 +385,9 @@ class IndividualViewModel(
     val shields48h: StateFlow<Int> = RoadmapManager.shields48h
     val shields72h: StateFlow<Int> = RoadmapManager.shields72h
 
+    val girlDeductionPoints: StateFlow<Double> = FlameManager.girlDeductionPoints
+    val pulseElixirUsesLeft: StateFlow<Int> = ProfileManager.pulseElixirUsesLeft
+
 
     init {
         FlameManager.init(application)
@@ -421,12 +424,18 @@ class IndividualViewModel(
     }
 
     /**
-     * "Deflame" Button: Decreases the total Flame score by 3 points (default 3.0).
+     * "Deflame" Button: Decreases the total Flame score by [points] (default 3.0) plus any active Pulse Elixir (+5.0).
      */
     fun deflame(points: Double = 3.0) {
+        val pulseBonus = if (ProfileManager.pulseElixirUsesLeft.value > 0) 5.0 else 0.0
+        val effectivePoints = (points + pulseBonus).coerceAtLeast(0.1)
         val newScore = FlameManager.deflame(getApplication(), points)
         viewModelScope.launch {
-            val formatted = if (points % 1.0 == 0.0) "${points.toInt()}" else String.format(Locale.US, "%.1f", points)
+            val formatted = if (effectivePoints % 1.0 == 0.0) {
+                "${effectivePoints.toInt()}"
+            } else {
+                String.format(Locale.US, "%.1f", effectivePoints)
+            }
             val msg = when (currentLanguage.value) {
                 "ar" -> "تم خفض الشعلة (-$formatted): ${String.format(Locale.US, "%.1f", newScore)}"
                 "fr" -> "Déflamme (-$formatted pts) : ${String.format(Locale.US, "%.1f", newScore)}"
@@ -437,12 +446,33 @@ class IndividualViewModel(
     }
 
     /**
-     * "Girl" Button: Decreases the total Flame score by [points] (default 3.0 or custom value).
+     * Saves the deduction value used on subsequent taps of the "Girl" button without immediately deducting points.
      */
-    fun girl(points: Double = 3.0) {
-        val newScore = FlameManager.girl(getApplication(), points)
+    fun setGirlDeductionPoints(points: Double) {
+        val saved = FlameManager.setGirlDeductionPoints(getApplication(), points)
         viewModelScope.launch {
-            val formatted = if (points % 1.0 == 0.0) "${points.toInt()}" else String.format(Locale.US, "%.1f", points)
+            val formatted = if (saved % 1.0 == 0.0) "${saved.toInt()}" else String.format(Locale.US, "%.1f", saved)
+            val msg = when (currentLanguage.value) {
+                "ar" -> "تم تحديث خصم Girl إلى (-$formatted) للضغطة القادمة"
+                "fr" -> "Déduction Girl mise à jour (-$formatted pts) pour le prochain appui"
+                else -> "Girl deduction updated (-$formatted pts) for next tap"
+            }
+            emitMessage(msg)
+        }
+    }
+
+    /**
+     * "Girl" Button: Decreases the total Flame score by [points] (defaults to saved girlDeductionPoints).
+     */
+    fun girl(points: Double? = null) {
+        val resolvedPoints = (points ?: FlameManager.girlDeductionPoints.value).coerceAtLeast(0.1)
+        val newScore = FlameManager.girl(getApplication(), resolvedPoints)
+        viewModelScope.launch {
+            val formatted = if (resolvedPoints % 1.0 == 0.0) {
+                "${resolvedPoints.toInt()}"
+            } else {
+                String.format(Locale.US, "%.1f", resolvedPoints)
+            }
             val msg = when (currentLanguage.value) {
                 "ar" -> "تبريد Girl (-$formatted): ${String.format(Locale.US, "%.1f", newScore)}"
                 "fr" -> "Action Girl (-$formatted pts) : ${String.format(Locale.US, "%.1f", newScore)}"
