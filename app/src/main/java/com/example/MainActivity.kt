@@ -478,7 +478,7 @@ fun LiquidGlassApp(
         )
     }
 
-    // Mandatory In-App Update Card Dialog (auto-triggered on app entry whenever a newer version is found)
+    // Optional In-App Update Card Dialog (auto-triggered on app entry when a newer version is found)
     val shouldShowUpdateModal = when (appUpdateState) {
         is AppUpdateState.UpdateAvailable,
         is AppUpdateState.Downloading,
@@ -497,7 +497,7 @@ fun LiquidGlassApp(
         AppUpdateCardDialog(
             state = appUpdateState,
             currentLang = currentLang,
-            isMandatory = true,
+            isMandatory = false,
             onUpdateClick = { release ->
                 startedUpdateFromModal = true
                 viewModel.downloadAppUpdate(release)
@@ -508,7 +508,13 @@ fun LiquidGlassApp(
             onRetryClick = {
                 viewModel.checkForAppUpdate(isAutoCheck = false)
             },
-            onDismiss = {}
+            onCancelDownload = {
+                viewModel.cancelAppUpdateDownload()
+            },
+            onDismiss = {
+                startedUpdateFromModal = false
+                viewModel.dismissUpdatePrompt()
+            }
         )
     }
 }

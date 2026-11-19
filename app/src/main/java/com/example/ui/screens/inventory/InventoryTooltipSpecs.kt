@@ -414,7 +414,7 @@ object InventoryTooltipFactory {
                 lang,
                 "أندر وأقوى جوهرة كيميائية في النظام؛ تمنح حصانة دائمة ضد التصفير.",
                 "L'élixir le plus rare et puissant du système, offrant une immunité permanente.",
-                "The rarest pinnacle potion in StrikePulse granting eternal systemic protection."
+                "The rarest pinnacle potion in Obsidian granting eternal systemic protection."
             ),
             bonuses = locText(
                 lang,

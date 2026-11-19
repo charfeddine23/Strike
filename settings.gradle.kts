@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "StrikePulse"
+rootProject.name = "Obsidian"
 
 include(":app")

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">StrikePulse</string>
+    <string name="app_name">Obsidian</string>
     <string name="nav_dashboard">Records</string>
     <string name="nav_entry">Data Entry</string>
     <string name="nav_inventory">Inventory</string>
@@ -80,7 +80,7 @@
     <string name="fingerprint_unlock_prompt">Use your fingerprint to unlock the app</string>
     <string name="fingerprint_unlock_btn">Unlock with Fingerprint</string>
     <string name="fingerprint_prompt_title">Biometric Verification</string>
-    <string name="fingerprint_prompt_subtitle">Touch the fingerprint sensor to unlock StrikePulse</string>
+    <string name="fingerprint_prompt_subtitle">Touch the fingerprint sensor to unlock Obsidian</string>
     <string name="fingerprint_setup_subtitle">Verify your fingerprint to enable biometric lock</string>
     <string name="fingerprint_unlocked">App Unlocked</string>
     <string name="fingerprint_auth_failed">Fingerprint not recognized. Try again.</string>

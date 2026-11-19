@@ -54,7 +54,7 @@ class BackupManager(private val repository: IndividualRepository) {
             val prefsSnapshot = SecurityPreferences(context).exportSnapshot()
 
             val rootJson = JSONObject().apply {
-                put("app", "StrikePulse")
+                put("app", "Obsidian")
                 put("backup_schema_version", 2)
                 put("version_code", BuildConfig.VERSION_CODE)
                 put("version_name", BuildConfig.VERSION_NAME)
@@ -179,7 +179,7 @@ class BackupManager(private val repository: IndividualRepository) {
             if (individualsJson.length() == 0 && eventsJson.length() == 0 && !hasFullState) {
                 return@withContext BackupResult(
                     success = false,
-                    message = if (lang == "ar") "الملف المحدد فارغ أو لا يحتوي على بيانات صالحة." else "Selected file is empty or contains no valid StrikePulse data."
+                    message = if (lang == "ar") "الملف المحدد فارغ أو لا يحتوي على بيانات صالحة." else "Selected file is empty or contains no valid Obsidian data."
                 )
             }
 

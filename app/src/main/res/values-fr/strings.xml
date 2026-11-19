@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">StrikePulse</string>
+    <string name="app_name">Obsidian</string>
     <string name="nav_dashboard">Registres</string>
     <string name="nav_entry">Saisie</string>
     <string name="nav_inventory">Inventaire</string>
@@ -80,7 +80,7 @@
     <string name="fingerprint_unlock_prompt">Utilisez votre empreinte pour déverrouiller l\'application</string>
     <string name="fingerprint_unlock_btn">Déverrouiller par empreinte</string>
     <string name="fingerprint_prompt_title">Vérification biométrique</string>
-    <string name="fingerprint_prompt_subtitle">Touchez le capteur d\'empreinte pour déverrouiller StrikePulse</string>
+    <string name="fingerprint_prompt_subtitle">Touchez le capteur d\'empreinte pour déverrouiller Obsidian</string>
     <string name="fingerprint_setup_subtitle">Vérifiez votre empreinte pour activer le verrouillage</string>
     <string name="fingerprint_unlocked">Application déverrouillée</string>
     <string name="fingerprint_auth_failed">Empreinte non reconnue. Réessayez.</string>

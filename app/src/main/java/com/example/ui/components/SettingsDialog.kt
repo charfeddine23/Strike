@@ -974,9 +974,9 @@ private fun SettingsPanelBody(
                                 )
                                 Text(
                                     text = when (currentLang) {
-                                        "ar" -> "فحص وتنزيل الإصدارات من GitHub تلقائياً"
-                                        "fr" -> "Vérifier et télécharger automatiquement depuis GitHub"
-                                        else -> "Automatically check & download releases from GitHub"
+                                        "ar" -> "التحقق تلقائياً من توفر إصدارات جديدة على GitHub"
+                                        "fr" -> "Vérifier automatiquement les mises à jour sur GitHub"
+                                        else -> "Automatically check for new releases on GitHub"
                                     },
                                     fontSize = 10.sp,
                                     color = descColor
@@ -1449,7 +1449,7 @@ private fun SettingsPanelBody(
                         Button(
                             onClick = {
                                 val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
-                                createDocumentLauncher.launch("StrikePulse_Backup_$timestamp.json")
+                                createDocumentLauncher.launch("Obsidian_Backup_$timestamp.json")
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -1559,7 +1559,7 @@ private fun SettingsPanelBody(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = "StrikePulse v${BuildConfig.VERSION_NAME} • Developed by Charfeddine Kahlessenane",
+                text = "Obsidian v${BuildConfig.VERSION_NAME} • Developed by Charfeddine Kahlessenane",
                 fontSize = 10.sp,
                 color = Color(0x8094A3B8)
             )

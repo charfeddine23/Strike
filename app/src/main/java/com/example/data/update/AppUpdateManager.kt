@@ -99,7 +99,29 @@ object AppUpdateManager {
     @Volatile
     private var activeDownloadJob: Job? = null
 
+    @Volatile
+    private var dismissedTagInSession: String? = null
+
     fun resetToIdle() {
+        dismissedTagInSession = null
+        _state.value = AppUpdateState.Idle
+    }
+
+    /**
+     * Dismisses the current optional update prompt for this app session so background/resume
+     * auto-checks do not immediately re-open it for the same release tag.
+     * Explicit manual checks (`isAutoCheck = false`) clear this suppression.
+     */
+    fun dismissPrompt() {
+        val currentTag = when (val s = _state.value) {
+            is AppUpdateState.UpdateAvailable -> s.release.tagName
+            is AppUpdateState.ReadyToInstall -> s.release.tagName
+            is AppUpdateState.Downloading -> s.release.tagName
+            else -> null
+        }
+        if (currentTag != null) {
+            dismissedTagInSession = currentTag
+        }
         _state.value = AppUpdateState.Idle
     }
 
@@ -413,6 +435,9 @@ object AppUpdateManager {
         currentVersion: String,
         isAutoCheck: Boolean = false
     ): AppUpdateState = withContext(Dispatchers.IO) {
+        if (!isAutoCheck) {
+            dismissedTagInSession = null
+        }
         val currentState = _state.value
         if (currentState is AppUpdateState.Checking ||
             currentState is AppUpdateState.Downloading ||
@@ -539,7 +564,11 @@ object AppUpdateManager {
             val next: AppUpdateState = when {
                 bestRelease != null -> {
                     if (isNewerVersion(bestRelease.versionName, currentVersion)) {
-                        AppUpdateState.UpdateAvailable(bestRelease)
+                        if (isAutoCheck && dismissedTagInSession == bestRelease.tagName) {
+                            AppUpdateState.Idle
+                        } else {
+                            AppUpdateState.UpdateAvailable(bestRelease)
+                        }
                     } else {
                         if (isAutoCheck) AppUpdateState.Idle else AppUpdateState.UpToDate(currentVersion)
                     }
@@ -623,7 +652,7 @@ object AppUpdateManager {
                 listFiles()?.forEach { old -> old.delete() }
             }
 
-            val safeName = (release.apkFileName ?: "StrikePulse-v${release.versionName}.apk")
+            val safeName = (release.apkFileName ?: "Obsidian-v${release.versionName}.apk")
                 .replace(Regex("[^a-zA-Z0-9._-]"), "_")
             val partFile = File(updatesDir, "$safeName.part")
             val finalFile = File(updatesDir, safeName)
@@ -631,7 +660,7 @@ object AppUpdateManager {
             val request = Request.Builder()
                 .url(downloadUrl)
                 .header("Accept", "application/octet-stream")
-                .header("User-Agent", "StrikePulse-Android/1.0")
+                .header("User-Agent", "Obsidian-Android/1.0")
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -787,7 +816,7 @@ object AppUpdateManager {
             val request = Request.Builder()
                 .url(url)
                 .header("Accept", accept)
-                .header("User-Agent", "StrikePulse-Android/1.0")
+                .header("User-Agent", "Obsidian-Android/1.0")
                 .build()
             client.newCall(request).execute().use { response ->
                 FetchResult(

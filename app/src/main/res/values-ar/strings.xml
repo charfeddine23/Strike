@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">سترايك بالس</string>
+    <string name="app_name">Obsidian</string>
     <string name="nav_dashboard">السجلات</string>
     <string name="nav_entry">إدخال البيانات</string>
     <string name="nav_inventory">المخزون</string>
@@ -80,7 +80,7 @@
     <string name="fingerprint_unlock_prompt">استخدم بصمة الإصبع لفتح التطبيق</string>
     <string name="fingerprint_unlock_btn">التحقق بالبصمة</string>
     <string name="fingerprint_prompt_title">التحقق من الهوية</string>
-    <string name="fingerprint_prompt_subtitle">ضع إصبعك على المستشعر لفتح StrikePulse</string>
+    <string name="fingerprint_prompt_subtitle">ضع إصبعك على المستشعر لفتح Obsidian</string>
     <string name="fingerprint_setup_subtitle">تحقق ببصمتك لتفعيل قفل البصمة</string>
     <string name="fingerprint_unlocked">تم التحقق وفتح التطبيق بنجاح</string>
     <string name="fingerprint_auth_failed">لم يتم التعرف على البصمة، حاول مجدداً.</string>

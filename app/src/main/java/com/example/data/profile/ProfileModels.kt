@@ -225,7 +225,7 @@ object ProfileMasterInventory {
             rarity = TitleRarity.ULTIMATE,
             unlockStation = 500,
             description = "اللقب الأسمى والأعلى في التطبيق. يُفتح عند إتمام المحطة 500 واستخدام جرعة الانبعاث الأبدي.",
-            descriptionEn = "The supreme apex title in StrikePulse. Unlocked by reaching Station 500 and activating the Eternal Resurgence Potion."
+            descriptionEn = "The supreme apex title in Obsidian. Unlocked by reaching Station 500 and activating the Eternal Resurgence Potion."
         )
     )
 

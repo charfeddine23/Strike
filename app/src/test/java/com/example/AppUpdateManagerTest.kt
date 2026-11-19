@@ -211,4 +211,39 @@ class AppUpdateManagerTest {
             }
         }
     }
+
+    @Test
+    fun `dismissPrompt records dismissed release tag and resets state to Idle`() {
+        val release = com.example.data.update.GitHubReleaseInfo(
+            tagName = "v2.5.0",
+            versionName = "2.5.0",
+            releaseName = "v2.5.0",
+            releaseNotes = "",
+            htmlUrl = AppUpdateManager.GITHUB_RELEASES_URL,
+            apkDownloadUrl = "https://example.com/app.apk",
+            apkFileName = "app.apk",
+            apkSizeBytes = 1024L
+        )
+        val stateField = AppUpdateManager::class.java.getDeclaredField("_state").apply {
+            isAccessible = true
+        }
+        val dismissedField = AppUpdateManager::class.java.getDeclaredField("dismissedTagInSession").apply {
+            isAccessible = true
+        }
+        @Suppress("UNCHECKED_CAST")
+        val mutableState = stateField.get(AppUpdateManager) as kotlinx.coroutines.flow.MutableStateFlow<com.example.data.update.AppUpdateState>
+
+        try {
+            mutableState.value = com.example.data.update.AppUpdateState.UpdateAvailable(release)
+            AppUpdateManager.dismissPrompt()
+
+            assertEquals(com.example.data.update.AppUpdateState.Idle, AppUpdateManager.state.value)
+            assertEquals("v2.5.0", dismissedField.get(AppUpdateManager))
+
+            AppUpdateManager.resetToIdle()
+            assertNull(dismissedField.get(AppUpdateManager))
+        } finally {
+            AppUpdateManager.resetToIdle()
+        }
+    }
 }

@@ -16,7 +16,7 @@ object StrikerNotificationHelper {
 
     const val CHANNEL_ID = "striker_call_alerts"
     private const val CHANNEL_NAME = "Striker Call Alerts"
-    private const val CHANNEL_DESC = "Notifications when an individual registered in StrikePulse is calling"
+    private const val CHANNEL_DESC = "Notifications when an individual registered in Obsidian is calling"
     private const val NOTIFICATION_ID = 9001
 
     fun createNotificationChannel(context: Context) {

@@ -908,7 +908,7 @@ class IndividualViewModel(
     }
 
     fun dismissUpdatePrompt() {
-        AppUpdateManager.resetToIdle()
+        AppUpdateManager.dismissPrompt()
     }
 
     fun notifyContactImported(name: String, phone: String = "") {

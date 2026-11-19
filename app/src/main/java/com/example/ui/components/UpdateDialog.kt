@@ -22,11 +22,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -54,7 +62,7 @@ import java.io.File
 
 /**
  * Compact, floating In-App Update Card Dialog.
- * Supports mandatory update mode (cannot be skipped with "Maybe Later", back press, or outside tap).
+ * Defaults to optional mode (user can skip with "Maybe Later", close button, back press, or outside tap).
  */
 @Composable
 fun AppUpdateCardDialog(
@@ -63,8 +71,9 @@ fun AppUpdateCardDialog(
     onInstallClick: (File) -> Unit,
     onRetryClick: () -> Unit,
     onDismiss: () -> Unit,
+    onCancelDownload: () -> Unit = {},
     currentLang: String = "ar",
-    isMandatory: Boolean = true
+    isMandatory: Boolean = false
 ) {
     val context = LocalContext.current
     val isAr = currentLang == "ar"
@@ -76,14 +85,14 @@ fun AppUpdateCardDialog(
     val isDownloading = state is AppUpdateState.Downloading
 
     val laterLabel = when {
-        isAr -> "ربما لاحقا"
+        isAr -> "ربما لاحقاً"
         isFr -> "Plus tard"
         else -> "Maybe Later"
     }
 
-    if (isMandatory) {
-        BackHandler(enabled = true) {
-            // Mandatory update cannot be bypassed with Back navigation
+    BackHandler(enabled = isMandatory || isDownloading) {
+        if (!isMandatory && isDownloading) {
+            onCancelDownload()
         }
     }
 
@@ -104,8 +113,27 @@ fun AppUpdateCardDialog(
                 .background(cardBg)
                 .border(1.dp, Color(0x22FFFFFF), RoundedCornerShape(24.dp))
                 .padding(horizontal = 24.dp, vertical = 28.dp)
-                .testTag("mandatory_update_dialog")
+                .testTag(if (isMandatory) "mandatory_update_dialog" else "optional_update_dialog")
         ) {
+            if (!isMandatory && !isDownloading) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .minimumInteractiveComponentSize()
+                        .clip(CircleShape)
+                        .background(Color(0x18FFFFFF))
+                        .testTag("modal_close_update_btn")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = laterLabel,
+                        tint = mutedText,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -167,9 +195,12 @@ fun AppUpdateCardDialog(
                         }
                         is AppUpdateState.ReadyToInstall -> "v${state.release.versionName}"
                         is AppUpdateState.Error -> when {
-                            isAr -> "تحديث إجباري"
-                            isFr -> "Mise à jour obligatoire"
-                            else -> "Mandatory Update"
+                            isMandatory && isAr -> "تحديث إجباري"
+                            isMandatory && isFr -> "Mise à jour obligatoire"
+                            isMandatory -> "Mandatory Update"
+                            isAr -> "تعذر تنزيل التحديث"
+                            isFr -> "Erreur de mise à jour"
+                            else -> "Update Error"
                         }
                         else -> when {
                             isAr -> "تحديث جديد"
@@ -193,14 +224,27 @@ fun AppUpdateCardDialog(
                                 isMandatory && isAr -> "يجب تحديث التطبيق للاستمرار في الاستخدام"
                                 isMandatory && isFr -> "Vous devez mettre à jour l'application pour continuer"
                                 isMandatory -> "Please update the app to continue using it"
-                                isAr -> "تحديث جديد متاح على GitHub"
-                                isFr -> "Une nouvelle mise à jour est disponible sur GitHub"
-                                else -> "A new version is available from GitHub"
+                                isAr -> "يتوفر تحديث اختياري جديد على GitHub؛ يمكنك التنزيل الآن أو المتابعة لاحقاً"
+                                isFr -> "Une mise à jour optionnelle est disponible sur GitHub"
+                                else -> "An optional update is available on GitHub. Download now or continue later."
                             },
                             fontSize = 14.sp,
                             color = mutedText,
                             textAlign = TextAlign.Center
                         )
+                        if (state.release.apkSizeBytes > 0L) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = when {
+                                    isAr -> "الحجم: ${AppUpdateManager.formatBytes(state.release.apkSizeBytes)}"
+                                    isFr -> "Taille : ${AppUpdateManager.formatBytes(state.release.apkSizeBytes)}"
+                                    else -> "Size: ${AppUpdateManager.formatBytes(state.release.apkSizeBytes)}"
+                                },
+                                fontSize = 12.sp,
+                                color = mutedText.copy(alpha = 0.85f),
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
 
                     is AppUpdateState.Downloading -> {
@@ -350,6 +394,31 @@ fun AppUpdateCardDialog(
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                        }
+
+                        if (!isMandatory) {
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedButton(
+                                onClick = onCancelDownload,
+                                shape = RoundedCornerShape(50),
+                                border = BorderStroke(1.dp, Color(0x33FFFFFF)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .testTag("modal_cancel_download_btn")
+                            ) {
+                                Text(
+                                    text = when {
+                                        isAr -> "إلغاء التحميل"
+                                        isFr -> "Annuler le téléchargement"
+                                        else -> "Cancel Download"
+                                    },
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = mutedText
+                                )
+                            }
                         }
                     }
 
