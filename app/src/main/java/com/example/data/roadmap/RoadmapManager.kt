@@ -422,13 +422,13 @@ object RoadmapManager {
     )
 
     /**
-     * Calculates the highest unlocked station (0 to 500) using non-cumulative per-stage XP:
+     * Calculates the highest unlocked station (0 to 700) using non-cumulative per-stage XP:
      * unlocking station `k` consumes `getRequiredXpForStation(k)` XP so station `k + 1`
      * must be earned from 0 XP up to `getRequiredXpForStation(k + 1)`.
      */
     fun calculateUnlockedStationId(currentXp: Long): Int {
         val safeXp = currentXp.coerceAtLeast(0L)
-        for (s in 500 downTo 1) {
+        for (s in TaskPools.TOTAL_STATIONS_COUNT downTo 1) {
             if (safeXp >= TaskPools.getCumulativeXpForStation(s)) {
                 return s
             }
@@ -442,11 +442,11 @@ object RoadmapManager {
     fun getStageProgress(currentXp: Long): StageXpProgress {
         val safeXp = currentXp.coerceAtLeast(0L)
         val unlocked = calculateUnlockedStationId(safeXp)
-        if (unlocked >= 500) {
-            val maxReq = TaskPools.getRequiredXpForStation(500)
+        if (unlocked >= TaskPools.TOTAL_STATIONS_COUNT) {
+            val maxReq = TaskPools.getRequiredXpForStation(TaskPools.TOTAL_STATIONS_COUNT)
             return StageXpProgress(
-                unlockedStationId = 500,
-                nextStationId = 500,
+                unlockedStationId = TaskPools.TOTAL_STATIONS_COUNT,
+                nextStationId = TaskPools.TOTAL_STATIONS_COUNT,
                 currentStageXp = maxReq,
                 nextStageRequiredXp = maxReq,
                 remainingXpForNextStage = 0L,
@@ -471,7 +471,7 @@ object RoadmapManager {
 
     fun generateStations(totalXp: Long, claimedStations: Set<Int>): List<RoadmapStation> {
         val safeXp = totalXp.coerceAtLeast(0L)
-        return (1..500).map { id ->
+        return (1..TaskPools.TOTAL_STATIONS_COUNT).map { id ->
             val stageCost = TaskPools.getRequiredXpForStation(id)
             val cumulativeCost = TaskPools.getCumulativeXpForStation(id)
             val state = when {
@@ -1292,7 +1292,7 @@ object RoadmapManager {
         json.optJSONArray("claimedStations")?.let { arr ->
             for (i in 0 until arr.length()) {
                 val sid = arr.optInt(i, -1)
-                if (sid in 1..500) importedStations.add(sid)
+                if (sid in 1..TaskPools.TOTAL_STATIONS_COUNT) importedStations.add(sid)
             }
         }
         val finalStations = if (replaceExisting) importedStations else (_claimedStations.value + importedStations)

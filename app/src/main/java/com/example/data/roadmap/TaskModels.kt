@@ -61,7 +61,7 @@ enum class StationState {
 }
 
 data class RoadmapStation(
-    val id: Int, // 1..500
+    val id: Int, // 1..700
     val requiredTotalXp: Long,
     val reward: StationReward,
     val state: StationState = StationState.LOCKED

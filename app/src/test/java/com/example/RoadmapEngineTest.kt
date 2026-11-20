@@ -97,6 +97,7 @@ class RoadmapEngineTest {
     fun testExponentialRoadmapCurve() {
         val s1Xp = TaskPools.getRequiredXpForStation(1)
         val s500Xp = TaskPools.getRequiredXpForStation(500)
+        val s700Xp = TaskPools.getRequiredXpForStation(700)
 
         // Station 1: exactly 1,345 XP
         assertEquals(1345L, s1Xp)
@@ -104,10 +105,13 @@ class RoadmapEngineTest {
         // Station 500: exactly 1,000,000 XP
         assertEquals(1_000_000L, s500Xp)
 
-        // Strictly increasing smooth difficulty progression across all 500 stations
+        // Station 700 (Frozen Abyss Cap): exactly 20,000,000 XP
+        assertEquals(20_000_000L, s700Xp)
+
+        // Strictly increasing smooth difficulty progression across all 700 stations
         var prevXp = 0L
         var prevStepDelta = 0L
-        for (s in 1..500) {
+        for (s in 1..700) {
             val req = TaskPools.getRequiredXpForStation(s)
             assertTrue("Station $s required XP ($req) must strictly exceed prev ($prevXp)", req > prevXp)
             if (s > 1) {
@@ -120,9 +124,9 @@ class RoadmapEngineTest {
     }
 
     @Test
-    fun testGenerate500Stations() {
+    fun testGenerate700Stations() {
         val stations = RoadmapManager.generateStations(totalXp = 1345L, claimedStations = emptySet())
-        assertEquals(500, stations.size)
+        assertEquals(700, stations.size)
 
         // Station 1 requires 1,345 XP, with 1,345 XP it is UNLOCKED
         assertEquals(1, stations[0].id)
@@ -138,6 +142,15 @@ class RoadmapEngineTest {
         assertEquals(500, stations[499].id)
         assertEquals(1_000_000L, stations[499].requiredTotalXp)
         assertEquals(StationState.LOCKED, stations[499].state)
+
+        // Station 501 enters Frozen Zone (> 1,000,000 XP)
+        assertEquals(501, stations[500].id)
+        assertTrue(stations[500].requiredTotalXp > 1_000_000L)
+
+        // Station 700 reaches 20,000,000 XP ceiling
+        assertEquals(700, stations[699].id)
+        assertEquals(20_000_000L, stations[699].requiredTotalXp)
+        assertEquals(StationState.LOCKED, stations[699].state)
     }
 
     @Test
@@ -173,18 +186,28 @@ class RoadmapEngineTest {
         val reward20 = TaskPools.getRewardForStation(20)
         val reward100 = TaskPools.getRewardForStation(100)
         val reward500 = TaskPools.getRewardForStation(500)
+        val reward600 = TaskPools.getRewardForStation(600)
+        val reward700 = TaskPools.getRewardForStation(700)
 
         assertNotNull(reward20)
         assertNotNull(reward100)
         assertNotNull(reward500)
+        assertNotNull(reward600)
+        assertNotNull(reward700)
 
         // Station 20 and 100 have extra Silver Skip-Key rewards
         assertEquals(RewardType.KEY_SILVER, reward20.type)
         assertEquals(RewardType.KEY_SILVER, reward100.type)
 
-        // Station 500 should be the ultimate Tier 5 Eternal Rebirth Elixir
+        // Station 500 preserves Eternal Rebirth Elixir (1x)
         assertEquals(RewardType.POTION_ETERNAL_REBIRTH, reward500.type)
         assertEquals(1, reward500.quantity)
+
+        // Glacial milestone rewards (600 & 700)
+        assertEquals(RewardType.POTION_CRYO_INFUSION, reward600.type)
+        assertEquals(3, reward600.quantity)
+        assertEquals(RewardType.POTION_ETERNAL_REBIRTH, reward700.type)
+        assertEquals(2, reward700.quantity)
     }
 
     @Test
@@ -631,7 +654,7 @@ class RoadmapEngineTest {
 
     @Test
     fun testWavySnakeTrajectoryZeroCenterCollisionsAndContinuity() {
-        for (stationId in 1..500) {
+        for (stationId in 1..700) {
             val nodeX = com.example.ui.components.wavyNodeNormalizedX(stationId.toFloat())
             // Nodes must always sit clearly on Left (<= 0.30) or Right (>= 0.70) so side glass cards never collide
             assertTrue(
@@ -640,12 +663,42 @@ class RoadmapEngineTest {
             )
             assertTrue("Station $stationId nodeX=$nodeX out of safe bounds", nodeX in 0.14f..0.86f)
 
-            if (stationId < 500) {
+            if (stationId < 700) {
                 val bottomOfRow = com.example.ui.components.wavyNodeNormalizedX(stationId + 0.5f)
                 val topOfNextRow = com.example.ui.components.wavyNodeNormalizedX((stationId + 1) - 0.5f)
                 assertEquals(bottomOfRow, topOfNextRow, 0.0001f)
             }
         }
+    }
+
+    @Test
+    fun testGlacialDepthScalingAndSnapshotRestoreUpTo700() {
+        assertEquals(0f, com.example.ui.components.glacialDepthForStation(1), 0.0001f)
+        assertEquals(0f, com.example.ui.components.glacialDepthForStation(500), 0.0001f)
+        assertEquals(0.005f, com.example.ui.components.glacialDepthForStation(501), 0.0001f)
+        assertEquals(0.5f, com.example.ui.components.glacialDepthForStation(600), 0.0001f)
+        assertEquals(1.0f, com.example.ui.components.glacialDepthForStation(700), 0.0001f)
+
+        // Unlock all 700 stations using cumulative XP at station 700
+        val maxCumulative = TaskPools.getCumulativeXpForStation(700)
+        assertEquals(700, RoadmapManager.calculateUnlockedStationId(maxCumulative))
+        val maxProg = RoadmapManager.getStageProgress(maxCumulative)
+        assertEquals(700, maxProg.unlockedStationId)
+        assertEquals(700, maxProg.nextStationId)
+        assertEquals(1f, maxProg.progressFraction, 0.0001f)
+
+        // Backup & Restore preserves claimed stations in frozen band 501..700
+        RoadmapManager.addXp(app, maxCumulative)
+        assertNotNull(RoadmapManager.claimStationReward(app, 550))
+        assertNotNull(RoadmapManager.claimStationReward(app, 700))
+        val snapshot = RoadmapManager.exportSnapshot(app)
+        RoadmapManager.resetAllLevelsToZero(app)
+        assertTrue(RoadmapManager.claimedStations.value.isEmpty())
+
+        RoadmapManager.restoreSnapshot(app, snapshot, replaceExisting = true)
+        assertTrue(RoadmapManager.claimedStations.value.contains(550))
+        assertTrue(RoadmapManager.claimedStations.value.contains(700))
+        assertEquals(700, RoadmapManager.calculateUnlockedStationId(RoadmapManager.totalXp.value))
     }
 
     @Test

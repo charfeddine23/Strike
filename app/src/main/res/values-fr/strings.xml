@@ -51,7 +51,7 @@
     <string name="reset_all_levels_btn">Réinitialiser les Niveaux à Zéro</string>
     <string name="reset_all_levels_desc">Remet XP, Stations, Missions, Flamme, Boucliers, Clés, Potions, Titres et Avatars à l\'état initial (conserve individus et strikes)</string>
     <string name="reset_all_levels_confirm_title">Réinitialiser tous les niveaux ?</string>
-    <string name="reset_all_levels_confirm_msg">Tous les niveaux, XP, 500 stations, 1000 missions, score Flamme, boucliers, clés, potions ainsi que les titres et avatars débloqués seront réinitialisés à l\'état initial. Vos individus et l\'historique des strikes restent intacts.</string>
+    <string name="reset_all_levels_confirm_msg">Tous les niveaux, XP, 700 stations, 1000 missions, score Flamme, boucliers, clés, potions ainsi que les titres et avatars débloqués seront réinitialisés à l\'état initial. Vos individus et l\'historique des strikes restent intacts.</string>
     <string name="reset_all_levels_confirm_action">Oui, remettre à 0</string>
     <string name="record_saved">Enregistrement réussi !</string>
     <string name="record_deleted">Enregistrement supprimé.</string>
@@ -258,7 +258,7 @@
     <string name="deviations_dna_rotate_hint">Glissez pour faire pivoter l\'ADN • Physique réactive</string>
     <string name="roadmap_nav_title">Parcours</string>
     <string name="roadmap_title">Parcours Cyber &amp; Missions</string>
-    <string name="roadmap_subtitle">500 Stations, Progression XP &amp; Œufs Cyber</string>
+    <string name="roadmap_subtitle">700 Stations, Progression XP &amp; Ère Glaciaire</string>
     <string name="roadmap_tab_stations">Parcours</string>
     <string name="roadmap_tab_tasks">Missions</string>
     <string name="roadmap_tab_elite_missions">Missions Élite</string>

@@ -25,8 +25,11 @@ object TaskPools {
     const val TOTAL_TASKS_COUNT = 1000
     const val CATEGORY_TASKS_COUNT = 250
     const val TOTAL_XP_POOL = 434725L
+    const val BASE_STATIONS_COUNT = 500
+    const val TOTAL_STATIONS_COUNT = 700
     const val ROADMAP_LEVEL_1_XP = 1345L
     const val ROADMAP_LEVEL_500_XP = 1_000_000L
+    const val ROADMAP_LEVEL_700_XP = 20_000_000L
 
     private data class TaskBlueprint(
         val title: String,
@@ -157,6 +160,42 @@ object TaskPools {
                 titleEn = "Eternal Resurgence Potion + Gary Master Title",
                 descriptionEn = "Station 500 Grand Prize: Grants permanent reset immunity shield and the legendary Gary Master title"
             )
+            stationId == 700 -> StationReward(
+                type = RewardType.POTION_ETERNAL_REBIRTH,
+                title = "تاج الهاوية المتجمدة: محطة 700",
+                description = "قمة العصر الجليدي المطلقة (20 مليون XP): جرعتا انبعاث أبدي لحصانة مطلقة وسط الجليد السحيق",
+                iconName = "potion_rebirth",
+                quantity = 2,
+                titleEn = "Frozen Abyss Crown: Station 700",
+                descriptionEn = "Ultimate Glacial Summit (20M XP): 2x Eternal Resurgence Potions for absolute deep-freeze mastery"
+            )
+            stationId == 600 -> StationReward(
+                type = RewardType.POTION_CRYO_INFUSION,
+                title = "قلب التجميد السحيق: محطة 600",
+                description = "منتصف العصر الجليدي: 3 جرعات حقن تجميدي مطلق لتبريد أعتى التقلبات",
+                iconName = "potion_cryo",
+                quantity = 3,
+                titleEn = "Deep Cryo Core: Station 600",
+                descriptionEn = "Permafrost Midpoint Milestone: 3x Absolute Cryo-Infusion boosts forged in eternal ice"
+            )
+            stationId > 500 && stationId % 20 == 0 -> StationReward(
+                type = RewardType.KEY_SILVER,
+                title = "نخبة العصر الجليدي: محطة #$stationId",
+                description = "معلم جليدي متقدم: 3 مفاتيح فضية محفورة بالصقيع لتجاوز المهام وحصد الـ XP",
+                iconName = "key_silver",
+                quantity = 3,
+                titleEn = "Glacial Elite Milestone: Station #$stationId",
+                descriptionEn = "Deep Permafrost Milestone: 3x Frost-Forged Silver Skip Keys for instant XP mastery"
+            )
+            stationId > 500 && stationId % 10 == 0 -> StationReward(
+                type = RewardType.POTION_CRYO_INFUSION,
+                title = "صقيع الأعماق: محطة #$stationId",
+                description = "جائزة المنطقة الجليدية كل 10 مستويات: جرعتا حقن تجميدي مطلق لتعزيز الثبات",
+                iconName = "potion_cryo",
+                quantity = 2,
+                titleEn = "Permafrost Vault: Station #$stationId",
+                descriptionEn = "Glacial Tier Milestone: 2x Absolute Cryo-Infusion vials sealed in glacial crystal"
+            )
             stationId % 20 == 0 -> StationReward(
                 type = RewardType.KEY_SILVER,
                 title = "مكافأة نخبوية: محطة #$stationId",
@@ -168,41 +207,51 @@ object TaskPools {
             )
             else -> {
                 val idx = (stationId - 1) % HIERARCHICAL_REWARDS.size
-                HIERARCHICAL_REWARDS[idx]
+                val base = HIERARCHICAL_REWARDS[idx]
+                if (stationId > BASE_STATIONS_COUNT) base.copy(quantity = 2) else base
             }
         }
     }
 
     /**
-     * Smooth Exponential Wavy Roadmap XP Curve (500 Stations):
+     * Smooth Exponential Wavy Roadmap XP Curve (700 Stations):
      * - Station 1: exactly 1,345 XP
      * - Stations 2..499: smooth monotonically rising progression
      * - Station 500: exactly 1,000,000 XP
+     * - Stations 501..699: glacial zone continuation scaling exponentially
+     * - Station 700: exactly 20,000,000 XP
      */
     fun getRequiredXpForStation(stationId: Int): Long {
-        val s = stationId.coerceIn(1, 500)
+        val s = stationId.coerceIn(1, TOTAL_STATIONS_COUNT)
         if (s == 1) return ROADMAP_LEVEL_1_XP
-        if (s == 500) return ROADMAP_LEVEL_500_XP
-        val ratio = ROADMAP_LEVEL_500_XP.toDouble() / ROADMAP_LEVEL_1_XP.toDouble()
-        val power = (s - 1.0) / 499.0
-        return Math.round(ROADMAP_LEVEL_1_XP.toDouble() * Math.pow(ratio, power))
+        if (s == BASE_STATIONS_COUNT) return ROADMAP_LEVEL_500_XP
+        if (s == TOTAL_STATIONS_COUNT) return ROADMAP_LEVEL_700_XP
+        return if (s < BASE_STATIONS_COUNT) {
+            val ratio = ROADMAP_LEVEL_500_XP.toDouble() / ROADMAP_LEVEL_1_XP.toDouble()
+            val power = (s - 1.0) / (BASE_STATIONS_COUNT - 1.0)
+            Math.round(ROADMAP_LEVEL_1_XP.toDouble() * Math.pow(ratio, power))
+        } else {
+            val ratio = ROADMAP_LEVEL_700_XP.toDouble() / ROADMAP_LEVEL_500_XP.toDouble()
+            val power = (s - BASE_STATIONS_COUNT).toDouble() / (TOTAL_STATIONS_COUNT - BASE_STATIONS_COUNT).toDouble()
+            Math.round(ROADMAP_LEVEL_500_XP.toDouble() * Math.pow(ratio, power))
+        }
     }
 
     private val CUMULATIVE_STATION_XP: LongArray by lazy {
-        LongArray(501).apply {
+        LongArray(TOTAL_STATIONS_COUNT + 1).apply {
             this[0] = 0L
-            for (s in 1..500) {
+            for (s in 1..TOTAL_STATIONS_COUNT) {
                 this[s] = this[s - 1] + getRequiredXpForStation(s)
             }
         }
     }
 
     /**
-     * Cumulative lifetime XP required to unlock [stationId] (0..500) when each stage
+     * Cumulative lifetime XP required to unlock [stationId] (0..700) when each stage
      * resets its XP progress bar to 0 upon completion and consumes its own cost.
      */
     fun getCumulativeXpForStation(stationId: Int): Long {
-        return CUMULATIVE_STATION_XP[stationId.coerceIn(0, 500)]
+        return CUMULATIVE_STATION_XP[stationId.coerceIn(0, TOTAL_STATIONS_COUNT)]
     }
 
     // ==========================================

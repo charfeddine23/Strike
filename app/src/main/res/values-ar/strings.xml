@@ -51,7 +51,7 @@
     <string name="reset_all_levels_btn">تصفير كل المستويات إلى الصفر</string>
     <string name="reset_all_levels_desc">إرجاع الخبرة، المحطات، المهام، الشعلة، الدروع، المفاتيح، الجرعات، والألقاب والأفاتارات إلى الحالة الأولية (مع الحفاظ على الأفراد وسجلات السترايك)</string>
     <string name="reset_all_levels_confirm_title">تصفير كل المستويات إلى الصفر؟</string>
-    <string name="reset_all_levels_confirm_msg">سيتم تصفير كافة المستويات، نقاط XP، الـ 500 محطة، الـ 1000 مهمة، نقاط الشعلة، الدروع، المفاتيح، والجرعات، كما سيتم مسح وإعادة قفل الألقاب والأفاتارات المفتوحة إلى حالتها الأولية. تبقى قائمة الأفراد وسجلات السترايك محفوظة.</string>
+    <string name="reset_all_levels_confirm_msg">سيتم تصفير كافة المستويات، نقاط XP، الـ 700 محطة، الـ 1000 مهمة، نقاط الشعلة، الدروع، المفاتيح، والجرعات، كما سيتم مسح وإعادة قفل الألقاب والأفاتارات المفتوحة إلى حالتها الأولية. تبقى قائمة الأفراد وسجلات السترايك محفوظة.</string>
     <string name="reset_all_levels_confirm_action">نعم، صفّر المستويات إلى 0</string>
     <string name="record_saved">تم حفظ السجل بنجاح!</string>
     <string name="record_deleted">تم حذف السجل.</string>
@@ -258,7 +258,7 @@
     <string name="deviations_dna_rotate_hint">اسحب لتدوير الـ DNA • فيزياء الحركة التفاعلية نشطة</string>
     <string name="roadmap_nav_title">المسار</string>
     <string name="roadmap_title">المسار السيبراني والمهام</string>
-    <string name="roadmap_subtitle">500 محطة، تدرج الـ XP، وجوائز البيض السيبراني</string>
+    <string name="roadmap_subtitle">700 محطة، تدرج الـ XP، والعصر الجليدي المتجمد</string>
     <string name="roadmap_tab_stations">المسار</string>
     <string name="roadmap_tab_tasks">المهام</string>
     <string name="roadmap_tab_elite_missions">مهام النخبة</string>

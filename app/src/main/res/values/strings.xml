@@ -49,9 +49,9 @@
     <string name="empty_records_desc">Tap + below to add your first individual and start tracking metrics.</string>
     <string name="seed_sample_data">Load Sample Data</string>
     <string name="reset_all_levels_btn">Reset All Levels to Zero</string>
-    <string name="reset_all_levels_desc">Resets XP, Stations (0/500), Tasks, Flame Score, Shields, Keys, Potions, Titles &amp; Avatars to initial state (preserves individuals &amp; strike logs)</string>
+    <string name="reset_all_levels_desc">Resets XP, Stations (0/700), Tasks, Flame Score, Shields, Keys, Potions, Titles &amp; Avatars to initial state (preserves individuals &amp; strike logs)</string>
     <string name="reset_all_levels_confirm_title">Reset All Levels to Zero?</string>
-    <string name="reset_all_levels_confirm_msg">All game levels, XP, 500 Roadmap stations, 1000 tasks, Flame score, shields, keys, potions, and unlocked titles &amp; avatars will be cleared and locked back to their initial state. Your individuals and strike logs remain preserved.</string>
+    <string name="reset_all_levels_confirm_msg">All game levels, XP, 700 Roadmap stations, 1000 tasks, Flame score, shields, keys, potions, and unlocked titles &amp; avatars will be cleared and locked back to their initial state. Your individuals and strike logs remain preserved.</string>
     <string name="reset_all_levels_confirm_action">Reset Levels to 0</string>
     <string name="record_saved">Record saved successfully!</string>
     <string name="record_deleted">Record deleted.</string>
@@ -258,7 +258,7 @@
     <string name="deviations_dna_rotate_hint">Drag DNA to rotate • Spring physics active</string>
     <string name="roadmap_nav_title">Roadmap</string>
     <string name="roadmap_title">Cyber Roadmap &amp; Tasks</string>
-    <string name="roadmap_subtitle">500 Stations, XP Progression &amp; Egg Rewards</string>
+    <string name="roadmap_subtitle">700 Stations, XP Progression &amp; Glacial Mastery</string>
     <string name="roadmap_tab_stations">Roadmap</string>
     <string name="roadmap_tab_tasks">Tasks</string>
     <string name="roadmap_tab_elite_missions">Elite Missions</string>

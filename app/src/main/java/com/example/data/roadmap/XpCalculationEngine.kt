@@ -55,6 +55,7 @@ object XpCalculationEngine {
 
     const val LEVEL_1_THRESHOLD_XP = TaskPools.ROADMAP_LEVEL_1_XP
     const val LEVEL_500_THRESHOLD_XP = TaskPools.ROADMAP_LEVEL_500_XP
+    const val LEVEL_700_THRESHOLD_XP = TaskPools.ROADMAP_LEVEL_700_XP
 
     private const val PREFS_NAME = "strikepulse_xp_engine_prefs"
     private const val KEY_CREDITED_TELEMETRY_XP = "key_credited_telemetry_xp"

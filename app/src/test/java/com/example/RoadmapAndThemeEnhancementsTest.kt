@@ -215,4 +215,40 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
     }
+
+    @Test
+    fun frozenGlacialStations_renderAndDeepenWhenScrollingPast500() {
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
+        composeRule.waitForIdle()
+
+        // Progress header reflects 700 total stations
+        composeRule.onNodeWithTag("roadmap_header_progress_title")
+            .assertIsDisplayed()
+            .assertTextContains("/ 700", substring = true)
+
+        // Initially at Station 1 -> glacial immersion overlays are inactive
+        assertEquals(0, composeRule.onAllNodesWithTag("glacial_viewport_backdrop").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("glacial_submersion_overlay").fetchSemanticsNodes().size)
+
+        // Jump into Permafrost Threshold (Station 501)
+        composeRule.onNodeWithTag("btn_jump_501").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("station_501").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("glacial_threshold_banner_501").assertIsDisplayed()
+        composeRule.onNodeWithTag("glacial_viewport_backdrop").assertIsDisplayed()
+        composeRule.onNodeWithTag("glacial_submersion_overlay").assertIsDisplayed()
+
+        // Jump all the way to Station 700 (20M XP Glacial Crown)
+        composeRule.onNodeWithTag("btn_jump_700").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("station_700").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("station_700").assertIsDisplayed()
+        composeRule.onNodeWithTag("glacial_viewport_backdrop").assertIsDisplayed()
+        composeRule.onNodeWithTag("glacial_submersion_overlay").assertIsDisplayed()
+    }
 }

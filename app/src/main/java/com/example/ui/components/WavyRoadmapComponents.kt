@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -307,6 +308,8 @@ fun WavySnakeStationRow(
     val lowerPathActive = nextStationState != null && nextStationState != StationState.LOCKED
     val isFrontierTail = station.state != StationState.LOCKED && nextStationState == StationState.LOCKED
 
+    val frostDepth = remember(station.id) { glacialDepthForStation(station.id) }
+    val isFrozenZone = frostDepth > 0f
     val rowHeight = 166.dp
 
     BoxWithConstraints(
@@ -319,6 +322,16 @@ fun WavySnakeStationRow(
         val maxWidthDp = maxWidth
         val nodeCenterDp = maxWidthDp * nodeNormX
 
+        // Layer 0: Per-Row Permafrost Frost Encasement (Stations 501..700)
+        if (isFrozenZone) {
+            GlacialRowFrostDecoration(
+                frostDepth = frostDepth,
+                glowPulse = glowPulse,
+                isDarkTheme = isDarkTheme,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
         // Layer 1: Continuous Seamless Glowing / Dashed Snake Track Canvas
         GlowingWavyRoadmapSegmentCanvas(
             stationId = station.id,
@@ -330,6 +343,17 @@ fun WavySnakeStationRow(
             darkTheme = isDarkTheme,
             modifier = Modifier.fillMaxSize()
         )
+
+        // Station 501 Permafrost Entry Banner (keeps LazyColumn 1:1 index mapping intact)
+        if (station.id == 501) {
+            GlacialThresholdBannerPill(
+                currentLang = currentLang,
+                isDarkTheme = isDarkTheme,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 2.dp)
+            )
+        }
 
         // Layer 2: Physical LTR positioning for Node Orb + Side Frosted Card
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -433,14 +457,39 @@ fun WavySnakeStationRow(
                                 style = Stroke(width = 1.3.dp.toPx())
                             )
                         }
+                    } else if (isFrozenZone) {
+                        // Locked frozen nodes gain a shimmering crystalline frost aura ring
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val center = Offset(size.width / 2f, size.height / 2f)
+                            val crystalTone = if (isDarkTheme) GlacialNightIce else GlacialDayCyan
+                            rotate(degrees = orbitRotation * 0.4f, pivot = center) {
+                                drawCircle(
+                                    color = crystalTone.copy(alpha = (0.28f + 0.42f * frostDepth) * glowPulse),
+                                    radius = size.minDimension * 0.34f,
+                                    center = center,
+                                    style = Stroke(
+                                        width = (1.1f + 0.6f * frostDepth).dp.toPx(),
+                                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f), 0f)
+                                    )
+                                )
+                            }
+                        }
                     }
 
                     val orbSize = if (isCurrentActiveOrb) 50.dp else 44.dp
                     val orbBrush = when {
-                        isCurrentActiveOrb -> Brush.verticalGradient(listOf(MilestoneGold, WarmFireOrange))
+                        isCurrentActiveOrb -> if (isFrozenZone) {
+                            Brush.verticalGradient(listOf(GlacialNightCrystal, GlacialNightCyan))
+                        } else {
+                            Brush.verticalGradient(listOf(MilestoneGold, WarmFireOrange))
+                        }
                         station.state == StationState.CLAIMED -> Brush.verticalGradient(
                             if (isDarkTheme) listOf(ElectricMint, Color(0xFF00C875))
                             else listOf(Color(0xFF10B981), DayEmerald)
+                        )
+                        isFrozenZone -> Brush.verticalGradient(
+                            if (isDarkTheme) listOf(Color(0xFF10324F), Color(0xFF071B2E))
+                            else listOf(Color(0xFFFFFFFF), Color(0xFFD9F0FE))
                         )
                         else -> Brush.verticalGradient(
                             if (isDarkTheme) listOf(Color(0xFF1A2338), Color(0xFF111829))
@@ -450,10 +499,21 @@ fun WavySnakeStationRow(
                     val orbBorder = when {
                         isCurrentActiveOrb -> Color.White.copy(alpha = 0.9f)
                         station.state == StationState.CLAIMED -> (if (isDarkTheme) ElectricMint else DayEmerald).copy(alpha = 0.9f)
+                        isFrozenZone -> (if (isDarkTheme) GlacialNightIce else GlacialDayCyan).copy(alpha = 0.55f + 0.35f * frostDepth)
                         else -> if (isDarkTheme) Color(0xFF3B4863) else Color(0xFF94A3B8)
                     }
-                    val lockedIconTint = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
-                    val lockedTextTint = if (isDarkTheme) Color(0xFFCBD5E1) else DayTextPrimary
+                    val lockedIconTint = when {
+                        isFrozenZone && isDarkTheme -> GlacialNightIce
+                        isFrozenZone && !isDarkTheme -> GlacialDayDeepBlue
+                        isDarkTheme -> Color(0xFF94A3B8)
+                        else -> DayTextSecondary
+                    }
+                    val lockedTextTint = when {
+                        isFrozenZone && isDarkTheme -> GlacialNightCrystal
+                        isFrozenZone && !isDarkTheme -> GlacialDayText
+                        isDarkTheme -> Color(0xFFCBD5E1)
+                        else -> DayTextPrimary
+                    }
 
                     Box(
                         modifier = Modifier
@@ -479,7 +539,7 @@ fun WavySnakeStationRow(
                                 }
                                 station.state == StationState.UNLOCKED -> {
                                     Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
+                                        imageVector = if (isFrozenZone) Icons.Default.AcUnit else Icons.Default.AutoAwesome,
                                         contentDescription = null,
                                         tint = Color(0xFF071318),
                                         modifier = Modifier.size(15.dp)
@@ -487,7 +547,7 @@ fun WavySnakeStationRow(
                                 }
                                 else -> {
                                     Icon(
-                                        imageVector = Icons.Default.Lock,
+                                        imageVector = if (isFrozenZone) Icons.Default.AcUnit else Icons.Default.Lock,
                                         contentDescription = null,
                                         tint = lockedIconTint,
                                         modifier = Modifier.size(13.dp)
@@ -578,20 +638,41 @@ private fun StationGlassRewardCard(
     onClaim: () -> Unit
 ) {
     val isAr = currentLang == "ar"
-    val cyanTone = if (isDarkTheme) NeonAqua else DayCyan
+    val frostDepth = glacialDepthForStation(station.id)
+    val isFrozenZone = frostDepth > 0f
+
+    val cyanTone = if (isDarkTheme) {
+        if (isFrozenZone) GlacialNightCyan else NeonAqua
+    } else {
+        if (isFrozenZone) GlacialDayCyan else DayCyan
+    }
     val mintTone = if (isDarkTheme) ElectricMint else DayEmerald
     val goldTone = if (isDarkTheme) MilestoneGold else DayOrange
     val orangeTone = if (isDarkTheme) WarmFireOrange else DayOrange
 
     val borderBrush = when {
         isCurrentMilestone || (isMajorMilestone && station.state != StationState.LOCKED) -> Brush.linearGradient(
-            listOf(goldTone, orangeTone.copy(alpha = 0.85f), goldTone.copy(alpha = 0.7f))
+            if (isFrozenZone) listOf(GlacialNightCrystal, cyanTone, goldTone)
+            else listOf(goldTone, orangeTone.copy(alpha = 0.85f), goldTone.copy(alpha = 0.7f))
         )
         station.state == StationState.UNLOCKED -> Brush.linearGradient(
             listOf(cyanTone, mintTone)
         )
         station.state == StationState.CLAIMED -> Brush.linearGradient(
             listOf(mintTone.copy(alpha = 0.65f), cyanTone.copy(alpha = 0.4f))
+        )
+        isFrozenZone -> Brush.linearGradient(
+            if (isDarkTheme) {
+                listOf(
+                    GlacialNightCrystal.copy(alpha = 0.25f + 0.35f * frostDepth),
+                    GlacialNightCyan.copy(alpha = 0.22f + 0.30f * frostDepth)
+                )
+            } else {
+                listOf(
+                    GlacialDayIceBorder,
+                    GlacialDayCyan.copy(alpha = 0.45f + 0.35f * frostDepth)
+                )
+            }
         )
         else -> Brush.linearGradient(
             if (isDarkTheme) listOf(Color.White.copy(alpha = 0.14f), NeonAqua.copy(alpha = 0.12f))
@@ -601,27 +682,44 @@ private fun StationGlassRewardCard(
 
     val cardFillBrush = if (isDarkTheme) {
         when {
-            isCurrentMilestone -> Brush.verticalGradient(listOf(Color(0xDC1B1E28), Color(0xCC111521)))
-            station.state == StationState.UNLOCKED -> Brush.verticalGradient(listOf(Color(0xDC102331), Color(0xCC0C1725)))
-            station.state == StationState.CLAIMED -> Brush.verticalGradient(listOf(Color(0xD6111B2B), Color(0xC80B1320)))
+            isCurrentMilestone -> Brush.verticalGradient(
+                if (isFrozenZone) listOf(Color(0xE00A2642), Color(0xD805182C))
+                else listOf(Color(0xDC1B1E28), Color(0xCC111521))
+            )
+            station.state == StationState.UNLOCKED -> Brush.verticalGradient(listOf(Color(0xDC0D2842), Color(0xCC091B2E)))
+            station.state == StationState.CLAIMED -> Brush.verticalGradient(listOf(Color(0xD60D2136), Color(0xC8081626)))
+            isFrozenZone -> Brush.verticalGradient(listOf(Color(0xD2081F36), Color(0xC8051424)))
             else -> Brush.verticalGradient(listOf(Color(0xB8111726), Color(0xA60B101B)))
         }
     } else {
         when {
-            isCurrentMilestone -> Brush.verticalGradient(listOf(Color(0xFAFFFDF7), Color(0xF5FEF3C7)))
+            isCurrentMilestone -> Brush.verticalGradient(
+                if (isFrozenZone) listOf(Color(0xFAFFFFFF), Color(0xF5D9F0FE))
+                else listOf(Color(0xFAFFFDF7), Color(0xF5FEF3C7))
+            )
             station.state == StationState.UNLOCKED -> Brush.verticalGradient(listOf(Color(0xFAFFFFFF), Color(0xF5E0F2FE)))
             station.state == StationState.CLAIMED -> Brush.verticalGradient(listOf(Color(0xFAFFFFFF), Color(0xF2ECFDF5)))
+            isFrozenZone -> Brush.verticalGradient(listOf(Color(0xFAFFFFFF), Color(0xF2E0F2FE)))
             else -> Brush.verticalGradient(listOf(DayGlassSurface, Color(0xF2F1F5F9)))
         }
     }
 
-    val borderWidth = if (isCurrentMilestone || station.state == StationState.UNLOCKED) 1.4.dp else 1.dp
-    val titleColor = if (isDarkTheme) {
-        if (station.state == StationState.LOCKED) Color(0xFFCBD5E1) else Color.White
-    } else {
-        DayTextPrimary
+    val borderWidth = when {
+        isCurrentMilestone || station.state == StationState.UNLOCKED -> 1.4.dp
+        isFrozenZone -> (1.1f + 0.5f * frostDepth).dp
+        else -> 1.dp
     }
-    val descColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+    val titleColor = if (isDarkTheme) {
+        if (isFrozenZone) GlacialNightCrystal
+        else if (station.state == StationState.LOCKED) Color(0xFFCBD5E1) else Color.White
+    } else {
+        if (isFrozenZone) GlacialDayText else DayTextPrimary
+    }
+    val descColor = if (isDarkTheme) {
+        if (isFrozenZone) GlacialNightIce.copy(alpha = 0.82f) else Color(0xFF94A3B8)
+    } else {
+        if (isFrozenZone) Color(0xFF1E3A5F) else DayTextSecondary
+    }
     val mutedReqColor = if (isDarkTheme) Color(0xFF64748B) else DayTextSecondary
 
     Column(

@@ -67,6 +67,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.roadmap.RoadmapManager
+import com.example.data.roadmap.TaskPools
 import com.example.data.roadmap.XpHistoryEntry
 import com.example.data.roadmap.XpSourceCategory
 import com.example.ui.theme.DayCyan
@@ -91,10 +92,9 @@ import java.util.Locale
 /**
  * Top Frosted Liquid Glass Roadmap Progress Header Card ("وعاء تقدم المسار").
  * Features:
- * - Arabic RTL layout when [isAr] is true, placing the glowing cyan Liquid Glass `?` / Info icon
- *   at the physical left edge (`Alignment.CenterEnd` in RTL / `Alignment.CenterStart` visual guide slot).
- * - Displays `"تقدم المسار: المحطة X / 500"` and XP progress toward 1,000,000 XP.
- * - Tapping the glowing info button opens a dark-mode Liquid Glass XP Guide modal dialog.
+ * - Displays `"تقدم المسار: المحطة X / 700"` and XP progress up to 20,000,000 XP at Level 700.
+ * - Adapts with icy crystal frost borders & snow indicator when viewing/unlocking Frozen Levels (501..700).
+ * - Tapping the glowing info button opens a Liquid Glass XP Guide modal dialog.
  */
 @Composable
 fun RoadmapProgressHeader(
@@ -104,14 +104,16 @@ fun RoadmapProgressHeader(
     onJumpToStation: (Int) -> Unit,
     modifier: Modifier = Modifier,
     glowPulse: Float = 0.85f,
+    glacialDepth: Float = 0f,
     currentLang: String = if (isAr) "ar" else "en",
     isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     var showXpGuideDialog by remember { mutableStateOf(false) }
 
+    val totalStations = TaskPools.TOTAL_STATIONS_COUNT
     val stageProgress = remember(totalXp) { RoadmapManager.getStageProgress(totalXp) }
-    val safeStation = stageProgress.unlockedStationId.coerceIn(0, 500)
-    val stagesLeft = (500 - safeStation).coerceAtLeast(0)
+    val safeStation = stageProgress.unlockedStationId.coerceIn(0, totalStations)
+    val stagesLeft = (totalStations - safeStation).coerceAtLeast(0)
     val progressFraction = stageProgress.progressFraction.coerceIn(0f, 1f)
     val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
     val xpFormatted = remember(totalXp) { nf.format(totalXp.coerceAtLeast(0L)) }
@@ -119,18 +121,34 @@ fun RoadmapProgressHeader(
     val stageReqFormatted = remember(stageProgress) { nf.format(stageProgress.nextStageRequiredXp) }
 
     val effectiveLayoutDirection = if (isAr || currentLang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
-    val aquaTone = if (isDarkTheme) NeonAqua else DayCyan
+    val inFrostView = glacialDepth > 0.05f || safeStation > TaskPools.BASE_STATIONS_COUNT
+    val aquaTone = when {
+        inFrostView && isDarkTheme -> GlacialNightCyan
+        inFrostView && !isDarkTheme -> GlacialDayCyan
+        isDarkTheme -> NeonAqua
+        else -> DayCyan
+    }
     val mintTone = if (isDarkTheme) ElectricMint else DayEmerald
     val goldTone = if (isDarkTheme) MilestoneGold else DayOrange
     val cardBgBrush = if (isDarkTheme) {
-        Brush.verticalGradient(colors = listOf(Color(0xDD141C2E), Color(0xCC0C1220)))
+        if (inFrostView) {
+            Brush.verticalGradient(colors = listOf(Color(0xE0092138), Color(0xD8051526)))
+        } else {
+            Brush.verticalGradient(colors = listOf(Color(0xDD141C2E), Color(0xCC0C1220)))
+        }
     } else {
-        Brush.verticalGradient(colors = listOf(DayGlassSurface, Color(0xF5EFF5FB)))
+        if (inFrostView) {
+            Brush.verticalGradient(colors = listOf(Color(0xFAFFFFFF), Color(0xF5D9F0FE)))
+        } else {
+            Brush.verticalGradient(colors = listOf(DayGlassSurface, Color(0xF5EFF5FB)))
+        }
     }
     val cardBorderBrush = Brush.linearGradient(
         colors = listOf(
-            aquaTone.copy(alpha = if (isDarkTheme) 0.48f else 0.55f),
-            if (isDarkTheme) Color.White.copy(alpha = 0.16f) else Color(0xFFCBD5E1),
+            aquaTone.copy(alpha = if (isDarkTheme) 0.56f else 0.65f),
+            if (inFrostView && isDarkTheme) GlacialNightCrystal.copy(alpha = 0.42f)
+            else if (isDarkTheme) Color.White.copy(alpha = 0.16f)
+            else Color(0xFFCBD5E1),
             mintTone.copy(alpha = if (isDarkTheme) 0.36f else 0.45f)
         )
     )
@@ -144,7 +162,7 @@ fun RoadmapProgressHeader(
                 .clip(RoundedCornerShape(22.dp))
                 .background(cardBgBrush)
                 .border(
-                    width = 1.1.dp,
+                    width = if (inFrostView) 1.3.dp else 1.1.dp,
                     brush = cardBorderBrush,
                     shape = RoundedCornerShape(22.dp)
                 )
@@ -165,7 +183,7 @@ fun RoadmapProgressHeader(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.MilitaryTech,
+                            imageVector = if (inFrostView) Icons.Default.AcUnit else Icons.Default.MilitaryTech,
                             contentDescription = null,
                             tint = aquaTone,
                             modifier = Modifier.size(21.dp)
@@ -177,27 +195,28 @@ fun RoadmapProgressHeader(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = when (currentLang) {
-                                "ar" -> "تقدم المسار: المحطة $safeStation / 500"
-                                "fr" -> "Progression : Station $safeStation / 500"
-                                else -> "Roadmap Progress: LVL $safeStation / 500"
+                                "ar" -> "تقدم المسار: المحطة $safeStation / $totalStations"
+                                "fr" -> "Progression : Station $safeStation / $totalStations"
+                                else -> "Roadmap Progress: LVL $safeStation / $totalStations"
                             },
                             fontWeight = FontWeight.Black,
                             fontFamily = PlusJakartaSans,
                             fontSize = 15.sp,
                             color = titleColor,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("roadmap_header_progress_title")
                         )
                         Text(
-                            text = if (safeStation >= 500) {
+                            text = if (safeStation >= totalStations) {
                                 when (currentLang) {
-                                    "ar" -> "اكتملت 500 محطة! • الإجمالي: $xpFormatted XP"
-                                    "fr" -> "500 stations débloquées ! • Total : $xpFormatted XP"
-                                    else -> "All 500 stations unlocked! • Total: $xpFormatted XP"
+                                    "ar" -> "اكتملت $totalStations محطة! • الإجمالي: $xpFormatted XP"
+                                    "fr" -> "$totalStations stations débloquées ! • Total : $xpFormatted XP"
+                                    else -> "All $totalStations stations unlocked! • Total: $xpFormatted XP"
                                 }
                             } else {
                                 when (currentLang) {
-                                    "ar" -> "المحطة ${stageProgress.nextStationId}: $stageXpFormatted / $stageReqFormatted XP • متبقي $stagesLeft محطة"
+                                    "ar" -> "المحطة ${stageProgress.nextStationId}: $stageXpFormatted / $stageReqFormatted XP • متبقي $stagesLeft"
                                     "fr" -> "Station ${stageProgress.nextStationId} : $stageXpFormatted / $stageReqFormatted XP • $stagesLeft rest."
                                     else -> "Station ${stageProgress.nextStationId}: $stageXpFormatted / $stageReqFormatted XP • $stagesLeft left"
                                 }
@@ -375,7 +394,37 @@ fun RoadmapProgressHeader(
                         accentColor = goldTone,
                         isCrown = true,
                         isDarkTheme = isDarkTheme,
-                        onClick = { onJumpToStation(500) }
+                        onClick = { onJumpToStation(500) },
+                        modifier = Modifier.testTag("btn_jump_500")
+                    )
+                    val frostChipAccent = if (isDarkTheme) GlacialNightCyan else GlacialDayDeepBlue
+                    HeaderQuickJumpChip(
+                        label = if (currentLang == "ar") "جليد 501" else "501 Ice",
+                        icon = Icons.Default.AcUnit,
+                        isHighlighted = glacialDepth in 0.01f..0.49f,
+                        accentColor = frostChipAccent,
+                        isDarkTheme = isDarkTheme,
+                        onClick = { onJumpToStation(501) },
+                        modifier = Modifier.testTag("btn_jump_501")
+                    )
+                    HeaderQuickJumpChip(
+                        label = if (currentLang == "ar") "م 600" else "LVL 600",
+                        icon = Icons.Default.AcUnit,
+                        isHighlighted = glacialDepth in 0.50f..0.89f,
+                        accentColor = frostChipAccent,
+                        isDarkTheme = isDarkTheme,
+                        onClick = { onJumpToStation(600) },
+                        modifier = Modifier.testTag("btn_jump_600")
+                    )
+                    HeaderQuickJumpChip(
+                        label = "700",
+                        icon = Icons.Default.AcUnit,
+                        isHighlighted = glacialDepth >= 0.90f,
+                        accentColor = frostChipAccent,
+                        isCrown = true,
+                        isDarkTheme = isDarkTheme,
+                        onClick = { onJumpToStation(700) },
+                        modifier = Modifier.testTag("btn_jump_700")
                     )
                 }
             }
@@ -563,9 +612,9 @@ fun XpEarningGuideDialog(
                                     )
                                     Text(
                                         text = when (currentLang) {
-                                            "ar" -> "جميع المصادر الفعالة للتقدم في مسار 500 محطة"
-                                            "fr" -> "Toutes les sources pour progresser sur 500 stations"
-                                            else -> "All active sources to unlock 500 stations"
+                                            "ar" -> "جميع المصادر الفعالة للتقدم في مسار ${TaskPools.TOTAL_STATIONS_COUNT} محطة (حتى 20M XP)"
+                                            "fr" -> "Toutes les sources pour progresser sur ${TaskPools.TOTAL_STATIONS_COUNT} stations (Max 20M XP)"
+                                            else -> "All active sources to unlock ${TaskPools.TOTAL_STATIONS_COUNT} stations (Max 20M XP)"
                                         },
                                         fontSize = 11.sp,
                                         color = subColor

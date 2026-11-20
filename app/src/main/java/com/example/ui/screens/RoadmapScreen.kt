@@ -10,6 +10,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -64,6 +65,7 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -104,11 +106,14 @@ import com.example.data.roadmap.TaskPeriod
 import com.example.data.roadmap.TaskPools
 import com.example.data.roadmap.TaskStatus
 import com.example.ui.components.ElectricMint
+import com.example.ui.components.GlacialSubmersionOverlay
+import com.example.ui.components.GlacialViewportBackdrop
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.NeonAqua
 import com.example.ui.components.RoadmapAmbientBackground
 import com.example.ui.components.RoadmapProgressHeader
 import com.example.ui.components.WavySnakeStationRow
+import com.example.ui.components.glacialDepthForStation
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayGlassSurface
@@ -196,7 +201,7 @@ fun RoadmapScreen(
     val currentStationId = stageProgress.unlockedStationId
     val roadmapListState = rememberLazyListState()
 
-    // 500 Stations generation (memoized)
+    // 700 Stations generation (memoized)
     val stations = remember(claimedStations, totalXp) {
         RoadmapManager.generateStations(totalXp, claimedStations)
     }
@@ -209,6 +214,42 @@ fun RoadmapScreen(
             roadmapListState.scrollToItem(targetIdx)
         }
     }
+
+    // Live scroll-driven glacial immersion depth (0f for Stations 1..500 -> 1f at Station 700)
+    val rawGlacialDepth by remember(selectedMainTab, currentStationId) {
+        derivedStateOf {
+            if (selectedMainTab != 0) {
+                0f
+            } else {
+                val visible = roadmapListState.layoutInfo.visibleItemsInfo
+                val deepestVisible = if (visible.isNotEmpty()) {
+                    visible.maxOf { it.index + 1 }
+                } else {
+                    currentStationId
+                }
+                if (deepestVisible > TaskPools.BASE_STATIONS_COUNT) {
+                    glacialDepthForStation(deepestVisible).coerceAtLeast(0.10f)
+                } else {
+                    0f
+                }
+            }
+        }
+    }
+    val animatedGlacialDepth by animateFloatAsState(
+        targetValue = rawGlacialDepth,
+        animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+        label = "glacial_submersion_depth"
+    )
+    val glacialTransition = rememberInfiniteTransition(label = "glacial_atmosphere")
+    val glacialDriftPhase by glacialTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2.0 * kotlin.math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 14000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "glacial_drift_phase"
+    )
 
     val rtlSign = if (appLayoutDirection == LayoutDirection.Rtl) -1 else 1
     val ledgerAccent = if (isDarkTheme) ElectricMint else DayEmerald
@@ -227,6 +268,13 @@ fun RoadmapScreen(
         RoadmapAmbientBackground(
             modifier = Modifier.fillMaxSize(),
             darkTheme = isDarkTheme
+        )
+
+        GlacialViewportBackdrop(
+            glacialDepth = animatedGlacialDepth,
+            driftPhase = glacialDriftPhase,
+            isDarkTheme = isDarkTheme,
+            modifier = Modifier.fillMaxSize()
         )
 
         Column(modifier = Modifier.fillMaxSize()) {
@@ -417,6 +465,7 @@ fun RoadmapScreen(
                             totalXp = totalXp,
                             nextStationId = stageProgress.nextStationId,
                             currentStageXp = stageProgress.currentStageXp,
+                            glacialDepth = animatedGlacialDepth,
                             isAr = isAr,
                             currentLang = currentLang,
                             isDarkTheme = isDarkTheme,
@@ -643,6 +692,13 @@ fun RoadmapScreen(
                 }
             }
         }
+        // Non-blocking foreground edge-creeping frost & branching ice dendrites when above Station 500
+        GlacialSubmersionOverlay(
+            glacialDepth = animatedGlacialDepth,
+            driftPhase = glacialDriftPhase,
+            isDarkTheme = isDarkTheme,
+            modifier = Modifier.fillMaxSize()
+        )
     }
 }
 
@@ -654,6 +710,7 @@ private fun RoadmapStationsTabContent(
     totalXp: Long,
     nextStationId: Int,
     currentStageXp: Long,
+    glacialDepth: Float,
     isAr: Boolean,
     currentLang: String,
     isDarkTheme: Boolean,
@@ -728,6 +785,7 @@ private fun RoadmapStationsTabContent(
                 isAr = isAr,
                 currentLang = currentLang,
                 glowPulse = glowPulse,
+                glacialDepth = glacialDepth,
                 isDarkTheme = isDarkTheme,
                 onJumpToStation = onJumpToStation
             )

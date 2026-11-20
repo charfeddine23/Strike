@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.data.roadmap.RoadmapStation
 import com.example.data.roadmap.StationState
+import com.example.data.roadmap.TaskPools
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
@@ -310,8 +311,9 @@ fun GlowingWavyRoadmapPath(
 
 /**
  * Single-row C-infinity continuous wavy snake-path Canvas used inside each [WavySnakeStationRow]
- * of the 500-station LazyColumn. Driven by a single shared [flowPhase] and [glowPulse] so
- * glowing energy pulses glide seamlessly across row boundaries down the entire roadmap.
+ * of the 700-station LazyColumn. Driven by a single shared [flowPhase] and [glowPulse] so
+ * glowing energy pulses glide seamlessly across row boundaries down the entire roadmap,
+ * transitioning into a frozen crystalline permafrost conduit above Station 500.
  */
 @Composable
 fun GlowingWavyRoadmapSegmentCanvas(
@@ -324,20 +326,56 @@ fun GlowingWavyRoadmapSegmentCanvas(
     glowPulse: Float = 0.85f,
     darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
+    val frostDepth = glacialDepthForStation(stationId)
+    val isFrozenZone = frostDepth > 0f
+
     Canvas(modifier = modifier.fillMaxSize()) {
         val stepsPerHalf = 22
         val totalSteps = stepsPerHalf * 2
         val midY = size.height * 0.5f
 
-        val activeStartTone = if (darkTheme) NeonAqua else DayCyan
-        val activeEndTone = if (darkTheme) ElectricMint else DayEmerald
-        val coreTone = if (darkTheme) Color(0xFFC8FDFF) else Color(0xFF0EA5E9)
+        val activeStartTone = when {
+            isFrozenZone && darkTheme -> GlacialNightAurora
+            isFrozenZone && !darkTheme -> GlacialDayCyan
+            darkTheme -> NeonAqua
+            else -> DayCyan
+        }
+        val activeEndTone = when {
+            isFrozenZone && darkTheme -> GlacialNightIce
+            isFrozenZone && !darkTheme -> GlacialDayDeepBlue
+            darkTheme -> ElectricMint
+            else -> DayEmerald
+        }
+        val coreTone = when {
+            isFrozenZone && darkTheme -> GlacialNightCrystal
+            isFrozenZone && !darkTheme -> Color.White
+            darkTheme -> Color(0xFFC8FDFF)
+            else -> Color(0xFF0EA5E9)
+        }
         val orbHaloTone = if (darkTheme) Color(0xFFE6FFFF) else Color.White
         val orbCenterTone = if (darkTheme) Color(0xFFF2FFFF) else Color.White
-        val lockedConduitBg = if (darkTheme) Color(0x66161F33) else Color(0x3394A3B8)
-        val lockedDashColor = if (darkTheme) Color(0xFF4A5873) else Color(0xFF94A3B8)
-        val frontierOuterTone = if (darkTheme) WarmFireOrange else DayOrange
-        val frontierInnerTone = if (darkTheme) MilestoneGold else WarmFireOrange
+        val lockedConduitBg = when {
+            isFrozenZone && darkTheme -> Color(0x88103554)
+            isFrozenZone && !darkTheme -> Color(0x557DD3FC)
+            darkTheme -> Color(0x66161F33)
+            else -> Color(0x3394A3B8)
+        }
+        val lockedDashColor = when {
+            isFrozenZone && darkTheme -> GlacialNightIce.copy(alpha = 0.45f + 0.30f * frostDepth)
+            isFrozenZone && !darkTheme -> GlacialDayCyan.copy(alpha = 0.55f + 0.28f * frostDepth)
+            darkTheme -> Color(0xFF4A5873)
+            else -> Color(0xFF94A3B8)
+        }
+        val frontierOuterTone = if (isFrozenZone) {
+            if (darkTheme) GlacialNightCyan else GlacialDayDeepBlue
+        } else {
+            if (darkTheme) WarmFireOrange else DayOrange
+        }
+        val frontierInnerTone = if (isFrozenZone) {
+            if (darkTheme) GlacialNightCrystal else Color.White
+        } else {
+            if (darkTheme) MilestoneGold else WarmFireOrange
+        }
 
         fun pointAtFrac(yFrac: Float): Offset {
             val t = (stationId - 0.5f) + yFrac
@@ -434,7 +472,14 @@ fun GlowingWavyRoadmapSegmentCanvas(
                     }
                 }
             } else {
-                // Underlying shadow conduit + animated streaming dashed line
+                // Underlying shadow conduit + animated streaming dashed line (+ outer rime sheen in permafrost zone)
+                if (isFrozenZone) {
+                    drawPath(
+                        path = path,
+                        color = (if (darkTheme) GlacialNightCyan else Color.White).copy(alpha = (0.14f + 0.16f * frostDepth) * glowPulse),
+                        style = Stroke(width = (8f + 4f * frostDepth).dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+                }
                 drawPath(
                     path = path,
                     color = lockedConduitBg,
@@ -500,7 +545,7 @@ fun GlowingWavyRoadmapSegmentCanvas(
                 isTailFade = false
             )
         }
-        if (stationId < 500) {
+        if (stationId < TaskPools.TOTAL_STATIONS_COUNT) {
             drawTrackHalf(
                 startStep = stepsPerHalf,
                 endStep = totalSteps,
