@@ -7,7 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,6 +77,9 @@ import com.example.ui.components.StrikerStatusBadge
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayRose
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -96,6 +98,7 @@ import java.util.Locale
 fun StrikeScreen(
     viewModel: IndividualViewModel,
     modifier: Modifier = Modifier,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onAuthenticateDelete: ((
         title: String,
         subtitle: String,
@@ -113,8 +116,9 @@ fun StrikeScreen(
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
-    val isDarkTheme = isSystemInDarkTheme()
     val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
+    val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val accentRose = if (isDarkTheme) NeonRose else DayRose
 
     val totalAllTimeStrikes = maxOf(allTimeStrikesCount, allList.sumOf { it.strikeCount })
 
@@ -163,7 +167,7 @@ fun StrikeScreen(
                             Icon(
                                 imageVector = Icons.Default.History,
                                 contentDescription = null,
-                                tint = NeonCyan,
+                                tint = accentCyan,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -178,14 +182,14 @@ fun StrikeScreen(
                             Icon(
                                 imageVector = Icons.Default.Fingerprint,
                                 contentDescription = null,
-                                tint = NeonRose.copy(alpha = 0.85f),
+                                tint = accentRose.copy(alpha = 0.9f),
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = stringResource(R.string.swipe_to_delete_hint),
                                 fontSize = 11.sp,
-                                color = NeonRose.copy(alpha = 0.85f),
+                                color = accentRose.copy(alpha = 0.9f),
                                 fontWeight = FontWeight.Medium
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -205,7 +209,8 @@ fun StrikeScreen(
                 item {
                     LiquidGlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        darkTheme = isDarkTheme
                     ) {
                         Text(
                             text = when (currentLang) {
@@ -285,6 +290,8 @@ private fun StrikeTargetPickerDialog(
     val isAr = currentLang == "ar"
     val isFr = currentLang == "fr"
     val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val accentViolet = if (isDarkTheme) NeonViolet else DayPurple
+    val accentAmber = if (isDarkTheme) NeonAmber else DayOrange
     val panelBg = if (isDarkTheme) Color(0xF80B1324) else Color(0xFFF8FAFC)
 
     var selectedId by remember { mutableStateOf<Long?>(null) }
@@ -300,7 +307,7 @@ private fun StrikeTargetPickerDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.62f))
+                .background(Color.Black.copy(alpha = if (isDarkTheme) 0.62f else 0.42f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -317,7 +324,7 @@ private fun StrikeTargetPickerDialog(
                 .background(panelBg)
                 .border(
                     1.25.dp,
-                    Brush.linearGradient(listOf(accentCyan, NeonViolet)),
+                    Brush.linearGradient(listOf(accentCyan, accentViolet)),
                     RoundedCornerShape(24.dp)
                 )
                 .padding(20.dp)
@@ -428,7 +435,7 @@ private fun StrikeTargetPickerDialog(
                                     .testTag("strike_picker_item_${person.id}"),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                GlassTypeBadge(type = person.type)
+                                GlassTypeBadge(type = person.type, darkTheme = isDarkTheme)
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(
@@ -444,7 +451,7 @@ private fun StrikeTargetPickerDialog(
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
                                         )
-                                        StrikerStatusBadge(status = status)
+                                        StrikerStatusBadge(status = status, darkTheme = isDarkTheme)
                                     }
                                     Text(
                                         text = when {
@@ -453,7 +460,7 @@ private fun StrikeTargetPickerDialog(
                                             else -> "${person.strikeCount} strikes • BOOST ${person.boost}"
                                         },
                                         fontSize = 11.5.sp,
-                                        color = if (isSelected) NeonAmber else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isSelected) accentAmber else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -509,7 +516,7 @@ private fun StrikeTargetPickerDialog(
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = accentCyan,
-                            contentColor = Color(0xFF021B26)
+                            contentColor = if (isDarkTheme) Color(0xFF021B26) else Color.White
                         )
                     ) {
                         Icon(
@@ -554,6 +561,8 @@ fun BiometricDeleteStrikeDialog(
     val isAr = currentLang == "ar"
     val isFr = currentLang == "fr"
     val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val accentRose = if (isDarkTheme) NeonRose else DayRose
+    val accentAmber = if (isDarkTheme) NeonAmber else DayOrange
     val panelBg = if (isDarkTheme) Color(0xF80B1324) else Color(0xFFF8FAFC)
 
     var biometricAvailability by remember {
@@ -595,7 +604,7 @@ fun BiometricDeleteStrikeDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.62f))
+                .background(Color.Black.copy(alpha = if (isDarkTheme) 0.62f else 0.42f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -612,7 +621,7 @@ fun BiometricDeleteStrikeDialog(
                 .background(panelBg)
                 .border(
                     1.25.dp,
-                    Brush.linearGradient(listOf(NeonRose, accentCyan)),
+                    Brush.linearGradient(listOf(accentRose, accentCyan)),
                     RoundedCornerShape(24.dp)
                 )
                 .padding(20.dp)
@@ -624,14 +633,14 @@ fun BiometricDeleteStrikeDialog(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(NeonRose.copy(alpha = 0.16f))
-                            .border(1.dp, NeonRose.copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
+                            .background(accentRose.copy(alpha = 0.16f))
+                            .border(1.dp, accentRose.copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Fingerprint,
                             contentDescription = null,
-                            tint = NeonRose,
+                            tint = accentRose,
                             modifier = Modifier.size(26.dp)
                         )
                     }
@@ -651,7 +660,7 @@ fun BiometricDeleteStrikeDialog(
                         Text(
                             text = "${event.individualName} • +${event.count} (${event.date})",
                             fontSize = 12.sp,
-                            color = NeonAmber,
+                            color = accentAmber,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
@@ -677,14 +686,14 @@ fun BiometricDeleteStrikeDialog(
                             .fillMaxWidth()
                             .testTag("biometric_delete_error_msg")
                             .clip(RoundedCornerShape(10.dp))
-                            .background(NeonRose.copy(alpha = 0.14f))
-                            .border(1.dp, NeonRose.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                            .background(accentRose.copy(alpha = 0.14f))
+                            .border(1.dp, accentRose.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
                             .padding(10.dp)
                     ) {
                         Text(
                             text = authErrorMessage!!,
                             fontSize = 12.sp,
-                            color = NeonRose,
+                            color = accentRose,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -791,7 +800,7 @@ fun BiometricDeleteStrikeDialog(
                             .testTag("btn_verify_fingerprint_delete"),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = NeonRose,
+                            containerColor = accentRose,
                             contentColor = Color.White
                         )
                     ) {
@@ -820,7 +829,7 @@ fun BiometricDeleteStrikeDialog(
 fun StrikeLogItem(
     event: StrikeEvent,
     onDeleteClick: (() -> Unit)? = null,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val cardBg = if (darkTheme) Color(0xFF0D1527) else Color(0xFFFFFFFF)
     val cardBorder = if (darkTheme) Color(0x3538BDF8) else Color(0x5500B4D8)
@@ -922,7 +931,7 @@ fun StrikeLogItem(
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = stringResource(R.string.delete),
-                            tint = NeonRose.copy(alpha = 0.85f),
+                            tint = if (darkTheme) NeonRose.copy(alpha = 0.85f) else DayRose,
                             modifier = Modifier.size(19.dp)
                         )
                     }
@@ -938,7 +947,7 @@ fun SwipeableStrikeLogItem(
     event: StrikeEvent,
     onRequestDelete: (StrikeEvent) -> Unit,
     modifier: Modifier = Modifier,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { dismissValue ->

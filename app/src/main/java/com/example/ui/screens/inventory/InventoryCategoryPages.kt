@@ -71,6 +71,10 @@ import com.example.data.profile.ProfileMasterInventory
 import com.example.data.profile.SkipKeyType
 import com.example.data.profile.TitleItem
 import com.example.ui.components.getAvatarVector
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -127,7 +131,7 @@ fun ShieldsSubPage(
                         "All shields & available quantities"
                     )
                 },
-                accentColor = NeonEmerald,
+                accentColor = if (isDarkTheme) NeonEmerald else DayEmerald,
                 icon = Icons.Default.Shield,
                 currentLang = currentLang,
                 isDarkTheme = isDarkTheme,
@@ -158,7 +162,7 @@ fun ShieldsSubPage(
                 isDarkTheme = isDarkTheme,
                 count = shields24h,
                 isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_24H,
-                accentColor = NeonCyan,
+                accentColor = if (isDarkTheme) NeonCyan else DayCyan,
                 icon = Icons.Default.Shield,
                 onActivate = {
                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -180,7 +184,7 @@ fun ShieldsSubPage(
                 isDarkTheme = isDarkTheme,
                 count = shields48h,
                 isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_48H,
-                accentColor = NeonEmerald,
+                accentColor = if (isDarkTheme) NeonEmerald else DayEmerald,
                 icon = Icons.Default.Shield,
                 onActivate = {
                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -202,7 +206,7 @@ fun ShieldsSubPage(
                 isDarkTheme = isDarkTheme,
                 count = shields72h,
                 isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_72H,
-                accentColor = NeonAmber,
+                accentColor = if (isDarkTheme) NeonAmber else DayOrange,
                 icon = Icons.Default.VerifiedUser,
                 onActivate = {
                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -256,7 +260,7 @@ fun KeysSubPage(
                     "Clés possédées : $totalKeys",
                     "Owned Keys: $totalKeys"
                 ),
-                accentColor = NeonAmber,
+                accentColor = if (isDarkTheme) NeonAmber else DayOrange,
                 icon = Icons.Default.VpnKey,
                 currentLang = currentLang,
                 isDarkTheme = isDarkTheme,
@@ -282,7 +286,7 @@ fun KeysSubPage(
                         "Gagnez des clés via les stations de la Feuille de route pour les voir ici.",
                         "Earn Skip-Keys from Roadmap stations to see them listed here."
                     ),
-                    accentColor = NeonAmber,
+                    accentColor = if (isDarkTheme) NeonAmber else DayOrange,
                     isDarkTheme = isDarkTheme,
                     testTag = "inv_keys_empty_state"
                 )
@@ -293,19 +297,19 @@ fun KeysSubPage(
                     SkipKeyType.WOODEN -> Quad(
                         locText(currentLang, "شائع", "COMMUN", "COMMON"),
                         locText(currentLang, "استخدام واحد لكل مفتاح", "1 Utilisation / clé", "1 Use per key"),
-                        Color(0xFFD97706),
+                        if (isDarkTheme) Color(0xFFD97706) else Color(0xFFB45309),
                         "inv_key_wooden"
                     )
                     SkipKeyType.BRONZE -> Quad(
                         locText(currentLang, "غير شائع", "PEU COMMUN", "UNCOMMON"),
                         locText(currentLang, "استخدامان لكل مفتاح", "2 Utilisations / clé", "2 Uses per key"),
-                        Color(0xFFF59E0B),
+                        if (isDarkTheme) Color(0xFFF59E0B) else DayOrange,
                         "inv_key_bronze"
                     )
                     SkipKeyType.SILVER -> Quad(
                         locText(currentLang, "نادر", "RARE", "RARE"),
                         locText(currentLang, "3 استخدامات لكل مفتاح", "3 Utilisations / clé", "3 Uses per key"),
-                        Color(0xFFE2E8F0),
+                        if (isDarkTheme) Color(0xFFE2E8F0) else Color(0xFF475569),
                         "inv_key_silver"
                     )
                 }
@@ -376,7 +380,7 @@ fun PotionsSubPage(
                     "Potions disponibles : $ownedTotal",
                     "Owned Potions: $ownedTotal"
                 ),
-                accentColor = NeonCyan,
+                accentColor = if (isDarkTheme) NeonCyan else DayCyan,
                 icon = Icons.Default.Science,
                 currentLang = currentLang,
                 isDarkTheme = isDarkTheme,
@@ -402,7 +406,7 @@ fun PotionsSubPage(
                         "Débloquez des stations dans la Feuille de route pour gagner des potions.",
                         "Unlock Roadmap stations to earn cybernetic potions and activate them here."
                     ),
-                    accentColor = NeonCyan,
+                    accentColor = if (isDarkTheme) NeonCyan else DayCyan,
                     isDarkTheme = isDarkTheme,
                     testTag = "inv_potions_empty_state"
                 )
@@ -425,7 +429,7 @@ fun PotionsSubPage(
                                 "Active ($pulseUsesLeft uses)"
                             )
                         } else null,
-                        accentColor = PotionType.PULSE_ELIXIR.color,
+                        accentColor = PotionType.PULSE_ELIXIR.adaptiveColor(isDarkTheme),
                         icon = Icons.Default.Bolt,
                         canActivate = pulseElixirCount > 0,
                         onActivate = {
@@ -457,7 +461,7 @@ fun PotionsSubPage(
                                 "Active (50% Slowdown)"
                             )
                         } else null,
-                        accentColor = PotionType.SHADOW_GRIP_SERUM.color,
+                        accentColor = PotionType.SHADOW_GRIP_SERUM.adaptiveColor(isDarkTheme),
                         icon = Icons.Default.Science,
                         canActivate = shadowSerumCount > 0 && !isShadowActive,
                         onActivate = {
@@ -489,7 +493,7 @@ fun PotionsSubPage(
                                 "Auto-Active (+50% Growth)"
                             )
                         } else null,
-                        accentColor = PotionType.GABRIEL_PURITY_DROPLET.color,
+                        accentColor = PotionType.GABRIEL_PURITY_DROPLET.adaptiveColor(isDarkTheme),
                         icon = Icons.Default.WaterDrop,
                         canActivate = false,
                         onActivate = {},
@@ -517,7 +521,7 @@ fun PotionsSubPage(
                                 "Armed for Next Strike (+100)"
                             )
                         } else null,
-                        accentColor = PotionType.ABSOLUTE_CRYO_INFUSION.color,
+                        accentColor = PotionType.ABSOLUTE_CRYO_INFUSION.adaptiveColor(isDarkTheme),
                         icon = Icons.Default.AcUnit,
                         canActivate = cryoInfusionCount > 0 && !hasCryoArmed,
                         onActivate = {
@@ -586,7 +590,7 @@ fun TitlesSubPage(
                     "Débloqués : ${unlockedTitleIds.size} / ${allGameTitles.size} • Actif : ${equippedTitle.getLocalizedTitle(currentLang)}",
                     "Unlocked: ${unlockedTitleIds.size} / ${allGameTitles.size} • Active: ${equippedTitle.getLocalizedTitle(currentLang)}"
                 ),
-                accentColor = NeonViolet,
+                accentColor = if (isDarkTheme) NeonViolet else DayPurple,
                 icon = Icons.Default.MilitaryTech,
                 currentLang = currentLang,
                 isDarkTheme = isDarkTheme,
@@ -841,6 +845,9 @@ private fun InventoryShieldCard(
     cardTag: String,
     activateBtnTag: String
 ) {
+    val activeEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
+    val buttonContentLuminance = accentColor.red * 0.299f + accentColor.green * 0.587f + accentColor.blue * 0.114f
+    val buttonContentColor = if (buttonContentLuminance > 0.55f) Color(0xFF03141F) else Color.White
     LongPressTooltipContainer(onLongPress1s = onLongPress1s) { isHolding, progress ->
         Box(
             modifier = Modifier
@@ -849,7 +856,7 @@ private fun InventoryShieldCard(
                 .background(cardGlassBackground(isDarkTheme))
                 .border(
                     width = if (isCurrentlyActive) 1.8.dp else 1.2.dp,
-                    color = if (isCurrentlyActive) NeonEmerald else accentColor.copy(alpha = 0.55f),
+                    color = if (isCurrentlyActive) activeEmerald else accentColor.copy(alpha = 0.55f),
                     shape = RoundedCornerShape(18.dp)
                 )
                 .testTag(cardTag)
@@ -898,7 +905,7 @@ private fun InventoryShieldCard(
                                     text = locText(currentLang, "• نشط", "• Actif", "• Active"),
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = NeonEmerald
+                                    color = activeEmerald
                                 )
                             }
                         }
@@ -930,7 +937,7 @@ private fun InventoryShieldCard(
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = accentColor,
-                            contentColor = Color(0xFF03141F),
+                            contentColor = buttonContentColor,
                             disabledContainerColor = accentColor.copy(alpha = 0.16f),
                             disabledContentColor = cardSecondaryTextColor(isDarkTheme)
                         ),
@@ -1067,6 +1074,9 @@ private fun InventoryPotionCard(
     cardTag: String,
     activateBtnTag: String
 ) {
+    val activeEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
+    val buttonContentLuminance = accentColor.red * 0.299f + accentColor.green * 0.587f + accentColor.blue * 0.114f
+    val buttonContentColor = if (buttonContentLuminance > 0.55f) Color(0xFF03141F) else Color.White
     LongPressTooltipContainer(onLongPress1s = onLongPress1s) { isHolding, progress ->
         Box(
             modifier = Modifier
@@ -1128,7 +1138,7 @@ private fun InventoryPotionCard(
                                 text = statusBadge,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = NeonEmerald
+                                color = activeEmerald
                             )
                         }
                     }
@@ -1158,7 +1168,7 @@ private fun InventoryPotionCard(
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = accentColor,
-                                contentColor = Color(0xFF03141F)
+                                contentColor = buttonContentColor
                             ),
                             modifier = Modifier
                                 .minimumInteractiveComponentSize()
@@ -1384,7 +1394,10 @@ private fun InventoryTitleCard(
     onActivate: () -> Unit,
     onLongPress1s: () -> Unit
 ) {
-    val accentColor = title.rarity.primaryColor
+    val accentColor = title.rarity.adaptiveColor(isDarkTheme)
+    val activeEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
+    val buttonContentLuminance = accentColor.red * 0.299f + accentColor.green * 0.587f + accentColor.blue * 0.114f
+    val buttonContentColor = if (buttonContentLuminance > 0.55f) Color(0xFF03141F) else Color.White
     val rarityLabel = when (currentLang) {
         "ar" -> title.rarity.labelAr
         else -> title.rarity.labelEn
@@ -1498,7 +1511,7 @@ private fun InventoryTitleCard(
                             fontWeight = if (isEquipped) FontWeight.Bold else FontWeight.Medium,
                             color = when {
                                 isEquipped -> accentColor
-                                isUnlocked -> NeonEmerald
+                                isUnlocked -> activeEmerald
                                 else -> cardSecondaryTextColor(isDarkTheme)
                             },
                             maxLines = 1,
@@ -1543,7 +1556,7 @@ private fun InventoryTitleCard(
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = accentColor,
-                                contentColor = Color(0xFF03141F)
+                                contentColor = buttonContentColor
                             ),
                             modifier = Modifier
                                 .minimumInteractiveComponentSize()
@@ -1667,7 +1680,10 @@ private fun InventoryAvatarCard(
     onActivate: () -> Unit,
     onLongPress1s: () -> Unit
 ) {
-    val accentColor = avatar.rarity.primaryColor
+    val accentColor = avatar.rarity.adaptiveColor(isDarkTheme)
+    val activeEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
+    val buttonContentLuminance = accentColor.red * 0.299f + accentColor.green * 0.587f + accentColor.blue * 0.114f
+    val buttonContentColor = if (buttonContentLuminance > 0.55f) Color(0xFF03141F) else Color.White
     val rarityLabel = avatar.rarity.getLocalizedLabel(currentLang)
     val statusText = when {
         isEquipped -> locText(currentLang, "مفعّل على ملفك الشخصي", "Équipé sur votre profil", "Equipped on your profile")
@@ -1771,7 +1787,7 @@ private fun InventoryAvatarCard(
                             fontWeight = if (isEquipped) FontWeight.Bold else FontWeight.Medium,
                             color = when {
                                 isEquipped -> accentColor
-                                isUnlocked -> NeonEmerald
+                                isUnlocked -> activeEmerald
                                 else -> cardSecondaryTextColor(isDarkTheme)
                             },
                             maxLines = 1,
@@ -1816,7 +1832,7 @@ private fun InventoryAvatarCard(
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = accentColor,
-                                contentColor = Color(0xFF03141F)
+                                contentColor = buttonContentColor
                             ),
                             modifier = Modifier
                                 .minimumInteractiveComponentSize()

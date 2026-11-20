@@ -108,6 +108,11 @@
     <string name="restore_merge">Merge with Existing</string>
     <string name="restore_replace">Replace All Records</string>
     <string name="auto_theme">Auto Theme</string>
+    <string name="theme_mode_title">Appearance &amp; Theme Mode</string>
+    <string name="theme_mode_desc">Switch cleanly between Day Mode, Night Mode, or System Auto</string>
+    <string name="theme_system">Auto</string>
+    <string name="theme_light">Day</string>
+    <string name="theme_dark">Night</string>
     <string name="sort_score">Total Score (BOOST × Strikes)</string>
     <string name="sort_boost">BOOST (Highest First)</string>
     <string name="sort_strikes">Strikes (Highest First)</string>

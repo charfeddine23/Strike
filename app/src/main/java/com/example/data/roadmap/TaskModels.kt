@@ -91,6 +91,28 @@ data class TaskItem(
     val canBeSkipped: Boolean get() = period != TaskPeriod.YEARLY && period != TaskPeriod.EVERLASTING
     fun getLocalizedTitle(lang: String): String = if (lang == "ar") title else titleEn
     fun getLocalizedDescription(lang: String): String = if (lang == "ar") description else descriptionEn
+
+    /**
+     * Compact Task Identifier Code: <PeriodChar><CategoryNumber><DifficultyChar>
+     * Example: Daily task #23 with Easy difficulty -> "D23E"
+     */
+    val taskCode: String
+        get() {
+            val periodPrefix = when (period) {
+                TaskPeriod.DAILY -> "D"
+                TaskPeriod.WEEKLY -> "W"
+                TaskPeriod.MONTHLY -> "M"
+                TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> "E"
+            }
+            val indexNumber = id.substringAfterLast('_').toIntOrNull()?.toString() ?: "1"
+            val difficultySuffix = when (difficultyTier) {
+                1 -> "E"
+                2 -> "M"
+                3 -> "H"
+                else -> "L"
+            }
+            return "$periodPrefix$indexNumber$difficultySuffix"
+        }
 }
 
 /**

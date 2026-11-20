@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -52,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.DayCyan
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonViolet
@@ -70,7 +70,7 @@ fun SmartSearchBanner(
     totalCount: Int,
     currentLang: String = "ar",
     modifier: Modifier = Modifier,
-    isDarkTheme: Boolean = isSystemInDarkTheme()
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val focusManager = LocalFocusManager.current
     var isFocused by remember { mutableStateOf(false) }

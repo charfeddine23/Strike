@@ -56,6 +56,11 @@ import com.example.ui.components.SmartMetricComparisonBar
 import com.example.ui.components.StrikerStatus
 import com.example.ui.components.StrikerStatusBadge
 import com.example.ui.components.DynamicAnimatedProfileCard
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -65,7 +70,8 @@ import com.example.ui.viewmodel.IndividualViewModel
 @Composable
 fun ComparisonScreen(
     viewModel: IndividualViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val strikeSearchQuery by viewModel.strikeSearchQuery.collectAsStateWithLifecycle()
@@ -75,6 +81,10 @@ fun ComparisonScreen(
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
+    val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val accentViolet = if (isDarkTheme) NeonViolet else DayPurple
+    val accentAmber = if (isDarkTheme) NeonAmber else DayOrange
+    val accentEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
     val selectableList = if (strikeSearchQuery.isNotBlank() && filteredSearchResults.isNotEmpty()) {
         filteredSearchResults.map { it.individual }
     } else {
@@ -93,7 +103,8 @@ fun ComparisonScreen(
         item {
             LiquidGlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(20.dp),
+                darkTheme = isDarkTheme
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -110,7 +121,7 @@ fun ComparisonScreen(
                         Text(
                             text = if (isAr) "تحليل المقارنة المباشرة بين المقاييس" else "Head-to-head metrics analysis",
                             style = MaterialTheme.typography.bodySmall,
-                            color = NeonCyan
+                            color = accentCyan
                         )
                     }
 
@@ -118,14 +129,14 @@ fun ComparisonScreen(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(NeonViolet.copy(alpha = 0.2f))
-                            .border(1.dp, NeonViolet, CircleShape),
+                            .background(accentViolet.copy(alpha = 0.16f))
+                            .border(1.dp, accentViolet, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.CompareArrows,
                             contentDescription = null,
-                            tint = NeonViolet,
+                            tint = accentViolet,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -145,10 +156,11 @@ fun ComparisonScreen(
                         label = stringResource(R.string.select_person_a),
                         person = personA,
                         status = personA?.let { viewModel.getStatusForIndividual(it, lastStrikeMap) },
-                        accentColor = NeonCyan,
+                        accentColor = accentCyan,
                         onClick = { showMenuA = true },
                         testTag = "selector_person_a",
-                        isAr = isAr
+                        isAr = isAr,
+                        isDarkTheme = isDarkTheme
                     )
 
                     DropdownMenu(
@@ -178,7 +190,7 @@ fun ComparisonScreen(
                     Icon(
                         imageVector = Icons.Default.SwapHoriz,
                         contentDescription = stringResource(R.string.swap),
-                        tint = NeonCyan,
+                        tint = accentCyan,
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -189,10 +201,11 @@ fun ComparisonScreen(
                         label = stringResource(R.string.select_person_b),
                         person = personB,
                         status = personB?.let { viewModel.getStatusForIndividual(it, lastStrikeMap) },
-                        accentColor = NeonViolet,
+                        accentColor = accentViolet,
                         onClick = { showMenuB = true },
                         testTag = "selector_person_b",
-                        isAr = isAr
+                        isAr = isAr,
+                        isDarkTheme = isDarkTheme
                     )
 
                     DropdownMenu(
@@ -247,11 +260,12 @@ fun ComparisonScreen(
                     "$perfectBalanceStr ($aWins — $bWins)"
                 }
 
-                val leaderColor = if (aWins > bWins) NeonCyan else if (bWins > aWins) NeonViolet else NeonAmber
+                val leaderColor = if (aWins > bWins) accentCyan else if (bWins > aWins) accentViolet else accentAmber
 
                 LiquidGlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = RoundedCornerShape(20.dp),
+                    darkTheme = isDarkTheme
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -294,13 +308,13 @@ fun ComparisonScreen(
                                     modifier = Modifier
                                         .size(10.dp)
                                         .clip(CircleShape)
-                                        .background(NeonCyan)
+                                        .background(accentCyan)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "${a.fullName} ($aWins)",
                                     fontSize = 12.sp,
-                                    color = NeonCyan,
+                                    color = accentCyan,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -310,13 +324,13 @@ fun ComparisonScreen(
                                     modifier = Modifier
                                         .size(10.dp)
                                         .clip(CircleShape)
-                                        .background(NeonViolet)
+                                        .background(accentViolet)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "${b.fullName} ($bWins)",
                                     fontSize = 12.sp,
-                                    color = NeonViolet,
+                                    color = accentViolet,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -329,7 +343,8 @@ fun ComparisonScreen(
             item {
                 LiquidGlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp)
+                    shape = RoundedCornerShape(20.dp),
+                    darkTheme = isDarkTheme
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -349,7 +364,8 @@ fun ComparisonScreen(
                             valueA = a.totalScore,
                             valueB = b.totalScore,
                             labelA = a.fullName.take(8),
-                            labelB = b.fullName.take(8)
+                            labelB = b.fullName.take(8),
+                            darkTheme = isDarkTheme
                         )
 
                         // 1. BOOST
@@ -358,7 +374,8 @@ fun ComparisonScreen(
                             valueA = a.boost,
                             valueB = b.boost,
                             labelA = a.fullName.take(8),
-                            labelB = b.fullName.take(8)
+                            labelB = b.fullName.take(8),
+                            darkTheme = isDarkTheme
                         )
 
                         // 2. Size (Length * Width)
@@ -367,7 +384,8 @@ fun ComparisonScreen(
                             valueA = a.size,
                             valueB = b.size,
                             labelA = a.fullName.take(8),
-                            labelB = b.fullName.take(8)
+                            labelB = b.fullName.take(8),
+                            darkTheme = isDarkTheme
                         )
 
                         // 3. Strike Count
@@ -376,7 +394,8 @@ fun ComparisonScreen(
                             valueA = a.strikeCount.toDouble(),
                             valueB = b.strikeCount.toDouble(),
                             labelA = a.fullName.take(8),
-                            labelB = b.fullName.take(8)
+                            labelB = b.fullName.take(8),
+                            darkTheme = isDarkTheme
                         )
 
                         // 4. S SCORE
@@ -385,7 +404,8 @@ fun ComparisonScreen(
                             valueA = a.sScore,
                             valueB = b.sScore,
                             labelA = a.fullName.take(8),
-                            labelB = b.fullName.take(8)
+                            labelB = b.fullName.take(8),
+                            darkTheme = isDarkTheme
                         )
 
                         // 5. F SCORE
@@ -394,7 +414,8 @@ fun ComparisonScreen(
                             valueA = a.fScore,
                             valueB = b.fScore,
                             labelA = a.fullName.take(8),
-                            labelB = b.fullName.take(8)
+                            labelB = b.fullName.take(8),
+                            darkTheme = isDarkTheme
                         )
 
                         // 6. C SCORE
@@ -403,7 +424,8 @@ fun ComparisonScreen(
                             valueA = a.cScore,
                             valueB = b.cScore,
                             labelA = a.fullName.take(8),
-                            labelB = b.fullName.take(8)
+                            labelB = b.fullName.take(8),
+                            darkTheme = isDarkTheme
                         )
                     }
                 }
@@ -420,7 +442,8 @@ fun ComparisonScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clickable { viewModel.incrementStrikeForId(a.id, 1) },
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        darkTheme = isDarkTheme
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -430,14 +453,14 @@ fun ComparisonScreen(
                                 text = if (isAr) "ضربة ${a.fullName.take(8)}" else "STRIKE ${a.fullName.take(8)}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = NeonCyan
+                                color = accentCyan
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Bolt,
                                     contentDescription = null,
-                                    tint = NeonCyan,
+                                    tint = accentCyan,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -445,7 +468,7 @@ fun ComparisonScreen(
                                     text = "+1",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = NeonCyan
+                                    color = accentCyan
                                 )
                             }
                         }
@@ -456,7 +479,8 @@ fun ComparisonScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clickable { viewModel.incrementStrikeForId(b.id, 1) },
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        darkTheme = isDarkTheme
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -466,14 +490,14 @@ fun ComparisonScreen(
                                 text = if (isAr) "ضربة ${b.fullName.take(8)}" else "STRIKE ${b.fullName.take(8)}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = NeonViolet
+                                color = accentViolet
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     imageVector = Icons.Default.Bolt,
                                     contentDescription = null,
-                                    tint = NeonViolet,
+                                    tint = accentViolet,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -481,7 +505,7 @@ fun ComparisonScreen(
                                     text = "+1",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = NeonViolet
+                                    color = accentViolet
                                 )
                             }
                         }
@@ -492,7 +516,8 @@ fun ComparisonScreen(
             item {
                 LiquidGlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    darkTheme = isDarkTheme
                 ) {
                     Text(
                         text = if (isAr) {
@@ -522,8 +547,10 @@ fun PersonSelectorCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     testTag: String? = null,
-    isAr: Boolean = true
+    isAr: Boolean = true,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
+    val boostTextColor = if (isDarkTheme) NeonEmerald else DayEmerald
     if (person != null && status != null) {
         DynamicAnimatedProfileCard(
             status = status,
@@ -531,7 +558,8 @@ fun PersonSelectorCard(
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
                 .then(if (testTag != null) Modifier.testTag(testTag) else Modifier),
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(16.dp),
+            darkTheme = isDarkTheme
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
@@ -554,17 +582,17 @@ fun PersonSelectorCard(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    StrikerStatusBadge(status = status)
+                    StrikerStatusBadge(status = status, darkTheme = isDarkTheme)
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    GlassTypeBadge(type = person.type)
+                    GlassTypeBadge(type = person.type, darkTheme = isDarkTheme)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = if (isAr) "التعزيز ${person.boost}" else "BOOST ${person.boost}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = NeonEmerald
+                        color = boostTextColor
                     )
                 }
             }
@@ -575,7 +603,8 @@ fun PersonSelectorCard(
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
                 .then(if (testTag != null) Modifier.testTag(testTag) else Modifier),
-            shape = RoundedCornerShape(16.dp)
+            shape = RoundedCornerShape(16.dp),
+            darkTheme = isDarkTheme
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(

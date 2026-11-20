@@ -18,11 +18,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,24 +46,23 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Timeline
-import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -75,8 +74,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
@@ -103,6 +109,16 @@ import com.example.ui.components.NeonAqua
 import com.example.ui.components.RoadmapAmbientBackground
 import com.example.ui.components.RoadmapProgressHeader
 import com.example.ui.components.WavySnakeStationRow
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayGlassSurface
+import com.example.ui.theme.DayGlassSurfaceElevated
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.DayTextSecondary
+import com.example.ui.theme.DayTextTertiary
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -115,21 +131,21 @@ import kotlinx.coroutines.launch
 
 /**
  * 500-Station Wavy Roadmap & Dynamic Randomized Task Engine:
- * - Continuous scrollable Bezier/sine-wave snake path connecting 500 progressive stations
- * - Deep OLED dark background (#0B0F19 -> #121826) with ambient floating glow dots
- * - Frosted glassmorphism HUD & station cards with glowing cyan (#00F0FF), electric mint (#00FF88),
- *   and warm fire orange (#FF8800) milestone accents
- * - Dynamic Task Engine (Daily, Weekly, Monthly, Annual) using Inventory Skip-Keys
+ * - Top quick-action bar: Left "Tasks Ledger", Right "Xp Logs"
+ * - 3 Main Tabs: Roadmap / Tasks / Elite Missions
+ * - Every task displays a unique compact Task ID code (e.g. D23E)
+ * - Skip action shows a custom key silhouette matching key type (Wooden / Bronze / Silver) beside "Skip"
  */
 @Composable
 fun RoadmapScreen(
     viewModel: IndividualViewModel,
-    onNavigateBack: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     initialMainTab: Int = 0,
     onMainTabChanged: (Int) -> Unit = {},
-    onOpenTasksLedger: () -> Unit = {}
+    onOpenTasksLedger: () -> Unit = {},
+    onOpenXpLogs: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -137,6 +153,7 @@ fun RoadmapScreen(
     val isHapticEnabled by viewModel.isHapticFeedbackEnabled
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
+    val appLayoutDirection = LocalLayoutDirection.current
 
     val totalXp by viewModel.totalXp.collectAsStateWithLifecycle()
     val claimedStations by viewModel.claimedStations.collectAsStateWithLifecycle()
@@ -193,7 +210,13 @@ fun RoadmapScreen(
         }
     }
 
-    val rtlSign = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1 else 1
+    val rtlSign = if (appLayoutDirection == LayoutDirection.Rtl) -1 else 1
+    val ledgerAccent = if (isDarkTheme) ElectricMint else DayEmerald
+    val xpLogsAccent = if (isDarkTheme) NeonViolet else DayPurple
+    val pillBgLedger = if (isDarkTheme) Color(0xBB0D1D24) else DayGlassSurface
+    val pillBgXpLogs = if (isDarkTheme) Color(0xBB191229) else DayGlassSurface
+    val tabAquaAccent = if (isDarkTheme) NeonAqua else DayCyan
+    val tabEliteAccent = if (isDarkTheme) NeonAmber else DayOrange
 
     Box(
         modifier = modifier
@@ -201,108 +224,113 @@ fun RoadmapScreen(
             .clipToBounds()
             .testTag("roadmap_screen")
     ) {
-        // Deep OLED background & floating subtle glow dots
-        RoadmapAmbientBackground(modifier = Modifier.fillMaxSize())
+        RoadmapAmbientBackground(
+            modifier = Modifier.fillMaxSize(),
+            darkTheme = isDarkTheme
+        )
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // TOP HEADER & NAVIGATION PILLS
+            // TOP QUICK-ACTION ROW & NAVIGATION PILLS
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                // Physical LTR layout so "Tasks Ledger" sits strictly on the physical LEFT
+                // and "Xp Logs" sits strictly on the physical RIGHT.
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = {
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                onNavigateBack()
-                            },
+                        // LEFT: Tasks Ledger button
+                        Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xBB161E31))
-                                .border(1.dp, Color(0x40FFFFFF), CircleShape)
-                                .testTag("roadmap_back_btn")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = if (isAr) "رجوع" else "Back",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column {
-                            Text(
-                                text = stringResource(R.string.roadmap_title),
-                                fontWeight = FontWeight.Black,
-                                fontFamily = PlusJakartaSans,
-                                fontSize = 18.sp,
-                                color = Color.White
-                            )
-                            Text(
-                                text = stringResource(R.string.roadmap_subtitle),
-                                fontSize = 11.sp,
-                                color = Color(0xFF94A3B8)
-                            )
-                        }
-                    }
-
-                    // Top-Right Frosted Tasks Ledger Button (replaces Shield badge opposite Roadmap title)
-                    Box(
-                        modifier = Modifier
-                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                            .clip(RoundedCornerShape(50))
-                            .clickable {
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                onOpenTasksLedger()
-                            }
-                            .testTag("roadmap_header_ledger_btn"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            modifier = Modifier
+                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                                 .clip(RoundedCornerShape(50))
-                                .background(Color(0xBB0D1D24))
-                                .border(1.2.dp, ElectricMint.copy(alpha = 0.8f), RoundedCornerShape(50))
-                                .padding(horizontal = 12.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                .clickable {
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    onOpenTasksLedger()
+                                }
+                                .testTag("roadmap_header_ledger_btn"),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.MenuBook,
-                                contentDescription = if (isAr) "دفتر المهام" else "Tasks Ledger",
-                                tint = ElectricMint,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = when {
-                                    isAr -> "دفتر المهام"
-                                    currentLang == "fr" -> "Registre"
-                                    else -> "Tasks Ledger"
-                                },
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Black,
-                                fontFamily = PlusJakartaSans,
-                                color = ElectricMint
-                            )
+                            CompositionLocalProvider(LocalLayoutDirection provides appLayoutDirection) {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(pillBgLedger)
+                                        .border(1.2.dp, ledgerAccent.copy(alpha = 0.8f), RoundedCornerShape(50))
+                                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MenuBook,
+                                        contentDescription = if (isAr) "دفتر المهام" else "Tasks Ledger",
+                                        tint = ledgerAccent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = when {
+                                            isAr -> "دفتر المهام"
+                                            currentLang == "fr" -> "Registre"
+                                            else -> "Tasks Ledger"
+                                        },
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black,
+                                        fontFamily = PlusJakartaSans,
+                                        color = ledgerAccent
+                                    )
+                                }
+                            }
+                        }
+
+                        // RIGHT: Xp Logs button
+                        Box(
+                            modifier = Modifier
+                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                                .clip(RoundedCornerShape(50))
+                                .clickable {
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    onOpenXpLogs()
+                                }
+                                .testTag("roadmap_header_xp_logs_btn"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CompositionLocalProvider(LocalLayoutDirection provides appLayoutDirection) {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(pillBgXpLogs)
+                                        .border(1.2.dp, xpLogsAccent.copy(alpha = 0.8f), RoundedCornerShape(50))
+                                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.History,
+                                        contentDescription = if (isAr) "سجل XP" else "Xp Logs",
+                                        tint = xpLogsAccent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Xp Logs",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black,
+                                        fontFamily = PlusJakartaSans,
+                                        color = xpLogsAccent
+                                    )
+                                }
+                            }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // MAIN SEGMENTED GLASS PILL TABS: Roadmap vs Tasks vs Elite Missions
                 Row(
@@ -313,7 +341,8 @@ fun RoadmapScreen(
                         label = stringResource(R.string.roadmap_tab_stations),
                         icon = Icons.Default.Timeline,
                         selected = selectedMainTab == 0,
-                        accentColor = NeonAqua,
+                        accentColor = tabAquaAccent,
+                        isDarkTheme = isDarkTheme,
                         onClick = {
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             selectedMainTab = 0
@@ -327,7 +356,8 @@ fun RoadmapScreen(
                         label = stringResource(R.string.roadmap_tab_tasks),
                         icon = Icons.Default.Bolt,
                         selected = selectedMainTab == 1,
-                        accentColor = NeonAqua,
+                        accentColor = tabAquaAccent,
+                        isDarkTheme = isDarkTheme,
                         onClick = {
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             selectedMainTab = 1
@@ -341,7 +371,8 @@ fun RoadmapScreen(
                         label = stringResource(R.string.roadmap_tab_elite_missions),
                         icon = Icons.Default.MilitaryTech,
                         selected = selectedMainTab == 2,
-                        accentColor = NeonAmber,
+                        accentColor = tabEliteAccent,
+                        isDarkTheme = isDarkTheme,
                         onClick = {
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             selectedMainTab = 2
@@ -388,6 +419,7 @@ fun RoadmapScreen(
                             currentStageXp = stageProgress.currentStageXp,
                             isAr = isAr,
                             currentLang = currentLang,
+                            isDarkTheme = isDarkTheme,
                             onJumpToStation = { targetStation ->
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                 coroutineScope.launch {
@@ -404,228 +436,208 @@ fun RoadmapScreen(
                     }
 
                     1 -> {
-                // ==========================================
-                // TAB 1: DYNAMIC TASK ENGINE & TASKS LEDGER
-                // ==========================================
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp)
-                ) {
-                    var everlastingFilter by remember { mutableStateOf(0) } // 0: All active, 1: Ready to Collect, 2: Pending
+                        // ==========================================
+                        // TAB 1: DYNAMIC TASK ENGINE
+                        // ==========================================
+                        val cyanAccent = if (isDarkTheme) NeonCyan else DayCyan
+                        val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
+                        val descColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
 
-                    // Period Selector Chips
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        PeriodFilterChip(
-                            label = if (isAr) "يومية (5)" else "Daily (5)",
-                            isSelected = selectedTaskPeriod == TaskPeriod.DAILY,
-                            onClick = {
-                                selectedTaskPeriod = TaskPeriod.DAILY
-                            }
-                        )
-                        PeriodFilterChip(
-                            label = if (isAr) "أسبوعية (7)" else "Weekly (7)",
-                            isSelected = selectedTaskPeriod == TaskPeriod.WEEKLY,
-                            onClick = {
-                                selectedTaskPeriod = TaskPeriod.WEEKLY
-                            }
-                        )
-                        PeriodFilterChip(
-                            label = if (isAr) "شهرية (10)" else "Monthly (10)",
-                            isSelected = selectedTaskPeriod == TaskPeriod.MONTHLY,
-                            onClick = {
-                                selectedTaskPeriod = TaskPeriod.MONTHLY
-                            }
-                        )
-                        PeriodFilterChip(
-                            label = if (isAr) "الأبدية (${yearlyTasks.size})" else "Eternal (${yearlyTasks.size})",
-                            isSelected = selectedTaskPeriod == TaskPeriod.YEARLY,
-                            onClick = {
-                                selectedTaskPeriod = TaskPeriod.YEARLY
-                            }
-                        )
-                    }
-
-                    // Eternal Master Goals Header Banner (Schedule countdown lives directly inside locked task containers)
-                    if (selectedTaskPeriod == TaskPeriod.YEARLY) {
-                        // Eternal Master Goals Header Banner
-                        val readyEternalCount = yearlyTasks.count { it.isReadyToClaim }
-                        val claimedEternalCount = (TaskPools.ALL_EVERLASTING_TASKS.size - yearlyTasks.size).coerceAtLeast(0)
-                        val totalEternal = TaskPools.ALL_EVERLASTING_TASKS.size.coerceAtLeast(1)
-                        val progressFraction = (claimedEternalCount.toFloat() / totalEternal.toFloat()).coerceIn(0f, 1f)
-
-                        LiquidGlassCard(
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 10.dp),
-                            shape = RoundedCornerShape(14.dp)
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp)
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = if (isAr) "مهام الأبدية (${yearlyTasks.size} متبقية)" else "Eternal Goals (${yearlyTasks.size} Remaining)",
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Black,
-                                            fontFamily = PlusJakartaSans,
-                                            color = NeonAmber
-                                        )
-                                        Text(
-                                            text = if (isAr) {
-                                                "عند جمع المكافأة تُنقل المهمة مباشرةً إلى دفتر المهام المنجزة • دون مفاتيح تجاوز"
-                                            } else {
-                                                "Collecting a completed goal transfers it directly to the Completed Tasks Ledger"
-                                            },
-                                            fontSize = 10.sp,
-                                            color = Color(0xFF94A3B8)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0x33F59E0B))
-                                            .border(1.dp, NeonAmber, RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                                onMainTabChanged(1)
-                                                onOpenTasksLedger()
-                                            }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = if (isAr) "في الدفتر: $claimedEternalCount/$totalEternal" else "Ledger: $claimedEternalCount/$totalEternal",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = NeonAmber
-                                        )
-                                    }
-                                }
+                            var everlastingFilter by remember { mutableStateOf(0) } // 0: All active, 1: Collect, 2: Pending
 
-                                Spacer(modifier = Modifier.height(8.dp))
+                            // Period Selector Chips
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(vertical = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                PeriodFilterChip(
+                                    label = if (isAr) "يومية (5)" else "Daily (5)",
+                                    isSelected = selectedTaskPeriod == TaskPeriod.DAILY,
+                                    accentColor = cyanAccent,
+                                    isDarkTheme = isDarkTheme,
+                                    onClick = { selectedTaskPeriod = TaskPeriod.DAILY }
+                                )
+                                PeriodFilterChip(
+                                    label = if (isAr) "أسبوعية (7)" else "Weekly (7)",
+                                    isSelected = selectedTaskPeriod == TaskPeriod.WEEKLY,
+                                    accentColor = cyanAccent,
+                                    isDarkTheme = isDarkTheme,
+                                    onClick = { selectedTaskPeriod = TaskPeriod.WEEKLY }
+                                )
+                                PeriodFilterChip(
+                                    label = if (isAr) "شهرية (10)" else "Monthly (10)",
+                                    isSelected = selectedTaskPeriod == TaskPeriod.MONTHLY,
+                                    accentColor = cyanAccent,
+                                    isDarkTheme = isDarkTheme,
+                                    onClick = { selectedTaskPeriod = TaskPeriod.MONTHLY }
+                                )
+                                PeriodFilterChip(
+                                    label = if (isAr) "الأبدية (${yearlyTasks.size})" else "Eternal (${yearlyTasks.size})",
+                                    isSelected = selectedTaskPeriod == TaskPeriod.YEARLY,
+                                    accentColor = cyanAccent,
+                                    isDarkTheme = isDarkTheme,
+                                    onClick = { selectedTaskPeriod = TaskPeriod.YEARLY }
+                                )
+                            }
 
-                                Box(
+                            // Eternal Master Goals Header Banner
+                            if (selectedTaskPeriod == TaskPeriod.YEARLY) {
+                                val readyEternalCount = yearlyTasks.count { it.isReadyToClaim }
+                                val claimedEternalCount = (TaskPools.ALL_EVERLASTING_TASKS.size - yearlyTasks.size).coerceAtLeast(0)
+                                val totalEternal = TaskPools.ALL_EVERLASTING_TASKS.size.coerceAtLeast(1)
+                                val progressFraction = (claimedEternalCount.toFloat() / totalEternal.toFloat()).coerceIn(0f, 1f)
+
+                                LiquidGlassCard(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp))
-                                        .background(Color(0x331E293B))
+                                        .padding(bottom = 10.dp),
+                                    shape = RoundedCornerShape(14.dp),
+                                    darkTheme = isDarkTheme
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth(progressFraction)
-                                            .height(6.dp)
-                                            .background(Brush.horizontalGradient(listOf(NeonAmber, Color(0xFFF97316))))
-                                    )
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = if (isAr) "مهام الأبدية (${yearlyTasks.size} متبقية)" else "Eternal Goals (${yearlyTasks.size} Remaining)",
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Black,
+                                                    fontFamily = PlusJakartaSans,
+                                                    color = amberAccent
+                                                )
+                                                Text(
+                                                    text = if (isAr) {
+                                                        "عند جمع المكافأة تُنقل المهمة مباشرةً إلى دفتر المهام المنجزة • دون مفاتيح تجاوز"
+                                                    } else {
+                                                        "Collecting a completed goal transfers it directly to the Completed Tasks Ledger"
+                                                    },
+                                                    fontSize = 10.sp,
+                                                    color = descColor
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(amberAccent.copy(alpha = if (isDarkTheme) 0.2f else 0.14f))
+                                                    .border(1.dp, amberAccent, RoundedCornerShape(8.dp))
+                                                    .clickable {
+                                                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                                        onMainTabChanged(1)
+                                                        onOpenTasksLedger()
+                                                    }
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (isAr) "في الدفتر: $claimedEternalCount/$totalEternal" else "Ledger: $claimedEternalCount/$totalEternal",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = amberAccent
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp))
+                                                .background(if (isDarkTheme) Color(0x331E293B) else DayGlassSurfaceElevated)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth(progressFraction)
+                                                    .height(6.dp)
+                                                    .background(Brush.horizontalGradient(listOf(amberAccent, Color(0xFFF97316))))
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            FilterChipTiny(
+                                                label = if (isAr) "الكل (${yearlyTasks.size})" else "All (${yearlyTasks.size})",
+                                                selected = everlastingFilter == 0,
+                                                isDarkTheme = isDarkTheme,
+                                                onClick = { everlastingFilter = 0 }
+                                            )
+                                            FilterChipTiny(
+                                                label = if (isAr) "جاهزة للجمع ($readyEternalCount)" else "Collect ($readyEternalCount)",
+                                                selected = everlastingFilter == 1,
+                                                isDarkTheme = isDarkTheme,
+                                                onClick = { everlastingFilter = 1 }
+                                            )
+                                            FilterChipTiny(
+                                                label = if (isAr) "قيد الإنجاز (${yearlyTasks.size - readyEternalCount})" else "In Progress (${yearlyTasks.size - readyEternalCount})",
+                                                selected = everlastingFilter == 2,
+                                                isDarkTheme = isDarkTheme,
+                                                onClick = { everlastingFilter = 2 }
+                                            )
+                                        }
+                                    }
                                 }
+                            }
 
-                                Spacer(modifier = Modifier.height(8.dp))
+                            val currentTasks = when (selectedTaskPeriod) {
+                                TaskPeriod.DAILY -> dailyTasks
+                                TaskPeriod.WEEKLY -> weeklyTasks
+                                TaskPeriod.MONTHLY -> monthlyTasks
+                                TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> when (everlastingFilter) {
+                                    1 -> yearlyTasks.filter { it.isReadyToClaim }
+                                    2 -> yearlyTasks.filter { !it.isReadyToClaim }
+                                    else -> yearlyTasks
+                                }
+                            }
 
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    FilterChipTiny(
-                                        label = if (isAr) "الكل (${yearlyTasks.size})" else "All (${yearlyTasks.size})",
-                                        selected = everlastingFilter == 0,
-                                        onClick = { everlastingFilter = 0 }
-                                    )
-                                    FilterChipTiny(
-                                        label = if (isAr) "جاهزة للجمع ($readyEternalCount)" else "Collect ($readyEternalCount)",
-                                        selected = everlastingFilter == 1,
-                                        onClick = { everlastingFilter = 1 }
-                                    )
-                                    FilterChipTiny(
-                                        label = if (isAr) "قيد الإنجاز (${yearlyTasks.size - readyEternalCount})" else "In Progress (${yearlyTasks.size - readyEternalCount})",
-                                        selected = everlastingFilter == 2,
-                                        onClick = { everlastingFilter = 2 }
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(bottom = 48.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(currentTasks, key = { it.id }) { task ->
+                                    TaskItemCard(
+                                        task = task,
+                                        nowMillis = nowMillis,
+                                        currentLang = currentLang,
+                                        isDarkTheme = isDarkTheme,
+                                        availableKeysForType = when (task.requiredSkipKey) {
+                                            SkipKeyType.WOODEN -> woodenKeys
+                                            SkipKeyType.BRONZE -> bronzeKeys
+                                            SkipKeyType.SILVER -> silverKeys
+                                        },
+                                        onClaimReward = {
+                                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            viewModel.claimTaskReward(task.id)
+                                        },
+                                        onSkipWithKey = {
+                                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            viewModel.useSkipKeyForTask(task.id)
+                                        }
                                     )
                                 }
                             }
                         }
-                    }
-
-                    val currentTasks = when (selectedTaskPeriod) {
-                        TaskPeriod.DAILY -> dailyTasks
-                        TaskPeriod.WEEKLY -> weeklyTasks
-                        TaskPeriod.MONTHLY -> monthlyTasks
-                        TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> when (everlastingFilter) {
-                            1 -> yearlyTasks.filter { it.isReadyToClaim }
-                            2 -> yearlyTasks.filter { !it.isReadyToClaim }
-                            else -> yearlyTasks
-                        }
-                    }
-
-                    // Inventory Skip-Keys Summary Strip (for Daily, Weekly, Monthly)
-                    if (selectedTaskPeriod != TaskPeriod.YEARLY) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 10.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            KeyInventoryChip(
-                                name = SkipKeyType.WOODEN.getLocalizedName(currentLang),
-                                count = woodenKeys,
-                                color = Color(0xFFD97706),
-                                modifier = Modifier.weight(1f)
-                            )
-                            KeyInventoryChip(
-                                name = SkipKeyType.BRONZE.getLocalizedName(currentLang),
-                                count = bronzeKeys,
-                                color = Color(0xFFF59E0B),
-                                modifier = Modifier.weight(1f)
-                            )
-                            KeyInventoryChip(
-                                name = SkipKeyType.SILVER.getLocalizedName(currentLang),
-                                count = silverKeys,
-                                color = Color(0xFFE2E8F0),
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 48.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(currentTasks, key = { it.id }) { task ->
-                            TaskItemCard(
-                                task = task,
-                                nowMillis = nowMillis,
-                                currentLang = currentLang,
-                                availableKeysForType = when (task.requiredSkipKey) {
-                                    SkipKeyType.WOODEN -> woodenKeys
-                                    SkipKeyType.BRONZE -> bronzeKeys
-                                    SkipKeyType.SILVER -> silverKeys
-                                },
-                                onClaimReward = {
-                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    viewModel.claimTaskReward(task.id)
-                                },
-                                onSkipWithKey = {
-                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    viewModel.useSkipKeyForTask(task.id)
-                                }
-                            )
-                        }
-                    }
-                }
                     }
 
                     else -> {
                         EliteMissionsSoonPage(
-                            currentLang = currentLang
+                            currentLang = currentLang,
+                            isDarkTheme = isDarkTheme
                         )
                     }
                 }
@@ -644,6 +656,7 @@ private fun RoadmapStationsTabContent(
     currentStageXp: Long,
     isAr: Boolean,
     currentLang: String,
+    isDarkTheme: Boolean,
     onJumpToStation: (Int) -> Unit,
     onClaimStation: (Int) -> Unit
 ) {
@@ -715,6 +728,7 @@ private fun RoadmapStationsTabContent(
                 isAr = isAr,
                 currentLang = currentLang,
                 glowPulse = glowPulse,
+                isDarkTheme = isDarkTheme,
                 onJumpToStation = onJumpToStation
             )
         }
@@ -746,6 +760,7 @@ private fun RoadmapStationsTabContent(
                     badgeBobDp = badgeBobDp,
                     nextStationId = nextStationId,
                     currentStageXp = currentStageXp,
+                    isDarkTheme = isDarkTheme,
                     onClaim = { onClaimStation(station.id) }
                 )
             }
@@ -755,10 +770,18 @@ private fun RoadmapStationsTabContent(
 
 @Composable
 private fun EliteMissionsSoonPage(
-    currentLang: String
+    currentLang: String,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
-    val goldAccent = NeonAmber
-    val violetAccent = NeonViolet
+    val goldAccent = if (isDarkTheme) NeonAmber else DayOrange
+    val violetAccent = if (isDarkTheme) NeonViolet else DayPurple
+    val cardBrush = if (isDarkTheme) {
+        Brush.verticalGradient(listOf(Color(0xEB15182B), Color(0xEB0E1222), Color(0xEB090D18)))
+    } else {
+        Brush.verticalGradient(listOf(Color(0xFAFFFFFF), Color(0xFFF3F7FC)))
+    }
+    val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
+    val descColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
 
     Box(
         modifier = Modifier
@@ -772,15 +795,7 @@ private fun EliteMissionsSoonPage(
                 .widthIn(max = 480.dp)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp))
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color(0xEB15182B),
-                            Color(0xEB0E1222),
-                            Color(0xEB090D18)
-                        )
-                    )
-                )
+                .background(cardBrush)
                 .border(
                     width = 1.5.dp,
                     brush = Brush.linearGradient(listOf(goldAccent.copy(alpha = 0.8f), violetAccent.copy(alpha = 0.7f))),
@@ -819,14 +834,14 @@ private fun EliteMissionsSoonPage(
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = PlusJakartaSans,
-                color = Color.White,
+                color = titleColor,
                 textAlign = TextAlign.Center
             )
 
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(goldAccent.copy(alpha = 0.18f))
+                    .background(goldAccent.copy(alpha = if (isDarkTheme) 0.18f else 0.14f))
                     .border(1.2.dp, goldAccent.copy(alpha = 0.8f), RoundedCornerShape(50))
                     .padding(horizontal = 28.dp, vertical = 10.dp)
             ) {
@@ -848,7 +863,7 @@ private fun EliteMissionsSoonPage(
                     else -> "High-stakes elite operations and prestige missions are arriving soon."
                 },
                 fontSize = 12.sp,
-                color = Color(0xFF94A3B8),
+                color = descColor,
                 textAlign = TextAlign.Center,
                 lineHeight = 18.sp
             )
@@ -862,21 +877,26 @@ private fun RoadmapPillTabButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     selected: Boolean,
     accentColor: Color = NeonAqua,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val unselectedBg = if (isDarkTheme) Color(0xAA131A29) else DayGlassSurface
+    val unselectedBorder = if (isDarkTheme) Color(0x26FFFFFF) else Color(0xFFCBD5E1)
+    val unselectedText = if (isDarkTheme) Color(0xFFCBD5E1) else DayTextSecondary
+
     val bgColor by animateColorAsState(
-        targetValue = if (selected) accentColor.copy(alpha = 0.16f) else Color(0xAA131A29),
+        targetValue = if (selected) accentColor.copy(alpha = if (isDarkTheme) 0.16f else 0.14f) else unselectedBg,
         animationSpec = tween(150),
         label = "pill_bg"
     )
     val borderColor by animateColorAsState(
-        targetValue = if (selected) accentColor.copy(alpha = 0.85f) else Color(0x26FFFFFF),
+        targetValue = if (selected) accentColor.copy(alpha = 0.85f) else unselectedBorder,
         animationSpec = tween(150),
         label = "pill_border"
     )
     val contentColor by animateColorAsState(
-        targetValue = if (selected) accentColor else Color(0xFFCBD5E1),
+        targetValue = if (selected) accentColor else unselectedText,
         animationSpec = tween(150),
         label = "pill_content"
     )
@@ -912,6 +932,182 @@ private fun RoadmapPillTabButton(
 }
 
 /**
+ * Custom key icon drawn cleanly with Canvas so WOODEN, BRONZE, and SILVER keys
+ * have unmistakably distinct silhouettes & metallic/wood accents matching their type.
+ */
+@Composable
+fun SkipKeyShapeIcon(
+    keyType: SkipKeyType,
+    enabled: Boolean,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    modifier: Modifier = Modifier
+) {
+    val primaryColor = if (!enabled) {
+        Color(0xFF94A3B8)
+    } else when (keyType) {
+        SkipKeyType.WOODEN -> if (isDarkTheme) Color(0xFFD97706) else Color(0xFF92400E)
+        SkipKeyType.BRONZE -> if (isDarkTheme) Color(0xFFF59E0B) else Color(0xFFB45309)
+        SkipKeyType.SILVER -> if (isDarkTheme) Color(0xFFE2E8F0) else Color(0xFF475569)
+    }
+    val highlightColor = if (!enabled) {
+        Color(0xFFCBD5E1)
+    } else when (keyType) {
+        SkipKeyType.WOODEN -> if (isDarkTheme) Color(0xFFFBBF24) else Color(0xFFD97706)
+        SkipKeyType.BRONZE -> if (isDarkTheme) Color(0xFFFDE68A) else Color(0xFFF59E0B)
+        SkipKeyType.SILVER -> if (isDarkTheme) Color.White else Color(0xFF94A3B8)
+    }
+
+    Canvas(modifier = modifier.size(18.dp)) {
+        val w = size.width
+        val h = size.height
+        val strokeThin = 1.3.dp.toPx()
+
+        when (keyType) {
+            SkipKeyType.WOODEN -> {
+                // Wooden Key: warm chunky rounded-plank oval bow + rustic grain line + 2 wide carved square teeth
+                drawRoundRect(
+                    color = primaryColor,
+                    topLeft = Offset(w * 0.05f, h * 0.24f),
+                    size = Size(w * 0.34f, h * 0.52f),
+                    cornerRadius = CornerRadius(w * 0.12f, h * 0.18f),
+                    style = Stroke(width = strokeThin * 1.35f)
+                )
+                drawLine(
+                    color = highlightColor,
+                    start = Offset(w * 0.14f, h * 0.44f),
+                    end = Offset(w * 0.30f, h * 0.44f),
+                    strokeWidth = 1.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                // Thick wooden shaft
+                drawLine(
+                    color = primaryColor,
+                    start = Offset(w * 0.39f, h * 0.50f),
+                    end = Offset(w * 0.93f, h * 0.50f),
+                    strokeWidth = strokeThin * 1.4f,
+                    cap = StrokeCap.Round
+                )
+                // Twin square carved wooden teeth
+                drawRect(
+                    color = primaryColor,
+                    topLeft = Offset(w * 0.64f, h * 0.50f),
+                    size = Size(w * 0.11f, h * 0.24f)
+                )
+                drawRect(
+                    color = highlightColor,
+                    topLeft = Offset(w * 0.81f, h * 0.50f),
+                    size = Size(w * 0.11f, h * 0.28f)
+                )
+            }
+
+            SkipKeyType.BRONZE -> {
+                // Bronze Key: antique rotated diamond bow + decorative collar ring + dual stepped castle bit
+                val diamond = Path().apply {
+                    moveTo(w * 0.23f, h * 0.18f)
+                    lineTo(w * 0.40f, h * 0.50f)
+                    lineTo(w * 0.23f, h * 0.82f)
+                    lineTo(w * 0.06f, h * 0.50f)
+                    close()
+                }
+                drawPath(
+                    path = diamond,
+                    color = primaryColor,
+                    style = Stroke(width = strokeThin * 1.25f, join = StrokeJoin.Round)
+                )
+                drawCircle(
+                    color = highlightColor,
+                    radius = w * 0.06f,
+                    center = Offset(w * 0.23f, h * 0.50f)
+                )
+                // Collar notch
+                drawLine(
+                    color = highlightColor,
+                    start = Offset(w * 0.48f, h * 0.38f),
+                    end = Offset(w * 0.48f, h * 0.62f),
+                    strokeWidth = strokeThin,
+                    cap = StrokeCap.Round
+                )
+                // Shaft
+                drawLine(
+                    color = primaryColor,
+                    start = Offset(w * 0.40f, h * 0.50f),
+                    end = Offset(w * 0.94f, h * 0.50f),
+                    strokeWidth = strokeThin * 1.2f,
+                    cap = StrokeCap.Round
+                )
+                // Stepped antique castle teeth
+                val bitPath = Path().apply {
+                    moveTo(w * 0.62f, h * 0.50f)
+                    lineTo(w * 0.62f, h * 0.78f)
+                    lineTo(w * 0.72f, h * 0.78f)
+                    lineTo(w * 0.72f, h * 0.65f)
+                    lineTo(w * 0.82f, h * 0.65f)
+                    lineTo(w * 0.82f, h * 0.80f)
+                    lineTo(w * 0.92f, h * 0.80f)
+                    lineTo(w * 0.92f, h * 0.50f)
+                }
+                drawPath(
+                    path = bitPath,
+                    color = primaryColor,
+                    style = Stroke(width = strokeThin, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+            }
+
+            SkipKeyType.SILVER -> {
+                // Silver Key: royal hexagonal faceted crown bow + twin collar rings + 3 precision warded teeth
+                val hex = Path().apply {
+                    moveTo(w * 0.14f, h * 0.22f)
+                    lineTo(w * 0.31f, h * 0.22f)
+                    lineTo(w * 0.40f, h * 0.50f)
+                    lineTo(w * 0.31f, h * 0.78f)
+                    lineTo(w * 0.14f, h * 0.78f)
+                    lineTo(w * 0.05f, h * 0.50f)
+                    close()
+                }
+                drawPath(
+                    path = hex,
+                    color = primaryColor,
+                    style = Stroke(width = strokeThin * 1.25f, join = StrokeJoin.Round)
+                )
+                // Inner crown gem glint
+                drawLine(
+                    color = highlightColor,
+                    start = Offset(w * 0.17f, h * 0.38f),
+                    end = Offset(w * 0.28f, h * 0.38f),
+                    strokeWidth = 1.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                // Double collar guard
+                drawLine(
+                    color = highlightColor,
+                    start = Offset(w * 0.46f, h * 0.35f),
+                    end = Offset(w * 0.46f, h * 0.65f),
+                    strokeWidth = 1.1.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = primaryColor,
+                    start = Offset(w * 0.40f, h * 0.50f),
+                    end = Offset(w * 0.95f, h * 0.50f),
+                    strokeWidth = strokeThin * 1.15f,
+                    cap = StrokeCap.Round
+                )
+                // Triple royal warded teeth
+                listOf(0.60f to 0.70f, 0.75f to 0.80f, 0.90f to 0.74f).forEachIndexed { idx, (tx, ty) ->
+                    drawLine(
+                        color = if (idx == 1) highlightColor else primaryColor,
+                        start = Offset(w * tx, h * 0.50f),
+                        end = Offset(w * tx, h * ty),
+                        strokeWidth = strokeThin * 1.1f,
+                        cap = StrokeCap.Round
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
  * Task Item Card in the Dynamic Task Engine
  */
 @Composable
@@ -919,26 +1115,39 @@ fun TaskItemCard(
     task: TaskItem,
     nowMillis: Long = System.currentTimeMillis(),
     currentLang: String = "ar",
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     availableKeysForType: Int,
     onClaimReward: () -> Unit = {},
     onSkipWithKey: () -> Unit
 ) {
     val isAr = currentLang == "ar"
+    val isFr = currentLang == "fr"
     val isLocked = task.isLocked(nowMillis)
     val isReady = task.status == TaskStatus.READY_TO_CLAIM
+
+    val cyanAccent = if (isDarkTheme) NeonCyan else DayCyan
+    val emeraldAccent = if (isDarkTheme) NeonEmerald else DayEmerald
+    val mintAccent = if (isDarkTheme) ElectricMint else DayEmerald
+    val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
+    val violetAccent = if (isDarkTheme) NeonViolet else DayPurple
+    val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
+    val descColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+    val mutedColor = if (isDarkTheme) Color(0xFF64748B) else DayTextTertiary
+    val idBadgeBg = if (isDarkTheme) Color(0x2838BDF8) else Color(0x180284C7)
 
     LiquidGlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .then(
                 when {
-                    isReady -> Modifier.border(1.4.dp, ElectricMint, RoundedCornerShape(16.dp))
-                    isLocked -> Modifier.border(1.1.dp, NeonAmber.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                    isReady -> Modifier.border(1.4.dp, mintAccent, RoundedCornerShape(16.dp))
+                    isLocked -> Modifier.border(1.1.dp, amberAccent.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
                     else -> Modifier
                 }
             )
             .testTag("task_card_${task.id}"),
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(16.dp),
+        darkTheme = isDarkTheme
     ) {
         Column(
             modifier = Modifier
@@ -951,59 +1160,86 @@ fun TaskItemCard(
                 verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(idBadgeBg)
+                                .border(0.9.dp, cyanAccent.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                .testTag("task_id_badge_${task.id}")
+                        ) {
+                            Text(
+                                text = task.taskCode,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = PlusJakartaSans,
+                                color = cyanAccent
+                            )
+                        }
+
+                        // Difficulty Tier Indicator Pill
+                        val (tierLabel, tierColor) = when (task.difficultyTier) {
+                            1 -> (if (isAr) "سهل" else "Easy") to cyanAccent
+                            2 -> (if (isAr) "متوسط" else "Medium") to amberAccent
+                            3 -> (if (isAr) "متقدم" else "Hard") to if (isDarkTheme) Color(0xFFF97316) else Color(0xFFC2410C)
+                            else -> (if (isAr) "نخبوي" else "Elite") to violetAccent
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(tierColor.copy(alpha = 0.16f))
+                                .border(0.8.dp, tierColor.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = tierLabel,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = tierColor
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
                     Text(
                         text = task.getLocalizedTitle(currentLang),
                         fontWeight = FontWeight.Bold,
                         fontFamily = PlusJakartaSans,
                         fontSize = 14.sp,
-                        color = if (isLocked) Color(0xFF94A3B8) else Color.White
+                        color = if (isLocked) descColor else titleColor
                     )
                     Text(
                         text = task.getLocalizedDescription(currentLang),
                         fontSize = 11.sp,
-                        color = Color(0xFF94A3B8),
+                        color = descColor,
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
 
-                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // XP Bounty Badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isReady) ElectricMint.copy(alpha = 0.22f) else Color(0x3310B981))
-                            .border(1.dp, if (isReady) ElectricMint else NeonEmerald, RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = "+${task.xpBounty} XP",
-                            fontWeight = FontWeight.Black,
-                            fontSize = 11.sp,
-                            color = if (isReady) ElectricMint else NeonEmerald
-                        )
-                    }
+                Spacer(modifier = Modifier.width(8.dp))
 
-                    // Difficulty Tier Indicator Pill
-                    val (tierLabel, tierColor) = when (task.difficultyTier) {
-                        1 -> (if (isAr) "سهل" else "Easy") to NeonCyan
-                        2 -> (if (isAr) "متوسط" else "Medium") to NeonAmber
-                        3 -> (if (isAr) "متقدم" else "Hard") to Color(0xFFF97316)
-                        else -> (if (isAr) "نخبوي" else "Elite") to NeonViolet
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(tierColor.copy(alpha = 0.16f))
-                            .border(0.8.dp, tierColor.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = tierLabel,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = tierColor
+                // XP Bounty Badge
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (isReady) mintAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.15f)
+                            else emeraldAccent.copy(alpha = if (isDarkTheme) 0.2f else 0.14f)
                         )
-                    }
+                        .border(1.dp, if (isReady) mintAccent else emeraldAccent, RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "+${task.xpBounty} XP",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        color = if (isReady) mintAccent else emeraldAccent
+                    )
                 }
             }
 
@@ -1020,7 +1256,7 @@ fun TaskItemCard(
                         .weight(1f)
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp))
-                        .background(Color(0x331E293B))
+                        .background(if (isDarkTheme) Color(0x331E293B) else DayGlassSurfaceElevated)
                 ) {
                     Box(
                         modifier = Modifier
@@ -1028,10 +1264,10 @@ fun TaskItemCard(
                             .height(6.dp)
                             .background(
                                 when {
-                                    isReady -> ElectricMint
-                                    task.isCompleted -> NeonEmerald
-                                    isLocked -> Color(0xFF64748B)
-                                    else -> NeonCyan
+                                    isReady -> mintAccent
+                                    task.isCompleted -> emeraldAccent
+                                    isLocked -> mutedColor
+                                    else -> cyanAccent
                                 }
                             )
                     )
@@ -1040,7 +1276,7 @@ fun TaskItemCard(
                 Text(
                     text = "${task.currentCount} / ${task.targetCount}",
                     fontSize = 10.sp,
-                    color = if (isReady) ElectricMint else Color(0xFFCBD5E1),
+                    color = if (isReady) mintAccent else if (isDarkTheme) Color(0xFFCBD5E1) else DayTextSecondary,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -1076,13 +1312,13 @@ fun TaskItemCard(
                             },
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = ElectricMint
+                            color = mintAccent
                         )
                         Button(
                             onClick = onClaimReward,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = ElectricMint,
-                                contentColor = Color(0xFF041418)
+                                containerColor = mintAccent,
+                                contentColor = if (isDarkTheme) Color(0xFF041418) else Color.White
                             ),
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier
@@ -1105,7 +1341,6 @@ fun TaskItemCard(
                     }
                 }
                 isLocked -> {
-                    val isFr = currentLang == "fr"
                     val countdown = TaskPools.formatRemainingCountdown(task.unlockAtMillis, nowMillis, currentLang)
                     val (grantTitle, grantSubtitle) = when (task.period) {
                         TaskPeriod.DAILY -> Pair(
@@ -1150,8 +1385,8 @@ fun TaskItemCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0x22F59E0B))
-                            .border(1.dp, NeonAmber.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                            .background(amberAccent.copy(alpha = if (isDarkTheme) 0.14f else 0.10f))
+                            .border(1.dp, amberAccent.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
                             .padding(horizontal = 10.dp, vertical = 9.dp)
                             .testTag("task_cooldown_timer_${task.id}"),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -1163,14 +1398,14 @@ fun TaskItemCard(
                             Icon(
                                 imageVector = Icons.Default.Lock,
                                 contentDescription = null,
-                                tint = NeonAmber,
+                                tint = amberAccent,
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
                                 text = grantTitle,
                                 fontSize = 10.5.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = NeonAmber
+                                color = amberAccent
                             )
                         }
                         Row(
@@ -1185,7 +1420,7 @@ fun TaskItemCard(
                                 Icon(
                                     imageVector = Icons.Default.Schedule,
                                     contentDescription = null,
-                                    tint = Color(0xFFFDE68A),
+                                    tint = if (isDarkTheme) Color(0xFFFDE68A) else amberAccent,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(5.dp))
@@ -1193,15 +1428,15 @@ fun TaskItemCard(
                                     text = grantSubtitle,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFFE2E8F0)
+                                    color = if (isDarkTheme) Color(0xFFE2E8F0) else DayTextPrimary
                                 )
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xCC0B1324))
-                                    .border(1.dp, NeonAmber, RoundedCornerShape(8.dp))
+                                    .background(if (isDarkTheme) Color(0xCC0B1324) else DayGlassSurface)
+                                    .border(1.dp, amberAccent, RoundedCornerShape(8.dp))
                                     .padding(horizontal = 9.dp, vertical = 4.dp)
                             ) {
                                 Text(
@@ -1209,7 +1444,7 @@ fun TaskItemCard(
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = PlusJakartaSans,
-                                    color = NeonAmber
+                                    color = amberAccent
                                 )
                             }
                         }
@@ -1221,13 +1456,13 @@ fun TaskItemCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = NeonEmerald, modifier = Modifier.size(16.dp))
+                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = emeraldAccent, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = if (isAr) "مكتملة (+${task.xpBounty} XP حُصدت بنجاح)" else "Completed (+${task.xpBounty} XP Claimed)",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = NeonEmerald
+                            color = emeraldAccent
                         )
                     }
                 }
@@ -1236,15 +1471,15 @@ fun TaskItemCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0x22F59E0B))
-                            .border(1.dp, Color(0x55F59E0B), RoundedCornerShape(8.dp))
+                            .background(amberAccent.copy(alpha = if (isDarkTheme) 0.14f else 0.10f))
+                            .border(1.dp, amberAccent.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
                             .padding(horizontal = 10.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = null,
-                            tint = NeonAmber,
+                            tint = amberAccent,
                             modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -1256,7 +1491,7 @@ fun TaskItemCard(
                             },
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = NeonAmber
+                            color = amberAccent
                         )
                     }
                 }
@@ -1269,14 +1504,14 @@ fun TaskItemCard(
                         Text(
                             text = if (isAr) "تُنجز بالنشاط الفعلي أو بالتجاوز" else "Complete via activity or skip-key",
                             fontSize = 10.sp,
-                            color = Color(0xFF64748B),
+                            color = mutedColor,
                             fontWeight = FontWeight.Medium
                         )
 
                         val keyColor = when (task.requiredSkipKey) {
-                            SkipKeyType.WOODEN -> Color(0xFFD97706)
-                            SkipKeyType.BRONZE -> Color(0xFFF59E0B)
-                            SkipKeyType.SILVER -> Color(0xFFE2E8F0)
+                            SkipKeyType.WOODEN -> if (isDarkTheme) Color(0xFFD97706) else Color(0xFF92400E)
+                            SkipKeyType.BRONZE -> if (isDarkTheme) Color(0xFFF59E0B) else Color(0xFFB45309)
+                            SkipKeyType.SILVER -> if (isDarkTheme) Color(0xFFE2E8F0) else Color(0xFF475569)
                         }
                         val hasKeyAvailable = availableKeysForType > 0
 
@@ -1285,29 +1520,29 @@ fun TaskItemCard(
                             enabled = hasKeyAvailable,
                             shape = RoundedCornerShape(10.dp),
                             border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (hasKeyAvailable) keyColor.copy(alpha = 0.75f) else Color(0x3364748B)
+                                1.1.dp,
+                                if (hasKeyAvailable) keyColor.copy(alpha = 0.8f) else mutedColor.copy(alpha = 0.35f)
                             ),
                             modifier = Modifier
                                 .height(36.dp)
                                 .testTag("btn_skip_task_${task.id}")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.VpnKey,
-                                contentDescription = null,
-                                tint = if (hasKeyAvailable) keyColor else Color.Gray,
-                                modifier = Modifier.size(13.dp)
+                            SkipKeyShapeIcon(
+                                keyType = task.requiredSkipKey,
+                                enabled = hasKeyAvailable,
+                                isDarkTheme = isDarkTheme,
+                                modifier = Modifier.testTag("skip_key_shape_${task.requiredSkipKey.name.lowercase()}_${task.id}")
                             )
-                            Spacer(modifier = Modifier.width(5.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isAr) {
-                                    "تجاوز بـ ${task.requiredSkipKey.getLocalizedName(currentLang)} ($availableKeysForType)"
-                                } else {
-                                    "Skip w/ ${task.requiredSkipKey.getLocalizedName(currentLang)} ($availableKeysForType)"
+                                text = when {
+                                    isAr -> "تجاوز"
+                                    isFr -> "Passer"
+                                    else -> "Skip"
                                 },
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (hasKeyAvailable) keyColor else Color.Gray
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (hasKeyAvailable) keyColor else mutedColor
                             )
                         }
                     }
@@ -1318,34 +1553,34 @@ fun TaskItemCard(
 }
 
 @Composable
-fun KeyInventoryChip(name: String, count: Int, color: Color, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0x221E293B))
-            .border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-            .padding(vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = name, fontSize = 10.sp, color = color, fontWeight = FontWeight.Bold)
-            Text(text = "$count", fontSize = 15.sp, fontWeight = FontWeight.Black, color = Color.White)
-        }
-    }
-}
-
-@Composable
 fun PeriodFilterChip(
     label: String,
     isSelected: Boolean,
     accentColor: Color = NeonCyan,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onClick: () -> Unit
 ) {
+    val bgColor = when {
+        isSelected -> accentColor.copy(alpha = if (isDarkTheme) 0.2f else 0.14f)
+        isDarkTheme -> Color(0x221E293B)
+        else -> DayGlassSurface
+    }
+    val borderColor = when {
+        isSelected -> accentColor
+        isDarkTheme -> Color(0x20FFFFFF)
+        else -> Color(0xFFCBD5E1)
+    }
+    val textColor = when {
+        isSelected -> accentColor
+        isDarkTheme -> Color(0xFF94A3B8)
+        else -> DayTextSecondary
+    }
+
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (isSelected) accentColor.copy(alpha = 0.2f) else Color(0x221E293B))
-            .border(1.dp, if (isSelected) accentColor else Color(0x20FFFFFF), RoundedCornerShape(10.dp))
+            .background(bgColor)
+            .border(1.dp, borderColor, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
@@ -1353,7 +1588,7 @@ fun PeriodFilterChip(
             text = label,
             fontSize = 11.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) accentColor else Color(0xFF94A3B8)
+            color = textColor
         )
     }
 }
@@ -1362,13 +1597,31 @@ fun PeriodFilterChip(
 fun FilterChipTiny(
     label: String,
     selected: Boolean,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onClick: () -> Unit
 ) {
+    val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
+    val bgColor = when {
+        selected -> amberAccent.copy(alpha = if (isDarkTheme) 0.2f else 0.14f)
+        isDarkTheme -> Color(0x221E293B)
+        else -> DayGlassSurface
+    }
+    val borderColor = when {
+        selected -> amberAccent
+        isDarkTheme -> Color(0x20FFFFFF)
+        else -> Color(0xFFCBD5E1)
+    }
+    val textColor = when {
+        selected -> amberAccent
+        isDarkTheme -> Color(0xFF94A3B8)
+        else -> DayTextSecondary
+    }
+
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) Color(0x33F59E0B) else Color(0x221E293B))
-            .border(1.dp, if (selected) NeonAmber else Color(0x20FFFFFF), RoundedCornerShape(8.dp))
+            .background(bgColor)
+            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
@@ -1376,8 +1629,9 @@ fun FilterChipTiny(
             text = label,
             fontSize = 10.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) NeonAmber else Color(0xFF94A3B8)
+            color = textColor
         )
     }
 }
+
 

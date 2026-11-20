@@ -13,7 +13,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -70,6 +69,7 @@ import com.example.ui.theme.GlassBorderBrushDark
 import com.example.ui.theme.GlassBorderBrushLight
 import com.example.ui.theme.GlassCardSurfaceLight
 import com.example.ui.theme.GlassDarkPanel
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -85,7 +85,7 @@ import com.example.ui.theme.PlusJakartaSans
 @Composable
 fun LiquidGlassBackground(
     modifier: Modifier = Modifier,
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = LocalAppDarkTheme.current,
     content: @Composable BoxScope.() -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "ambient_liquid_glass")
@@ -164,7 +164,7 @@ fun LiquidGlassCard(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(20.dp),
     borderWidth: Dp = 1.dp,
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = LocalAppDarkTheme.current,
     onClick: (() -> Unit)? = null,
     testTag: String? = null,
     content: @Composable BoxScope.() -> Unit
@@ -225,7 +225,7 @@ fun LiquidGlassCard(
 fun LiquidGlassInnerPanel(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(12.dp),
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = LocalAppDarkTheme.current,
     content: @Composable BoxScope.() -> Unit
 ) {
     val bgColor = if (darkTheme) Color(0x221E293B) else Color(0x66F1F5F9)
@@ -250,7 +250,7 @@ fun LiquidGlassInnerPanel(
 fun GlassTypeBadge(
     type: String,
     modifier: Modifier = Modifier,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val (badgeBg, borderColor, textColor) = if (darkTheme) {
         when (type) {
@@ -296,7 +296,7 @@ fun GlassMetricPill(
     value: String,
     modifier: Modifier = Modifier,
     accentColor: Color = NeonCyan,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val effectiveAccent = if (darkTheme) accentColor else when (accentColor) {
         NeonCyan -> DayCyan
@@ -344,7 +344,7 @@ fun CosmicStrikeButton(
     strikeCount: Int,
     subtitle: String = "TAP TO STRIKE",
     testTag: String = "strike_button",
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -479,7 +479,7 @@ fun GlassStatSummaryCard(
     accentColor: Color,
     modifier: Modifier = Modifier,
     testTag: String? = null,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val effectiveAccent = if (darkTheme) accentColor else when (accentColor) {
         NeonCyan -> DayCyan
@@ -492,6 +492,7 @@ fun GlassStatSummaryCard(
     LiquidGlassCard(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
+        darkTheme = darkTheme,
         testTag = testTag
     ) {
         Row(
@@ -544,7 +545,7 @@ fun SmartMetricComparisonBar(
     labelA: String,
     labelB: String,
     modifier: Modifier = Modifier,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val total = (valueA + valueB).coerceAtLeast(0.001)
     val fractionA = (valueA / total).toFloat().coerceIn(0.05f, 0.95f)
@@ -572,10 +573,10 @@ fun SmartMetricComparisonBar(
                 )
                 if (isAWinner) {
                     Spacer(modifier = Modifier.width(6.dp))
-                    WinnerBadge(label = "$labelA +${((valueA - valueB) * 10.0).toLong() / 10.0}")
+                    WinnerBadge(label = "$labelA +${((valueA - valueB) * 10.0).toLong() / 10.0}", darkTheme = darkTheme)
                 } else if (isBWinner) {
                     Spacer(modifier = Modifier.width(6.dp))
-                    WinnerBadge(label = "$labelB +${((valueB - valueA) * 10.0).toLong() / 10.0}")
+                    WinnerBadge(label = "$labelB +${((valueB - valueA) * 10.0).toLong() / 10.0}", darkTheme = darkTheme)
                 }
             }
 
@@ -645,7 +646,7 @@ fun SmartMetricComparisonBar(
 @Composable
 fun WinnerBadge(
     label: String,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val emeraldColor = if (darkTheme) NeonEmerald else DayEmerald
     val badgeBg = if (darkTheme) NeonEmerald.copy(alpha = 0.2f) else Color(0x2210B981)

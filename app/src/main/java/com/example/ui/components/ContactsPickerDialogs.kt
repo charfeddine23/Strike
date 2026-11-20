@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.ui.theme.DayCyan
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -82,7 +82,7 @@ fun InAppContactsPickerDialog(
     currentLang: String,
     onSelectContact: (ImportedContact) -> Unit,
     onDismiss: () -> Unit,
-    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     useDialogWindow: Boolean = false
 ) {
     val isAr = currentLang == "ar"
@@ -389,7 +389,7 @@ fun ContactsPermissionRequiredDialog(
     currentLang: String,
     onOpenSettings: () -> Unit,
     onDismiss: () -> Unit,
-    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     useDialogWindow: Boolean = false
 ) {
     val isAr = currentLang == "ar"

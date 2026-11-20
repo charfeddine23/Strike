@@ -20,7 +20,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,6 +88,7 @@ import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
 import com.example.ui.theme.DayPurple
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -110,7 +110,7 @@ fun RecordsDashboardBanner(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     isExpanded: Boolean = false,
-    isDarkTheme: Boolean = isSystemInDarkTheme()
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val chevronRotation by animateFloatAsState(
         targetValue = if (isExpanded) 180f else 0f,
@@ -283,7 +283,7 @@ fun RecordsDashboardExpandablePanel(
     allList: List<Individual>,
     currentLang: String,
     onDismiss: () -> Unit,
-    isDarkTheme: Boolean = isSystemInDarkTheme()
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val isAr = currentLang == "ar"
     val totalCount = allList.size
@@ -797,7 +797,7 @@ fun formatYearlyWinnerName(rawName: String, maxChars: Int = 12): String {
 @Composable
 fun YearlyStatCard(
     stat: YearlyStrikeStat,
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = LocalAppDarkTheme.current,
     isAr: Boolean = true
 ) {
     val yearBadgeBg = if (darkTheme) Color(0xFF0F2537) else Color(0x2200B4D8)

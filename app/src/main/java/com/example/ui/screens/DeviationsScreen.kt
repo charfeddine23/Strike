@@ -19,7 +19,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -97,6 +96,13 @@ import com.example.R
 import com.example.data.deviations.DeviationsManager
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.theme.CaveatHandwriting
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayRose
+import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.DayTextSecondary
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -130,7 +136,7 @@ fun DeviationsScreen(
     viewModel: IndividualViewModel,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    isDarkTheme: Boolean = isSystemInDarkTheme()
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -219,6 +225,9 @@ fun DeviationsScreen(
     )
 
     val totalDnaAngle = ambientRot + manualAngleOffset.value
+    val cyanAccent = if (isDarkTheme) NeonCyan else DayCyan
+    val roseAccent = if (isDarkTheme) NeonRose else DayRose
+    val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
 
     LazyColumn(
         modifier = modifier
@@ -246,14 +255,18 @@ fun DeviationsScreen(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0x221E293B))
-                            .border(1.dp, Color(0x3338BDF8), CircleShape)
+                            .background(if (isDarkTheme) Color(0x221E293B) else Color(0xFAFFFFFF))
+                            .border(
+                                1.dp,
+                                if (isDarkTheme) Color(0x3338BDF8) else Color(0x450284C7),
+                                CircleShape
+                            )
                             .testTag("deviations_back_btn")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = if (isAr) "رجوع" else "Back",
-                            tint = NeonCyan,
+                            tint = cyanAccent,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -266,12 +279,12 @@ fun DeviationsScreen(
                             fontWeight = FontWeight.Black,
                             fontFamily = PlusJakartaSans,
                             fontSize = 20.sp,
-                            color = Color.White
+                            color = if (isDarkTheme) Color.White else DayTextPrimary
                         )
                         Text(
                             text = stringResource(R.string.deviations_subtitle),
                             fontSize = 11.sp,
-                            color = Color(0xFF94A3B8)
+                            color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
                         )
                     }
                 }
@@ -286,13 +299,17 @@ fun DeviationsScreen(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color(0x221E293B))
-                            .border(1.dp, Color(0x3338BDF8), CircleShape)
+                            .background(if (isDarkTheme) Color(0x221E293B) else Color(0xFAFFFFFF))
+                            .border(
+                                1.dp,
+                                if (isDarkTheme) Color(0x3338BDF8) else Color(0x450284C7),
+                                CircleShape
+                            )
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = if (isAr) "معلومات" else "Info",
-                            tint = NeonCyan,
+                            tint = cyanAccent,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -309,7 +326,8 @@ fun DeviationsScreen(
                 lightRankTitle = lightRank.title,
                 gripProgress = darkRank.gripProgress,
                 approachProgress = lightRank.approachProgress,
-                strobe = warningStrobe
+                strobe = warningStrobe,
+                isDarkTheme = isDarkTheme
             )
         }
 
@@ -319,7 +337,8 @@ fun DeviationsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("dna_hero_card"),
-                shape = RoundedCornerShape(24.dp)
+                shape = RoundedCornerShape(24.dp),
+                darkTheme = isDarkTheme
             ) {
                 Column(
                     modifier = Modifier
@@ -331,15 +350,18 @@ fun DeviationsScreen(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .background(if (isDarkTrack) Color(0x38EF4444) else Color(0x3838BDF8))
-                            .border(1.2.dp, if (isDarkTrack) NeonRose else NeonCyan, RoundedCornerShape(12.dp))
+                            .background(
+                                if (isDarkTrack) roseAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
+                                else cyanAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
+                            )
+                            .border(1.2.dp, if (isDarkTrack) roseAccent else cyanAccent, RoundedCornerShape(12.dp))
                             .padding(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
                                 imageVector = if (isDarkTrack) Icons.Default.Warning else Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                tint = if (isDarkTrack) NeonRose else NeonCyan,
+                                tint = if (isDarkTrack) roseAccent else cyanAccent,
                                 modifier = Modifier.size(15.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -351,7 +373,7 @@ fun DeviationsScreen(
                                 },
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 11.sp,
-                                color = if (isDarkTrack) NeonRose else NeonCyan
+                                color = if (isDarkTrack) roseAccent else cyanAccent
                             )
                         }
                     }
@@ -482,8 +504,12 @@ fun DeviationsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0x221E293B))
-                            .border(1.dp, Color(0x3338BDF8), RoundedCornerShape(14.dp))
+                            .background(if (isDarkTheme) Color(0x221E293B) else Color(0xFFF1F5F9))
+                            .border(
+                                1.dp,
+                                if (isDarkTheme) Color(0x3338BDF8) else Color(0x380284C7),
+                                RoundedCornerShape(14.dp)
+                            )
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -496,13 +522,13 @@ fun DeviationsScreen(
                                     if (isAr) "الرتبة الملائكية الحالية:" else "Current Light Rank:"
                                 },
                                 fontSize = 11.sp,
-                                color = Color(0xFF94A3B8)
+                                color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
                             )
                             Text(
                                 text = if (isDarkTrack) darkRank.title else lightRank.title,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Black,
-                                color = if (isDarkTrack) NeonRose else NeonCyan,
+                                color = if (isDarkTrack) roseAccent else cyanAccent,
                                 fontFamily = PlusJakartaSans
                             )
                         }
@@ -516,7 +542,7 @@ fun DeviationsScreen(
                                 },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = if (isDarkTrack) NeonRose else Color.White
+                                color = if (isDarkTrack) roseAccent else if (isDarkTheme) Color.White else DayTextPrimary
                             )
 
                             // Small Grip Progress Bar
@@ -525,13 +551,13 @@ fun DeviationsScreen(
                                     .width(90.dp)
                                     .height(4.dp)
                                     .clip(RoundedCornerShape(2.dp))
-                                    .background(Color(0x331E293B))
+                                    .background(if (isDarkTheme) Color(0x331E293B) else Color(0xFFCBD5E1))
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth(if (isDarkTrack) darkRank.gripProgress else lightRank.approachProgress)
                                         .height(4.dp)
-                                        .background(if (isDarkTrack) NeonRose else NeonCyan)
+                                        .background(if (isDarkTrack) roseAccent else cyanAccent)
                                 )
                             }
                         }
@@ -544,7 +570,8 @@ fun DeviationsScreen(
         item {
             LiquidGlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(20.dp),
+                darkTheme = isDarkTheme
             ) {
                 Column(
                     modifier = Modifier
@@ -560,13 +587,13 @@ fun DeviationsScreen(
                             text = if (isAr) "مؤشر التوازن البيولوجي (الطاقة الحيوية)" else "Biological Energy Equilibrium Gauge",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            color = Color.White
+                            color = if (isDarkTheme) Color.White else DayTextPrimary
                         )
                         Text(
                             text = stringResource(R.string.deviations_tier_label, bioTier.index),
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 11.sp,
-                            color = NeonAmber
+                            color = amberAccent
                         )
                     }
 
@@ -638,18 +665,18 @@ fun DeviationsScreen(
                             text = if (isAr) "${(ePercent * 100).toInt()}% إستروجين" else "${(ePercent * 100).toInt()}% Estrogen",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFFB7185)
+                            color = if (isDarkTheme) Color(0xFFFB7185) else DayRose
                         )
                         Text(
                             text = if (isAr) "نقطة التوازن: 50% / 50%" else "Equilibrium: 50% / 50%",
                             fontSize = 10.sp,
-                            color = Color(0xFF94A3B8)
+                            color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
                         )
                         Text(
                             text = if (isAr) "${(tPercent * 100).toInt()}% تيستوستيرون" else "${(tPercent * 100).toInt()}% Testosterone",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = NeonCyan
+                            color = cyanAccent
                         )
                     }
                 }
@@ -662,6 +689,7 @@ fun DeviationsScreen(
                 tier = bioTier,
                 currentScore = flameScore,
                 currentLang = currentLang,
+                isDarkTheme = isDarkTheme,
                 onInspectAllTiers = {
                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                     showAllTiersSheet = true
@@ -675,7 +703,7 @@ fun DeviationsScreen(
         ModalBottomSheet(
             onDismissRequest = { showAllTiersSheet = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF0F172A),
+            containerColor = if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF8FAFC),
             tonalElevation = 12.dp,
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
         ) {
@@ -695,7 +723,7 @@ fun DeviationsScreen(
                             fontWeight = FontWeight.Black,
                             fontFamily = PlusJakartaSans,
                             fontSize = 18.sp,
-                            color = Color.White
+                            color = if (isDarkTheme) Color.White else DayTextPrimary
                         )
                         Text(
                             text = if (isAr) {
@@ -704,7 +732,7 @@ fun DeviationsScreen(
                                 "Progression from Absolute Feminine (1) to Hercules (50)"
                             },
                             fontSize = 11.sp,
-                            color = Color(0xFF94A3B8)
+                            color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
                         )
                     }
 
@@ -712,7 +740,7 @@ fun DeviationsScreen(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = if (isAr) "إغلاق" else "Close",
-                            tint = Color.Gray
+                            tint = if (isDarkTheme) Color.Gray else DayTextSecondary
                         )
                     }
                 }
@@ -739,10 +767,13 @@ fun DeviationsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isCurrent) Color(0x3338BDF8) else Color(0x221E293B))
+                                .background(
+                                    if (isCurrent) cyanAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
+                                    else if (isDarkTheme) Color(0x221E293B) else Color.White
+                                )
                                 .border(
                                     1.dp,
-                                    if (isCurrent) NeonCyan else Color(0x15FFFFFF),
+                                    if (isCurrent) cyanAccent else if (isDarkTheme) Color(0x15FFFFFF) else Color(0xFFCBD5E1),
                                     RoundedCornerShape(12.dp)
                                 )
                                 .padding(horizontal = 14.dp, vertical = 10.dp),
@@ -754,14 +785,21 @@ fun DeviationsScreen(
                                     modifier = Modifier
                                         .size(28.dp)
                                         .clip(CircleShape)
-                                        .background(if (isCurrent) NeonCyan else Color(0x22FFFFFF)),
+                                        .background(
+                                            if (isCurrent) cyanAccent
+                                            else if (isDarkTheme) Color(0x22FFFFFF) else Color(0xFFE2E8F0)
+                                        ),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         text = "$tierNum",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Black,
-                                        color = if (isCurrent) Color.Black else Color.White
+                                        color = if (isCurrent) {
+                                            if (isDarkTheme) Color.Black else Color.White
+                                        } else {
+                                            if (isDarkTheme) Color.White else DayTextPrimary
+                                        }
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -770,12 +808,12 @@ fun DeviationsScreen(
                                         text = name,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
-                                        color = if (isCurrent) NeonCyan else Color.White
+                                        color = if (isCurrent) cyanAccent else if (isDarkTheme) Color.White else DayTextPrimary
                                     )
                                     Text(
                                         text = if (isAr) "$minSc - $maxSc نقطة" else "$minSc - $maxSc PTS",
                                         fontSize = 10.sp,
-                                        color = Color(0xFF94A3B8)
+                                        color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
                                     )
                                 }
                             }
@@ -784,15 +822,15 @@ fun DeviationsScreen(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(Color(0x3338BDF8))
-                                        .border(1.dp, NeonCyan, RoundedCornerShape(6.dp))
+                                        .background(cyanAccent.copy(alpha = 0.20f))
+                                        .border(1.dp, cyanAccent, RoundedCornerShape(6.dp))
                                         .padding(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
                                     Text(
                                         text = if (isAr) "المستوى الحالي" else "Current Tier",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = NeonCyan
+                                        color = cyanAccent
                                     )
                                 }
                             }
@@ -805,13 +843,15 @@ fun DeviationsScreen(
 
     // INFO EXPLANATION DIALOG
     if (showInfoDialog) {
+        val dialogBodyColor = if (isDarkTheme) Color(0xFFCBD5E1) else DayTextSecondary
         AlertDialog(
             onDismissRequest = { showInfoDialog = false },
             title = {
                 Text(
                     text = stringResource(R.string.deviations_title),
                     fontWeight = FontWeight.Black,
-                    fontFamily = PlusJakartaSans
+                    fontFamily = PlusJakartaSans,
+                    color = if (isDarkTheme) Color.White else DayTextPrimary
                 )
             },
             text = {
@@ -819,7 +859,7 @@ fun DeviationsScreen(
                     Text(
                         text = if (isAr) "نظام الانحرافات والشيفرة الجينية المزدوجة:" else "Deviations System & Dual Genetic Matrix:",
                         fontWeight = FontWeight.Bold,
-                        color = NeonCyan,
+                        color = cyanAccent,
                         fontSize = 13.sp
                     )
                     Text(
@@ -829,7 +869,7 @@ fun DeviationsScreen(
                             "1. Shadow Track (0 - 2,000 pts): The cyber-shadow entity closes in as your score drops toward 0, gripping the DNA completely across 20 dark ranks ending with Baphomet."
                         },
                         fontSize = 12.sp,
-                        color = Color(0xFFCBD5E1)
+                        color = dialogBodyColor
                     )
                     Text(
                         text = if (isAr) {
@@ -838,7 +878,7 @@ fun DeviationsScreen(
                             "2. Angelic Light Track (2,001 - 20,000 pts): The cyber-angel approaches with radiant wings and turns the DNA pure white at 20,000 pts across 20 light ranks ending with Gabriel."
                         },
                         fontSize = 12.sp,
-                        color = Color(0xFFCBD5E1)
+                        color = dialogBodyColor
                     )
                     Text(
                         text = if (isAr) {
@@ -847,16 +887,16 @@ fun DeviationsScreen(
                             "3. Biological Energy & 50 Tiers: Shifts between Estrogen and Testosterone across 50 tiers from Absolute Feminine to Hercules."
                         },
                         fontSize = 12.sp,
-                        color = Color(0xFFCBD5E1)
+                        color = dialogBodyColor
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showInfoDialog = false }) {
-                    Text(if (isAr) "حسناً" else "OK", fontWeight = FontWeight.Bold)
+                    Text(if (isAr) "حسناً" else "OK", fontWeight = FontWeight.Bold, color = cyanAccent)
                 }
             },
-            containerColor = Color(0xFF0F172A),
+            containerColor = if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF8FAFC),
             tonalElevation = 8.dp
         )
     }
@@ -873,13 +913,26 @@ fun PulsingCyberWarningBar(
     lightRankTitle: String,
     gripProgress: Float,
     approachProgress: Float,
-    strobe: Float
+    strobe: Float,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
-    val barColor = if (isDarkTrack) NeonRose else NeonCyan
-    val barBg = if (isDarkTrack) {
-        Color(0x33EF4444).copy(alpha = 0.25f + gripProgress * 0.2f)
+    val barColor = if (isDarkTrack) {
+        if (isDarkTheme) NeonRose else DayRose
     } else {
-        Color(0x2238BDF8).copy(alpha = 0.25f + approachProgress * 0.15f)
+        if (isDarkTheme) NeonCyan else DayCyan
+    }
+    val barBg = if (isDarkTheme) {
+        if (isDarkTrack) {
+            Color(0x33EF4444).copy(alpha = 0.25f + gripProgress * 0.2f)
+        } else {
+            Color(0x2238BDF8).copy(alpha = 0.25f + approachProgress * 0.15f)
+        }
+    } else {
+        if (isDarkTrack) {
+            Color(0xFFE11D48).copy(alpha = 0.10f + gripProgress * 0.08f)
+        } else {
+            Color(0xFF0284C7).copy(alpha = 0.10f + approachProgress * 0.08f)
+        }
     }
 
     val warningText = when {
@@ -935,7 +988,11 @@ fun PulsingCyberWarningBar(
                 text = warningText,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (isDarkTrack) Color.White else Color(0xFFF0FDF4),
+                color = if (isDarkTheme) {
+                    if (isDarkTrack) Color.White else Color(0xFFF0FDF4)
+                } else {
+                    DayTextPrimary
+                },
                 letterSpacing = 0.2.sp,
                 modifier = Modifier.weight(1f)
             )
@@ -1557,22 +1614,25 @@ fun LuxuryCyberRankFrame(
     tier: com.example.data.deviations.BiologicalTier,
     currentScore: Double,
     currentLang: String = "ar",
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onInspectAllTiers: () -> Unit
 ) {
     val isAr = currentLang == "ar"
+    val cyanAccent = if (isDarkTheme) NeonCyan else DayCyan
+    val purpleAccent = if (isDarkTheme) Color(0xFFC084FC) else DayPurple
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xD90B132B))
+            .background(if (isDarkTheme) Color(0xD90B132B) else Color(0xFAFFFFFF))
             .border(
                 1.5.dp,
                 Brush.horizontalGradient(
                     listOf(
-                        Color(0xFF38BDF8),
-                        Color(0xFF818CF8),
-                        Color(0xFFC084FC),
-                        Color(0xFF38BDF8)
+                        cyanAccent,
+                        if (isDarkTheme) Color(0xFF818CF8) else Color(0xFF4F46E5),
+                        purpleAccent,
+                        cyanAccent
                     )
                 ),
                 RoundedCornerShape(22.dp)
@@ -1593,32 +1653,34 @@ fun LuxuryCyberRankFrame(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0x3338BDF8))
-                        .border(1.dp, NeonCyan, RoundedCornerShape(8.dp))
+                        .background(cyanAccent.copy(alpha = 0.16f))
+                        .border(1.dp, cyanAccent, RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(
                         text = if (isAr) "المستوى ${tier.index} / 50" else "TIER ${tier.index} / 50",
                         fontWeight = FontWeight.Black,
                         fontSize = 11.sp,
-                        color = NeonCyan,
+                        color = cyanAccent,
                         letterSpacing = 1.sp
                     )
                 }
 
                 Button(
                     onClick = onInspectAllTiers,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0x331E293B)),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isDarkTheme) Color(0x331E293B) else cyanAccent.copy(alpha = 0.12f)
+                    ),
                     shape = RoundedCornerShape(10.dp),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier.height(30.dp)
+                    modifier = Modifier.height(32.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(13.dp))
+                    Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = cyanAccent, modifier = Modifier.size(13.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = if (isAr) "كافة المستويات" else "All Tiers",
                         fontSize = 10.sp,
-                        color = NeonCyan,
+                        color = cyanAccent,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -1632,7 +1694,7 @@ fun LuxuryCyberRankFrame(
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = CaveatHandwriting,
-                color = Color.White,
+                color = if (isDarkTheme) Color.White else DayTextPrimary,
                 textAlign = TextAlign.Center
             )
 
@@ -1648,7 +1710,7 @@ fun LuxuryCyberRankFrame(
                     if (isAr) "وصلت إلى القمة المطلقة!" else "Absolute peak reached!"
                 },
                 fontSize = 11.sp,
-                color = Color(0xFF94A3B8)
+                color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -1660,14 +1722,14 @@ fun LuxuryCyberRankFrame(
                     .fillMaxWidth()
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp))
-                    .background(Color(0x331E293B))
+                    .background(if (isDarkTheme) Color(0x331E293B) else Color(0xFFE2E8F0))
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(tierProgress)
                         .height(6.dp)
                         .background(
-                            Brush.horizontalGradient(listOf(NeonCyan, Color(0xFFC084FC)))
+                            Brush.horizontalGradient(listOf(cyanAccent, purpleAccent))
                         )
                 )
             }

@@ -11,7 +11,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -76,6 +75,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -97,7 +101,7 @@ import java.util.Calendar
 fun DataEntryDialog(
     viewModel: IndividualViewModel,
     onDismiss: () -> Unit,
-    isDarkTheme: Boolean = isSystemInDarkTheme()
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val name by viewModel.formName.collectAsStateWithLifecycle()
     val phoneNumber by viewModel.formPhoneNumber.collectAsStateWithLifecycle()
@@ -219,6 +223,10 @@ fun DataEntryDialog(
     val totalHistoricalStrikes = historicalEntries.sumOf { it.second }
 
     val modalBg = if (isDarkTheme) Color(0xFF070B14) else Color(0xFFF1F5F9)
+    val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val accentEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
+    val accentAmber = if (isDarkTheme) NeonAmber else DayOrange
+    val accentViolet = if (isDarkTheme) NeonViolet else DayPurple
     val scrollState = rememberScrollState()
 
     BackHandler(enabled = !showInAppContactsPicker && !showContactsPermissionDialog) {
@@ -330,14 +338,14 @@ fun DataEntryDialog(
                                 modifier = Modifier
                                     .size(40.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0x221E293B))
-                                    .border(1.dp, Color(0x4038BDF8), CircleShape)
+                                    .background(if (isDarkTheme) Color(0x221E293B) else Color(0xFFE2E8F0))
+                                    .border(1.dp, accentCyan.copy(alpha = 0.45f), CircleShape)
                                     .testTag("close_data_entry_dialog_btn")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = stringResource(R.string.cancel),
-                                    tint = NeonCyan
+                                    tint = accentCyan
                                 )
                             }
                         }
@@ -384,7 +392,8 @@ fun DataEntryDialog(
                         // Section 1: Individual Profile & Type
                         LiquidGlassCard(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(20.dp)
+                                shape = RoundedCornerShape(20.dp),
+                                darkTheme = isDarkTheme
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Row(
@@ -529,11 +538,19 @@ fun DataEntryDialog(
                                                     .weight(1f)
                                                     .clip(RoundedCornerShape(12.dp))
                                                     .background(
-                                                        if (isSelected) NeonCyan.copy(alpha = 0.25f) else Color(0x15FFFFFF)
+                                                        when {
+                                                            isSelected -> accentCyan.copy(alpha = 0.22f)
+                                                            isDarkTheme -> Color(0x15FFFFFF)
+                                                            else -> Color(0xFFE2E8F0)
+                                                        }
                                                     )
                                                     .border(
                                                         1.5.dp,
-                                                        if (isSelected) NeonCyan else Color(0x25FFFFFF),
+                                                        when {
+                                                            isSelected -> accentCyan
+                                                            isDarkTheme -> Color(0x25FFFFFF)
+                                                            else -> Color(0xFFCBD5E1)
+                                                        },
                                                         RoundedCornerShape(12.dp)
                                                     )
                                                     .clickable { viewModel.formType.value = t }
@@ -544,7 +561,7 @@ fun DataEntryDialog(
                                                 Text(
                                                     text = t,
                                                     fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                                                    color = if (isSelected) NeonCyan else MaterialTheme.colorScheme.onSurface,
+                                                    color = if (isSelected) accentCyan else MaterialTheme.colorScheme.onSurface,
                                                     fontSize = 14.sp
                                                 )
                                             }
@@ -556,7 +573,8 @@ fun DataEntryDialog(
                         // Section 2: Physical Dimensions & Live SIZE Calculation
                         LiquidGlassCard(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(20.dp)
+                                shape = RoundedCornerShape(20.dp),
+                                darkTheme = isDarkTheme
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Row(
@@ -658,7 +676,8 @@ fun DataEntryDialog(
                         // Section 3: Scores & Live BOOST Calculation
                         LiquidGlassCard(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(20.dp)
+                                shape = RoundedCornerShape(20.dp),
+                                darkTheme = isDarkTheme
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Row(
@@ -802,7 +821,8 @@ fun DataEntryDialog(
                         // Section 4: Historical Strikes Entry per Year
                         LiquidGlassCard(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(20.dp)
+                                shape = RoundedCornerShape(20.dp),
+                                darkTheme = isDarkTheme
                             ) {
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     Row(
@@ -931,15 +951,19 @@ fun DataEntryDialog(
                                             Box(
                                                 modifier = Modifier
                                                     .clip(RoundedCornerShape(8.dp))
-                                                    .background(Color(0x18FFFFFF))
-                                                    .border(1.dp, Color(0x28FFFFFF), RoundedCornerShape(8.dp))
+                                                    .background(if (isDarkTheme) Color(0x18FFFFFF) else Color(0xFFE2E8F0))
+                                                    .border(
+                                                        1.dp,
+                                                        if (isDarkTheme) Color(0x28FFFFFF) else Color(0xFFCBD5E1),
+                                                        RoundedCornerShape(8.dp)
+                                                    )
                                                     .clickable { inputYear = yr.toString() }
                                                     .padding(horizontal = 8.dp, vertical = 6.dp)
                                             ) {
                                                 Text(
                                                     text = "$yr",
                                                     fontSize = 11.sp,
-                                                    color = NeonCyan,
+                                                    color = accentCyan,
                                                     fontWeight = FontWeight.Medium
                                                 )
                                             }
@@ -954,8 +978,8 @@ fun DataEntryDialog(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
                                                         .clip(RoundedCornerShape(10.dp))
-                                                        .background(Color(0x250F172A))
-                                                        .border(1.dp, NeonEmerald.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                                        .background(if (isDarkTheme) Color(0x250F172A) else Color(0xFFF1F5F9))
+                                                        .border(1.dp, accentEmerald.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
                                                         .padding(horizontal = 12.dp, vertical = 8.dp),
                                                     horizontalArrangement = Arrangement.SpaceBetween,
                                                     verticalAlignment = Alignment.CenterVertically
@@ -965,13 +989,13 @@ fun DataEntryDialog(
                                                             text = if (isAr) "سنة $yr : " else "Year $yr : ",
                                                             fontWeight = FontWeight.Bold,
                                                             fontSize = 13.sp,
-                                                            color = NeonCyan
+                                                            color = accentCyan
                                                         )
                                                         Text(
                                                             text = if (isAr) "$cnt ضربة" else "$cnt strikes",
                                                             fontWeight = FontWeight.ExtraBold,
                                                             fontSize = 13.sp,
-                                                            color = NeonEmerald
+                                                            color = accentEmerald
                                                         )
                                                     }
 

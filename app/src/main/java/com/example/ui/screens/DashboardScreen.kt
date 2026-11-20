@@ -18,7 +18,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -115,7 +114,9 @@ import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
 import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayRose
 import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -134,7 +135,8 @@ fun DashboardScreen(
     onNavigateToStrike: (Long) -> Unit,
     onNavigateToCompare: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    hostDataEntryExternally: Boolean = false
+    hostDataEntryExternally: Boolean = false,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val individuals by viewModel.filteredIndividuals.collectAsStateWithLifecycle()
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
@@ -143,11 +145,13 @@ fun DashboardScreen(
     val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
     val isDataEntryOpen by viewModel.isDataEntryOpen.collectAsStateWithLifecycle()
-    val isDarkTheme = isSystemInDarkTheme()
     val context = LocalContext.current
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
+    val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val accentAmber = if (isDarkTheme) NeonAmber else DayOrange
+    val accentRose = if (isDarkTheme) NeonRose else DayRose
 
     var individualToDelete by remember { mutableStateOf<Individual?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -183,7 +187,7 @@ fun DashboardScreen(
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = "Search",
-                                tint = NeonCyan
+                                tint = accentCyan
                             )
                         },
                         trailingIcon = {
@@ -204,10 +208,11 @@ fun DashboardScreen(
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = Color(0x3338BDF8),
-                            focusedContainerColor = Color(0x1A1E293B),
-                            unfocusedContainerColor = Color(0x101E293B)
+                            focusedBorderColor = accentCyan,
+                            unfocusedBorderColor = if (isDarkTheme) Color(0x3338BDF8) else Color(0x660284C7),
+                            focusedContainerColor = if (isDarkTheme) Color(0x1A1E293B) else Color(0xF5FFFFFF),
+                            unfocusedContainerColor = if (isDarkTheme) Color(0x101E293B) else Color(0xCCFFFFFF),
+                            cursorColor = accentCyan
                         )
                     )
 
@@ -281,7 +286,7 @@ fun DashboardScreen(
                         Icon(
                             imageVector = Icons.Default.FilterAlt,
                             contentDescription = null,
-                            tint = NeonCyan,
+                            tint = accentCyan,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -350,7 +355,14 @@ fun DashboardScreen(
                                     Box(
                                         modifier = Modifier
                                             .clip(CircleShape)
-                                            .background(if (isSelected) accentColor.copy(alpha = 0.35f) else if (isDarkTheme) Color(0x181E293B) else Color(0x25CBD5E1))
+                                            .background(
+                                                when {
+                                                    isSelected && isDarkTheme -> accentColor.copy(alpha = 0.35f)
+                                                    isSelected -> accentColor
+                                                    isDarkTheme -> Color(0x181E293B)
+                                                    else -> Color(0x33CBD5E1)
+                                                }
+                                            )
                                             .padding(horizontal = 6.dp, vertical = 1.dp)
                                     ) {
                                         Text(
@@ -376,7 +388,8 @@ fun DashboardScreen(
                             .fillMaxWidth()
                             .padding(vertical = 32.dp)
                             .testTag("empty_records_card"),
-                        shape = RoundedCornerShape(20.dp)
+                        shape = RoundedCornerShape(20.dp),
+                        darkTheme = isDarkTheme
                     ) {
                         Column(
                             modifier = Modifier
@@ -387,7 +400,7 @@ fun DashboardScreen(
                             Icon(
                                 imageVector = Icons.Default.People,
                                 contentDescription = null,
-                                tint = NeonCyan,
+                                tint = accentCyan,
                                 modifier = Modifier.size(48.dp)
                             )
                             Spacer(modifier = Modifier.height(12.dp))
@@ -413,7 +426,8 @@ fun DashboardScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 24.dp),
-                        shape = RoundedCornerShape(20.dp)
+                        shape = RoundedCornerShape(20.dp),
+                        darkTheme = isDarkTheme
                     ) {
                         Column(
                             modifier = Modifier
@@ -424,7 +438,7 @@ fun DashboardScreen(
                             Icon(
                                 imageVector = Icons.Default.Search,
                                 contentDescription = null,
-                                tint = NeonAmber,
+                                tint = accentAmber,
                                 modifier = Modifier.size(42.dp)
                             )
                             Spacer(modifier = Modifier.height(12.dp))
@@ -448,8 +462,8 @@ fun DashboardScreen(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(NeonCyan.copy(alpha = 0.2f))
-                                    .border(1.dp, NeonCyan, RoundedCornerShape(12.dp))
+                                    .background(accentCyan.copy(alpha = if (isDarkTheme) 0.2f else 0.14f))
+                                    .border(1.dp, accentCyan, RoundedCornerShape(12.dp))
                                     .clickable { viewModel.resetFilters() }
                                     .padding(horizontal = 18.dp, vertical = 8.dp)
                                     .testTag("reset_search_mismatch_btn"),
@@ -457,7 +471,7 @@ fun DashboardScreen(
                             ) {
                                 Text(
                                     text = if (isAr) "إعادة ضبط التصفية والبحث" else "Reset Filters & Search",
-                                    color = NeonCyan,
+                                    color = accentCyan,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
@@ -486,6 +500,7 @@ fun DashboardScreen(
                             viewModel.openDataEntryForEdit(item)
                         },
                         onDelete = { individualToDelete = item },
+                        darkTheme = isDarkTheme,
                         isHapticFeedbackEnabled = isHapticFeedbackEnabled,
                         isAr = isAr
                     )
@@ -506,8 +521,8 @@ fun DashboardScreen(
                 .align(Alignment.BottomEnd)
                 .padding(20.dp)
                 .testTag("add_record_fab"),
-            containerColor = NeonCyan,
-            contentColor = Color(0xFF03141F),
+            containerColor = accentCyan,
+            contentColor = if (isDarkTheme) Color(0xFF03141F) else Color.White,
             shape = CircleShape
         ) {
             Icon(
@@ -532,6 +547,9 @@ fun DashboardScreen(
         val target = individualToDelete!!
         AlertDialog(
             onDismissRequest = { individualToDelete = null },
+            containerColor = if (isDarkTheme) Color(0xFF0E1729) else Color(0xFFF8FAFC),
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             title = { Text(stringResource(R.string.confirm_delete_title)) },
             text = { Text("${stringResource(R.string.confirm_delete_msg)}\n(${target.fullName})") },
             confirmButton = {
@@ -542,7 +560,7 @@ fun DashboardScreen(
                     },
                     modifier = Modifier.testTag("confirm_delete_btn")
                 ) {
-                    Text(stringResource(R.string.delete), color = NeonRose, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.delete), color = accentRose, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -565,7 +583,7 @@ fun IndividualRecordCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = LocalAppDarkTheme.current,
     isHapticFeedbackEnabled: Boolean = true,
     isAr: Boolean = true
 ) {
@@ -791,7 +809,7 @@ fun IndividualRecordCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                GlassTypeBadge(type = individual.type)
+                                GlassTypeBadge(type = individual.type, darkTheme = darkTheme)
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {
                                     Text(
@@ -985,7 +1003,7 @@ fun IndividualRecordCard(
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = stringResource(R.string.delete),
-                            tint = if (darkTheme) NeonRose.copy(alpha = 0.8f) else Color(0xFFBE123C),
+                            tint = if (darkTheme) NeonRose.copy(alpha = 0.8f) else DayRose,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -1003,7 +1021,7 @@ fun ScorePill(
     value: Double,
     color: Color,
     modifier: Modifier = Modifier,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val effectiveColor = if (darkTheme) color else when (color) {
         NeonSky, NeonCyan -> DayCyan
@@ -1055,7 +1073,7 @@ private fun LuxurySortButtonPopup(
     currentLang: String,
     onSelectSortOrder: (SortOrder) -> Unit,
     onDismiss: () -> Unit,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val transitionState = remember { MutableTransitionState(false) }
     LaunchedEffect(visible) {
@@ -1112,7 +1130,7 @@ private fun LuxurySortButtonPopup(
                 else -> "Most recorded strikes first"
             },
             icon = Icons.Default.Bolt,
-            accent = if (darkTheme) NeonRose else Color(0xFFE11D48)
+            accent = if (darkTheme) NeonRose else DayRose
         ),
         LuxurySortOptionSpec(
             order = SortOrder.SIZE_DESC,
@@ -1145,7 +1163,7 @@ private fun LuxurySortButtonPopup(
         listOf(
             accentCyan.copy(alpha = 0.8f),
             accentViolet.copy(alpha = 0.6f),
-            NeonEmerald.copy(alpha = 0.7f)
+            if (darkTheme) NeonEmerald.copy(alpha = 0.7f) else DayEmerald.copy(alpha = 0.65f)
         )
     )
 

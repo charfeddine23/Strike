@@ -5,7 +5,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,6 +78,11 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.flame.DateRangeConfig
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayRose
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -109,7 +113,7 @@ private enum class PickerTarget {
 fun StreakStartDateDialog(
     viewModel: IndividualViewModel,
     onDismiss: () -> Unit,
-    isDarkTheme: Boolean = isSystemInDarkTheme()
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val focusManager = LocalFocusManager.current
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
@@ -186,8 +190,19 @@ fun StreakStartDateDialog(
     }
 
     val effectiveLayoutDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
-    val girlAccent = Color(0xFFFB7185)
-    val deflameAccent = Color(0xFF38BDF8)
+    val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val accentEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
+    val accentAmber = if (isDarkTheme) NeonAmber else DayOrange
+    val accentRose = if (isDarkTheme) NeonRose else DayRose
+    val girlAccent = if (isDarkTheme) Color(0xFFFB7185) else DayRose
+    val deflameAccent = accentCyan
+
+    val dialogBg = if (isDarkTheme) Color(0xFF0B1426) else Color(0xFFF8FAFC)
+    val mainTextColor = if (isDarkTheme) Color.White else Color(0xFF0F172A)
+    val secondaryTextColor = if (isDarkTheme) Color(0xFFE2E8F0) else Color(0xFF334155)
+    val mutedTextColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF64748B)
+    val sectionBgColor = if (isDarkTheme) Color(0x2B16233B) else Color(0xFFFFFFFF)
+    val previewCardBg = if (isDarkTheme) Color(0x221E293B) else Color(0xFFFFFFFF)
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -202,12 +217,16 @@ fun StreakStartDateDialog(
                     .border(
                         width = 1.dp,
                         brush = Brush.verticalGradient(
-                            listOf(NeonCyan.copy(alpha = 0.8f), NeonAmber.copy(alpha = 0.45f), Color(0x3338BDF8))
+                            listOf(
+                                accentCyan.copy(alpha = 0.75f),
+                                accentAmber.copy(alpha = 0.45f),
+                                accentCyan.copy(alpha = 0.25f)
+                            )
                         ),
                         shape = RoundedCornerShape(24.dp)
                     )
                     .testTag("streak_start_date_dialog"),
-                color = Color(0xFF0B1426),
+                color = dialogBg,
                 tonalElevation = 8.dp
             ) {
                 Column(
@@ -231,14 +250,14 @@ fun StreakStartDateDialog(
                                 modifier = Modifier
                                     .size(42.dp)
                                     .clip(CircleShape)
-                                    .background(NeonAmber.copy(alpha = 0.2f))
-                                    .border(1.dp, NeonAmber.copy(alpha = 0.7f), CircleShape),
+                                    .background(accentAmber.copy(alpha = 0.18f))
+                                    .border(1.dp, accentAmber.copy(alpha = 0.65f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.LocalFireDepartment,
                                     contentDescription = null,
-                                    tint = NeonAmber,
+                                    tint = accentAmber,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -252,7 +271,7 @@ fun StreakStartDateDialog(
                                     },
                                     fontSize = 17.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White,
+                                    color = mainTextColor,
                                     fontFamily = PlusJakartaSans
                                 )
                                 Text(
@@ -262,7 +281,7 @@ fun StreakStartDateDialog(
                                         else -> "Calendar-only & per-element ranges"
                                     },
                                     fontSize = 11.sp,
-                                    color = NeonCyan,
+                                    color = accentCyan,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -278,7 +297,7 @@ fun StreakStartDateDialog(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0x22FFFFFF)),
+                                    .background(if (isDarkTheme) Color(0x22FFFFFF) else Color(0xFFE2E8F0)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -288,7 +307,7 @@ fun StreakStartDateDialog(
                                         isFr -> "Fermer"
                                         else -> "Close"
                                     },
-                                    tint = Color.White.copy(alpha = 0.7f),
+                                    tint = mainTextColor.copy(alpha = 0.75f),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -304,7 +323,7 @@ fun StreakStartDateDialog(
                             else -> "Pick start & end dates exclusively from the calendar to keep period math isolated, and customize dates per element if needed."
                         },
                         fontSize = 11.5.sp,
-                        color = Color.White.copy(alpha = 0.76f),
+                        color = secondaryTextColor.copy(alpha = 0.82f),
                         lineHeight = 17.sp
                     )
 
@@ -318,8 +337,8 @@ fun StreakStartDateDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0x2B16233B))
-                            .border(1.dp, NeonCyan.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                            .background(sectionBgColor)
+                            .border(1.dp, accentCyan.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
                             .padding(12.dp)
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -335,7 +354,7 @@ fun StreakStartDateDialog(
                                     Icon(
                                         imageVector = Icons.Default.DateRange,
                                         contentDescription = null,
-                                        tint = NeonCyan,
+                                        tint = accentCyan,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Text(
@@ -346,7 +365,7 @@ fun StreakStartDateDialog(
                                         },
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.ExtraBold,
-                                        color = Color.White,
+                                        color = mainTextColor,
                                         fontFamily = PlusJakartaSans
                                     )
                                 }
@@ -354,7 +373,7 @@ fun StreakStartDateDialog(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(NeonCyan.copy(alpha = 0.16f))
+                                        .background(accentCyan.copy(alpha = 0.14f))
                                         .padding(horizontal = 8.dp, vertical = 3.dp)
                                 ) {
                                     Text(
@@ -365,7 +384,7 @@ fun StreakStartDateDialog(
                                         },
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Black,
-                                        color = NeonCyan
+                                        color = accentCyan
                                     )
                                 }
                             }
@@ -381,7 +400,8 @@ fun StreakStartDateDialog(
                                         else -> "Start Date"
                                     },
                                     dateStr = globalStartDate,
-                                    accentColor = NeonCyan,
+                                    accentColor = accentCyan,
+                                    isDarkTheme = isDarkTheme,
                                     testTag = "btn_pick_global_start_date",
                                     onClick = { activePickerTarget = PickerTarget.GLOBAL_START },
                                     modifier = Modifier.weight(1f)
@@ -393,7 +413,8 @@ fun StreakStartDateDialog(
                                         else -> "End Date"
                                     },
                                     dateStr = globalEndDate,
-                                    accentColor = NeonEmerald,
+                                    accentColor = accentEmerald,
+                                    isDarkTheme = isDarkTheme,
                                     testTag = "btn_pick_global_end_date",
                                     onClick = { activePickerTarget = PickerTarget.GLOBAL_END },
                                     modifier = Modifier.weight(1f)
@@ -420,7 +441,7 @@ fun StreakStartDateDialog(
                             },
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFFE2E8F0)
+                            color = secondaryTextColor
                         )
                         Text(
                             text = when {
@@ -429,7 +450,7 @@ fun StreakStartDateDialog(
                                 else -> "Calendar only"
                             },
                             fontSize = 10.sp,
-                            color = Color(0xFF94A3B8)
+                            color = mutedTextColor
                         )
                     }
 
@@ -443,7 +464,8 @@ fun StreakStartDateDialog(
                         subtitle = "${previewResult.daysElapsed} " + (if (isAr) "يوم" else if (isFr) "jours" else "days") +
                             " • +${previewResult.inactivityPointsAdded.toInt()} " + (if (isAr) "نقطة" else "PTS"),
                         icon = Icons.Default.TrendingUp,
-                        accentColor = NeonAmber,
+                        accentColor = accentAmber,
+                        isDarkTheme = isDarkTheme,
                         range = inactivityRange,
                         globalStartDate = globalStartDate,
                         globalEndDate = globalEndDate,
@@ -481,7 +503,8 @@ fun StreakStartDateDialog(
                             " • -${String.format(Locale.US, "%.1f", previewResult.totalDeductions)} " +
                             (if (isAr) "نقطة" else "PTS"),
                         icon = Icons.Default.Bolt,
-                        accentColor = NeonRose,
+                        accentColor = accentRose,
+                        isDarkTheme = isDarkTheme,
                         range = strikesRange,
                         globalStartDate = globalStartDate,
                         globalEndDate = globalEndDate,
@@ -520,6 +543,7 @@ fun StreakStartDateDialog(
                             (if (isAr) "يوم" else if (isFr) "j" else "d"),
                         icon = Icons.Default.Favorite,
                         accentColor = girlAccent,
+                        isDarkTheme = isDarkTheme,
                         range = girlRange,
                         globalStartDate = globalStartDate,
                         globalEndDate = globalEndDate,
@@ -558,10 +582,10 @@ fun StreakStartDateDialog(
                                         fontSize = 11.5.sp
                                     )
                                 },
-                                placeholder = { Text("0", color = Color(0x66FFFFFF)) },
+                                placeholder = { Text("0", color = mutedTextColor.copy(alpha = 0.6f)) },
                                 singleLine = true,
                                 textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                    color = Color.White,
+                                    color = mainTextColor,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = PlusJakartaSans
                                 ),
@@ -572,8 +596,8 @@ fun StreakStartDateDialog(
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = girlAccent,
                                     unfocusedBorderColor = girlAccent.copy(alpha = 0.35f),
-                                    focusedContainerColor = Color(0x1A1E293B),
-                                    unfocusedContainerColor = Color(0x1A1E293B),
+                                    focusedContainerColor = if (isDarkTheme) Color(0x1A1E293B) else Color(0xFFF1F5F9),
+                                    unfocusedContainerColor = if (isDarkTheme) Color(0x1A1E293B) else Color(0xFFF1F5F9),
                                     cursorColor = girlAccent
                                 ),
                                 keyboardOptions = KeyboardOptions(
@@ -599,6 +623,7 @@ fun StreakStartDateDialog(
                             (if (isAr) "يوم" else if (isFr) "j" else "d"),
                         icon = Icons.Default.AcUnit,
                         accentColor = deflameAccent,
+                        isDarkTheme = isDarkTheme,
                         range = deflameRange,
                         globalStartDate = globalStartDate,
                         globalEndDate = globalEndDate,
@@ -637,10 +662,10 @@ fun StreakStartDateDialog(
                                         fontSize = 11.5.sp
                                     )
                                 },
-                                placeholder = { Text("0", color = Color(0x66FFFFFF)) },
+                                placeholder = { Text("0", color = mutedTextColor.copy(alpha = 0.6f)) },
                                 singleLine = true,
                                 textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                    color = Color.White,
+                                    color = mainTextColor,
                                     fontWeight = FontWeight.Bold,
                                     fontFamily = PlusJakartaSans
                                 ),
@@ -651,8 +676,8 @@ fun StreakStartDateDialog(
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = deflameAccent,
                                     unfocusedBorderColor = deflameAccent.copy(alpha = 0.35f),
-                                    focusedContainerColor = Color(0x1A1E293B),
-                                    unfocusedContainerColor = Color(0x1A1E293B),
+                                    focusedContainerColor = if (isDarkTheme) Color(0x1A1E293B) else Color(0xFFF1F5F9),
+                                    unfocusedContainerColor = if (isDarkTheme) Color(0x1A1E293B) else Color(0xFFF1F5F9),
                                     cursorColor = deflameAccent
                                 ),
                                 keyboardOptions = KeyboardOptions(
@@ -673,8 +698,8 @@ fun StreakStartDateDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0x221E293B))
-                            .border(1.dp, Color(0x4038BDF8), RoundedCornerShape(16.dp))
+                            .background(previewCardBg)
+                            .border(1.dp, accentCyan.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
                             .padding(14.dp)
                             .testTag("preview_calculation_card")
                     ) {
@@ -692,13 +717,13 @@ fun StreakStartDateDialog(
                                     },
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = NeonCyan,
+                                    color = accentCyan,
                                     fontFamily = PlusJakartaSans
                                 )
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(NeonEmerald.copy(alpha = 0.2f))
+                                        .background(accentEmerald.copy(alpha = 0.16f))
                                         .padding(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
                                     Text(
@@ -708,7 +733,7 @@ fun StreakStartDateDialog(
                                             else -> "Auto & Verified"
                                         },
                                         fontSize = 10.sp,
-                                        color = NeonEmerald,
+                                        color = accentEmerald,
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -716,22 +741,24 @@ fun StreakStartDateDialog(
 
                             PreviewLineRow(
                                 icon = Icons.Default.TrendingUp,
-                                tint = NeonAmber,
+                                tint = accentAmber,
                                 label = when {
                                     isAr -> "الأيام (${previewResult.daysElapsed}ي • ${previewResult.inactivityStartDate}→${previewResult.inactivityEndDate}):"
                                     else -> "Days (${previewResult.daysElapsed}d • ${previewResult.inactivityStartDate}→${previewResult.inactivityEndDate}):"
                                 },
-                                value = "+${previewResult.inactivityPointsAdded.toInt()} " + if (isAr) "نقطة" else "PTS"
+                                value = "+${previewResult.inactivityPointsAdded.toInt()} " + if (isAr) "نقطة" else "PTS",
+                                isDarkTheme = isDarkTheme
                             )
 
                             PreviewLineRow(
                                 icon = Icons.Default.TrendingDown,
-                                tint = NeonRose,
+                                tint = accentRose,
                                 label = when {
                                     isAr -> "الضربات (${previewResult.totalStrikesCount} • ${previewResult.strikesStartDate}→${previewResult.strikesEndDate}):"
                                     else -> "Strikes (${previewResult.totalStrikesCount} • ${previewResult.strikesStartDate}→${previewResult.strikesEndDate}):"
                                 },
-                                value = "-${String.format(Locale.US, "%.1f", previewResult.totalDeductions)} " + if (isAr) "نقطة" else "PTS"
+                                value = "-${String.format(Locale.US, "%.1f", previewResult.totalDeductions)} " + if (isAr) "نقطة" else "PTS",
+                                isDarkTheme = isDarkTheme
                             )
 
                             if (previewResult.girlPerMonth > 0 || previewResult.girlPressesCount > 0) {
@@ -742,7 +769,8 @@ fun StreakStartDateDialog(
                                         isAr -> "Girl (${previewResult.girlPressesCount}× • ${previewResult.girlStartDate}→${previewResult.girlEndDate}):"
                                         else -> "Girl (${previewResult.girlPressesCount}× • ${previewResult.girlStartDate}→${previewResult.girlEndDate}):"
                                     },
-                                    value = "-${String.format(Locale.US, "%.1f", previewResult.girlPointsDeducted)} " + if (isAr) "نقطة" else "PTS"
+                                    value = "-${String.format(Locale.US, "%.1f", previewResult.girlPointsDeducted)} " + if (isAr) "نقطة" else "PTS",
+                                    isDarkTheme = isDarkTheme
                                 )
                             }
 
@@ -754,7 +782,8 @@ fun StreakStartDateDialog(
                                         isAr -> "Deflame (${previewResult.deflamePressesCount}× • ${previewResult.deflameStartDate}→${previewResult.deflameEndDate}):"
                                         else -> "Deflame (${previewResult.deflamePressesCount}× • ${previewResult.deflameStartDate}→${previewResult.deflameEndDate}):"
                                     },
-                                    value = "-${String.format(Locale.US, "%.1f", previewResult.deflamePointsDeducted)} " + if (isAr) "نقطة" else "PTS"
+                                    value = "-${String.format(Locale.US, "%.1f", previewResult.deflamePointsDeducted)} " + if (isAr) "نقطة" else "PTS",
+                                    isDarkTheme = isDarkTheme
                                 )
                             }
 
@@ -762,7 +791,7 @@ fun StreakStartDateDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(1.dp)
-                                    .background(Color(0x33FFFFFF))
+                                    .background(if (isDarkTheme) Color(0x33FFFFFF) else Color(0xFFE2E8F0))
                             )
 
                             Row(
@@ -778,13 +807,13 @@ fun StreakStartDateDialog(
                                     },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = NeonAmber
+                                    color = accentAmber
                                 )
                                 Text(
                                     text = "${String.format(Locale.US, "%.1f", previewResult.estimatedPeakScore)} " + if (isAr) "نقطة" else "PTS",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = NeonAmber,
+                                    color = accentAmber,
                                     fontFamily = PlusJakartaSans
                                 )
                             }
@@ -802,13 +831,13 @@ fun StreakStartDateDialog(
                                     },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF38BDF8)
+                                    color = accentCyan
                                 )
                                 Text(
                                     text = "-${String.format(Locale.US, "%.1f", previewResult.totalExtinguishedPoints)} " + if (isAr) "نقطة" else "PTS",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF38BDF8),
+                                    color = accentCyan,
                                     fontFamily = PlusJakartaSans
                                 )
                             }
@@ -826,7 +855,7 @@ fun StreakStartDateDialog(
                                     },
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White
+                                    color = mainTextColor
                                 )
                                 Text(
                                     text = if (isAr) {
@@ -836,7 +865,7 @@ fun StreakStartDateDialog(
                                     },
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = if (previewResult.resultingScore > 2000.0) NeonCyan else NeonAmber,
+                                    color = if (previewResult.resultingScore > 2000.0) accentCyan else accentAmber,
                                     fontFamily = PlusJakartaSans
                                 )
                             }
@@ -857,7 +886,7 @@ fun StreakStartDateDialog(
                                 .height(48.dp)
                                 .testTag("btn_cancel_start_date"),
                             shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, Color(0x4038BDF8))
+                            border = BorderStroke(1.dp, accentCyan.copy(alpha = 0.45f))
                         ) {
                             Text(
                                 text = when {
@@ -865,7 +894,7 @@ fun StreakStartDateDialog(
                                     isFr -> "Annuler"
                                     else -> "Cancel"
                                 },
-                                color = Color.White.copy(alpha = 0.8f),
+                                color = secondaryTextColor,
                                 fontSize = 13.sp
                             )
                         }
@@ -890,14 +919,15 @@ fun StreakStartDateDialog(
                                 .testTag("btn_apply_start_date"),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = NeonCyan,
-                                disabledContainerColor = Color(0x331E293B)
+                                containerColor = accentCyan,
+                                contentColor = Color(0xFF021B26),
+                                disabledContainerColor = if (isDarkTheme) Color(0x331E293B) else Color(0xFFE2E8F0)
                             )
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = Color.Black,
+                                tint = Color(0xFF021B26),
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -907,7 +937,7 @@ fun StreakStartDateDialog(
                                     isFr -> "Appliquer et recalculer"
                                     else -> "Apply & Recalculate"
                                 },
-                                color = Color.Black,
+                                color = Color(0xFF021B26),
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 13.sp,
                                 fontFamily = PlusJakartaSans
@@ -1019,7 +1049,7 @@ fun StreakStartDateDialog(
                             isFr -> "Confirmer"
                             else -> "Confirm"
                         },
-                        color = NeonCyan,
+                        color = accentCyan,
                         fontWeight = FontWeight.ExtraBold
                     )
                 }
@@ -1032,33 +1062,33 @@ fun StreakStartDateDialog(
                             isFr -> "Annuler"
                             else -> "Cancel"
                         },
-                        color = Color(0xFF94A3B8)
+                        color = mutedTextColor
                     )
                 }
             },
             colors = DatePickerDefaults.colors(
-                containerColor = Color(0xFF0E172A)
+                containerColor = if (isDarkTheme) Color(0xFF0E172A) else Color(0xFFFFFFFF)
             )
         ) {
             DatePicker(
                 state = datePickerState,
                 showModeToggle = false,
                 colors = DatePickerDefaults.colors(
-                    containerColor = Color(0xFF0E172A),
-                    titleContentColor = NeonCyan,
-                    headlineContentColor = Color.White,
-                    weekdayContentColor = Color(0xFF94A3B8),
-                    subheadContentColor = Color(0xFFCBD5E1),
-                    yearContentColor = Color.White,
-                    currentYearContentColor = NeonCyan,
-                    selectedYearContentColor = Color.Black,
-                    selectedYearContainerColor = NeonCyan,
-                    dayContentColor = Color.White,
-                    disabledDayContentColor = Color(0x33FFFFFF),
-                    selectedDayContentColor = Color.Black,
-                    selectedDayContainerColor = NeonCyan,
-                    todayContentColor = NeonAmber,
-                    todayDateBorderColor = NeonAmber
+                    containerColor = if (isDarkTheme) Color(0xFF0E172A) else Color(0xFFFFFFFF),
+                    titleContentColor = accentCyan,
+                    headlineContentColor = mainTextColor,
+                    weekdayContentColor = mutedTextColor,
+                    subheadContentColor = secondaryTextColor,
+                    yearContentColor = mainTextColor,
+                    currentYearContentColor = accentCyan,
+                    selectedYearContentColor = Color.White,
+                    selectedYearContainerColor = accentCyan,
+                    dayContentColor = mainTextColor,
+                    disabledDayContentColor = if (isDarkTheme) Color(0x33FFFFFF) else Color(0x4064748B),
+                    selectedDayContentColor = if (isDarkTheme) Color.Black else Color.White,
+                    selectedDayContainerColor = accentCyan,
+                    todayContentColor = accentAmber,
+                    todayDateBorderColor = accentAmber
                 )
             )
         }
@@ -1070,6 +1100,7 @@ private fun CalendarDateButton(
     label: String,
     dateStr: String,
     accentColor: Color,
+    isDarkTheme: Boolean,
     testTag: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -1077,8 +1108,8 @@ private fun CalendarDateButton(
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0x330F172A))
-            .border(1.dp, accentColor.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+            .background(if (isDarkTheme) Color(0x330F172A) else Color(0xFFF1F5F9))
+            .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 9.dp)
             .testTag(testTag),
@@ -1112,7 +1143,7 @@ private fun CalendarDateButton(
                 fontSize = 12.5.sp,
                 fontWeight = FontWeight.Black,
                 fontFamily = PlusJakartaSans,
-                color = Color.White,
+                color = if (isDarkTheme) Color.White else Color(0xFF0F172A),
                 maxLines = 1
             )
         }
@@ -1125,6 +1156,7 @@ private fun PerElementDateCard(
     subtitle: String,
     icon: ImageVector,
     accentColor: Color,
+    isDarkTheme: Boolean,
     range: DateRangeConfig,
     globalStartDate: String,
     globalEndDate: String,
@@ -1140,15 +1172,19 @@ private fun PerElementDateCard(
 ) {
     val activeStart = if (range.isCustom) range.startDate else globalStartDate
     val activeEnd = if (range.isCustom) range.endDate else globalEndDate
+    val cardBg = if (isDarkTheme) Color(0x22162238) else Color(0xFFFFFFFF)
+    val defaultBorder = if (isDarkTheme) Color(0x29FFFFFF) else Color(0xFFE2E8F0)
+    val titleColor = if (isDarkTheme) Color.White else Color(0xFF0F172A)
+    val mutedColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF64748B)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(15.dp))
-            .background(Color(0x22162238))
+            .background(cardBg)
             .border(
                 width = if (range.isCustom) 1.2.dp else 1.dp,
-                color = if (range.isCustom) accentColor.copy(alpha = 0.7f) else Color(0x29FFFFFF),
+                color = if (range.isCustom) accentColor.copy(alpha = 0.7f) else defaultBorder,
                 shape = RoundedCornerShape(15.dp)
             )
             .padding(12.dp)
@@ -1183,7 +1219,7 @@ private fun PerElementDateCard(
                             text = title,
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = titleColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -1210,18 +1246,18 @@ private fun PerElementDateCard(
                         },
                         fontSize = 10.5.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (range.isCustom) accentColor else Color(0xFF94A3B8)
+                        color = if (range.isCustom) accentColor else mutedColor
                     )
                     Switch(
                         checked = range.isCustom,
                         onCheckedChange = onToggleCustom,
                         modifier = Modifier.testTag(toggleTestTag),
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.Black,
+                            checkedThumbColor = if (isDarkTheme) Color.Black else Color.White,
                             checkedTrackColor = accentColor,
-                            uncheckedThumbColor = Color(0xFF94A3B8),
-                            uncheckedTrackColor = Color(0xFF1E293B),
-                            uncheckedBorderColor = Color(0x44FFFFFF)
+                            uncheckedThumbColor = mutedColor,
+                            uncheckedTrackColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0),
+                            uncheckedBorderColor = if (isDarkTheme) Color(0x44FFFFFF) else Color(0xFFCBD5E1)
                         )
                     )
                 }
@@ -1239,7 +1275,7 @@ private fun PerElementDateCard(
                         else -> "Using main range: $activeStart → $activeEnd"
                     },
                     fontSize = 10.5.sp,
-                    color = Color(0xFF94A3B8)
+                    color = mutedColor
                 )
             }
 
@@ -1256,6 +1292,7 @@ private fun PerElementDateCard(
                         },
                         dateStr = range.startDate,
                         accentColor = accentColor,
+                        isDarkTheme = isDarkTheme,
                         testTag = startBtnTestTag,
                         onClick = onPickStart,
                         modifier = Modifier.weight(1f)
@@ -1268,6 +1305,7 @@ private fun PerElementDateCard(
                         },
                         dateStr = range.endDate,
                         accentColor = accentColor,
+                        isDarkTheme = isDarkTheme,
                         testTag = endBtnTestTag,
                         onClick = onPickEnd,
                         modifier = Modifier.weight(1f)
@@ -1283,7 +1321,8 @@ private fun PreviewLineRow(
     icon: ImageVector,
     tint: Color,
     label: String,
-    value: String
+    value: String,
+    isDarkTheme: Boolean
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1304,7 +1343,7 @@ private fun PreviewLineRow(
             Text(
                 text = label,
                 fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.88f),
+                color = if (isDarkTheme) Color.White.copy(alpha = 0.88f) else Color(0xFF334155),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

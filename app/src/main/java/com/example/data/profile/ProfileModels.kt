@@ -1,6 +1,11 @@
 package com.example.data.profile
 
 import androidx.compose.ui.graphics.Color
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayRose
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -22,7 +27,16 @@ enum class TitleRarity(
     RARE("نادر", "Rare", NeonCyan, Color(0xFF0284C7), Color(0xAA00E5FF), 3),
     LEGENDARY("أسطوري", "Legendary", NeonAmber, Color(0xFFEA580C), Color(0xCCF59E0B), 4),
     ULTIMATE("مطلق", "Ultimate", NeonViolet, Color(0xFFEC4899), Color(0xEED946EF), 4),
-    MILESTONE_PEAK("قمة المجد", "Apex Milestone", Color(0xFFFF453A), NeonAmber, Color(0xFFFF5555), 4)
+    MILESTONE_PEAK("قمة المجد", "Apex Milestone", Color(0xFFFF453A), NeonAmber, Color(0xFFFF5555), 4);
+
+    fun adaptiveColor(isDarkTheme: Boolean): Color = if (isDarkTheme) primaryColor else when (this) {
+        COMMON -> Color(0xFF475569)
+        UNCOMMON -> DayEmerald
+        RARE -> DayCyan
+        LEGENDARY -> DayOrange
+        ULTIMATE -> DayPurple
+        MILESTONE_PEAK -> DayRose
+    }
 }
 
 data class TitleItem(
@@ -51,6 +65,13 @@ enum class AvatarRarity(
     LEGENDARY("أسطوري", "Legendary", NeonAmber, Color(0xCCF59E0B));
 
     fun getLocalizedLabel(lang: String): String = if (lang == "ar") labelAr else labelEn
+
+    fun adaptiveColor(isDarkTheme: Boolean): Color = if (isDarkTheme) primaryColor else when (this) {
+        COMMON -> Color(0xFF475569)
+        UNCOMMON -> DayEmerald
+        RARE -> DayCyan
+        LEGENDARY -> DayOrange
+    }
 }
 
 data class AvatarItem(
@@ -128,6 +149,14 @@ enum class PotionType(
     fun getLocalizedName(lang: String): String = if (lang == "ar") nameAr else nameEn
     fun getLocalizedDescription(lang: String): String = if (lang == "ar") descriptionAr else descriptionEn
     fun getLocalizedDuration(lang: String): String = if (lang == "ar") durationLabelAr else durationLabelEn
+
+    fun adaptiveColor(isDarkTheme: Boolean): Color = if (isDarkTheme) color else when (this) {
+        PULSE_ELIXIR -> DayCyan
+        SHADOW_GRIP_SERUM -> DayPurple
+        GABRIEL_PURITY_DROPLET -> Color(0xFFB45309)
+        ABSOLUTE_CRYO_INFUSION -> Color(0xFF0369A1)
+        ETERNAL_REBIRTH_ELIXIR -> DayRose
+    }
 }
 
 enum class SkipKeyType(

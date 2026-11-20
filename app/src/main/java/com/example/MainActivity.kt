@@ -70,6 +70,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -84,6 +85,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -92,6 +94,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -118,6 +121,20 @@ import com.example.ui.screens.InventoryScreen
 import com.example.ui.screens.RoadmapScreen
 import com.example.ui.screens.StrikeScreen
 import com.example.ui.screens.TasksLedgerScreen
+import com.example.ui.screens.XpLogsScreen
+import com.example.ui.theme.AppThemeMode
+import com.example.ui.theme.CosmicDarkSurface
+import com.example.ui.theme.DarkNavBg
+import com.example.ui.theme.DarkNavBorder
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.DayTextSecondary
+import com.example.ui.theme.LightNavBg
+import com.example.ui.theme.LightNavBorder
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -138,6 +155,7 @@ enum class AppScreen {
     DEVIATIONS,
     ROADMAP,
     TASKS_LEDGER,
+    XP_LOGS,
     PROFILE
 }
 
@@ -152,10 +170,24 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            // Theme automatically follows system theme
-            val isDarkTheme = isSystemInDarkTheme()
+            val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+            val systemDark = isSystemInDarkTheme()
+            val isDarkTheme = when (themeMode) {
+                AppThemeMode.SYSTEM -> systemDark
+                AppThemeMode.DARK -> true
+                AppThemeMode.LIGHT -> false
+            }
             val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
             val isAppUnlocked by viewModel.isAppUnlocked.collectAsStateWithLifecycle()
+
+            val rootView = LocalView.current
+            if (!rootView.isInEditMode) {
+                SideEffect {
+                    val controller = WindowCompat.getInsetsController(window, rootView)
+                    controller.isAppearanceLightStatusBars = !isDarkTheme
+                    controller.isAppearanceLightNavigationBars = !isDarkTheme
+                }
+            }
 
             val locale = when (currentLang) {
                 "ar" -> Locale("ar")
@@ -311,9 +343,9 @@ fun LiquidGlassApp(
         }
     }
 
-    // Hardware/gesture BackHandler: return from TASKS_LEDGER to ROADMAP, otherwise return to DASHBOARD
+    // Hardware/gesture BackHandler: return from TASKS_LEDGER or XP_LOGS to ROADMAP, otherwise return to DASHBOARD
     BackHandler(enabled = currentScreen != AppScreen.DASHBOARD) {
-        currentScreen = if (currentScreen == AppScreen.TASKS_LEDGER) {
+        currentScreen = if (currentScreen == AppScreen.TASKS_LEDGER || currentScreen == AppScreen.XP_LOGS) {
             AppScreen.ROADMAP
         } else {
             AppScreen.DASHBOARD
@@ -325,7 +357,7 @@ fun LiquidGlassApp(
             containerColor = Color.Transparent,
             topBar = {
                 AnimatedVisibility(
-                    visible = currentScreen != AppScreen.TASKS_LEDGER,
+                    visible = currentScreen != AppScreen.TASKS_LEDGER && currentScreen != AppScreen.XP_LOGS,
                     enter = expandVertically(tween(170, easing = FastOutSlowInEasing)) + fadeIn(tween(150)),
                     exit = shrinkVertically(tween(140, easing = FastOutLinearInEasing)) + fadeOut(tween(100))
                 ) {
@@ -385,12 +417,13 @@ fun LiquidGlassApp(
             },
             bottomBar = {
                 AnimatedVisibility(
-                    visible = currentScreen != AppScreen.TASKS_LEDGER,
+                    visible = currentScreen != AppScreen.TASKS_LEDGER && currentScreen != AppScreen.XP_LOGS,
                     enter = expandVertically(tween(170, easing = FastOutSlowInEasing)) + fadeIn(tween(150)),
                     exit = shrinkVertically(tween(140, easing = FastOutLinearInEasing)) + fadeOut(tween(100))
                 ) {
                     LiquidGlassBottomBar(
                         currentScreen = currentScreen,
+                        isDarkTheme = isDarkTheme,
                         onScreenSelected = { screen ->
                             if (screen != AppScreen.DASHBOARD) {
                                 showRecordsDashboardDialog = false
@@ -447,7 +480,8 @@ fun LiquidGlassApp(
                             viewModel.selectPersonA(id)
                             currentScreen = AppScreen.COMPARISON
                         },
-                        hostDataEntryExternally = true
+                        hostDataEntryExternally = true,
+                        isDarkTheme = isDarkTheme
                     )
 
                     AppScreen.INVENTORY -> InventoryScreen(
@@ -456,42 +490,58 @@ fun LiquidGlassApp(
                     )
 
                     AppScreen.STRIKE -> StrikeScreen(
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        isDarkTheme = isDarkTheme
                     )
 
                     AppScreen.COMPARISON -> ComparisonScreen(
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        isDarkTheme = isDarkTheme
                     )
 
                     AppScreen.FLAME -> FlameScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
+                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD },
+                        isDarkTheme = isDarkTheme
                     )
 
                     AppScreen.DEVIATIONS -> DeviationsScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
+                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD },
+                        isDarkTheme = isDarkTheme
                     )
 
                     AppScreen.ROADMAP -> RoadmapScreen(
                         viewModel = viewModel,
                         onNavigateBack = { currentScreen = AppScreen.DASHBOARD },
+                        isDarkTheme = isDarkTheme,
                         initialMainTab = roadmapMainTab,
                         onMainTabChanged = { roadmapMainTab = it },
                         onOpenTasksLedger = {
                             roadmapMainTab = 1
                             currentScreen = AppScreen.TASKS_LEDGER
+                        },
+                        onOpenXpLogs = {
+                            currentScreen = AppScreen.XP_LOGS
                         }
                     )
 
                     AppScreen.TASKS_LEDGER -> TasksLedgerScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.ROADMAP }
+                        onNavigateBack = { currentScreen = AppScreen.ROADMAP },
+                        isDarkTheme = isDarkTheme
+                    )
+
+                    AppScreen.XP_LOGS -> XpLogsScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { currentScreen = AppScreen.ROADMAP },
+                        isDarkTheme = isDarkTheme
                     )
 
                     AppScreen.PROFILE -> com.example.ui.screens.ProfileScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD }
+                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD },
+                        isDarkTheme = isDarkTheme
                     )
                 }
             }
@@ -597,7 +647,7 @@ fun LiquidGlassTopBar(
     onOpenDeviations: () -> Unit,
     onLongPressFlame: () -> Unit = {},
     currentLang: String = "ar",
-    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     isHapticEnabled: Boolean = true
 ) {
     val title = when (currentScreen) {
@@ -612,6 +662,11 @@ fun LiquidGlassTopBar(
             "ar" -> "دفتر المهام"
             "fr" -> "Registre des missions"
             else -> "Tasks Ledger"
+        }
+        AppScreen.XP_LOGS -> when (currentLang) {
+            "ar" -> "سجل نقاط XP"
+            "fr" -> "Journaux XP"
+            else -> "Xp Logs"
         }
         AppScreen.PROFILE -> when (currentLang) {
             "ar" -> "الملف الشخصي"
@@ -707,16 +762,24 @@ fun LiquidGlassTopBar(
                         isDarkTheme = isDarkTheme
                     )
 
+                val dropdownBg = if (isDarkTheme) Color(0xF20B1221) else Color(0xFAFFFFFF)
+                val dropdownSurfaceInner = if (isDarkTheme) Color(0x201E293B) else Color(0xFFF1F5F9)
+                val emeraldTone = if (isDarkTheme) NeonEmerald else DayEmerald
+                val amberTone = if (isDarkTheme) NeonAmber else DayOrange
+                val cyanTone = if (isDarkTheme) NeonCyan else DayCyan
+                val goldTone = if (isDarkTheme) Color(0xFFFFD700) else Color(0xFFB45309)
+                val secondaryTextTone = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+
                 DropdownMenu(
                     expanded = showShieldDropdown,
                     onDismissRequest = onDismissShieldDropdown,
                     offset = DpOffset(x = (-12).dp, y = 8.dp),
                     modifier = Modifier
                         .width(250.dp)
-                        .background(Color(0xF20B1221))
+                        .background(dropdownBg)
                         .border(
                             1.2.dp,
-                            if (isStreakShieldActive) NeonEmerald.copy(alpha = 0.7f) else NeonAmber.copy(alpha = 0.6f),
+                            if (isStreakShieldActive) emeraldTone.copy(alpha = 0.7f) else amberTone.copy(alpha = 0.6f),
                             RoundedCornerShape(12.dp)
                         )
                         .testTag("top_bar_shield_readonly_dropdown")
@@ -737,7 +800,7 @@ fun LiquidGlassTopBar(
                                 Icon(
                                     imageVector = Icons.Default.Shield,
                                     contentDescription = null,
-                                    tint = if (isStreakShieldActive) NeonEmerald else NeonAmber,
+                                    tint = if (isStreakShieldActive) emeraldTone else amberTone,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -749,7 +812,7 @@ fun LiquidGlassTopBar(
                                     },
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = if (isStreakShieldActive) NeonEmerald else NeonAmber
+                                    color = if (isStreakShieldActive) emeraldTone else amberTone
                                 )
                             }
                         }
@@ -758,7 +821,7 @@ fun LiquidGlassTopBar(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Color(0x201E293B))
+                                .background(dropdownSurfaceInner)
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -767,14 +830,14 @@ fun LiquidGlassTopBar(
                                 Icon(
                                     imageVector = Icons.Default.Timer,
                                     contentDescription = null,
-                                    tint = NeonCyan,
+                                    tint = cyanTone,
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Spacer(modifier = Modifier.width(5.dp))
                                 Text(
                                     text = if (currentLang == "ar") "الوقت المتبقي" else "Time Remaining",
                                     fontSize = 11.sp,
-                                    color = Color(0xFF94A3B8)
+                                    color = secondaryTextTone
                                 )
                             }
                             Text(
@@ -785,27 +848,32 @@ fun LiquidGlassTopBar(
                                 },
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Black,
-                                color = if (isStreakShieldActive) NeonCyan else Color(0xFF64748B)
+                                color = if (isStreakShieldActive) cyanTone else secondaryTextTone
                             )
                         }
 
-                        HorizontalDivider(color = Color(0x2A38BDF8))
+                        HorizontalDivider(
+                            color = if (isDarkTheme) Color(0x2A38BDF8) else Color(0xFFCBD5E1)
+                        )
 
                         // Read-only Available Inventory Counts for Each Shield Type
                         ShieldReadOnlyCountRow(
                             label = if (currentLang == "ar") "درع الـ 24 ساعة" else "24h Shield",
                             valueText = "$available24hShields",
-                            accent = NeonCyan
+                            accent = cyanTone,
+                            isDarkTheme = isDarkTheme
                         )
                         ShieldReadOnlyCountRow(
                             label = if (currentLang == "ar") "درع الـ 48 ساعة" else "48h Shield",
                             valueText = "$available48hShields",
-                            accent = NeonEmerald
+                            accent = emeraldTone,
+                            isDarkTheme = isDarkTheme
                         )
                         ShieldReadOnlyCountRow(
                             label = if (currentLang == "ar") "درع الـ 72 ساعة" else "72h Shield",
                             valueText = "$available72hShields",
-                            accent = NeonAmber
+                            accent = amberTone,
+                            isDarkTheme = isDarkTheme
                         )
                         ShieldReadOnlyCountRow(
                             label = if (currentLang == "ar") "درع الـ 7 أيام (تلقائي)" else "7-Day Shield (Auto)",
@@ -814,7 +882,8 @@ fun LiquidGlassTopBar(
                             } else {
                                 "$sevenDayAutoShieldCount"
                             },
-                            accent = Color(0xFFFFD700)
+                            accent = goldTone,
+                            isDarkTheme = isDarkTheme
                         )
                     }
                 }
@@ -849,7 +918,8 @@ fun LiquidGlassTopBar(
 private fun ShieldReadOnlyCountRow(
     label: String,
     valueText: String,
-    accent: Color
+    accent: Color,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -859,7 +929,7 @@ private fun ShieldReadOnlyCountRow(
         Text(
             text = label,
             fontSize = 11.sp,
-            color = Color(0xFFE2E8F0),
+            color = if (isDarkTheme) Color(0xFFE2E8F0) else DayTextPrimary,
             fontWeight = FontWeight.Medium
         )
         Text(
@@ -874,8 +944,17 @@ private fun ShieldReadOnlyCountRow(
 @Composable
 fun LiquidGlassBottomBar(
     currentScreen: AppScreen,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onScreenSelected: (AppScreen) -> Unit
 ) {
+    val navBg = if (isDarkTheme) DarkNavBg else LightNavBg
+    val navBorder = if (isDarkTheme) DarkNavBorder else LightNavBorder
+    val dashColor = if (isDarkTheme) NeonCyan else DayCyan
+    val invColor = if (isDarkTheme) NeonEmerald else DayEmerald
+    val strikeColor = if (isDarkTheme) NeonAmber else DayOrange
+    val compareColor = if (isDarkTheme) NeonViolet else DayPurple
+    val roadmapColor = if (isDarkTheme) NeonAmber else DayOrange
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -886,8 +965,8 @@ fun LiquidGlassBottomBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(22.dp))
-                .background(com.example.ui.theme.DarkNavBg)
-                .border(1.dp, com.example.ui.theme.DarkNavBorder, RoundedCornerShape(22.dp))
+                .background(navBg)
+                .border(1.dp, navBorder, RoundedCornerShape(22.dp))
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
@@ -896,7 +975,8 @@ fun LiquidGlassBottomBar(
                 icon = Icons.Default.FormatListNumbered,
                 label = stringResource(R.string.nav_dashboard),
                 isSelected = currentScreen == AppScreen.DASHBOARD,
-                activeColor = NeonCyan,
+                activeColor = dashColor,
+                isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_dashboard",
                 onClick = { onScreenSelected(AppScreen.DASHBOARD) }
             )
@@ -905,7 +985,8 @@ fun LiquidGlassBottomBar(
                 icon = Icons.Default.Inventory2,
                 label = stringResource(R.string.nav_inventory),
                 isSelected = currentScreen == AppScreen.INVENTORY,
-                activeColor = NeonEmerald,
+                activeColor = invColor,
+                isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_inventory",
                 onClick = { onScreenSelected(AppScreen.INVENTORY) }
             )
@@ -914,7 +995,8 @@ fun LiquidGlassBottomBar(
                 icon = Icons.Default.Bolt,
                 label = stringResource(R.string.nav_strike),
                 isSelected = currentScreen == AppScreen.STRIKE,
-                activeColor = NeonAmber,
+                activeColor = strikeColor,
+                isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_strike",
                 onClick = { onScreenSelected(AppScreen.STRIKE) }
             )
@@ -923,7 +1005,8 @@ fun LiquidGlassBottomBar(
                 icon = Icons.AutoMirrored.Filled.CompareArrows,
                 label = stringResource(R.string.nav_compare),
                 isSelected = currentScreen == AppScreen.COMPARISON,
-                activeColor = NeonViolet,
+                activeColor = compareColor,
+                isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_compare",
                 onClick = { onScreenSelected(AppScreen.COMPARISON) }
             )
@@ -932,7 +1015,8 @@ fun LiquidGlassBottomBar(
                 icon = Icons.Default.Timeline,
                 label = stringResource(R.string.roadmap_nav_title),
                 isSelected = currentScreen == AppScreen.ROADMAP,
-                activeColor = NeonAmber,
+                activeColor = roadmapColor,
+                isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_roadmap",
                 onClick = { onScreenSelected(AppScreen.ROADMAP) }
             )
@@ -946,21 +1030,22 @@ private fun BottomNavItem(
     label: String,
     isSelected: Boolean,
     activeColor: Color,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     testTag: String,
     onClick: () -> Unit
 ) {
     val bgColor by animateColorAsState(
-        targetValue = if (isSelected) activeColor.copy(alpha = 0.2f) else Color.Transparent,
+        targetValue = if (isSelected) activeColor.copy(alpha = if (isDarkTheme) 0.2f else 0.14f) else Color.Transparent,
         animationSpec = tween(160),
         label = "nav_bg"
     )
     val borderColor by animateColorAsState(
-        targetValue = if (isSelected) activeColor.copy(alpha = 0.8f) else Color.Transparent,
+        targetValue = if (isSelected) activeColor.copy(alpha = if (isDarkTheme) 0.8f else 0.65f) else Color.Transparent,
         animationSpec = tween(160),
         label = "nav_border"
     )
     val iconTint by animateColorAsState(
-        targetValue = if (isSelected) activeColor else Color(0xFF94A3B8),
+        targetValue = if (isSelected) activeColor else if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF475569),
         animationSpec = tween(160),
         label = "nav_tint"
     )

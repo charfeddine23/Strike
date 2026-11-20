@@ -43,11 +43,13 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
@@ -107,17 +109,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import com.example.R
+import com.example.ui.theme.AppThemeMode
 import com.example.ui.theme.CaveatHandwriting
+import com.example.ui.theme.CosmicDarkSurface
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayRose
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -182,7 +188,7 @@ fun SettingsSideDrawer(
                 ) + fadeOut(animationSpec = tween(160))
             ) {
                 CompositionLocalProvider(LocalLayoutDirection provides appLayoutDirection) {
-                    val isDarkTheme = isSystemInDarkTheme()
+                    val isDarkTheme = LocalAppDarkTheme.current
                     val panelShape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)
                     val panelBrush = if (isDarkTheme) {
                         Brush.verticalGradient(
@@ -195,8 +201,8 @@ fun SettingsSideDrawer(
                     } else {
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color(0xFAF4F7FC),
-                                Color(0xFAEEF2F6)
+                                Color(0xFAF8FBFF),
+                                Color(0xFFEEF4FA)
                             )
                         )
                     }
@@ -275,8 +281,8 @@ fun SettingsDialog(
     onDismiss: () -> Unit,
     onLockAppNow: () -> Unit
 ) {
-    val isDarkTheme = isSystemInDarkTheme()
-    val dialogBg = if (isDarkTheme) Color(0xF00B132B) else Color(0xFFEEF2F6)
+    val isDarkTheme = LocalAppDarkTheme.current
+    val dialogBg = if (isDarkTheme) Color(0xF00B132B) else Color(0xFFF6F9FD)
     val dialogBorder = if (isDarkTheme) Color(0x6038BDF8) else Color(0xFFCBD5E1)
 
     Dialog(
@@ -315,6 +321,7 @@ private fun SettingsPanelBody(
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
     val isAutoUpdateEnabled by viewModel.isAutoUpdateEnabled
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     var biometricAvailability by remember(context, hostActivity) {
         mutableStateOf(FingerprintAuthHelper.checkAvailability(hostActivity ?: context))
@@ -336,7 +343,7 @@ private fun SettingsPanelBody(
     var pendingRestoreUri by remember { mutableStateOf<Uri?>(null) }
     var showRestoreConfirmDialog by remember { mutableStateOf(false) }
     var showResetAllLevelsConfirmDialog by remember { mutableStateOf(false) }
-    val isDarkTheme = isSystemInDarkTheme()
+    val isDarkTheme = LocalAppDarkTheme.current
 
     val permissionsToRequest = remember {
         buildList {
@@ -379,15 +386,15 @@ private fun SettingsPanelBody(
         }
     }
 
-    // Liquid Glass v3 Design Aesthetic Color Tokens
+    // Liquid Glass v5 Appearance Tokens (Zero Day/Night Color Overlap)
     val cardBg = if (isDarkTheme) Color(0x221E293B) else Color(0xFFFFFFFF)
     val cardBorder = if (isDarkTheme) Color(0x3538BDF8) else Color(0xFFCBD5E1)
-    val titleColor = if (isDarkTheme) Color(0xFFF8FAFC) else Color(0xFF1E293B)
-    val descColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF475569)
-    val activeCyan = Color(0xFF0EA5E9)
-    val activeTurquoise = Color(0xFF06B6D4)
-    val primaryActionTeal = Color(0xFF0F766E)
-    val sensitiveRed = Color(0xFFE11D48)
+    val titleColor = if (isDarkTheme) Color(0xFFF8FAFC) else Color(0xFF0B132B)
+    val descColor = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF334155)
+    val activeCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val activeTurquoise = if (isDarkTheme) NeonEmerald else DayEmerald
+    val primaryActionTeal = if (isDarkTheme) Color(0xFF0E7490) else Color(0xFF0F766E)
+    val sensitiveRed = if (isDarkTheme) NeonRose else DayRose
 
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
@@ -758,35 +765,110 @@ private fun SettingsPanelBody(
                     }
                 }
 
-                // 4. Automatic System Theme Info (وضع الهاتف تلقائياً)
-                Row(
+                // 4. Theme Mode Selector (التحكم الكامل بالوضع الليلي والنهاري والتلقائي)
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(16.dp))
                         .background(cardBg)
                         .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(14.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.BrightnessAuto,
-                        contentDescription = null,
-                        tint = activeTurquoise,
-                        modifier = Modifier.size(24.dp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = when (themeMode) {
+                                AppThemeMode.LIGHT -> Icons.Default.LightMode
+                                AppThemeMode.DARK -> Icons.Default.DarkMode
+                                AppThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                            },
+                            contentDescription = null,
+                            tint = activeCyan,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.theme_mode_title),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = titleColor
+                            )
+                            Text(
+                                text = stringResource(R.string.theme_mode_desc),
+                                fontSize = 10.5.sp,
+                                color = descColor
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val themeOptions = listOf(
+                        Triple(
+                            AppThemeMode.SYSTEM,
+                            stringResource(R.string.theme_system),
+                            Icons.Default.BrightnessAuto to "theme_mode_system"
+                        ),
+                        Triple(
+                            AppThemeMode.LIGHT,
+                            stringResource(R.string.theme_light),
+                            Icons.Default.LightMode to "theme_mode_light"
+                        ),
+                        Triple(
+                            AppThemeMode.DARK,
+                            stringResource(R.string.theme_dark),
+                            Icons.Default.DarkMode to "theme_mode_dark"
+                        )
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = stringResource(R.string.auto_theme),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = titleColor
-                        )
-                        Text(
-                            text = stringResource(R.string.system_theme_active),
-                            fontSize = 11.sp,
-                            color = descColor
-                        )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        themeOptions.forEach { (mode, label, iconAndTag) ->
+                            val (modeIcon, tag) = iconAndTag
+                            val isSelected = themeMode == mode
+                            val accent = when (mode) {
+                                AppThemeMode.LIGHT -> if (isDarkTheme) NeonAmber else DayOrange
+                                AppThemeMode.DARK -> if (isDarkTheme) NeonViolet else DayPurple
+                                AppThemeMode.SYSTEM -> activeCyan
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .minimumInteractiveComponentSize()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isSelected) accent.copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
+                                        else if (isDarkTheme) Color(0x15FFFFFF) else Color(0xFFF1F5F9)
+                                    )
+                                    .border(
+                                        width = if (isSelected) 1.3.dp else 1.dp,
+                                        color = if (isSelected) accent else cardBorder,
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { viewModel.setThemeMode(mode) }
+                                    .padding(horizontal = 6.dp, vertical = 8.dp)
+                                    .testTag(tag),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = modeIcon,
+                                    contentDescription = label,
+                                    tint = if (isSelected) accent else descColor,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = label,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                    color = if (isSelected) accent else descColor,
+                                    maxLines = 1
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -1574,6 +1656,7 @@ private fun SettingsPanelBody(
                 showRestoreConfirmDialog = false
                 pendingRestoreUri = null
             },
+            containerColor = if (isDarkTheme) CosmicDarkSurface else Color.White,
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
@@ -1653,6 +1736,7 @@ private fun SettingsPanelBody(
     if (showResetAllLevelsConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showResetAllLevelsConfirmDialog = false },
+            containerColor = if (isDarkTheme) CosmicDarkSurface else Color.White,
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(

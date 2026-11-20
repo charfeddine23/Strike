@@ -10,7 +10,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -32,6 +31,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonRose
@@ -51,7 +53,7 @@ fun DynamicStreakShieldHeaderButton(
     isShieldActive: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     isHapticEnabled: Boolean = true
 ) {
     val context = LocalContext.current
@@ -120,7 +122,7 @@ fun DynamicStreakShieldHeaderButton(
                         radius = radius
                     )
                 }
-                .background(Color(0xD9064E3B))
+                .background(if (isDarkTheme) Color(0xD9064E3B) else Color(0xFFF0FDF4))
                 .border(1.5.dp, emeraldBorderBrush, CircleShape)
                 .clickable {
                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -133,7 +135,7 @@ fun DynamicStreakShieldHeaderButton(
             Icon(
                 imageVector = Icons.Default.Shield,
                 contentDescription = "Streak Shield Active (Protected)",
-                tint = Color(0xFF6EE7B7),
+                tint = if (isDarkTheme) Color(0xFF6EE7B7) else DayEmerald,
                 modifier = Modifier.size(20.dp)
             )
         }
@@ -171,7 +173,7 @@ fun DynamicStreakShieldHeaderButton(
                         radius = radius
                     )
                 }
-                .background(Color(0xD91E1B18))
+                .background(if (isDarkTheme) Color(0xD91E1B18) else Color(0xFFFFFBEB))
                 .border(1.5.dp, warningBorderBrush, CircleShape)
                 .clickable {
                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -184,7 +186,7 @@ fun DynamicStreakShieldHeaderButton(
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = "Streak Unprotected - Tap + to Activate Shield",
-                tint = Color(0xFFFDE047),
+                tint = if (isDarkTheme) Color(0xFFFDE047) else DayOrange,
                 modifier = Modifier.size(22.dp)
             )
         }

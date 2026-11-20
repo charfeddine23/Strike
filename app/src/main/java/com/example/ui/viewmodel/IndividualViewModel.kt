@@ -38,6 +38,7 @@ import java.util.Date
 import java.util.Locale
 import com.example.ui.components.StrikerStatus
 import com.example.ui.components.StrikerStatusEvaluator
+import com.example.ui.theme.AppThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -343,9 +344,12 @@ class IndividualViewModel(
         initialValue = 257.0
     )
 
-    // Language state
+    // Language & Theme state
     private val _currentLanguage = MutableStateFlow(securityPrefs.selectedLanguage)
     val currentLanguage: StateFlow<String> = _currentLanguage.asStateFlow()
+
+    private val _themeMode = MutableStateFlow(securityPrefs.themeMode)
+    val themeMode: StateFlow<AppThemeMode> = _themeMode.asStateFlow()
 
     // Flame System State
     val flameScore: StateFlow<Double> = FlameManager.flameScore
@@ -1428,6 +1432,33 @@ class IndividualViewModel(
         }
     }
 
+    fun setThemeMode(mode: AppThemeMode) {
+        if (_themeMode.value == mode) return
+        _themeMode.value = mode
+        securityPrefs.themeMode = mode
+        viewModelScope.launch {
+            val lang = currentLanguage.value
+            val msg = when (mode) {
+                AppThemeMode.SYSTEM -> when (lang) {
+                    "ar" -> "تم ضبط المظهر على التلقائي (حسب النظام)"
+                    "fr" -> "Apparence définie sur Automatique"
+                    else -> "Theme set to System Auto"
+                }
+                AppThemeMode.LIGHT -> when (lang) {
+                    "ar" -> "تم تفعيل الوضع النهاري"
+                    "fr" -> "Mode Jour activé"
+                    else -> "Day Mode enabled"
+                }
+                AppThemeMode.DARK -> when (lang) {
+                    "ar" -> "تم تفعيل الوضع الليلي"
+                    "fr" -> "Mode Nuit activé"
+                    else -> "Night Mode enabled"
+                }
+            }
+            emitMessage(msg)
+        }
+    }
+
     /**
      * Literally resets all game levels, consumables, unlocked titles, and unlocked avatars
      * back to their initial base state WITHOUT touching individuals or strike records.
@@ -1467,6 +1498,7 @@ class IndividualViewModel(
             val result = backupManager.importBackup(context, sourceUri, replaceExisting, lang)
             if (result.success) {
                 _currentLanguage.value = securityPrefs.selectedLanguage
+                _themeMode.value = securityPrefs.themeMode
                 isFingerprintLockEnabled.value = securityPrefs.isFingerprintLockEnabled
                 isHapticFeedbackEnabled.value = securityPrefs.isHapticFeedbackEnabled
                 isAutoUpdateEnabled.value = securityPrefs.isAutoUpdateEnabled

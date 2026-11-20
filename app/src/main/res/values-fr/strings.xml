@@ -108,6 +108,11 @@
     <string name="restore_merge">Fusionner avec l\'existant</string>
     <string name="restore_replace">Remplacer tous les enregistrements</string>
     <string name="auto_theme">Thème automatique</string>
+    <string name="theme_mode_title">Apparence (Jour / Nuit)</string>
+    <string name="theme_mode_desc">Basculez entre le mode Jour, Nuit ou Automatique avec des palettes dédiées</string>
+    <string name="theme_system">Auto</string>
+    <string name="theme_light">Jour</string>
+    <string name="theme_dark">Nuit</string>
     <string name="sort_score">Score total (BOOST × Strikes)</string>
     <string name="sort_boost">BOOST (Plus élevé)</string>
     <string name="sort_strikes">Strikes (Plus élevé)</string>

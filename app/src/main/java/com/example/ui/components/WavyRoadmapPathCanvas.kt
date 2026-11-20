@@ -24,17 +24,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.data.roadmap.RoadmapStation
 import com.example.data.roadmap.StationState
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.LocalAppDarkTheme
 import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
  * Dedicated, reusable Compose Canvas component that draws a glowing, smooth wavy path
- * visualizing the station roadmap using the Neon Cyan (#00F0FF), Electric Mint (#00FF88),
- * and Warm Fire Orange (#FF8800) visual design system gradients.
- *
- * Features fluid downward-traveling neon energy orbs with soft comet halos, breathing bloom,
- * expanding sonar ripple on the active milestone, and a flowing dashed conduit for locked nodes.
+ * visualizing the station roadmap using separated Day and Night visual design palettes.
  */
 @Composable
 fun GlowingWavyRoadmapPath(
@@ -42,7 +42,8 @@ fun GlowingWavyRoadmapPath(
     currentStationId: Int,
     modifier: Modifier = Modifier,
     horizontalAmplitudeFraction: Float = 0.30f,
-    showNodeMarkers: Boolean = true
+    showNodeMarkers: Boolean = true,
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "wavy_path_glow")
     val flowPhase by infiniteTransition.animateFloat(
@@ -101,6 +102,16 @@ fun GlowingWavyRoadmapPath(
             phase = -flowPhase * dashPeriod
         )
 
+        val activeStartTone = if (darkTheme) NeonAqua else DayCyan
+        val activeEndTone = if (darkTheme) ElectricMint else DayEmerald
+        val coreHighlightTone = if (darkTheme) Color(0xFFC8FDFF) else Color(0xFF0EA5E9)
+        val orbCenterTone = if (darkTheme) Color(0xFFF0FFFF) else Color.White
+        val lockedConduitBg = if (darkTheme) Color(0x55161F33) else Color(0x3394A3B8)
+        val lockedDashColor = if (darkTheme) Color(0xFF475569) else Color(0xFF94A3B8)
+        val lockedNodeFill = if (darkTheme) Color(0xFF1A2338) else Color(0xFFF8FAFC)
+        val frontierStartTone = if (darkTheme) WarmFireOrange else DayOrange
+        val frontierTipTone = if (darkTheme) MilestoneGold else WarmFireOrange
+
         for (i in 0 until nodeOffsets.lastIndex) {
             val start = nodeOffsets[i]
             val end = nodeOffsets[i + 1]
@@ -127,8 +138,8 @@ fun GlowingWavyRoadmapPath(
                     path = segmentPath,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            NeonAqua.copy(alpha = 0.24f * beaconPulse),
-                            ElectricMint.copy(alpha = 0.26f * beaconPulse)
+                            activeStartTone.copy(alpha = (if (darkTheme) 0.24f else 0.18f) * beaconPulse),
+                            activeEndTone.copy(alpha = (if (darkTheme) 0.26f else 0.20f) * beaconPulse)
                         ),
                         startY = start.y,
                         endY = end.y
@@ -140,8 +151,8 @@ fun GlowingWavyRoadmapPath(
                     path = segmentPath,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            NeonAqua.copy(alpha = 0.58f * beaconPulse),
-                            ElectricMint.copy(alpha = 0.58f * beaconPulse)
+                            activeStartTone.copy(alpha = 0.58f * beaconPulse),
+                            activeEndTone.copy(alpha = 0.58f * beaconPulse)
                         ),
                         startY = start.y,
                         endY = end.y
@@ -152,7 +163,7 @@ fun GlowingWavyRoadmapPath(
                 drawPath(
                     path = segmentPath,
                     brush = Brush.verticalGradient(
-                        colors = listOf(Color(0xFFC8FDFF), NeonAqua, ElectricMint),
+                        colors = listOf(coreHighlightTone, activeStartTone, activeEndTone),
                         startY = start.y,
                         endY = end.y
                     ),
@@ -174,12 +185,12 @@ fun GlowingWavyRoadmapPath(
                         3f * omt * t * t * controlY2 +
                         t * t * t * end.y
                     drawCircle(
-                        color = NeonAqua.copy(alpha = 0.36f * strength),
+                        color = activeStartTone.copy(alpha = 0.36f * strength),
                         radius = (8f * strength + 2f).dp.toPx(),
                         center = Offset(bx, by)
                     )
                     drawCircle(
-                        color = Color(0xFFF0FFFF).copy(alpha = strength),
+                        color = orbCenterTone.copy(alpha = strength),
                         radius = (3.4f * strength + 0.6f).dp.toPx(),
                         center = Offset(bx, by)
                     )
@@ -187,12 +198,12 @@ fun GlowingWavyRoadmapPath(
             } else {
                 drawPath(
                     path = segmentPath,
-                    color = Color(0x55161F33),
+                    color = lockedConduitBg,
                     style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                 )
                 drawPath(
                     path = segmentPath,
-                    color = Color(0xFF475569),
+                    color = lockedDashColor,
                     style = Stroke(
                         width = 2.4.dp.toPx(),
                         cap = StrokeCap.Round,
@@ -219,8 +230,8 @@ fun GlowingWavyRoadmapPath(
                         path = tailPath,
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                WarmFireOrange.copy(alpha = 0.92f),
-                                MilestoneGold.copy(alpha = 0.65f * beaconPulse),
+                                frontierStartTone.copy(alpha = 0.92f),
+                                frontierTipTone.copy(alpha = 0.65f * beaconPulse),
                                 Color.Transparent
                             ),
                             startY = start.y,
@@ -229,7 +240,7 @@ fun GlowingWavyRoadmapPath(
                         style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
                     )
                     drawCircle(
-                        color = MilestoneGold.copy(alpha = 0.7f * beaconPulse),
+                        color = frontierTipTone.copy(alpha = 0.7f * beaconPulse),
                         radius = 4.5.dp.toPx(),
                         center = Offset(tipX, tipY)
                     )
@@ -246,14 +257,14 @@ fun GlowingWavyRoadmapPath(
                         val rippleRadius = (12f + rippleProgress * 16f).dp.toPx()
                         val rippleAlpha = (1f - rippleProgress) * 0.65f
                         drawCircle(
-                            color = WarmFireOrange.copy(alpha = rippleAlpha),
+                            color = frontierStartTone.copy(alpha = rippleAlpha),
                             radius = rippleRadius,
                             center = pt,
                             style = Stroke(width = 1.8.dp.toPx())
                         )
                         drawCircle(
                             brush = Brush.radialGradient(
-                                colors = listOf(WarmFireOrange.copy(alpha = 0.45f * beaconPulse), Color.Transparent),
+                                colors = listOf(frontierStartTone.copy(alpha = 0.45f * beaconPulse), Color.Transparent),
                                 center = pt,
                                 radius = 22.dp.toPx()
                             ),
@@ -261,31 +272,31 @@ fun GlowingWavyRoadmapPath(
                             center = pt
                         )
                         drawCircle(
-                            brush = Brush.verticalGradient(listOf(MilestoneGold, WarmFireOrange)),
+                            brush = Brush.verticalGradient(listOf(frontierTipTone, frontierStartTone)),
                             radius = 10.dp.toPx(),
                             center = pt
                         )
                     }
                     st.state == StationState.CLAIMED -> {
                         drawCircle(
-                            color = ElectricMint.copy(alpha = 0.28f * beaconPulse),
+                            color = activeEndTone.copy(alpha = 0.28f * beaconPulse),
                             radius = 13.dp.toPx(),
                             center = pt
                         )
                         drawCircle(
-                            brush = Brush.verticalGradient(listOf(NeonAqua, ElectricMint)),
+                            brush = Brush.verticalGradient(listOf(activeStartTone, activeEndTone)),
                             radius = 7.5.dp.toPx(),
                             center = pt
                         )
                     }
                     else -> {
                         drawCircle(
-                            color = Color(0xFF1A2338),
+                            color = lockedNodeFill,
                             radius = 6.dp.toPx(),
                             center = pt
                         )
                         drawCircle(
-                            color = Color(0xFF475569),
+                            color = lockedDashColor,
                             radius = 6.dp.toPx(),
                             center = pt,
                             style = Stroke(width = 1.5.dp.toPx())
@@ -310,12 +321,23 @@ fun GlowingWavyRoadmapSegmentCanvas(
     isFrontierTail: Boolean,
     modifier: Modifier = Modifier,
     flowPhase: Float = 0f,
-    glowPulse: Float = 0.85f
+    glowPulse: Float = 0.85f,
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     Canvas(modifier = modifier.fillMaxSize()) {
         val stepsPerHalf = 22
         val totalSteps = stepsPerHalf * 2
         val midY = size.height * 0.5f
+
+        val activeStartTone = if (darkTheme) NeonAqua else DayCyan
+        val activeEndTone = if (darkTheme) ElectricMint else DayEmerald
+        val coreTone = if (darkTheme) Color(0xFFC8FDFF) else Color(0xFF0EA5E9)
+        val orbHaloTone = if (darkTheme) Color(0xFFE6FFFF) else Color.White
+        val orbCenterTone = if (darkTheme) Color(0xFFF2FFFF) else Color.White
+        val lockedConduitBg = if (darkTheme) Color(0x66161F33) else Color(0x3394A3B8)
+        val lockedDashColor = if (darkTheme) Color(0xFF4A5873) else Color(0xFF94A3B8)
+        val frontierOuterTone = if (darkTheme) WarmFireOrange else DayOrange
+        val frontierInnerTone = if (darkTheme) MilestoneGold else WarmFireOrange
 
         fun pointAtFrac(yFrac: Float): Offset {
             val t = (stationId - 0.5f) + yFrac
@@ -347,8 +369,8 @@ fun GlowingWavyRoadmapSegmentCanvas(
                     path = path,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            NeonAqua.copy(alpha = 0.24f * glowPulse),
-                            ElectricMint.copy(alpha = 0.26f * glowPulse)
+                            activeStartTone.copy(alpha = (if (darkTheme) 0.24f else 0.16f) * glowPulse),
+                            activeEndTone.copy(alpha = (if (darkTheme) 0.26f else 0.18f) * glowPulse)
                         ),
                         startY = 0f,
                         endY = size.height
@@ -360,8 +382,8 @@ fun GlowingWavyRoadmapSegmentCanvas(
                     path = path,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            NeonAqua.copy(alpha = 0.56f * glowPulse),
-                            ElectricMint.copy(alpha = 0.56f * glowPulse)
+                            activeStartTone.copy(alpha = 0.56f * glowPulse),
+                            activeEndTone.copy(alpha = 0.56f * glowPulse)
                         ),
                         startY = 0f,
                         endY = size.height
@@ -372,7 +394,7 @@ fun GlowingWavyRoadmapSegmentCanvas(
                 drawPath(
                     path = path,
                     brush = Brush.verticalGradient(
-                        colors = listOf(Color(0xFFC8FDFF), NeonAqua, ElectricMint),
+                        colors = listOf(coreTone, activeStartTone, activeEndTone),
                         startY = 0f,
                         endY = size.height
                     ),
@@ -393,8 +415,8 @@ fun GlowingWavyRoadmapSegmentCanvas(
                             drawCircle(
                                 brush = Brush.radialGradient(
                                     colors = listOf(
-                                        Color(0xFFE6FFFF).copy(alpha = 0.65f * strength),
-                                        NeonAqua.copy(alpha = 0.34f * strength),
+                                        orbHaloTone.copy(alpha = 0.65f * strength),
+                                        activeStartTone.copy(alpha = 0.34f * strength),
                                         Color.Transparent
                                     ),
                                     center = pt,
@@ -404,7 +426,7 @@ fun GlowingWavyRoadmapSegmentCanvas(
                                 center = pt
                             )
                             drawCircle(
-                                color = Color(0xFFF2FFFF).copy(alpha = strength),
+                                color = orbCenterTone.copy(alpha = strength),
                                 radius = (3.4f * strength + 0.6f).dp.toPx(),
                                 center = pt
                             )
@@ -412,15 +434,15 @@ fun GlowingWavyRoadmapSegmentCanvas(
                     }
                 }
             } else {
-                // Dark underlying shadow conduit + animated streaming dashed line
+                // Underlying shadow conduit + animated streaming dashed line
                 drawPath(
                     path = path,
-                    color = Color(0x66161F33),
+                    color = lockedConduitBg,
                     style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                 )
                 drawPath(
                     path = path,
-                    color = Color(0xFF4A5873),
+                    color = lockedDashColor,
                     style = Stroke(
                         width = 2.4.dp.toPx(),
                         cap = StrokeCap.Round,
@@ -443,8 +465,8 @@ fun GlowingWavyRoadmapSegmentCanvas(
                         path = tailPath,
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                WarmFireOrange.copy(alpha = 0.35f * glowPulse),
-                                MilestoneGold.copy(alpha = 0.18f * glowPulse),
+                                frontierOuterTone.copy(alpha = 0.35f * glowPulse),
+                                frontierInnerTone.copy(alpha = 0.18f * glowPulse),
                                 Color.Transparent
                             ),
                             startY = midY,
@@ -457,8 +479,8 @@ fun GlowingWavyRoadmapSegmentCanvas(
                         path = tailPath,
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                MilestoneGold.copy(alpha = 0.95f),
-                                WarmFireOrange.copy(alpha = 0.78f),
+                                frontierInnerTone.copy(alpha = 0.95f),
+                                frontierOuterTone.copy(alpha = 0.78f),
                                 Color.Transparent
                             ),
                             startY = midY,

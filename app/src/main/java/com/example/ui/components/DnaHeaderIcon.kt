@@ -11,7 +11,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -30,6 +29,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonViolet
@@ -46,7 +47,7 @@ import kotlin.math.sin
 fun DnaHeaderIcon(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     isHapticEnabled: Boolean = true
 ) {
     val context = LocalContext.current
@@ -73,8 +74,8 @@ fun DnaHeaderIcon(
         label = "dna_pulse"
     )
 
-    val auraColor = if (isDarkTheme) NeonCyan else Color(0xFF0284C7)
-    val bg = if (isDarkTheme) Color(0xD90A1329) else Color(0xCCF0FDF4)
+    val auraColor = if (isDarkTheme) NeonCyan else DayCyan
+    val bg = if (isDarkTheme) Color(0xD90A1329) else Color(0xF5FFFFFF)
     val borderBrush = Brush.sweepGradient(
         listOf(
             NeonCyan,
@@ -136,8 +137,9 @@ fun DnaHeaderIcon(
 
                 // Draw connector rung
                 val rungAlpha = (0.35f + (1f - kotlin.math.abs(sinA)) * 0.55f).coerceIn(0.2f, 1f)
+                val rungBaseColor = if (isDarkTheme) Color.White else Color(0xFF334155)
                 drawLine(
-                    color = Color.White.copy(alpha = rungAlpha * 0.6f),
+                    color = rungBaseColor.copy(alpha = rungAlpha * 0.6f),
                     start = Offset(x1, y),
                     end = Offset(x2, y),
                     strokeWidth = 1.2f,

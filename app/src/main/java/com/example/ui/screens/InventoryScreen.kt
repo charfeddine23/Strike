@@ -17,7 +17,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -82,6 +81,11 @@ import com.example.ui.screens.inventory.ShieldsSubPage
 import com.example.ui.screens.inventory.TitlesSubPage
 import com.example.ui.screens.inventory.cardSecondaryTextColor
 import com.example.ui.screens.inventory.locText
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.DayTextSecondary
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -103,7 +107,7 @@ enum class InventoryCategory {
 @Composable
 fun InventoryScreen(
     viewModel: IndividualViewModel,
-    isDarkTheme: Boolean = isSystemInDarkTheme(),
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -324,8 +328,8 @@ fun InventoryScreen(
         ModalBottomSheet(
             onDismissRequest = { selectedTooltip = null },
             sheetState = sheetState,
-            containerColor = Color(0xEC0B1120),
-            scrimColor = Color(0x99020617),
+            containerColor = if (isDarkTheme) Color(0xEC0B1120) else Color(0xFAF8FAFC),
+            scrimColor = if (isDarkTheme) Color(0x99020617) else Color(0x660F172A),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
             dragHandle = null
         ) {
@@ -337,6 +341,7 @@ fun InventoryScreen(
                 InventoryTooltipSheetContent(
                     spec = spec,
                     currentLang = currentLang,
+                    isDarkTheme = isDarkTheme,
                     onClose = { selectedTooltip = null }
                 )
             }
@@ -345,22 +350,24 @@ fun InventoryScreen(
 
     // Guiding Tooltip Hint Dialog (1 second)
     if (showLongPressGuideDialog) {
+        val guideViolet = if (isDarkTheme) NeonViolet else DayPurple
+        val guideCyan = if (isDarkTheme) NeonCyan else DayCyan
         AlertDialog(
             onDismissRequest = { showLongPressGuideDialog = false },
-            containerColor = Color(0xF50F172A),
+            containerColor = if (isDarkTheme) Color(0xF50F172A) else Color(0xFFF8FAFC),
             icon = {
                 Box(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(NeonViolet.copy(alpha = 0.18f))
-                        .border(1.2.dp, NeonViolet.copy(alpha = 0.7f), CircleShape),
+                        .background(guideViolet.copy(alpha = 0.16f))
+                        .border(1.2.dp, guideViolet.copy(alpha = 0.7f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.TouchApp,
                         contentDescription = null,
-                        tint = NeonViolet,
+                        tint = guideViolet,
                         modifier = Modifier.size(26.dp)
                     )
                 }
@@ -369,7 +376,7 @@ fun InventoryScreen(
                 Text(
                     text = locText(currentLang, "دليل الاستخدام", "Guide d'utilisation", "Usage Guide"),
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color.White,
+                    color = if (isDarkTheme) Color.White else DayTextPrimary,
                     fontFamily = PlusJakartaSans
                 )
             },
@@ -382,7 +389,7 @@ fun InventoryScreen(
                         "Press and hold any item for 1 second to view its explanation and how to obtain it."
                     ),
                     fontSize = 14.sp,
-                    color = Color(0xFFE2E8F0),
+                    color = if (isDarkTheme) Color(0xFFE2E8F0) else DayTextSecondary,
                     lineHeight = 22.sp
                 )
             },
@@ -393,7 +400,7 @@ fun InventoryScreen(
                 ) {
                     Text(
                         text = locText(currentLang, "حسناً", "Compris", "Got It"),
-                        color = NeonCyan,
+                        color = guideCyan,
                         fontWeight = FontWeight.Bold
                     )
                 }

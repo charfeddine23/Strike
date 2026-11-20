@@ -92,6 +92,13 @@ import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.ProfileAvatarHeaderIcon
 import com.example.ui.components.getAvatarVector
 import com.example.ui.theme.CaveatHandwriting
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.DayTextSecondary
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -113,13 +120,18 @@ import java.util.Locale
 @Composable
 fun ProfileScreen(
     viewModel: IndividualViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val context = LocalContext.current
     val view = LocalView.current
     val isHapticEnabled by viewModel.isHapticFeedbackEnabled
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
+    val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val accentAmber = if (isDarkTheme) NeonAmber else DayOrange
+    val accentViolet = if (isDarkTheme) NeonViolet else DayPurple
+    val accentEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
 
     // Profile state flows
     val userName by ProfileManager.userName.collectAsStateWithLifecycle()
@@ -182,15 +194,15 @@ fun ProfileScreen(
                 IconButton(
                     onClick = onNavigateBack,
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(48.dp)
                         .clip(CircleShape)
-                        .background(Color(0x221E293B))
-                        .border(1.dp, Color(0x4038BDF8), CircleShape)
+                        .background(if (isDarkTheme) Color(0x221E293B) else Color(0xCCFFFFFF))
+                        .border(1.dp, if (isDarkTheme) Color(0x4038BDF8) else Color(0x660284C7), CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = if (isAr) "رجوع" else "Back",
-                        tint = NeonCyan
+                        tint = accentCyan
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -205,7 +217,7 @@ fun ProfileScreen(
                     Text(
                         text = if (isAr) "العتاد السيبراني ومصفوفة القدرات" else "Cyber Profile & Arsenal Matrix",
                         style = MaterialTheme.typography.labelSmall,
-                        color = NeonCyan,
+                        color = accentCyan,
                         fontSize = 11.sp
                     )
                 }
@@ -221,7 +233,8 @@ fun ProfileScreen(
             item {
                 LiquidGlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp)
+                    shape = RoundedCornerShape(22.dp),
+                    darkTheme = isDarkTheme
                 ) {
                     Row(
                         modifier = Modifier
@@ -264,7 +277,7 @@ fun ProfileScreen(
                             Text(
                                 text = if (isAr) "المستوى الحالي: محطة #$unlockedStation" else "Current Level: Station #$unlockedStation",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = NeonAmber,
+                                color = accentAmber,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -275,14 +288,15 @@ fun ProfileScreen(
             // 2. DYNAMIC TITLE CARD
             item {
                 val rarity = equippedTitle.rarity
+                val rarityAccent = rarity.adaptiveColor(isDarkTheme)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(18.dp))
-                        .background(Color(0x181E293B))
+                        .background(if (isDarkTheme) Color(0x181E293B) else Color(0xF5FFFFFF))
                         .border(
                             1.5.dp,
-                            rarity.primaryColor.copy(alpha = titleGlowPulse),
+                            rarityAccent.copy(alpha = titleGlowPulse),
                             RoundedCornerShape(18.dp)
                         )
                         .padding(14.dp)
@@ -290,7 +304,7 @@ fun ProfileScreen(
                     // Background ambient particle glow
                     Canvas(modifier = Modifier.matchParentSize()) {
                         drawCircle(
-                            color = rarity.glowColor.copy(alpha = 0.15f * titleGlowPulse),
+                            color = rarityAccent.copy(alpha = (if (isDarkTheme) 0.15f else 0.10f) * titleGlowPulse),
                             radius = size.width * 0.45f,
                             center = Offset(size.width * 0.85f, size.height * 0.5f)
                         )
@@ -306,7 +320,7 @@ fun ProfileScreen(
                                 Icon(
                                     imageVector = Icons.Default.AutoAwesome,
                                     contentDescription = null,
-                                    tint = rarity.primaryColor,
+                                    tint = rarityAccent,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -314,22 +328,22 @@ fun ProfileScreen(
                                     text = if (isAr) "اللقب المجهّز (${rarity.labelAr})" else "Equipped Title (${rarity.labelEn})",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = rarity.primaryColor
+                                    color = rarityAccent
                                 )
                             }
 
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(6.dp))
-                                    .background(rarity.primaryColor.copy(alpha = 0.2f))
-                                    .border(1.dp, rarity.primaryColor.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                                    .background(rarityAccent.copy(alpha = if (isDarkTheme) 0.2f else 0.14f))
+                                    .border(1.dp, rarityAccent.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = (if (isAr) rarity.labelAr else rarity.labelEn).uppercase(Locale.US),
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = rarity.primaryColor
+                                    color = rarityAccent
                                 )
                             }
                         }
@@ -350,7 +364,7 @@ fun ProfileScreen(
                             Text(
                                 text = localizedDesc,
                                 fontSize = 11.sp,
-                                color = NeonCyan.copy(alpha = 0.8f)
+                                color = accentCyan.copy(alpha = 0.88f)
                             )
                         }
                     }
@@ -361,7 +375,8 @@ fun ProfileScreen(
             item {
                 LiquidGlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp)
+                    shape = RoundedCornerShape(18.dp),
+                    darkTheme = isDarkTheme
                 ) {
                     Column(
                         modifier = Modifier
@@ -372,7 +387,7 @@ fun ProfileScreen(
                             Icon(
                                 imageVector = Icons.Default.Timeline,
                                 contentDescription = null,
-                                tint = NeonCyan,
+                                tint = accentCyan,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -401,7 +416,7 @@ fun ProfileScreen(
                                     "${String.format(Locale.US, "%.1f", (flameScore / 20000.0) * 100)}%"
                                 },
                                 icon = Icons.Default.LocalFireDepartment,
-                                color = NeonAmber
+                                color = accentAmber
                             )
 
                             // Shadow Grip %
@@ -411,7 +426,7 @@ fun ProfileScreen(
                                 value = "${String.format(Locale.US, "%.1f", shadowGripPercent)}%",
                                 sub = darkRank.title,
                                 icon = Icons.Default.Shield,
-                                color = if (shadowGripPercent > 50f) Color(0xFFEF4444) else NeonEmerald
+                                color = if (shadowGripPercent > 50f) Color(0xFFDC2626) else accentEmerald
                             )
                         }
 
@@ -429,7 +444,7 @@ fun ProfileScreen(
                                 value = "${stageProg.currentStageXp} / ${stageProg.nextStageRequiredXp}",
                                 sub = if (isAr) "الإجمالي: $totalXp XP" else "Total: $totalXp XP",
                                 icon = Icons.Default.Bolt,
-                                color = NeonCyan
+                                color = accentCyan
                             )
 
                             // Active Station
@@ -439,7 +454,7 @@ fun ProfileScreen(
                                 value = if (isAr) "محطة #$unlockedStation" else "Station #$unlockedStation",
                                 sub = if (isAr) "من 500 محطة" else "of 500 Stations",
                                 icon = Icons.Default.AutoAwesome,
-                                color = NeonViolet
+                                color = accentViolet
                             )
                         }
                     }
@@ -450,12 +465,12 @@ fun ProfileScreen(
             item {
                 TabRow(
                     selectedTabIndex = selectedTab,
-                    containerColor = Color(0x181E293B),
-                    contentColor = NeonCyan,
+                    containerColor = if (isDarkTheme) Color(0x181E293B) else Color(0xFFE6EFF8),
+                    contentColor = accentCyan,
                     indicator = { tabPositions ->
                         TabRowDefaults.SecondaryIndicator(
                             Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                            color = NeonCyan,
+                            color = accentCyan,
                             height = 3.dp
                         )
                     },
@@ -509,6 +524,7 @@ fun ProfileScreen(
                             AvatarItemCard(
                                 avatar = avatar,
                                 currentLang = currentLang,
+                                isDarkTheme = isDarkTheme,
                                 isUnlocked = isUnlocked,
                                 isEquipped = isEquipped,
                                 onEquip = {
@@ -531,6 +547,7 @@ fun ProfileScreen(
                     TitleItemCard(
                         title = ProfileMasterInventory.MILESTONE_PEAK_TITLE,
                         currentLang = currentLang,
+                        isDarkTheme = isDarkTheme,
                         isUnlocked = isMilestoneUnlocked,
                         isEquipped = isEquipped,
                         onEquip = {
@@ -547,6 +564,7 @@ fun ProfileScreen(
                     TitleItemCard(
                         title = title,
                         currentLang = currentLang,
+                        isDarkTheme = isDarkTheme,
                         isUnlocked = isUnlocked,
                         isEquipped = isEquipped,
                         onEquip = {
@@ -566,7 +584,7 @@ fun ProfileScreen(
                             text = if (isAr) "الجرعات السيبرانية (الحد الأقصى: 3 لكل نوع)" else "Cybernetic Potions (Max Capacity: 3 each)",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = NeonAmber
+                            color = accentAmber
                         )
 
                         // 1. Pulse Elixir
@@ -577,9 +595,10 @@ fun ProfileScreen(
                             statusNote = if (pulseUsesLeft > 0) {
                                 if (isAr) "نشط حالياً ($pulseUsesLeft استخدامات متبقية)" else "Currently active ($pulseUsesLeft uses left)"
                             } else "",
-                            color = com.example.data.profile.PotionType.PULSE_ELIXIR.color,
+                            color = com.example.data.profile.PotionType.PULSE_ELIXIR.adaptiveColor(isDarkTheme),
                             canUse = pulseElixirCount > 0,
                             currentLang = currentLang,
+                            isDarkTheme = isDarkTheme,
                             onUse = {
                                 ProfileManager.usePulseElixir(context)
                             }
@@ -593,9 +612,10 @@ fun ProfileScreen(
                             statusNote = if (isShadowActive) {
                                 if (isAr) "نشط حالياً (حماية 50% لمدة 3 أيام)" else "Currently active (50% protection for 3 days)"
                             } else "",
-                            color = com.example.data.profile.PotionType.SHADOW_GRIP_SERUM.color,
+                            color = com.example.data.profile.PotionType.SHADOW_GRIP_SERUM.adaptiveColor(isDarkTheme),
                             canUse = shadowSerumCount > 0 && !isShadowActive,
                             currentLang = currentLang,
+                            isDarkTheme = isDarkTheme,
                             onUse = {
                                 ProfileManager.useShadowSerum(context)
                             }
@@ -611,9 +631,10 @@ fun ProfileScreen(
                             } else {
                                 if (isAr) "خامل" else "Inactive"
                             },
-                            color = com.example.data.profile.PotionType.GABRIEL_PURITY_DROPLET.color,
+                            color = com.example.data.profile.PotionType.GABRIEL_PURITY_DROPLET.adaptiveColor(isDarkTheme),
                             canUse = false,
                             currentLang = currentLang,
+                            isDarkTheme = isDarkTheme,
                             onUse = {}
                         )
 
@@ -625,9 +646,10 @@ fun ProfileScreen(
                             statusNote = if (ProfileManager.hasCryoBuffArmed.value) {
                                 if (isAr) "جاهز ومسلّح للستريك القادم (+100)" else "Armed for next strike (+100)"
                             } else "",
-                            color = com.example.data.profile.PotionType.ABSOLUTE_CRYO_INFUSION.color,
+                            color = com.example.data.profile.PotionType.ABSOLUTE_CRYO_INFUSION.adaptiveColor(isDarkTheme),
                             canUse = cryoInfusionCount > 0 && !ProfileManager.hasCryoBuffArmed.value,
                             currentLang = currentLang,
+                            isDarkTheme = isDarkTheme,
                             onUse = {
                                 ProfileManager.useCryoInfusion(context)
                             }
@@ -641,9 +663,10 @@ fun ProfileScreen(
                             statusNote = if (ProfileManager.hasRebirthImmunity.value) {
                                 if (isAr) "مفعّل: مناعة أبدية وسيد النقوشة" else "Activated: Eternal immunity & Gary Master"
                             } else "",
-                            color = com.example.data.profile.PotionType.ETERNAL_REBIRTH_ELIXIR.color,
+                            color = com.example.data.profile.PotionType.ETERNAL_REBIRTH_ELIXIR.adaptiveColor(isDarkTheme),
                             canUse = eternalRebirthCount > 0 && !ProfileManager.hasRebirthImmunity.value,
                             currentLang = currentLang,
+                            isDarkTheme = isDarkTheme,
                             onUse = {
                                 ProfileManager.useEternalRebirth(context)
                             }
@@ -655,7 +678,7 @@ fun ProfileScreen(
                             text = if (isAr) "مفاتيح تجاوز المهام (السعة القصوى: 30 مفتاحاً)" else "Skip Keys (Max Capacity: 30 Keys)",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = NeonCyan
+                            color = accentCyan
                         )
 
                         Row(
@@ -674,14 +697,14 @@ fun ProfileScreen(
                                 label = com.example.data.profile.SkipKeyType.BRONZE.getLocalizedName(currentLang),
                                 uses = if (isAr) "استخدامان" else "2 Uses",
                                 count = bronzeKeys,
-                                color = Color(0xFFD97706)
+                                color = if (isDarkTheme) Color(0xFFD97706) else Color(0xFFB45309)
                             )
                             KeyTile(
                                 modifier = Modifier.weight(1f),
                                 label = com.example.data.profile.SkipKeyType.SILVER.getLocalizedName(currentLang),
                                 uses = if (isAr) "3 استخدامات" else "3 Uses",
                                 count = silverKeys,
-                                color = Color(0xFFCBD5E1)
+                                color = if (isDarkTheme) Color(0xFFCBD5E1) else Color(0xFF475569)
                             )
                         }
                     }
@@ -706,13 +729,17 @@ fun ProfileScreen(
                     .clip(RoundedCornerShape(26.dp))
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color(0xFF0E1526), Color(0xFF090D18))
+                            colors = if (isDarkTheme) {
+                                listOf(Color(0xFF0E1526), Color(0xFF090D18))
+                            } else {
+                                listOf(Color(0xFFFFFFFF), Color(0xFFF1F5F9))
+                            }
                         )
                     )
                     .border(
                         width = 1.6.dp,
                         brush = Brush.linearGradient(
-                            colors = listOf(NeonCyan, NeonViolet, NeonAmber)
+                            colors = listOf(accentCyan, accentViolet, accentAmber)
                         ),
                         shape = RoundedCornerShape(26.dp)
                     )
@@ -722,7 +749,7 @@ fun ProfileScreen(
                 Canvas(modifier = Modifier.matchParentSize()) {
                     drawCircle(
                         brush = Brush.radialGradient(
-                            colors = listOf(NeonViolet.copy(alpha = 0.22f), Color.Transparent),
+                            colors = listOf(accentViolet.copy(alpha = if (isDarkTheme) 0.22f else 0.10f), Color.Transparent),
                             center = Offset(size.width * 0.5f, 0f),
                             radius = size.width * 0.75f
                         ),
@@ -749,7 +776,7 @@ fun ProfileScreen(
                             Icon(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = if (isAr) "إغلاق" else "Close",
-                                tint = Color(0xFF94A3B8),
+                                tint = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -762,12 +789,16 @@ fun ProfileScreen(
                             .clip(CircleShape)
                             .background(
                                 Brush.radialGradient(
-                                    colors = listOf(NeonCyan.copy(alpha = 0.28f), Color(0xFF0B1324))
+                                    colors = if (isDarkTheme) {
+                                        listOf(NeonCyan.copy(alpha = 0.28f), Color(0xFF0B1324))
+                                    } else {
+                                        listOf(DayCyan.copy(alpha = 0.20f), Color(0xFFE0F2FE))
+                                    }
                                 )
                             )
                             .border(
                                 1.5.dp,
-                                Brush.linearGradient(listOf(NeonCyan, NeonAmber)),
+                                Brush.linearGradient(listOf(accentCyan, accentAmber)),
                                 CircleShape
                             ),
                         contentAlignment = Alignment.Center
@@ -775,7 +806,7 @@ fun ProfileScreen(
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
-                            tint = NeonAmber,
+                            tint = accentAmber,
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -787,7 +818,7 @@ fun ProfileScreen(
                         fontSize = 19.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = PlusJakartaSans,
-                        color = Color.White,
+                        color = if (isDarkTheme) Color.White else DayTextPrimary,
                         textAlign = TextAlign.Center
                     )
 
@@ -796,7 +827,7 @@ fun ProfileScreen(
                     Text(
                         text = if (isAr) "اكتب اسمك المفضّل أو ولّد اسماً فخماً من ألقاب اللعبة" else "Enter your preferred name or generate one from game titles",
                         fontSize = 11.sp,
-                        color = Color(0xFF94A3B8),
+                        color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary,
                         textAlign = TextAlign.Center
                     )
 
@@ -809,13 +840,13 @@ fun ProfileScreen(
                         label = { Text(if (isAr) "الاسم الجديد" else "New Name", fontSize = 12.sp) },
                         shape = RoundedCornerShape(14.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = Color(0x5538BDF8),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedLabelColor = NeonCyan,
-                            unfocusedLabelColor = Color(0xFF94A3B8),
-                            cursorColor = NeonCyan
+                            focusedBorderColor = accentCyan,
+                            unfocusedBorderColor = if (isDarkTheme) Color(0x5538BDF8) else Color(0x660284C7),
+                            focusedTextColor = if (isDarkTheme) Color.White else DayTextPrimary,
+                            unfocusedTextColor = if (isDarkTheme) Color.White else DayTextPrimary,
+                            focusedLabelColor = accentCyan,
+                            unfocusedLabelColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary,
+                            cursorColor = accentCyan
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -836,7 +867,7 @@ fun ProfileScreen(
                         shape = RoundedCornerShape(14.dp),
                         border = androidx.compose.foundation.BorderStroke(
                             1.2.dp,
-                            Brush.horizontalGradient(listOf(NeonViolet, NeonCyan))
+                            Brush.horizontalGradient(listOf(accentViolet, accentCyan))
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -846,7 +877,7 @@ fun ProfileScreen(
                         Icon(
                             imageVector = Icons.Default.Casino,
                             contentDescription = null,
-                            tint = NeonAmber,
+                            tint = accentAmber,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -854,7 +885,7 @@ fun ProfileScreen(
                             text = if (isAr) "توليد اسم عشوائي من الألقاب" else "Generate Random Title Name",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = if (isDarkTheme) Color.White else DayTextPrimary
                         )
                     }
 
@@ -870,9 +901,9 @@ fun ProfileScreen(
                         },
                         enabled = tempName.trim().isNotEmpty(),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = NeonCyan,
-                            contentColor = Color(0xFF090D18),
-                            disabledContainerColor = NeonCyan.copy(alpha = 0.35f)
+                            containerColor = accentCyan,
+                            contentColor = if (isDarkTheme) Color(0xFF090D18) else Color.White,
+                            disabledContainerColor = accentCyan.copy(alpha = 0.35f)
                         ),
                         shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
@@ -931,19 +962,25 @@ private fun MetricTile(
 private fun AvatarItemCard(
     avatar: AvatarItem,
     currentLang: String,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     isUnlocked: Boolean,
     isEquipped: Boolean,
     onEquip: () -> Unit
 ) {
     val isAr = currentLang == "ar"
+    val rarityColor = avatar.rarity.adaptiveColor(isDarkTheme)
+    val equipColor = if (isDarkTheme) NeonCyan else DayCyan
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(if (isEquipped) avatar.rarity.primaryColor.copy(alpha = 0.15f) else Color(0x181E293B))
+            .background(
+                if (isEquipped) rarityColor.copy(alpha = if (isDarkTheme) 0.15f else 0.12f)
+                else if (isDarkTheme) Color(0x181E293B) else Color(0xF5FFFFFF)
+            )
             .border(
                 1.dp,
-                if (isEquipped) avatar.rarity.primaryColor else Color(0x2238BDF8),
+                if (isEquipped) rarityColor else if (isDarkTheme) Color(0x2238BDF8) else Color(0x55CBD5E1),
                 RoundedCornerShape(14.dp)
             )
             .clickable(enabled = isUnlocked && !isEquipped, onClick = onEquip)
@@ -959,10 +996,10 @@ private fun AvatarItemCard(
                     modifier = Modifier
                         .size(46.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF0F172A))
+                        .background(if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF1F5F9))
                         .border(
                             1.5.dp,
-                            if (isUnlocked) avatar.rarity.primaryColor else Color(0xFF64748B),
+                            if (isUnlocked) rarityColor else Color(0xFF64748B),
                             CircleShape
                         ),
                     contentAlignment = Alignment.Center
@@ -971,7 +1008,7 @@ private fun AvatarItemCard(
                         Icon(
                             imageVector = getAvatarVector(avatar.badgeIconName),
                             contentDescription = avatar.getLocalizedName(currentLang),
-                            tint = avatar.rarity.primaryColor,
+                            tint = rarityColor,
                             modifier = Modifier.size(24.dp)
                         )
                     } else {
@@ -998,13 +1035,13 @@ private fun AvatarItemCard(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(avatar.rarity.primaryColor.copy(alpha = 0.15f))
+                                .background(rarityColor.copy(alpha = 0.15f))
                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                         ) {
                             Text(
                                 text = avatar.rarity.getLocalizedLabel(currentLang),
                                 fontSize = 8.sp,
-                                color = avatar.rarity.primaryColor,
+                                color = rarityColor,
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -1016,7 +1053,7 @@ private fun AvatarItemCard(
                             if (isAr) "يُفتح عند المحطة #${avatar.unlockStation}" else "Unlocks at Station #${avatar.unlockStation}"
                         },
                         fontSize = 10.sp,
-                        color = if (isUnlocked) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF94A3B8)
+                        color = if (isUnlocked) MaterialTheme.colorScheme.onSurfaceVariant else if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
                     )
                 }
             }
@@ -1025,19 +1062,19 @@ private fun AvatarItemCard(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(avatar.rarity.primaryColor.copy(alpha = 0.2f))
-                        .border(1.dp, avatar.rarity.primaryColor, RoundedCornerShape(8.dp))
+                        .background(rarityColor.copy(alpha = 0.2f))
+                        .border(1.dp, rarityColor, RoundedCornerShape(8.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
                         if (isAr) "مجهّز ✓" else "Equipped ✓",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Black,
-                        color = avatar.rarity.primaryColor
+                        color = rarityColor
                     )
                 }
             } else if (isUnlocked) {
-                Text(if (isAr) "تجهيز" else "Equip", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NeonCyan)
+                Text(if (isAr) "تجهيز" else "Equip", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = equipColor)
             }
         }
     }
@@ -1047,19 +1084,26 @@ private fun AvatarItemCard(
 private fun TitleItemCard(
     title: TitleItem,
     currentLang: String,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     isUnlocked: Boolean,
     isEquipped: Boolean,
     onEquip: () -> Unit
 ) {
     val isAr = currentLang == "ar"
+    val rarityColor = title.rarity.adaptiveColor(isDarkTheme)
+    val equipColor = if (isDarkTheme) NeonCyan else DayCyan
+    val unlockHintColor = if (isDarkTheme) NeonAmber else DayOrange
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isEquipped) title.rarity.primaryColor.copy(alpha = 0.15f) else Color(0x181E293B))
+            .background(
+                if (isEquipped) rarityColor.copy(alpha = if (isDarkTheme) 0.15f else 0.12f)
+                else if (isDarkTheme) Color(0x181E293B) else Color(0xF5FFFFFF)
+            )
             .border(
                 1.dp,
-                if (isEquipped) title.rarity.primaryColor else Color(0x2238BDF8),
+                if (isEquipped) rarityColor else if (isDarkTheme) Color(0x2238BDF8) else Color(0x55CBD5E1),
                 RoundedCornerShape(12.dp)
             )
             .clickable(enabled = isUnlocked && !isEquipped, onClick = onEquip)
@@ -1076,19 +1120,19 @@ private fun TitleItemCard(
                         text = title.getLocalizedTitle(currentLang),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = if (isUnlocked) title.rarity.primaryColor else Color(0xFF64748B)
+                        color = if (isUnlocked) rarityColor else Color(0xFF64748B)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
-                            .background(title.rarity.primaryColor.copy(alpha = 0.15f))
+                            .background(rarityColor.copy(alpha = 0.15f))
                             .padding(horizontal = 5.dp, vertical = 1.dp)
                     ) {
                         Text(
                             text = if (isAr) title.rarity.labelAr else title.rarity.labelEn,
                             fontSize = 8.sp,
-                            color = title.rarity.primaryColor,
+                            color = rarityColor,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1105,7 +1149,7 @@ private fun TitleItemCard(
                     Text(
                         text = if (isAr) "يُفتح عند إتمام المحطة #${title.unlockStation}" else "Unlocks at Station #${title.unlockStation}",
                         fontSize = 9.sp,
-                        color = NeonAmber
+                        color = unlockHintColor
                     )
                 }
             }
@@ -1114,19 +1158,19 @@ private fun TitleItemCard(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .background(title.rarity.primaryColor.copy(alpha = 0.2f))
-                        .border(1.dp, title.rarity.primaryColor, RoundedCornerShape(6.dp))
+                        .background(rarityColor.copy(alpha = 0.2f))
+                        .border(1.dp, rarityColor, RoundedCornerShape(6.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
                         if (isAr) "مجهّز ✓" else "Equipped ✓",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Black,
-                        color = title.rarity.primaryColor
+                        color = rarityColor
                     )
                 }
             } else if (isUnlocked) {
-                Text(if (isAr) "تجهيز" else "Equip", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = NeonCyan)
+                Text(if (isAr) "تجهيز" else "Equip", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = equipColor)
             } else {
                 Icon(
                     imageVector = Icons.Default.Lock,
@@ -1148,15 +1192,18 @@ private fun PotionCard(
     color: Color,
     canUse: Boolean,
     currentLang: String,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onUse: () -> Unit
 ) {
     val isAr = currentLang == "ar"
+    val buttonContentLuminance = color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f
+    val buttonContentColor = if (buttonContentLuminance > 0.55f) Color(0xFF0F172A) else Color.White
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0x181E293B))
-            .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+            .background(if (isDarkTheme) Color(0x181E293B) else Color(0xF5FFFFFF))
+            .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
             .padding(12.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -1170,7 +1217,7 @@ private fun PotionCard(
                         modifier = Modifier
                             .size(34.dp)
                             .clip(CircleShape)
-                            .background(color.copy(alpha = 0.2f))
+                            .background(color.copy(alpha = if (isDarkTheme) 0.2f else 0.14f))
                             .border(1.dp, color, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1191,15 +1238,17 @@ private fun PotionCard(
                 if (canUse) {
                     Button(
                         onClick = onUse,
-                        colors = ButtonDefaults.buttonColors(containerColor = color),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = color,
+                            contentColor = buttonContentColor
+                        ),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         Text(
                             if (isAr) "تفعيل" else "Activate",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF0F172A)
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }

@@ -6,24 +6,26 @@ import androidx.compose.ui.graphics.Color
 // ==========================================
 // Liquid Glass v5 - Cosmic Dark Palette
 // ==========================================
-val CosmicDarkBg = Color(0xFF070B14)
+val CosmicDarkBg = Color(0xFF060A13)
 val CosmicDarkSurface = Color(0xFF0F172A)
 val CosmicDarkSurfaceElevated = Color(0xFF1E293B)
-val GlassDarkPanel = Color(0x331E293B)
-val GlassDarkBorder = Color(0x3338BDF8)
-val GlassDarkHighlight = Color(0x1AFFFFFF)
+val CosmicDarkSheet = Color(0xFA0B1324)
+val GlassDarkPanel = Color(0xA60F172A)
+val GlassDarkBorder = Color(0x4538BDF8)
+val GlassDarkHighlight = Color(0x1EFFFFFF)
 
 // ==========================================
 // Liquid Glass v5 - Day Mode (Light Theme) Palette
 // Optimized for glare-free daylight comfort & crisp contrast
 // ==========================================
-val DayGlassBg = Color(0xFFF1F5F9)
-val DayGlassSurface = Color(0xF2FFFFFF)
-val DayGlassSurfaceElevated = Color(0xFFE8EEF5)
-val DayGlassPanel = Color(0xE8FFFFFF)
-val DayGlassPanelSubtle = Color(0x80F1F5F9)
-val DayGlassBorder = Color(0x590284C7)
-val DayGlassHighlight = Color(0x99FFFFFF)
+val DayGlassBg = Color(0xFFEEF4FA)
+val DayGlassSurface = Color(0xFAFFFFFF)
+val DayGlassSurfaceElevated = Color(0xFFE3ECF5)
+val DayGlassSheet = Color(0xFAF8FAFC)
+val DayGlassPanel = Color(0xF5FFFFFF)
+val DayGlassPanelSubtle = Color(0xCCE6EFF8)
+val DayGlassBorder = Color(0x660284C7)
+val DayGlassHighlight = Color(0xCCFFFFFF)
 
 // High-contrast Day Mode Typography (WCAG AAA daylight compliant)
 val DayTextPrimary = Color(0xFF0B132B)        // Midnight obsidian (> 14:1 contrast ratio)
@@ -32,9 +34,9 @@ val DayTextTertiary = Color(0xFF475569)       // Muted slate for captions & tags
 val DayTextHandwritten = Color(0xFF1E293B)    // Rich indigo-slate for handwritten secondary text
 
 // Day Mode Harmonized Accents (vibrant yet deep enough for pure readability on light cards)
-val DayCyan = Color(0xFF007A99)               // Deep cyan accent (contrast > 4.7:1)
+val DayCyan = Color(0xFF0284C7)               // Crisp sky-cyan accent (high daylight contrast)
 val DayCyanGlow = Color(0xFF00B4D8)           // Cyan glowing border highlight
-val DayCyanContainer = Color(0x2200B4D8)      // Translucent cyan glass fill
+val DayCyanContainer = Color(0x220284C7)      // Translucent cyan glass fill
 
 val DayOrange = Color(0xFFC25E00)             // Deep soft orange / amber highlight (> 4.5:1)
 val DayOrangeGlow = Color(0xFFF59E0B)         // Radiant amber glow
@@ -51,9 +53,11 @@ val DayEmeraldContainer = Color(0x2210B981)   // Translucent emerald glass fill
 val DayRose = Color(0xFFBE123C)               // Crimson rose for delete/warning
 val DayRoseContainer = Color(0x20F43F5E)
 
-// Dark Bottom Navigation Bar & Anchoring Elements
-val DarkNavBg = Color(0xEE0A1120)
-val DarkNavBorder = Color(0x4038BDF8)
+// Navigation Bar Tokens (strictly separated for Night vs Day)
+val DarkNavBg = Color(0xF00A1120)
+val DarkNavBorder = Color(0x4D38BDF8)
+val LightNavBg = Color(0xF5FFFFFF)
+val LightNavBorder = Color(0x550284C7)
 
 // ==========================================
 // Vivid Neon Accents for Liquid Glass (Dark Mode)
@@ -83,27 +87,27 @@ val BoostEmeraldBrush = Brush.linearGradient(
 
 val GlassBorderBrushDark = Brush.linearGradient(
     colors = listOf(
-        Color(0x8038BDF8),
-        Color(0x20A855F7),
-        Color(0x6000E5FF)
+        Color(0x8838BDF8),
+        Color(0x2CA855F7),
+        Color(0x6600E5FF)
     )
 )
 
 // Liquid Glass v5 Ultra-thin Glowing Border (Light Theme)
-// Multi-stop gradient with soft cyan and pure white specular highlights
+// Crisp daylight refraction border so cards read distinctly from pearl background
 val GlassBorderBrushLight = Brush.linearGradient(
     colors = listOf(
         Color(0xFFFFFFFF),    // Specular top highlight
-        Color(0x9900B4D8),    // Soft cyan glow
-        Color(0x448B5CF6),    // Subtle lilac refraction
-        Color(0xDDFFFFFF)     // Clean white border pop
+        Color(0x800284C7),    // Crisp sky-cyan edge
+        Color(0x4D7C3AED),    // Soft amethyst accent
+        Color(0xB3CBD5E1)     // Defined cool slate rim
     )
 )
 
 val GlassCardSurfaceLight = Brush.verticalGradient(
     colors = listOf(
-        Color(0xF5FFFFFF),    // Top crystalline sheen
-        Color(0xDEF0F7FA)     // Bottom subtle translucent pastel tint
+        Color(0xFAFFFFFF),    // Top crystalline sheen
+        Color(0xF0EDF4FB)     // Bottom subtle cool pearl tint
     )
 )
 

@@ -65,6 +65,16 @@ import androidx.compose.ui.unit.sp
 import com.example.data.roadmap.RewardType
 import com.example.data.roadmap.RoadmapStation
 import com.example.data.roadmap.StationState
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayGlassBg
+import com.example.ui.theme.DayGlassSurface
+import com.example.ui.theme.DayGlassSurfaceElevated
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.DayTextSecondary
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.PlusJakartaSans
 import kotlin.math.PI
 import kotlin.math.cos
@@ -91,11 +101,14 @@ private data class GlowDotSpec(
 )
 
 /**
- * Ambient deep OLED dark gradient (#0B0F19 -> #121826) with subtle floating glowing orbs
- * matching the futuristic cyber roadmap atmosphere.
+ * Ambient backdrop adapting cleanly to Night Mode (#0B0F19 -> #121826) and Day Mode
+ * (crystal pearl glass gradient) with subtle floating orbs and zero color bleeding.
  */
 @Composable
-fun RoadmapAmbientBackground(modifier: Modifier = Modifier) {
+fun RoadmapAmbientBackground(
+    modifier: Modifier = Modifier,
+    darkTheme: Boolean = LocalAppDarkTheme.current
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "ambient_glow_dots")
     val driftPhase by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -107,41 +120,53 @@ fun RoadmapAmbientBackground(modifier: Modifier = Modifier) {
         label = "drift_phase"
     )
 
-    val dots = remember {
+    val dots = remember(darkTheme) {
+        val aqua = if (darkTheme) NeonAqua else DayCyan
+        val mint = if (darkTheme) ElectricMint else DayEmerald
+        val violet = if (darkTheme) Color(0xFF8B5CF6) else DayPurple
+        val orange = if (darkTheme) WarmFireOrange else DayOrange
+        val gold = if (darkTheme) MilestoneGold else DayOrange
         listOf(
-            GlowDotSpec(0.12f, 0.08f, 3.5f, NeonAqua, 0.2f, true),
-            GlowDotSpec(0.86f, 0.11f, 3.0f, ElectricMint, 1.1f, true),
-            GlowDotSpec(0.06f, 0.24f, 4.0f, Color(0xFF8B5CF6), 2.3f, false),
-            GlowDotSpec(0.42f, 0.22f, 4.5f, WarmFireOrange, 0.8f, true),
-            GlowDotSpec(0.75f, 0.30f, 3.0f, NeonAqua, 3.4f, false),
-            GlowDotSpec(0.18f, 0.42f, 5.0f, NeonAqua, 1.7f, true),
-            GlowDotSpec(0.92f, 0.46f, 4.0f, ElectricMint, 2.9f, true),
-            GlowDotSpec(0.58f, 0.54f, 3.5f, WarmFireOrange, 4.1f, true),
-            GlowDotSpec(0.28f, 0.62f, 4.0f, Color(0xFF8B5CF6), 0.5f, true),
-            GlowDotSpec(0.88f, 0.68f, 3.5f, ElectricMint, 3.8f, true),
-            GlowDotSpec(0.14f, 0.77f, 4.5f, NeonAqua, 2.1f, true),
-            GlowDotSpec(0.52f, 0.80f, 3.5f, MilestoneGold, 4.8f, true),
-            GlowDotSpec(0.66f, 0.89f, 5.5f, WarmFireOrange, 1.4f, true),
-            GlowDotSpec(0.95f, 0.86f, 4.0f, NeonAqua, 5.2f, false),
-            GlowDotSpec(0.32f, 0.94f, 3.5f, ElectricMint, 2.7f, true),
-            GlowDotSpec(0.87f, 0.96f, 4.0f, ElectricMint, 0.9f, true)
+            GlowDotSpec(0.12f, 0.08f, 3.5f, aqua, 0.2f, true),
+            GlowDotSpec(0.86f, 0.11f, 3.0f, mint, 1.1f, true),
+            GlowDotSpec(0.06f, 0.24f, 4.0f, violet, 2.3f, false),
+            GlowDotSpec(0.42f, 0.22f, 4.5f, orange, 0.8f, true),
+            GlowDotSpec(0.75f, 0.30f, 3.0f, aqua, 3.4f, false),
+            GlowDotSpec(0.18f, 0.42f, 5.0f, aqua, 1.7f, true),
+            GlowDotSpec(0.92f, 0.46f, 4.0f, mint, 2.9f, true),
+            GlowDotSpec(0.58f, 0.54f, 3.5f, orange, 4.1f, true),
+            GlowDotSpec(0.28f, 0.62f, 4.0f, violet, 0.5f, true),
+            GlowDotSpec(0.88f, 0.68f, 3.5f, mint, 3.8f, true),
+            GlowDotSpec(0.14f, 0.77f, 4.5f, aqua, 2.1f, true),
+            GlowDotSpec(0.52f, 0.80f, 3.5f, gold, 4.8f, true),
+            GlowDotSpec(0.66f, 0.89f, 5.5f, orange, 1.4f, true),
+            GlowDotSpec(0.95f, 0.86f, 4.0f, aqua, 5.2f, false),
+            GlowDotSpec(0.32f, 0.94f, 3.5f, mint, 2.7f, true),
+            GlowDotSpec(0.87f, 0.96f, 4.0f, mint, 0.9f, true)
         )
     }
+
+    val bgBrush = if (darkTheme) {
+        Brush.verticalGradient(colors = listOf(RoadmapBgDarkTop, RoadmapBgDarkMid, RoadmapBgDarkBottom))
+    } else {
+        Brush.verticalGradient(colors = listOf(Color(0xFFF6FAFF), DayGlassBg, DayGlassSurfaceElevated))
+    }
+
+    val cornerGlow1 = if (darkTheme) NeonAqua.copy(alpha = 0.08f) else DayCyan.copy(alpha = 0.06f)
+    val cornerGlow2 = if (darkTheme) ElectricMint.copy(alpha = 0.06f) else DayEmerald.copy(alpha = 0.05f)
+    val cornerGlow3 = if (darkTheme) WarmFireOrange.copy(alpha = 0.06f) else DayOrange.copy(alpha = 0.05f)
+    val dotAlphaScale = if (darkTheme) 1f else 0.52f
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(RoadmapBgDarkTop, RoadmapBgDarkMid, RoadmapBgDarkBottom)
-                )
-            )
+            .background(bgBrush)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             // Subtle atmospheric corner radial glows
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(NeonAqua.copy(alpha = 0.08f), Color.Transparent),
+                    colors = listOf(cornerGlow1, Color.Transparent),
                     center = Offset(size.width * 0.25f, size.height * 0.12f),
                     radius = size.width * 0.65f
                 ),
@@ -150,7 +175,7 @@ fun RoadmapAmbientBackground(modifier: Modifier = Modifier) {
             )
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(ElectricMint.copy(alpha = 0.06f), Color.Transparent),
+                    colors = listOf(cornerGlow2, Color.Transparent),
                     center = Offset(size.width * 0.80f, size.height * 0.55f),
                     radius = size.width * 0.55f
                 ),
@@ -159,7 +184,7 @@ fun RoadmapAmbientBackground(modifier: Modifier = Modifier) {
             )
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(WarmFireOrange.copy(alpha = 0.06f), Color.Transparent),
+                    colors = listOf(cornerGlow3, Color.Transparent),
                     center = Offset(size.width * 0.20f, size.height * 0.82f),
                     radius = size.width * 0.50f
                 ),
@@ -167,7 +192,7 @@ fun RoadmapAmbientBackground(modifier: Modifier = Modifier) {
                 center = Offset(size.width * 0.20f, size.height * 0.82f)
             )
 
-            // Subtle ambient floating bokeh glow dots matching reference video depth
+            // Subtle ambient floating bokeh glow dots
             dots.forEach { dot ->
                 val dx = sin(driftPhase + dot.phaseOffset) * 8.dp.toPx()
                 val dy = cos(driftPhase + dot.phaseOffset * 1.3f) * 10.dp.toPx()
@@ -178,7 +203,7 @@ fun RoadmapAmbientBackground(modifier: Modifier = Modifier) {
                 if (dot.hasHalo) {
                     drawCircle(
                         brush = Brush.radialGradient(
-                            colors = listOf(dot.color.copy(alpha = 0.22f * pulse), Color.Transparent),
+                            colors = listOf(dot.color.copy(alpha = 0.22f * pulse * dotAlphaScale), Color.Transparent),
                             center = center,
                             radius = r * 4.2f
                         ),
@@ -186,13 +211,13 @@ fun RoadmapAmbientBackground(modifier: Modifier = Modifier) {
                         center = center
                     )
                     drawCircle(
-                        color = dot.color.copy(alpha = 0.16f * pulse),
+                        color = dot.color.copy(alpha = 0.16f * pulse * dotAlphaScale),
                         radius = r * 2.1f,
                         center = center
                     )
                 }
                 drawCircle(
-                    color = dot.color.copy(alpha = 0.68f * pulse),
+                    color = dot.color.copy(alpha = 0.68f * pulse * dotAlphaScale),
                     radius = r,
                     center = center
                 )
@@ -225,7 +250,8 @@ fun RoadmapProgressHudCard(
     isAr: Boolean,
     onJumpToStation: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    glowPulse: Float = 0.85f
+    glowPulse: Float = 0.85f,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     RoadmapProgressHeader(
         currentStationId = currentStationId,
@@ -233,7 +259,8 @@ fun RoadmapProgressHudCard(
         isAr = isAr,
         onJumpToStation = onJumpToStation,
         modifier = modifier,
-        glowPulse = glowPulse
+        glowPulse = glowPulse,
+        isDarkTheme = isDarkTheme
     )
 }
 
@@ -257,7 +284,8 @@ fun WavySnakeStationRow(
     rippleProgress: Float = 0f,
     badgeBobDp: Float = 0f,
     nextStationId: Int = 1,
-    currentStageXp: Long = 0L
+    currentStageXp: Long = 0L,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val isAr = currentLang == "ar"
     val appDirection = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
@@ -299,6 +327,7 @@ fun WavySnakeStationRow(
             isFrontierTail = isFrontierTail,
             flowPhase = flowPhase,
             glowPulse = glowPulse,
+            darkTheme = isDarkTheme,
             modifier = Modifier.fillMaxSize()
         )
 
@@ -409,14 +438,22 @@ fun WavySnakeStationRow(
                     val orbSize = if (isCurrentActiveOrb) 50.dp else 44.dp
                     val orbBrush = when {
                         isCurrentActiveOrb -> Brush.verticalGradient(listOf(MilestoneGold, WarmFireOrange))
-                        station.state == StationState.CLAIMED -> Brush.verticalGradient(listOf(ElectricMint, Color(0xFF00C875)))
-                        else -> Brush.verticalGradient(listOf(Color(0xFF1A2338), Color(0xFF111829)))
+                        station.state == StationState.CLAIMED -> Brush.verticalGradient(
+                            if (isDarkTheme) listOf(ElectricMint, Color(0xFF00C875))
+                            else listOf(Color(0xFF10B981), DayEmerald)
+                        )
+                        else -> Brush.verticalGradient(
+                            if (isDarkTheme) listOf(Color(0xFF1A2338), Color(0xFF111829))
+                            else listOf(Color.White, DayGlassSurfaceElevated)
+                        )
                     }
                     val orbBorder = when {
                         isCurrentActiveOrb -> Color.White.copy(alpha = 0.9f)
-                        station.state == StationState.CLAIMED -> ElectricMint.copy(alpha = 0.9f)
-                        else -> Color(0xFF3B4863)
+                        station.state == StationState.CLAIMED -> (if (isDarkTheme) ElectricMint else DayEmerald).copy(alpha = 0.9f)
+                        else -> if (isDarkTheme) Color(0xFF3B4863) else Color(0xFF94A3B8)
                     }
+                    val lockedIconTint = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+                    val lockedTextTint = if (isDarkTheme) Color(0xFFCBD5E1) else DayTextPrimary
 
                     Box(
                         modifier = Modifier
@@ -436,7 +473,7 @@ fun WavySnakeStationRow(
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = null,
-                                        tint = Color(0xFF071318),
+                                        tint = if (isDarkTheme) Color(0xFF071318) else Color.White,
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
@@ -452,7 +489,7 @@ fun WavySnakeStationRow(
                                     Icon(
                                         imageVector = Icons.Default.Lock,
                                         contentDescription = null,
-                                        tint = Color(0xFF94A3B8),
+                                        tint = lockedIconTint,
                                         modifier = Modifier.size(13.dp)
                                     )
                                 }
@@ -462,7 +499,11 @@ fun WavySnakeStationRow(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Black,
                                 fontFamily = PlusJakartaSans,
-                                color = if (station.state == StationState.LOCKED) Color(0xFFCBD5E1) else Color(0xFF071318),
+                                color = when (station.state) {
+                                    StationState.LOCKED -> lockedTextTint
+                                    StationState.CLAIMED -> if (isDarkTheme) Color(0xFF071318) else Color.White
+                                    else -> Color(0xFF071318)
+                                },
                                 lineHeight = 12.sp
                             )
                         }
@@ -514,6 +555,7 @@ fun WavySnakeStationRow(
                             pulseScale = pulseScale,
                             nextStationId = nextStationId,
                             currentStageXp = currentStageXp,
+                            isDarkTheme = isDarkTheme,
                             onClaim = onClaim
                         )
                     }
@@ -532,33 +574,55 @@ private fun StationGlassRewardCard(
     pulseScale: Float,
     nextStationId: Int = 1,
     currentStageXp: Long = 0L,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onClaim: () -> Unit
 ) {
     val isAr = currentLang == "ar"
+    val cyanTone = if (isDarkTheme) NeonAqua else DayCyan
+    val mintTone = if (isDarkTheme) ElectricMint else DayEmerald
+    val goldTone = if (isDarkTheme) MilestoneGold else DayOrange
+    val orangeTone = if (isDarkTheme) WarmFireOrange else DayOrange
 
     val borderBrush = when {
         isCurrentMilestone || (isMajorMilestone && station.state != StationState.LOCKED) -> Brush.linearGradient(
-            listOf(MilestoneGold, WarmFireOrange.copy(alpha = 0.85f), MilestoneGold.copy(alpha = 0.7f))
+            listOf(goldTone, orangeTone.copy(alpha = 0.85f), goldTone.copy(alpha = 0.7f))
         )
         station.state == StationState.UNLOCKED -> Brush.linearGradient(
-            listOf(NeonAqua, ElectricMint)
+            listOf(cyanTone, mintTone)
         )
         station.state == StationState.CLAIMED -> Brush.linearGradient(
-            listOf(ElectricMint.copy(alpha = 0.55f), NeonAqua.copy(alpha = 0.35f))
+            listOf(mintTone.copy(alpha = 0.65f), cyanTone.copy(alpha = 0.4f))
         )
         else -> Brush.linearGradient(
-            listOf(Color.White.copy(alpha = 0.14f), NeonAqua.copy(alpha = 0.12f))
+            if (isDarkTheme) listOf(Color.White.copy(alpha = 0.14f), NeonAqua.copy(alpha = 0.12f))
+            else listOf(Color(0xFFCBD5E1), DayCyan.copy(alpha = 0.35f))
         )
     }
 
-    val cardFillBrush = when {
-        isCurrentMilestone -> Brush.verticalGradient(listOf(Color(0xDC1B1E28), Color(0xCC111521)))
-        station.state == StationState.UNLOCKED -> Brush.verticalGradient(listOf(Color(0xDC102331), Color(0xCC0C1725)))
-        station.state == StationState.CLAIMED -> Brush.verticalGradient(listOf(Color(0xD6111B2B), Color(0xC80B1320)))
-        else -> Brush.verticalGradient(listOf(Color(0xB8111726), Color(0xA60B101B)))
+    val cardFillBrush = if (isDarkTheme) {
+        when {
+            isCurrentMilestone -> Brush.verticalGradient(listOf(Color(0xDC1B1E28), Color(0xCC111521)))
+            station.state == StationState.UNLOCKED -> Brush.verticalGradient(listOf(Color(0xDC102331), Color(0xCC0C1725)))
+            station.state == StationState.CLAIMED -> Brush.verticalGradient(listOf(Color(0xD6111B2B), Color(0xC80B1320)))
+            else -> Brush.verticalGradient(listOf(Color(0xB8111726), Color(0xA60B101B)))
+        }
+    } else {
+        when {
+            isCurrentMilestone -> Brush.verticalGradient(listOf(Color(0xFAFFFDF7), Color(0xF5FEF3C7)))
+            station.state == StationState.UNLOCKED -> Brush.verticalGradient(listOf(Color(0xFAFFFFFF), Color(0xF5E0F2FE)))
+            station.state == StationState.CLAIMED -> Brush.verticalGradient(listOf(Color(0xFAFFFFFF), Color(0xF2ECFDF5)))
+            else -> Brush.verticalGradient(listOf(DayGlassSurface, Color(0xF2F1F5F9)))
+        }
     }
 
     val borderWidth = if (isCurrentMilestone || station.state == StationState.UNLOCKED) 1.4.dp else 1.dp
+    val titleColor = if (isDarkTheme) {
+        if (station.state == StationState.LOCKED) Color(0xFFCBD5E1) else Color.White
+    } else {
+        DayTextPrimary
+    }
+    val descColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+    val mutedReqColor = if (isDarkTheme) Color(0xFF64748B) else DayTextSecondary
 
     Column(
         modifier = Modifier
@@ -583,13 +647,13 @@ private fun StationGlassRewardCard(
                 fontWeight = FontWeight.Bold,
                 fontFamily = PlusJakartaSans,
                 fontSize = 13.sp,
-                color = if (station.state == StationState.LOCKED) Color(0xFFCBD5E1) else Color.White,
+                color = titleColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
             Spacer(modifier = Modifier.width(6.dp))
-            RewardQuantityPill(station = station)
+            RewardQuantityPill(station = station, isDarkTheme = isDarkTheme)
         }
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -599,7 +663,7 @@ private fun StationGlassRewardCard(
             text = station.reward.getLocalizedDescription(currentLang),
             fontSize = 11.sp,
             lineHeight = 14.sp,
-            color = Color(0xFF94A3B8),
+            color = descColor,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -616,7 +680,7 @@ private fun StationGlassRewardCard(
                 StationState.UNLOCKED -> {
                     Button(
                         onClick = onClaim,
-                        colors = ButtonDefaults.buttonColors(containerColor = ElectricMint),
+                        colors = ButtonDefaults.buttonColors(containerColor = mintTone),
                         shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                         modifier = Modifier
@@ -624,10 +688,11 @@ private fun StationGlassRewardCard(
                             .scale(pulseScale)
                             .testTag("btn_claim_station_${station.id}")
                     ) {
+                        val btnFg = if (isDarkTheme) Color(0xFF071318) else Color.White
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
-                            tint = Color(0xFF071318),
+                            tint = btnFg,
                             modifier = Modifier.size(12.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -635,14 +700,14 @@ private fun StationGlassRewardCard(
                             text = if (isAr) "جني المكافأة" else "Claim",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
-                            color = Color(0xFF071318)
+                            color = btnFg
                         )
                     }
                     Text(
                         text = if (isAr) "الحد: ${station.requiredTotalXp} XP" else "Req: ${station.requiredTotalXp} XP",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = NeonAqua
+                        color = cyanTone
                     )
                 }
 
@@ -651,15 +716,15 @@ private fun StationGlassRewardCard(
                         text = if (isAr) "تم الاستلام ✓" else "Claimed ✓",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        color = ElectricMint
+                        color = mintTone
                     )
                     if (isMajorMilestone) {
-                        MajorBadgePill(isAr = isAr)
+                        MajorBadgePill(isAr = isAr, isDarkTheme = isDarkTheme)
                     } else {
                         Text(
                             text = if (isAr) "الحد: ${station.requiredTotalXp} XP" else "Req: ${station.requiredTotalXp} XP",
                             fontSize = 10.sp,
-                            color = Color(0xFF64748B),
+                            color = mutedReqColor,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -671,7 +736,7 @@ private fun StationGlassRewardCard(
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = null,
-                            tint = MilestoneGold.copy(alpha = 0.85f),
+                            tint = goldTone.copy(alpha = 0.85f),
                             modifier = Modifier.size(11.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -682,12 +747,12 @@ private fun StationGlassRewardCard(
                                 "LVL ${station.id} • $stageEarnedForThis / ${station.requiredTotalXp} XP"
                             },
                             fontSize = 10.sp,
-                            color = Color(0xFF94A3B8),
+                            color = descColor,
                             fontWeight = FontWeight.Medium
                         )
                     }
                     if (isMajorMilestone) {
-                        MajorBadgePill(isAr = isAr)
+                        MajorBadgePill(isAr = isAr, isDarkTheme = isDarkTheme)
                     }
                 }
             }
@@ -696,7 +761,11 @@ private fun StationGlassRewardCard(
 }
 
 @Composable
-private fun MajorBadgePill(isAr: Boolean) {
+private fun MajorBadgePill(
+    isAr: Boolean,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
+) {
+    val goldTint = if (isDarkTheme) MilestoneGold else DayOrange
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -704,39 +773,62 @@ private fun MajorBadgePill(isAr: Boolean) {
         Icon(
             imageVector = Icons.Default.Star,
             contentDescription = null,
-            tint = MilestoneGold,
+            tint = goldTint,
             modifier = Modifier.size(11.dp)
         )
         Text(
             text = if (isAr) "كبرى" else "MAJOR",
             fontSize = 10.sp,
             fontWeight = FontWeight.Black,
-            color = MilestoneGold
+            color = goldTint
         )
     }
 }
 
 @Composable
-private fun RewardQuantityPill(station: RoadmapStation) {
+private fun RewardQuantityPill(
+    station: RoadmapStation,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
+) {
     val reward = station.reward
     val (icon, tint) = when (reward.type) {
-        RewardType.SHIELD_24H, RewardType.SHIELD_48H, RewardType.SHIELD_72H -> Icons.Default.Shield to NeonAqua
-        RewardType.KEY_WOODEN -> Icons.Default.VpnKey to Color(0xFFD97706)
-        RewardType.KEY_BRONZE -> Icons.Default.VpnKey to WarmFireOrange
-        RewardType.KEY_SILVER -> Icons.Default.VpnKey to Color(0xFFE2E8F0)
-        RewardType.POTION_ETERNAL_REBIRTH -> Icons.Default.LocalDrink to MilestoneGold
+        RewardType.SHIELD_24H, RewardType.SHIELD_48H, RewardType.SHIELD_72H ->
+            Icons.Default.Shield to (if (isDarkTheme) NeonAqua else DayCyan)
+        RewardType.KEY_WOODEN ->
+            Icons.Default.VpnKey to (if (isDarkTheme) Color(0xFFD97706) else Color(0xFFB45309))
+        RewardType.KEY_BRONZE ->
+            Icons.Default.VpnKey to (if (isDarkTheme) WarmFireOrange else DayOrange)
+        RewardType.KEY_SILVER ->
+            Icons.Default.VpnKey to (if (isDarkTheme) Color(0xFFE2E8F0) else Color(0xFF475569))
+        RewardType.POTION_ETERNAL_REBIRTH ->
+            Icons.Default.LocalDrink to (if (isDarkTheme) MilestoneGold else DayOrange)
         RewardType.POTION_PULSE_ELIXIR,
         RewardType.POTION_SHADOW_SERUM,
         RewardType.POTION_GABRIEL_DROPLET,
-        RewardType.POTION_CRYO_INFUSION -> Icons.Default.LocalDrink to Color(0xFFA855F7)
-        RewardType.REWARD_AVATAR -> Icons.Default.Person to ElectricMint
-        RewardType.REWARD_TITLE -> Icons.Default.EmojiEvents to MilestoneGold
+        RewardType.POTION_CRYO_INFUSION ->
+            Icons.Default.LocalDrink to (if (isDarkTheme) Color(0xFFA855F7) else DayPurple)
+        RewardType.REWARD_AVATAR ->
+            Icons.Default.Person to (if (isDarkTheme) ElectricMint else DayEmerald)
+        RewardType.REWARD_TITLE ->
+            Icons.Default.EmojiEvents to (if (isDarkTheme) MilestoneGold else DayOrange)
     }
 
     val isLocked = station.state == StationState.LOCKED
-    val borderColor = if (isLocked) Color(0x3364748B) else tint.copy(alpha = 0.65f)
-    val bgColor = if (isLocked) Color(0x55161E31) else tint.copy(alpha = 0.14f)
-    val labelTint = if (isLocked) Color(0xFF94A3B8) else tint
+    val borderColor = if (isLocked) {
+        if (isDarkTheme) Color(0x3364748B) else Color(0xFFCBD5E1)
+    } else {
+        tint.copy(alpha = 0.65f)
+    }
+    val bgColor = if (isLocked) {
+        if (isDarkTheme) Color(0x55161E31) else Color(0xFFF1F5F9)
+    } else {
+        tint.copy(alpha = if (isDarkTheme) 0.14f else 0.12f)
+    }
+    val labelTint = if (isLocked) {
+        if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+    } else {
+        tint
+    }
 
     Row(
         modifier = Modifier

@@ -11,7 +11,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +64,7 @@ import com.example.R
 import com.example.ui.theme.CaveatHandwriting
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonRose
@@ -98,7 +98,7 @@ fun FullscreenFingerprintUnlockScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
-    val isDarkTheme = isSystemInDarkTheme()
+    val isDarkTheme = LocalAppDarkTheme.current
 
     var uiStatus by remember { mutableStateOf(BiometricUiStatus.IDLE) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
@@ -299,8 +299,8 @@ fun FullscreenFingerprintUnlockScreen(
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    activeAccent.copy(alpha = 0.25f),
-                                    Color(0xFF0B1324)
+                                    activeAccent.copy(alpha = if (isDarkTheme) 0.25f else 0.16f),
+                                    if (isDarkTheme) Color(0xFF0B1324) else Color(0xFFFFFFFF)
                                 )
                             )
                         )
@@ -375,7 +375,7 @@ fun FullscreenFingerprintUnlockScreen(
             Text(
                 text = stringResource(R.string.fingerprint_lock_desc),
                 fontSize = 11.sp,
-                color = Color(0x8094A3B8),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
         }

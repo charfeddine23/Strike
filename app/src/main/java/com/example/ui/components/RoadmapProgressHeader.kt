@@ -69,6 +69,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.XpHistoryEntry
 import com.example.data.roadmap.XpSourceCategory
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayGlassSheet
+import com.example.ui.theme.DayGlassSurface
+import com.example.ui.theme.DayGlassSurfaceElevated
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayRose
+import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.DayTextSecondary
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
@@ -93,7 +104,8 @@ fun RoadmapProgressHeader(
     onJumpToStation: (Int) -> Unit,
     modifier: Modifier = Modifier,
     glowPulse: Float = 0.85f,
-    currentLang: String = if (isAr) "ar" else "en"
+    currentLang: String = if (isAr) "ar" else "en",
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     var showXpGuideDialog by remember { mutableStateOf(false) }
 
@@ -107,26 +119,33 @@ fun RoadmapProgressHeader(
     val stageReqFormatted = remember(stageProgress) { nf.format(stageProgress.nextStageRequiredXp) }
 
     val effectiveLayoutDirection = if (isAr || currentLang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
+    val aquaTone = if (isDarkTheme) NeonAqua else DayCyan
+    val mintTone = if (isDarkTheme) ElectricMint else DayEmerald
+    val goldTone = if (isDarkTheme) MilestoneGold else DayOrange
+    val cardBgBrush = if (isDarkTheme) {
+        Brush.verticalGradient(colors = listOf(Color(0xDD141C2E), Color(0xCC0C1220)))
+    } else {
+        Brush.verticalGradient(colors = listOf(DayGlassSurface, Color(0xF5EFF5FB)))
+    }
+    val cardBorderBrush = Brush.linearGradient(
+        colors = listOf(
+            aquaTone.copy(alpha = if (isDarkTheme) 0.48f else 0.55f),
+            if (isDarkTheme) Color.White.copy(alpha = 0.16f) else Color(0xFFCBD5E1),
+            mintTone.copy(alpha = if (isDarkTheme) 0.36f else 0.45f)
+        )
+    )
+    val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
+    val subtitleColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
 
     CompositionLocalProvider(LocalLayoutDirection provides effectiveLayoutDirection) {
         Box(
             modifier = modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(22.dp))
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0xDD141C2E), Color(0xCC0C1220))
-                    )
-                )
+                .background(cardBgBrush)
                 .border(
                     width = 1.1.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            NeonAqua.copy(alpha = 0.48f),
-                            Color.White.copy(alpha = 0.16f),
-                            ElectricMint.copy(alpha = 0.36f)
-                        )
-                    ),
+                    brush = cardBorderBrush,
                     shape = RoundedCornerShape(22.dp)
                 )
                 .padding(horizontal = 14.dp, vertical = 12.dp)
@@ -141,14 +160,14 @@ fun RoadmapProgressHeader(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(NeonAqua.copy(alpha = 0.15f))
-                            .border(1.4.dp, NeonAqua.copy(alpha = 0.82f), CircleShape),
+                            .background(aquaTone.copy(alpha = 0.15f))
+                            .border(1.4.dp, aquaTone.copy(alpha = 0.82f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.MilitaryTech,
                             contentDescription = null,
-                            tint = NeonAqua,
+                            tint = aquaTone,
                             modifier = Modifier.size(21.dp)
                         )
                     }
@@ -165,7 +184,7 @@ fun RoadmapProgressHeader(
                             fontWeight = FontWeight.Black,
                             fontFamily = PlusJakartaSans,
                             fontSize = 15.sp,
-                            color = Color.White,
+                            color = titleColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -184,7 +203,7 @@ fun RoadmapProgressHeader(
                                 }
                             },
                             fontSize = 11.sp,
-                            color = Color(0xFF94A3B8),
+                            color = subtitleColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -211,8 +230,8 @@ fun RoadmapProgressHeader(
                                 .background(
                                     Brush.radialGradient(
                                         colors = listOf(
-                                            NeonAqua.copy(alpha = 0.28f * glowPulse),
-                                            ElectricMint.copy(alpha = 0.08f),
+                                            aquaTone.copy(alpha = 0.28f * glowPulse),
+                                            mintTone.copy(alpha = 0.08f),
                                             Color.Transparent
                                         )
                                     )
@@ -226,8 +245,8 @@ fun RoadmapProgressHeader(
                                 .background(
                                     Brush.linearGradient(
                                         colors = listOf(
-                                            NeonAqua.copy(alpha = 0.22f),
-                                            Color(0xAA0E182B)
+                                            aquaTone.copy(alpha = 0.20f),
+                                            if (isDarkTheme) Color(0xAA0E182B) else Color.White
                                         )
                                     )
                                 )
@@ -235,8 +254,8 @@ fun RoadmapProgressHeader(
                                     width = 1.3.dp,
                                     brush = Brush.linearGradient(
                                         colors = listOf(
-                                            NeonAqua.copy(alpha = 0.92f),
-                                            ElectricMint.copy(alpha = 0.65f)
+                                            aquaTone.copy(alpha = 0.92f),
+                                            mintTone.copy(alpha = 0.65f)
                                         )
                                     ),
                                     shape = CircleShape
@@ -250,7 +269,7 @@ fun RoadmapProgressHeader(
                                     "fr" -> "Guide des sources d'XP"
                                     else -> "XP Earning Guide"
                                 },
-                                tint = NeonAqua,
+                                tint = aquaTone,
                                 modifier = Modifier.size(19.dp)
                             )
                         }
@@ -271,13 +290,13 @@ fun RoadmapProgressHeader(
                             .fillMaxWidth()
                             .height(4.dp)
                             .clip(RoundedCornerShape(2.dp))
-                            .background(Color(0xFF1E293B))
+                            .background(if (isDarkTheme) Color(0xFF1E293B) else DayGlassSurfaceElevated)
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(progressFraction.coerceAtLeast(0.02f))
                                 .height(4.dp)
-                                .background(Brush.horizontalGradient(listOf(NeonAqua, ElectricMint)))
+                                .background(Brush.horizontalGradient(listOf(aquaTone, mintTone)))
                         )
                     }
 
@@ -291,7 +310,7 @@ fun RoadmapProgressHeader(
                                 .size(10.dp)
                                 .scale(0.92f + 0.16f * glowPulse)
                                 .clip(CircleShape)
-                                .background(NeonAqua)
+                                .background(aquaTone)
                         )
                         Box(
                             modifier = Modifier
@@ -299,8 +318,8 @@ fun RoadmapProgressHeader(
                                 .scale(0.92f + 0.16f * glowPulse)
                                 .clip(CircleShape)
                                 .background(
-                                    if (progressFraction >= 0.99f) ElectricMint
-                                    else NeonAqua.copy(alpha = 0.72f * glowPulse)
+                                    if (progressFraction >= 0.99f) mintTone
+                                    else aquaTone.copy(alpha = 0.72f * glowPulse)
                                 )
                         )
                     }
@@ -324,32 +343,38 @@ fun RoadmapProgressHeader(
                         },
                         icon = Icons.Default.MyLocation,
                         isHighlighted = true,
-                        accentColor = NeonAqua,
+                        accentColor = aquaTone,
+                        isDarkTheme = isDarkTheme,
                         onClick = { onJumpToStation(safeStation.coerceAtLeast(1)) },
                         modifier = Modifier.testTag("btn_jump_me")
                     )
                     HeaderQuickJumpChip(
                         label = if (currentLang == "ar") "م 1" else "LVL 1",
+                        isDarkTheme = isDarkTheme,
                         onClick = { onJumpToStation(1) }
                     )
                     HeaderQuickJumpChip(
                         label = if (currentLang == "ar") "م 100" else "LVL 100",
+                        isDarkTheme = isDarkTheme,
                         onClick = { onJumpToStation(100) }
                     )
                     HeaderQuickJumpChip(
                         label = if (currentLang == "ar") "م 250" else "LVL 250",
+                        isDarkTheme = isDarkTheme,
                         onClick = { onJumpToStation(250) }
                     )
                     HeaderQuickJumpChip(
                         label = if (currentLang == "ar") "م 400" else "LVL 400",
+                        isDarkTheme = isDarkTheme,
                         onClick = { onJumpToStation(400) }
                     )
                     HeaderQuickJumpChip(
                         label = "500",
                         icon = Icons.Default.EmojiEvents,
                         isHighlighted = false,
-                        accentColor = MilestoneGold,
+                        accentColor = goldTone,
                         isCrown = true,
+                        isDarkTheme = isDarkTheme,
                         onClick = { onJumpToStation(500) }
                     )
                 }
@@ -361,6 +386,7 @@ fun RoadmapProgressHeader(
         XpEarningGuideDialog(
             isAr = isAr || currentLang == "ar",
             currentLang = currentLang,
+            isDarkTheme = isDarkTheme,
             onDismiss = { showXpGuideDialog = false }
         )
     }
@@ -373,23 +399,26 @@ private fun HeaderQuickJumpChip(
     isHighlighted: Boolean = false,
     accentColor: Color = Color(0xFF94A3B8),
     isCrown: Boolean = false,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val crownAccent = if (isDarkTheme) MilestoneGold else DayOrange
+    val highlightAccent = if (isDarkTheme) NeonAqua else DayCyan
     val bgColor = when {
-        isHighlighted -> accentColor.copy(alpha = 0.16f)
-        isCrown -> MilestoneGold.copy(alpha = 0.14f)
-        else -> Color(0x99161E31)
+        isHighlighted -> accentColor.copy(alpha = if (isDarkTheme) 0.16f else 0.12f)
+        isCrown -> crownAccent.copy(alpha = 0.14f)
+        else -> if (isDarkTheme) Color(0x99161E31) else Color(0xFFF8FAFC)
     }
     val borderColor = when {
         isHighlighted -> accentColor.copy(alpha = 0.85f)
-        isCrown -> MilestoneGold.copy(alpha = 0.55f)
-        else -> Color(0x33FFFFFF)
+        isCrown -> crownAccent.copy(alpha = 0.55f)
+        else -> if (isDarkTheme) Color(0x33FFFFFF) else Color(0xFFCBD5E1)
     }
     val textColor = when {
-        isHighlighted -> NeonAqua
-        isCrown -> MilestoneGold
-        else -> Color(0xFFCBD5E1)
+        isHighlighted -> highlightAccent
+        isCrown -> crownAccent
+        else -> if (isDarkTheme) Color(0xFFCBD5E1) else DayTextSecondary
     }
 
     Row(
@@ -429,12 +458,32 @@ private fun HeaderQuickJumpChip(
 fun XpEarningGuideDialog(
     isAr: Boolean,
     currentLang: String = if (isAr) "ar" else "en",
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onDismiss: () -> Unit
 ) {
     val effectiveDir = if (isAr || currentLang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
     val xpHistory by RoadmapManager.xpHistory.collectAsStateWithLifecycle()
     val totalXp by RoadmapManager.totalXp.collectAsStateWithLifecycle()
     val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
+
+    val aquaTone = if (isDarkTheme) NeonAqua else DayCyan
+    val mintTone = if (isDarkTheme) ElectricMint else DayEmerald
+    val orangeTone = if (isDarkTheme) WarmFireOrange else DayOrange
+    val goldTone = if (isDarkTheme) MilestoneGold else DayOrange
+    val violetTone = if (isDarkTheme) NeonViolet else DayPurple
+    val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
+    val subColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+    val dialogSurfaceColor = if (isDarkTheme) Color(0xF00B1222) else DayGlassSheet
+    val dialogGradient = if (isDarkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFF131D34).copy(alpha = 0.94f),
+                Color(0xFF0A101E).copy(alpha = 0.96f)
+            )
+        )
+    } else {
+        Brush.verticalGradient(colors = listOf(Color.White, DayGlassBgColor()))
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -447,28 +496,21 @@ fun XpEarningGuideDialog(
                     .padding(horizontal = 20.dp)
                     .testTag("xp_guide_dialog"),
                 shape = RoundedCornerShape(26.dp),
-                color = Color(0xF00B1222),
+                color = dialogSurfaceColor,
                 tonalElevation = 12.dp,
                 shadowElevation = 24.dp
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color(0xFF131D34).copy(alpha = 0.94f),
-                                    Color(0xFF0A101E).copy(alpha = 0.96f)
-                                )
-                            )
-                        )
+                        .background(dialogGradient)
                         .border(
                             width = 1.3.dp,
                             brush = Brush.linearGradient(
                                 colors = listOf(
-                                    NeonAqua.copy(alpha = 0.72f),
-                                    Color.White.copy(alpha = 0.18f),
-                                    ElectricMint.copy(alpha = 0.58f)
+                                    aquaTone.copy(alpha = 0.72f),
+                                    if (isDarkTheme) Color.White.copy(alpha = 0.18f) else Color(0xFFCBD5E1),
+                                    mintTone.copy(alpha = 0.58f)
                                 )
                             ),
                             shape = RoundedCornerShape(26.dp)
@@ -496,14 +538,14 @@ fun XpEarningGuideDialog(
                                     modifier = Modifier
                                         .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(NeonAqua.copy(alpha = 0.16f))
-                                        .border(1.2.dp, NeonAqua.copy(alpha = 0.8f), CircleShape),
+                                        .background(aquaTone.copy(alpha = 0.16f))
+                                        .border(1.2.dp, aquaTone.copy(alpha = 0.8f), CircleShape),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Outlined.Info,
                                         contentDescription = null,
-                                        tint = NeonAqua,
+                                        tint = aquaTone,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -517,7 +559,7 @@ fun XpEarningGuideDialog(
                                         fontWeight = FontWeight.Black,
                                         fontFamily = PlusJakartaSans,
                                         fontSize = 16.sp,
-                                        color = Color.White
+                                        color = titleColor
                                     )
                                     Text(
                                         text = when (currentLang) {
@@ -526,7 +568,7 @@ fun XpEarningGuideDialog(
                                             else -> "All active sources to unlock 500 stations"
                                         },
                                         fontSize = 11.sp,
-                                        color = Color(0xFF94A3B8)
+                                        color = subColor
                                     )
                                 }
                             }
@@ -544,7 +586,7 @@ fun XpEarningGuideDialog(
                                         "fr" -> "Fermer"
                                         else -> "Close"
                                     },
-                                    tint = Color(0xFFCBD5E1),
+                                    tint = if (isDarkTheme) Color(0xFFCBD5E1) else DayTextSecondary,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -553,7 +595,8 @@ fun XpEarningGuideDialog(
                         // XP Source Rows
                         XpRuleItemRow(
                             icon = Icons.Default.TaskAlt,
-                            accentColor = ElectricMint,
+                            accentColor = mintTone,
+                            isDarkTheme = isDarkTheme,
                             title = when (currentLang) {
                                 "ar" -> "المهام اليومية والأسبوعية والشهرية والسنوية"
                                 "fr" -> "Missions quotidiennes, hebdo, mensuelles et éternelles"
@@ -568,7 +611,8 @@ fun XpEarningGuideDialog(
 
                         XpRuleItemRow(
                             icon = Icons.Default.AcUnit,
-                            accentColor = NeonAqua,
+                            accentColor = aquaTone,
+                            isDarkTheme = isDarkTheme,
                             title = when (currentLang) {
                                 "ar" -> "كل ضغطة تبريد (Deflame)"
                                 "fr" -> "Chaque appui Refroidir (Deflame)"
@@ -579,7 +623,8 @@ fun XpEarningGuideDialog(
 
                         XpRuleItemRow(
                             icon = Icons.Default.Female,
-                            accentColor = Color(0xFFFF66B2),
+                            accentColor = if (isDarkTheme) Color(0xFFFF66B2) else Color(0xFFDB2777),
+                            isDarkTheme = isDarkTheme,
                             title = when (currentLang) {
                                 "ar" -> "كل تفعيل (girl)"
                                 "fr" -> "Chaque activation (girl)"
@@ -590,7 +635,8 @@ fun XpEarningGuideDialog(
 
                         XpRuleItemRow(
                             icon = Icons.Default.Bolt,
-                            accentColor = WarmFireOrange,
+                            accentColor = orangeTone,
+                            isDarkTheme = isDarkTheme,
                             title = when (currentLang) {
                                 "ar" -> "كل سترايك واحد (Strike)"
                                 "fr" -> "Chaque Strike enregistré"
@@ -601,7 +647,8 @@ fun XpEarningGuideDialog(
 
                         XpRuleItemRow(
                             icon = Icons.Default.PersonAdd,
-                            accentColor = NeonViolet,
+                            accentColor = violetTone,
+                            isDarkTheme = isDarkTheme,
                             title = when (currentLang) {
                                 "ar" -> "كل إضافة فرد جديد"
                                 "fr" -> "Chaque nouvel individu ajouté"
@@ -612,7 +659,8 @@ fun XpEarningGuideDialog(
 
                         XpRuleItemRow(
                             icon = Icons.Default.Straighten,
-                            accentColor = MilestoneGold,
+                            accentColor = goldTone,
+                            isDarkTheme = isDarkTheme,
                             title = when (currentLang) {
                                 "ar" -> "مكافأة الحجم الإضافية (عند إضافة فرد مجموع حجمه Size أكثر من 200)"
                                 "fr" -> "Bonus de taille (individu ajouté avec Size > 200)"
@@ -630,8 +678,8 @@ fun XpEarningGuideDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(NeonAqua.copy(alpha = 0.10f))
-                                .border(1.dp, NeonAqua.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+                                .background(aquaTone.copy(alpha = 0.10f))
+                                .border(1.dp, aquaTone.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -639,7 +687,7 @@ fun XpEarningGuideDialog(
                             Icon(
                                 imageVector = Icons.Default.History,
                                 contentDescription = null,
-                                tint = NeonAqua,
+                                tint = aquaTone,
                                 modifier = Modifier.size(20.dp)
                             )
                             Text(
@@ -650,7 +698,7 @@ fun XpEarningGuideDialog(
                                 },
                                 fontSize = 12.sp,
                                 lineHeight = 17.sp,
-                                color = Color(0xFFE2E8F0),
+                                color = if (isDarkTheme) Color(0xFFE2E8F0) else DayTextPrimary,
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -664,18 +712,18 @@ fun XpEarningGuideDialog(
                                 .testTag("btn_dismiss_xp_guide"),
                             shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = NeonAqua.copy(alpha = 0.22f),
+                                containerColor = if (isDarkTheme) NeonAqua.copy(alpha = 0.22f) else DayCyan,
                                 contentColor = Color.White
                             ),
                             border = androidx.compose.foundation.BorderStroke(
                                 1.2.dp,
-                                Brush.horizontalGradient(listOf(NeonAqua, ElectricMint))
+                                Brush.horizontalGradient(listOf(aquaTone, mintTone))
                             )
                         ) {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = ElectricMint,
+                                tint = if (isDarkTheme) ElectricMint else Color.White,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -694,7 +742,8 @@ fun XpEarningGuideDialog(
                         XpHistoryLedgerSection(
                             xpHistory = xpHistory,
                             totalXpFormatted = nf.format(totalXp.coerceAtLeast(0L)),
-                            currentLang = currentLang
+                            currentLang = currentLang,
+                            isDarkTheme = isDarkTheme
                         )
                     }
                 }
@@ -704,23 +753,33 @@ fun XpEarningGuideDialog(
 }
 
 @Composable
+private fun DayGlassBgColor(): Color = DayGlassSurfaceElevated
+
+@Composable
 private fun XpHistoryLedgerSection(
     xpHistory: List<XpHistoryEntry>,
     totalXpFormatted: String,
-    currentLang: String
+    currentLang: String,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val dateFmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US) }
+    val violetTone = if (isDarkTheme) NeonViolet else DayPurple
+    val cyanTone = if (isDarkTheme) NeonCyan else DayCyan
+    val mintTone = if (isDarkTheme) ElectricMint else DayEmerald
+    val sectionBg = if (isDarkTheme) Color(0xA60E172A) else Color(0xFFF1F5F9)
+    val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
+    val subColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 4.dp)
             .clip(RoundedCornerShape(18.dp))
-            .background(Color(0xA60E172A))
+            .background(sectionBg)
             .border(
                 width = 1.dp,
                 brush = Brush.linearGradient(
-                    listOf(NeonViolet.copy(alpha = 0.45f), NeonCyan.copy(alpha = 0.35f))
+                    listOf(violetTone.copy(alpha = 0.45f), cyanTone.copy(alpha = 0.35f))
                 ),
                 shape = RoundedCornerShape(18.dp)
             )
@@ -742,14 +801,14 @@ private fun XpHistoryLedgerSection(
                     modifier = Modifier
                         .size(30.dp)
                         .clip(CircleShape)
-                        .background(NeonViolet.copy(alpha = 0.18f))
-                        .border(1.dp, NeonViolet.copy(alpha = 0.65f), CircleShape),
+                        .background(violetTone.copy(alpha = 0.18f))
+                        .border(1.dp, violetTone.copy(alpha = 0.65f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.History,
                         contentDescription = null,
-                        tint = NeonViolet,
+                        tint = violetTone,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -763,7 +822,7 @@ private fun XpHistoryLedgerSection(
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = PlusJakartaSans,
-                        color = Color.White,
+                        color = titleColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -774,7 +833,7 @@ private fun XpHistoryLedgerSection(
                             else -> "Every XP earned & concerned source (${xpHistory.size})"
                         },
                         fontSize = 10.sp,
-                        color = Color(0xFF94A3B8),
+                        color = subColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -784,8 +843,8 @@ private fun XpHistoryLedgerSection(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(ElectricMint.copy(alpha = 0.15f))
-                    .border(1.dp, ElectricMint.copy(alpha = 0.5f), RoundedCornerShape(50))
+                    .background(mintTone.copy(alpha = 0.15f))
+                    .border(1.dp, mintTone.copy(alpha = 0.5f), RoundedCornerShape(50))
                     .padding(horizontal = 8.dp, vertical = 3.dp)
             ) {
                 Text(
@@ -793,7 +852,7 @@ private fun XpHistoryLedgerSection(
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = PlusJakartaSans,
-                    color = ElectricMint
+                    color = mintTone
                 )
             }
         }
@@ -803,7 +862,7 @@ private fun XpHistoryLedgerSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0x66162033))
+                    .background(if (isDarkTheme) Color(0x66162033) else DayGlassSurface)
                     .padding(14.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -814,7 +873,7 @@ private fun XpHistoryLedgerSection(
                         else -> "No XP earned recorded yet. Every XP gain and its source will appear here."
                     },
                     fontSize = 11.5.sp,
-                    color = Color(0xFF94A3B8)
+                    color = subColor
                 )
             }
         } else {
@@ -829,7 +888,8 @@ private fun XpHistoryLedgerSection(
                     XpHistoryEntryRow(
                         entry = entry,
                         formattedTime = dateFmt.format(Date(entry.timestamp)),
-                        currentLang = currentLang
+                        currentLang = currentLang,
+                        isDarkTheme = isDarkTheme
                     )
                 }
             }
@@ -841,12 +901,20 @@ private fun XpHistoryLedgerSection(
 private fun XpHistoryEntryRow(
     entry: XpHistoryEntry,
     formattedTime: String,
-    currentLang: String
+    currentLang: String,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
+    val mintTone = if (isDarkTheme) ElectricMint else DayEmerald
+    val goldTone = if (isDarkTheme) MilestoneGold else DayOrange
+    val aquaTone = if (isDarkTheme) NeonAqua else DayCyan
+    val orangeTone = if (isDarkTheme) WarmFireOrange else DayOrange
+    val violetTone = if (isDarkTheme) NeonViolet else DayPurple
+    val cyanTone = if (isDarkTheme) NeonCyan else DayCyan
+
     val (icon, accent, categoryLabel) = when (entry.category) {
         XpSourceCategory.TASK -> Triple(
             Icons.Default.TaskAlt,
-            ElectricMint,
+            mintTone,
             when (currentLang) {
                 "ar" -> "مهمة"
                 "fr" -> "Mission"
@@ -855,7 +923,7 @@ private fun XpHistoryEntryRow(
         )
         XpSourceCategory.SKIP_KEY -> Triple(
             Icons.Default.VpnKey,
-            MilestoneGold,
+            goldTone,
             when (currentLang) {
                 "ar" -> "مفتاح تخطي"
                 "fr" -> "Clé"
@@ -864,17 +932,17 @@ private fun XpHistoryEntryRow(
         )
         XpSourceCategory.DEFLAME -> Triple(
             Icons.Default.AcUnit,
-            NeonAqua,
+            aquaTone,
             "Deflame"
         )
         XpSourceCategory.GIRL -> Triple(
             Icons.Default.Female,
-            Color(0xFFFF66B2),
+            if (isDarkTheme) Color(0xFFFF66B2) else Color(0xFFDB2777),
             "Girl"
         )
         XpSourceCategory.STRIKE -> Triple(
             Icons.Default.Bolt,
-            WarmFireOrange,
+            orangeTone,
             when (currentLang) {
                 "ar" -> "سترايك"
                 else -> "Strike"
@@ -882,7 +950,7 @@ private fun XpHistoryEntryRow(
         )
         XpSourceCategory.PERSON -> Triple(
             Icons.Default.PersonAdd,
-            NeonViolet,
+            violetTone,
             when (currentLang) {
                 "ar" -> "فرد جديد"
                 "fr" -> "Individu"
@@ -891,7 +959,7 @@ private fun XpHistoryEntryRow(
         )
         XpSourceCategory.RETROACTIVE -> Triple(
             Icons.Default.History,
-            NeonCyan,
+            cyanTone,
             when (currentLang) {
                 "ar" -> "مزامنة"
                 "fr" -> "Synchro"
@@ -900,7 +968,7 @@ private fun XpHistoryEntryRow(
         )
         XpSourceCategory.SYSTEM -> Triple(
             Icons.Default.AutoAwesome,
-            Color(0xFFCBD5E1),
+            if (isDarkTheme) Color(0xFFCBD5E1) else DayTextSecondary,
             when (currentLang) {
                 "ar" -> "النظام"
                 "fr" -> "Système"
@@ -910,15 +978,19 @@ private fun XpHistoryEntryRow(
     }
 
     val amountPrefix = if (entry.amount >= 0L) "+" else ""
-    val amountColor = if (entry.amount >= 0L) accent else Color(0xFFF87171)
+    val negTone = if (isDarkTheme) Color(0xFFF87171) else DayRose
+    val amountColor = if (entry.amount >= 0L) accent else negTone
     val concernedPartyText = entry.getLocalizedConcernedParty(currentLang)
     val detailText = entry.getLocalizedDetail(currentLang)
+    val rowBg = if (isDarkTheme) Color(0x88161E31) else DayGlassSurface
+    val primaryText = if (isDarkTheme) Color(0xFFF1F5F9) else DayTextPrimary
+    val mutedText = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0x88161E31))
+            .background(rowBg)
             .border(1.dp, accent.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -961,7 +1033,7 @@ private fun XpHistoryEntryRow(
                 Text(
                     text = formattedTime,
                     fontSize = 9.sp,
-                    color = Color(0xFF64748B),
+                    color = mutedText,
                     maxLines = 1
                 )
             }
@@ -974,7 +1046,7 @@ private fun XpHistoryEntryRow(
                 },
                 fontSize = 11.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFFF1F5F9),
+                color = primaryText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -983,7 +1055,7 @@ private fun XpHistoryEntryRow(
                 Text(
                     text = detailText,
                     fontSize = 10.sp,
-                    color = Color(0xFF94A3B8),
+                    color = mutedText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1014,13 +1086,17 @@ private fun XpRuleItemRow(
     icon: ImageVector,
     accentColor: Color,
     title: String,
-    badgeText: String
+    badgeText: String,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
+    val rowBg = if (isDarkTheme) Color(0x99161E31) else DayGlassSurface
+    val textColor = if (isDarkTheme) Color(0xFFF1F5F9) else DayTextPrimary
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0x99161E31))
+            .background(rowBg)
             .border(1.dp, accentColor.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1047,7 +1123,7 @@ private fun XpRuleItemRow(
             fontSize = 12.5.sp,
             lineHeight = 17.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Color(0xFFF1F5F9),
+            color = textColor,
             modifier = Modifier.weight(1f)
         )
 

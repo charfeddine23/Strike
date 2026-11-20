@@ -2,6 +2,7 @@ package com.example.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.ui.theme.AppThemeMode
 import org.json.JSONObject
 
 class SecurityPreferences(context: Context) {
@@ -15,6 +16,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_APP_LANGUAGE = "app_language"
         private const val KEY_HAPTIC_ENABLED = "haptic_feedback_enabled"
         private const val KEY_AUTO_UPDATE_ENABLED = "auto_update_enabled"
+        private const val KEY_THEME_MODE = "app_theme_mode"
     }
 
     var isFingerprintLockEnabled: Boolean
@@ -41,6 +43,10 @@ class SecurityPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_AUTO_UPDATE_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_UPDATE_ENABLED, value).apply()
 
+    var themeMode: AppThemeMode
+        get() = AppThemeMode.fromPref(prefs.getString(KEY_THEME_MODE, AppThemeMode.SYSTEM.prefValue))
+        set(value) = prefs.edit().putString(KEY_THEME_MODE, value.prefValue).apply()
+
     fun verifyPattern(pattern: String): Boolean {
         val stored = savedPattern ?: return false
         return stored == pattern
@@ -61,6 +67,7 @@ class SecurityPreferences(context: Context) {
             put("selectedLanguage", selectedLanguage)
             put("isHapticFeedbackEnabled", isHapticFeedbackEnabled)
             put("isAutoUpdateEnabled", isAutoUpdateEnabled)
+            put("themeMode", themeMode.prefValue)
         }
     }
 
@@ -71,6 +78,7 @@ class SecurityPreferences(context: Context) {
         val pattern = json.optString("savedPattern", "").ifBlank { null }
         val haptic = json.optBoolean("isHapticFeedbackEnabled", isHapticFeedbackEnabled)
         val autoUpdate = json.optBoolean("isAutoUpdateEnabled", isAutoUpdateEnabled)
+        val restoredThemeMode = AppThemeMode.fromPref(json.optString("themeMode", themeMode.prefValue))
 
         prefs.edit().apply {
             putString(KEY_APP_LANGUAGE, lang)
@@ -79,6 +87,7 @@ class SecurityPreferences(context: Context) {
             if (pattern != null) putString(KEY_SAVED_PATTERN, pattern) else remove(KEY_SAVED_PATTERN)
             putBoolean(KEY_HAPTIC_ENABLED, haptic)
             putBoolean(KEY_AUTO_UPDATE_ENABLED, autoUpdate)
+            putString(KEY_THEME_MODE, restoredThemeMode.prefValue)
             apply()
         }
     }

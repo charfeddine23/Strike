@@ -108,6 +108,11 @@
     <string name="restore_merge">دمج مع السجلات الحالية</string>
     <string name="restore_replace">استبدال كامل لقاعدة البيانات</string>
     <string name="auto_theme">المظهر التلقائي</string>
+    <string name="theme_mode_title">مظهر التطبيق (ليلي / نهاري)</string>
+    <string name="theme_mode_desc">تحكم كامل وفصل تام للألوان بين الوضع النهاري والليلي أو التلقائي</string>
+    <string name="theme_system">تلقائي</string>
+    <string name="theme_light">نهاري</string>
+    <string name="theme_dark">ليلي</string>
     <string name="sort_score">النتيجة الإجمالية (BOOST × الضربات)</string>
     <string name="sort_boost">قوة BOOST (الأعلى أولاً)</string>
     <string name="sort_strikes">الضربات (الأكثر أولاً)</string>

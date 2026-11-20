@@ -10,7 +10,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
@@ -41,6 +40,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.PlusJakartaSans
 import kotlin.math.cos
 import kotlin.math.sin
@@ -129,7 +129,7 @@ fun getStatusPalette(status: StrikerStatus, darkTheme: Boolean): StatusColorPale
 fun StrikerStatusBadge(
     status: StrikerStatus,
     modifier: Modifier = Modifier,
-    darkTheme: Boolean = isSystemInDarkTheme()
+    darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val palette = remember(status, darkTheme) { getStatusPalette(status, darkTheme) }
 
@@ -211,7 +211,7 @@ fun DynamicAnimatedProfileCard(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(18.dp),
     borderWidth: Dp = 1.25.dp,
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = LocalAppDarkTheme.current,
     onClick: (() -> Unit)? = null,
     testTag: String? = null,
     content: @Composable BoxScope.() -> Unit

@@ -61,6 +61,15 @@ import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.NeonAqua
 import com.example.ui.components.RoadmapAmbientBackground
 import com.example.ui.components.WarmFireOrange
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayGlassSurface
+import com.example.ui.theme.DayGlassSurfaceElevated
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.DayTextSecondary
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -82,7 +91,8 @@ import kotlinx.coroutines.delay
 fun TasksLedgerScreen(
     viewModel: IndividualViewModel,
     onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -158,12 +168,25 @@ fun TasksLedgerScreen(
         )
     }
 
+    val emeraldTone = if (isDarkTheme) NeonEmerald else DayEmerald
+    val mintTone = if (isDarkTheme) ElectricMint else DayEmerald
+    val cyanTone = if (isDarkTheme) NeonCyan else DayCyan
+    val violetTone = if (isDarkTheme) NeonViolet else DayPurple
+    val orangeTone = if (isDarkTheme) WarmFireOrange else DayOrange
+    val amberTone = if (isDarkTheme) NeonAmber else DayOrange
+    val aquaTone = if (isDarkTheme) NeonAqua else DayCyan
+    val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
+    val mutedColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .testTag("tasks_ledger_screen")
     ) {
-        RoadmapAmbientBackground(modifier = Modifier.fillMaxSize())
+        RoadmapAmbientBackground(
+            modifier = Modifier.fillMaxSize(),
+            darkTheme = isDarkTheme
+        )
 
         Column(
             modifier = Modifier
@@ -192,14 +215,14 @@ fun TasksLedgerScreen(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(Color(0xBB161E31))
-                            .border(1.dp, Color(0x40FFFFFF), CircleShape)
+                            .background(if (isDarkTheme) Color(0xBB161E31) else DayGlassSurface)
+                            .border(1.dp, if (isDarkTheme) Color(0x40FFFFFF) else Color(0xFFCBD5E1), CircleShape)
                             .testTag("ledger_back_btn")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = if (isAr) "رجوع" else if (isFr) "Retour" else "Back",
-                            tint = Color.White,
+                            tint = titleColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -211,7 +234,7 @@ fun TasksLedgerScreen(
                         Icon(
                             imageVector = Icons.Default.MenuBook,
                             contentDescription = null,
-                            tint = ElectricMint,
+                            tint = mintTone,
                             modifier = Modifier.size(22.dp)
                         )
                         Text(
@@ -223,7 +246,7 @@ fun TasksLedgerScreen(
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Black,
                             fontFamily = PlusJakartaSans,
-                            color = Color.White,
+                            color = titleColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.testTag("ledger_screen_title")
@@ -234,8 +257,8 @@ fun TasksLedgerScreen(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(ElectricMint.copy(alpha = 0.14f))
-                        .border(1.dp, ElectricMint.copy(alpha = 0.65f), RoundedCornerShape(10.dp))
+                        .background(mintTone.copy(alpha = 0.14f))
+                        .border(1.dp, mintTone.copy(alpha = 0.65f), RoundedCornerShape(10.dp))
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
                     Text(
@@ -243,7 +266,7 @@ fun TasksLedgerScreen(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = PlusJakartaSans,
-                        color = ElectricMint
+                        color = mintTone
                     )
                 }
             }
@@ -263,8 +286,9 @@ fun TasksLedgerScreen(
                         else -> "Completed Tasks"
                     },
                     icon = Icons.Default.CheckCircle,
-                    accentColor = NeonEmerald,
+                    accentColor = emeraldTone,
                     selected = statusFilter == 1,
+                    isDarkTheme = isDarkTheme,
                     testTag = "ledger_stat_completed",
                     onClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -281,8 +305,9 @@ fun TasksLedgerScreen(
                         else -> "Uncompleted Tasks"
                     },
                     icon = Icons.Default.HourglassTop,
-                    accentColor = NeonCyan,
+                    accentColor = cyanTone,
                     selected = statusFilter == 2,
+                    isDarkTheme = isDarkTheme,
                     testTag = "ledger_stat_uncompleted",
                     onClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -306,7 +331,8 @@ fun TasksLedgerScreen(
                         else -> "Completed"
                     },
                     selected = statusFilter == 1,
-                    accentColor = NeonEmerald,
+                    accentColor = emeraldTone,
+                    isDarkTheme = isDarkTheme,
                     testTag = "ledger_filter_completed",
                     onClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -321,7 +347,8 @@ fun TasksLedgerScreen(
                         else -> "Uncompleted"
                     },
                     selected = statusFilter == 2,
-                    accentColor = NeonCyan,
+                    accentColor = cyanTone,
+                    isDarkTheme = isDarkTheme,
                     testTag = "ledger_filter_uncompleted",
                     onClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -336,7 +363,8 @@ fun TasksLedgerScreen(
                         else -> "All"
                     },
                     selected = statusFilter == 0,
-                    accentColor = ElectricMint,
+                    accentColor = mintTone,
+                    isDarkTheme = isDarkTheme,
                     testTag = "ledger_filter_all",
                     onClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -361,7 +389,8 @@ fun TasksLedgerScreen(
                         else -> "Daily"
                     },
                     selected = periodFilter == TaskPeriod.DAILY,
-                    accentColor = NeonCyan,
+                    accentColor = cyanTone,
+                    isDarkTheme = isDarkTheme,
                     testTag = "ledger_period_daily",
                     onClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -375,7 +404,8 @@ fun TasksLedgerScreen(
                         else -> "Weekly"
                     },
                     selected = periodFilter == TaskPeriod.WEEKLY,
-                    accentColor = NeonViolet,
+                    accentColor = violetTone,
+                    isDarkTheme = isDarkTheme,
                     testTag = "ledger_period_weekly",
                     onClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -389,7 +419,8 @@ fun TasksLedgerScreen(
                         else -> "Monthly"
                     },
                     selected = periodFilter == TaskPeriod.MONTHLY,
-                    accentColor = WarmFireOrange,
+                    accentColor = orangeTone,
+                    isDarkTheme = isDarkTheme,
                     testTag = "ledger_period_monthly",
                     onClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -403,7 +434,8 @@ fun TasksLedgerScreen(
                         else -> "Eternal"
                     },
                     selected = periodFilter == TaskPeriod.YEARLY,
-                    accentColor = NeonAmber,
+                    accentColor = amberTone,
+                    isDarkTheme = isDarkTheme,
                     testTag = "ledger_period_eternal",
                     onClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -417,7 +449,8 @@ fun TasksLedgerScreen(
                         else -> "All"
                     },
                     selected = periodFilter == null,
-                    accentColor = NeonAqua,
+                    accentColor = aquaTone,
+                    isDarkTheme = isDarkTheme,
                     testTag = "ledger_period_all",
                     onClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -438,7 +471,8 @@ fun TasksLedgerScreen(
                             .fillMaxWidth()
                             .align(Alignment.TopCenter)
                             .padding(top = 12.dp),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        darkTheme = isDarkTheme
                     ) {
                         Column(
                             modifier = Modifier
@@ -449,7 +483,7 @@ fun TasksLedgerScreen(
                             Icon(
                                 imageVector = Icons.Default.MenuBook,
                                 contentDescription = null,
-                                tint = Color(0xFF64748B),
+                                tint = mutedColor,
                                 modifier = Modifier.size(38.dp)
                             )
                             Spacer(modifier = Modifier.height(10.dp))
@@ -461,7 +495,7 @@ fun TasksLedgerScreen(
                                 },
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF94A3B8),
+                                color = mutedColor,
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -479,6 +513,7 @@ fun TasksLedgerScreen(
                                 entry = entry,
                                 nowMillis = nowMillis,
                                 currentLang = currentLang,
+                                isDarkTheme = isDarkTheme,
                                 onClaimTask = {
                                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                     view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -505,16 +540,26 @@ private fun LedgerCountContainer(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     accentColor: Color,
     selected: Boolean,
+    isDarkTheme: Boolean,
     testTag: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgBrush = Brush.verticalGradient(
-        listOf(
-            accentColor.copy(alpha = if (selected) 0.24f else 0.12f),
-            Color(0xCC0D1525)
+    val bgBrush = if (isDarkTheme) {
+        Brush.verticalGradient(
+            listOf(
+                accentColor.copy(alpha = if (selected) 0.24f else 0.12f),
+                Color(0xCC0D1525)
+            )
         )
-    )
+    } else {
+        Brush.verticalGradient(
+            listOf(
+                if (selected) accentColor.copy(alpha = 0.14f) else DayGlassSurface,
+                if (selected) accentColor.copy(alpha = 0.08f) else DayGlassSurfaceElevated
+            )
+        )
+    }
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
@@ -542,7 +587,7 @@ private fun LedgerCountContainer(
                 text = label,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFFE2E8F0),
+                color = if (isDarkTheme) Color(0xFFE2E8F0) else DayTextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -569,17 +614,22 @@ private fun LedgerFilterSegment(
     label: String,
     selected: Boolean,
     accentColor: Color,
+    isDarkTheme: Boolean,
     testTag: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val unselectedBg = if (isDarkTheme) Color(0x33162033) else DayGlassSurface
+    val unselectedBorder = if (isDarkTheme) Color(0x28FFFFFF) else Color(0xFFCBD5E1)
+    val unselectedText = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(11.dp))
-            .background(if (selected) accentColor.copy(alpha = 0.22f) else Color(0x33162033))
+            .background(if (selected) accentColor.copy(alpha = if (isDarkTheme) 0.22f else 0.14f) else unselectedBg)
             .border(
                 width = if (selected) 1.2.dp else 1.dp,
-                color = if (selected) accentColor else Color(0x28FFFFFF),
+                color = if (selected) accentColor else unselectedBorder,
                 shape = RoundedCornerShape(11.dp)
             )
             .clickable(onClick = onClick)
@@ -591,7 +641,7 @@ private fun LedgerFilterSegment(
             text = label,
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
-            color = if (selected) accentColor else Color(0xFF94A3B8),
+            color = if (selected) accentColor else unselectedText,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -603,16 +653,21 @@ private fun LedgerPeriodChip(
     label: String,
     selected: Boolean,
     accentColor: Color,
+    isDarkTheme: Boolean,
     testTag: String,
     onClick: () -> Unit
 ) {
+    val unselectedBg = if (isDarkTheme) Color(0x33162033) else DayGlassSurface
+    val unselectedBorder = if (isDarkTheme) Color(0x26FFFFFF) else Color(0xFFCBD5E1)
+    val unselectedText = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(if (selected) accentColor.copy(alpha = 0.22f) else Color(0x33162033))
+            .background(if (selected) accentColor.copy(alpha = if (isDarkTheme) 0.22f else 0.14f) else unselectedBg)
             .border(
                 width = if (selected) 1.2.dp else 1.dp,
-                color = if (selected) accentColor else Color(0x26FFFFFF),
+                color = if (selected) accentColor else unselectedBorder,
                 shape = RoundedCornerShape(10.dp)
             )
             .clickable(onClick = onClick)
@@ -624,7 +679,7 @@ private fun LedgerPeriodChip(
             text = label,
             fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.Black else FontWeight.Medium,
-            color = if (selected) accentColor else Color(0xFF94A3B8),
+            color = if (selected) accentColor else unselectedText,
             maxLines = 1
         )
     }

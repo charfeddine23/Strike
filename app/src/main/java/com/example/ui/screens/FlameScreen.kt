@@ -19,7 +19,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -126,6 +125,14 @@ import com.example.ui.components.FlameVisualizer
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.getFlameColors
 import com.example.ui.components.getFlameStage
+import com.example.ui.theme.DayCyan
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayRose
+import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.DayTextSecondary
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -155,7 +162,7 @@ fun FlameScreen(
     viewModel: IndividualViewModel,
     onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier,
-    isDarkTheme: Boolean = isSystemInDarkTheme()
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -211,13 +218,16 @@ fun FlameScreen(
     }
 
     val stageBadgeColor = when (stage) {
-        FlameVisualStage.FROZEN_STATIC -> Color(0xFF38BDF8)
-        FlameVisualStage.ICE_CRACKING -> Color(0xFF00E5FF)
-        FlameVisualStage.COLOR_GRADIENT -> colors.second
-        FlameVisualStage.FULLY_IGNITED -> Color(0xFFEF4444)
-        FlameVisualStage.SUPERNOVA_OVERLOAD -> Color(0xFFC084FC)
-        FlameVisualStage.OBSIDIAN_PLASMA -> Color(0xFFE879F9)
+        FlameVisualStage.FROZEN_STATIC -> if (isDarkTheme) Color(0xFF38BDF8) else DayCyan
+        FlameVisualStage.ICE_CRACKING -> if (isDarkTheme) Color(0xFF00E5FF) else Color(0xFF0369A1)
+        FlameVisualStage.COLOR_GRADIENT -> if (isDarkTheme) colors.second else DayOrange
+        FlameVisualStage.FULLY_IGNITED -> if (isDarkTheme) Color(0xFFEF4444) else DayRose
+        FlameVisualStage.SUPERNOVA_OVERLOAD -> if (isDarkTheme) Color(0xFFC084FC) else DayPurple
+        FlameVisualStage.OBSIDIAN_PLASMA -> if (isDarkTheme) Color(0xFFE879F9) else Color(0xFF7E22CE)
     }
+    val cyanAccent = if (isDarkTheme) NeonCyan else DayCyan
+    val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
+    val roseAccent = if (isDarkTheme) NeonRose else DayRose
 
     // Filtered flame logs
     val filteredLogs = remember(flameLogs, selectedFilter) {
@@ -279,7 +289,7 @@ fun FlameScreen(
                     Text(text = stringResource(R.string.flame_cancel_action))
                 }
             },
-            containerColor = Color(0xFF0F172A),
+            containerColor = if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF8FAFC),
             tonalElevation = 8.dp
         )
     }
@@ -292,6 +302,7 @@ fun FlameScreen(
             stageBadgeColor = stageBadgeColor,
             isStreakShieldActive = isStreakShieldActive,
             isHapticEnabled = isHapticEnabled,
+            isDarkTheme = isDarkTheme,
             currentLang = currentLang,
             onDismiss = { showSettingsModal = false },
             onClearLogs = { showClearConfirmDialog = true }
@@ -335,7 +346,8 @@ fun FlameScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("flame_hero_card"),
-                shape = RoundedCornerShape(24.dp)
+                shape = RoundedCornerShape(24.dp),
+                darkTheme = isDarkTheme
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -496,6 +508,9 @@ fun FlameScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // "Deflame" Button (Displays true effective points including active Pulse Elixir +5 bonus)
+                    val deflameColor = if (isDarkTheme) Color(0xFF38BDF8) else DayCyan
+                    val deflameBoostColor = if (isDarkTheme) NeonCyan else DayPurple
+                    val girlColor = if (isDarkTheme) Color(0xFFFB7185) else DayRose
                     LiquidGlassCard(
                         modifier = Modifier
                             .weight(1f)
@@ -506,7 +521,8 @@ fun FlameScreen(
                                 viewModel.deflame(3.0)
                             }
                             .testTag("btn_deflame"),
-                        shape = RoundedCornerShape(18.dp)
+                        shape = RoundedCornerShape(18.dp),
+                        darkTheme = isDarkTheme
                     ) {
                         Column(
                             modifier = Modifier
@@ -518,14 +534,14 @@ fun FlameScreen(
                                 modifier = Modifier
                                     .size(44.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0x330284C7))
-                                    .border(1.5.dp, Color(0xFF38BDF8), CircleShape),
+                                    .background(deflameColor.copy(alpha = if (isDarkTheme) 0.20f else 0.14f))
+                                    .border(1.5.dp, deflameColor, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.AcUnit,
                                     contentDescription = "Deflame",
-                                    tint = Color(0xFF38BDF8),
+                                    tint = deflameColor,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -546,11 +562,12 @@ fun FlameScreen(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(
-                                            if (pulseBonus > 0.0) Color(0x3300E5FF) else Color(0x2238BDF8)
+                                            if (pulseBonus > 0.0) deflameBoostColor.copy(alpha = 0.16f)
+                                            else deflameColor.copy(alpha = 0.14f)
                                         )
                                         .border(
                                             width = if (pulseBonus > 0.0) 1.dp else 0.dp,
-                                            color = if (pulseBonus > 0.0) NeonCyan.copy(alpha = 0.65f) else Color.Transparent,
+                                            color = if (pulseBonus > 0.0) deflameBoostColor.copy(alpha = 0.65f) else Color.Transparent,
                                             shape = RoundedCornerShape(6.dp)
                                         )
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
@@ -559,7 +576,7 @@ fun FlameScreen(
                                         text = if (isAr) "-$deflameFormatted نقطة" else "-$deflameFormatted PTS",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Black,
-                                        color = if (pulseBonus > 0.0) NeonCyan else Color(0xFF38BDF8),
+                                        color = if (pulseBonus > 0.0) deflameBoostColor else deflameColor,
                                         modifier = Modifier.testTag("deflame_points_badge")
                                     )
                                 }
@@ -567,7 +584,7 @@ fun FlameScreen(
                                     Icon(
                                         imageVector = Icons.Default.Bolt,
                                         contentDescription = if (isAr) "معزز بإكسير النبض" else "Pulse Elixir Boosted",
-                                        tint = NeonCyan,
+                                        tint = deflameBoostColor,
                                         modifier = Modifier.size(12.dp)
                                     )
                                 }
@@ -593,7 +610,8 @@ fun FlameScreen(
                                 }
                             )
                             .testTag("btn_girl"),
-                        shape = RoundedCornerShape(18.dp)
+                        shape = RoundedCornerShape(18.dp),
+                        darkTheme = isDarkTheme
                     ) {
                         Column(
                             modifier = Modifier
@@ -605,14 +623,14 @@ fun FlameScreen(
                                 modifier = Modifier
                                     .size(44.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0x33E11D48))
-                                    .border(1.5.dp, Color(0xFFFB7185), CircleShape),
+                                    .background(girlColor.copy(alpha = if (isDarkTheme) 0.20f else 0.14f))
+                                    .border(1.5.dp, girlColor, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Favorite,
                                     contentDescription = "Girl",
-                                    tint = Color(0xFFFB7185),
+                                    tint = girlColor,
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
@@ -629,14 +647,14 @@ fun FlameScreen(
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
-                                        .background(Color(0x22FB7185))
+                                        .background(girlColor.copy(alpha = 0.14f))
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
                                         text = if (isAr) "-$girlFormatted نقطة" else "-$girlFormatted PTS",
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Black,
-                                        color = Color(0xFFFB7185),
+                                        color = girlColor,
                                         modifier = Modifier.testTag("girl_points_badge")
                                     )
                                 }
@@ -644,7 +662,7 @@ fun FlameScreen(
                                 Icon(
                                     imageVector = Icons.Default.Tune,
                                     contentDescription = if (isAr) "تعديل النقاط (ضغط مطوّل)" else "Adjust points (Hold)",
-                                    tint = Color(0xFFFB7185),
+                                    tint = girlColor,
                                     modifier = Modifier.size(12.dp)
                                 )
                             }
@@ -660,7 +678,8 @@ fun FlameScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("flame_analytics_summary_card"),
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(20.dp),
+                darkTheme = isDarkTheme
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
@@ -673,13 +692,13 @@ fun FlameScreen(
                                 modifier = Modifier
                                     .size(30.dp)
                                     .clip(CircleShape)
-                                    .background(NeonCyan.copy(alpha = 0.18f)),
+                                    .background(cyanAccent.copy(alpha = 0.18f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.AutoAwesome,
                                     contentDescription = null,
-                                    tint = NeonCyan,
+                                    tint = cyanAccent,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -719,6 +738,7 @@ fun FlameScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    val subCardBg = if (isDarkTheme) Color(0x181E293B) else Color(0xCCF1F5F9)
                     // Key Stats Grid (Peak Flame, Total Accrued, Total Extinguished)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -729,8 +749,8 @@ fun FlameScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0x181E293B))
-                                .border(1.dp, Color(0x25F59E0B), RoundedCornerShape(12.dp))
+                                .background(subCardBg)
+                                .border(1.dp, amberAccent.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
                                 .padding(8.dp)
                         ) {
                             Column {
@@ -738,7 +758,7 @@ fun FlameScreen(
                                     Icon(
                                         imageVector = Icons.Default.Star,
                                         contentDescription = null,
-                                        tint = NeonAmber,
+                                        tint = amberAccent,
                                         modifier = Modifier.size(13.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
@@ -754,7 +774,7 @@ fun FlameScreen(
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = PlusJakartaSans,
-                                    color = NeonAmber
+                                    color = amberAccent
                                 )
                             }
                         }
@@ -764,8 +784,8 @@ fun FlameScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0x181E293B))
-                                .border(1.dp, Color(0x25EF4444), RoundedCornerShape(12.dp))
+                                .background(subCardBg)
+                                .border(1.dp, roseAccent.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
                                 .padding(8.dp)
                         ) {
                             Column {
@@ -773,7 +793,7 @@ fun FlameScreen(
                                     Icon(
                                         imageVector = Icons.Default.TrendingUp,
                                         contentDescription = null,
-                                        tint = NeonRose,
+                                        tint = roseAccent,
                                         modifier = Modifier.size(13.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
@@ -789,7 +809,7 @@ fun FlameScreen(
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = PlusJakartaSans,
-                                    color = NeonRose
+                                    color = roseAccent
                                 )
                             }
                         }
@@ -799,8 +819,8 @@ fun FlameScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0x181E293B))
-                                .border(1.dp, Color(0x2538BDF8), RoundedCornerShape(12.dp))
+                                .background(subCardBg)
+                                .border(1.dp, cyanAccent.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
                                 .padding(8.dp)
                         ) {
                             Column {
@@ -808,7 +828,7 @@ fun FlameScreen(
                                     Icon(
                                         imageVector = Icons.Default.TrendingDown,
                                         contentDescription = null,
-                                        tint = Color(0xFF38BDF8),
+                                        tint = cyanAccent,
                                         modifier = Modifier.size(13.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
@@ -824,7 +844,7 @@ fun FlameScreen(
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = PlusJakartaSans,
-                                    color = Color(0xFF38BDF8)
+                                    color = cyanAccent
                                 )
                             }
                         }
@@ -850,7 +870,7 @@ fun FlameScreen(
                             text = if (isAr) "معدل السيطرة ${(extRatio * 100).toInt()}%" else "${(extRatio * 100).toInt()}% Control Rate",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            color = NeonCyan
+                            color = cyanAccent
                         )
                     }
 
@@ -861,19 +881,19 @@ fun FlameScreen(
                             .fillMaxWidth()
                             .height(6.dp)
                             .clip(RoundedCornerShape(3.dp))
-                            .background(Color(0x20FFFFFF))
+                            .background(if (isDarkTheme) Color(0x20FFFFFF) else Color(0x200F172A))
                     ) {
                         Box(
                             modifier = Modifier
                                 .weight(extRatio.coerceAtLeast(0.02f))
                                 .height(6.dp)
-                                .background(Color(0xFF38BDF8))
+                                .background(cyanAccent)
                         )
                         Box(
                             modifier = Modifier
                                 .weight((1f - extRatio).coerceAtLeast(0.02f))
                                 .height(6.dp)
-                                .background(NeonRose)
+                                .background(roseAccent)
                         )
                     }
                 }
@@ -884,7 +904,8 @@ fun FlameScreen(
         item {
             LiquidGlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(20.dp),
+                darkTheme = isDarkTheme
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -960,7 +981,7 @@ fun FlameScreen(
                                 Icon(
                                     imageVector = icon,
                                     contentDescription = null,
-                                    tint = NeonCyan,
+                                    tint = cyanAccent,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -990,7 +1011,8 @@ fun FlameScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("flame_audit_log_section"),
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(20.dp),
+                darkTheme = isDarkTheme
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
@@ -1003,13 +1025,13 @@ fun FlameScreen(
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(NeonAmber.copy(alpha = 0.2f)),
+                                    .background(amberAccent.copy(alpha = 0.2f)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.History,
                                     contentDescription = null,
-                                    tint = NeonAmber,
+                                    tint = amberAccent,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -1039,14 +1061,14 @@ fun FlameScreen(
                                 modifier = Modifier
                                     .size(34.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0x15FFFFFF))
-                                    .border(1.dp, Color(0x33FFFFFF), CircleShape)
+                                    .background(if (isDarkTheme) Color(0x15FFFFFF) else roseAccent.copy(alpha = 0.12f))
+                                    .border(1.dp, if (isDarkTheme) Color(0x33FFFFFF) else roseAccent.copy(alpha = 0.35f), CircleShape)
                                     .testTag("flame_clear_logs_btn")
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.DeleteOutline,
                                     contentDescription = stringResource(R.string.flame_clear_history),
-                                    tint = NeonRose,
+                                    tint = roseAccent,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -1076,12 +1098,12 @@ fun FlameScreen(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(
-                                        if (isSelected) NeonCyan.copy(alpha = 0.25f)
-                                        else Color(0x15FFFFFF)
+                                        if (isSelected) cyanAccent.copy(alpha = if (isDarkTheme) 0.25f else 0.16f)
+                                        else if (isDarkTheme) Color(0x15FFFFFF) else Color(0xFFF1F5F9)
                                     )
                                     .border(
                                         1.dp,
-                                        if (isSelected) NeonCyan else Color(0x25FFFFFF),
+                                        if (isSelected) cyanAccent else if (isDarkTheme) Color(0x25FFFFFF) else Color(0xFFCBD5E1),
                                         RoundedCornerShape(8.dp)
                                     )
                                     .clickable {
@@ -1095,7 +1117,7 @@ fun FlameScreen(
                                     text = label,
                                     fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
-                                    color = if (isSelected) NeonCyan else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (isSelected) cyanAccent else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -1108,7 +1130,7 @@ fun FlameScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0x10FFFFFF))
+                                .background(if (isDarkTheme) Color(0x10FFFFFF) else Color(0xCCF1F5F9))
                                 .padding(vertical = 24.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -1124,7 +1146,11 @@ fun FlameScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             filteredLogs.forEach { entry ->
-                                FlameAuditLogItemCard(entry, currentLang = currentLang)
+                                FlameAuditLogItemCard(
+                                    entry = entry,
+                                    currentLang = currentLang,
+                                    isDarkTheme = isDarkTheme
+                                )
                             }
                         }
                     }
@@ -1146,6 +1172,7 @@ private fun FlameSettingsAndSimulatorSheet(
     stageBadgeColor: Color,
     isStreakShieldActive: Boolean,
     isHapticEnabled: Boolean,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     currentLang: String = "ar",
     onDismiss: () -> Unit,
     onClearLogs: () -> Unit
@@ -1155,6 +1182,8 @@ private fun FlameSettingsAndSimulatorSheet(
     val view = LocalView.current
     val focusManager = LocalFocusManager.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val accentRose = if (isDarkTheme) NeonRose else DayRose
 
     var customScoreInput by remember { mutableStateOf("") }
     var inputError by remember { mutableStateOf<String?>(null) }
@@ -1162,8 +1191,8 @@ private fun FlameSettingsAndSimulatorSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color(0xFF0B1324),
-        scrimColor = Color.Black.copy(alpha = 0.70f),
+        containerColor = if (isDarkTheme) Color(0xFF0B1324) else Color(0xFFF8FAFC),
+        scrimColor = if (isDarkTheme) Color.Black.copy(alpha = 0.70f) else Color(0x660F172A),
         dragHandle = {
             Box(
                 modifier = Modifier
@@ -1171,7 +1200,7 @@ private fun FlameSettingsAndSimulatorSheet(
                     .width(42.dp)
                     .height(4.dp)
                     .clip(CircleShape)
-                    .background(Color(0x55FFFFFF))
+                    .background(if (isDarkTheme) Color(0x55FFFFFF) else Color(0x40334155))
             )
         }
     ) {
@@ -1193,14 +1222,14 @@ private fun FlameSettingsAndSimulatorSheet(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(NeonCyan.copy(alpha = 0.2f))
-                            .border(1.dp, NeonCyan.copy(alpha = 0.6f), CircleShape),
+                            .background(accentCyan.copy(alpha = 0.2f))
+                            .border(1.dp, accentCyan.copy(alpha = 0.6f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Tune,
                             contentDescription = null,
-                            tint = NeonCyan,
+                            tint = accentCyan,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -1216,7 +1245,7 @@ private fun FlameSettingsAndSimulatorSheet(
                         Text(
                             text = stringResource(R.string.flame_settings_subtitle),
                             fontSize = 11.sp,
-                            color = NeonCyan
+                            color = accentCyan
                         )
                     }
                 }
@@ -1226,12 +1255,12 @@ private fun FlameSettingsAndSimulatorSheet(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(Color(0x15FFFFFF))
+                        .background(if (isDarkTheme) Color(0x15FFFFFF) else Color(0x140284C7))
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Close",
-                        tint = Color.White,
+                        tint = if (isDarkTheme) Color.White else DayTextPrimary,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -1242,7 +1271,8 @@ private fun FlameSettingsAndSimulatorSheet(
             // SECTION 1: Interactive Score Simulator (Moved here as requested!)
             LiquidGlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp)
+                shape = RoundedCornerShape(18.dp),
+                darkTheme = isDarkTheme
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
@@ -1254,7 +1284,7 @@ private fun FlameSettingsAndSimulatorSheet(
                             Icon(
                                 imageVector = Icons.Default.Bolt,
                                 contentDescription = null,
-                                tint = NeonCyan,
+                                tint = accentCyan,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -1262,7 +1292,7 @@ private fun FlameSettingsAndSimulatorSheet(
                                 text = stringResource(R.string.flame_simulator_title),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp,
-                                color = NeonCyan
+                                color = accentCyan
                             )
                         }
                         Text(
@@ -1327,10 +1357,12 @@ private fun FlameSettingsAndSimulatorSheet(
                             ),
                             isError = inputError != null,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = NeonCyan,
-                                unfocusedBorderColor = Color(0x4038BDF8),
-                                focusedLabelColor = NeonCyan,
-                                cursorColor = NeonCyan
+                                focusedBorderColor = accentCyan,
+                                unfocusedBorderColor = if (isDarkTheme) Color(0x4038BDF8) else Color(0xFFCBD5E1),
+                                focusedLabelColor = accentCyan,
+                                focusedTextColor = if (isDarkTheme) Color.White else DayTextPrimary,
+                                unfocusedTextColor = if (isDarkTheme) Color.White else DayTextPrimary,
+                                cursorColor = accentCyan
                             ),
                             modifier = Modifier
                                 .weight(1f)
@@ -1350,7 +1382,7 @@ private fun FlameSettingsAndSimulatorSheet(
                                     inputError = ">= 0"
                                 }
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = NeonCyan),
+                            colors = ButtonDefaults.buttonColors(containerColor = accentCyan),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .height(52.dp)
@@ -1359,7 +1391,7 @@ private fun FlameSettingsAndSimulatorSheet(
                             Text(
                                 text = stringResource(R.string.flame_simulator_apply),
                                 fontWeight = FontWeight.Bold,
-                                color = Color.Black
+                                color = if (isDarkTheme) Color.Black else Color.White
                             )
                         }
                     }
@@ -1368,7 +1400,7 @@ private fun FlameSettingsAndSimulatorSheet(
                         Text(
                             text = if (isAr) "أدخل قيمة موجبة (0 فأكثر)" else "Enter any non-negative value (>= 0)",
                             fontSize = 11.sp,
-                            color = NeonRose,
+                            color = accentRose,
                             modifier = Modifier.padding(top = 4.dp, start = 4.dp)
                         )
                     }
@@ -1391,7 +1423,7 @@ private fun FlameSettingsAndSimulatorSheet(
                         colors = SliderDefaults.colors(
                             thumbColor = stageBadgeColor,
                             activeTrackColor = stageBadgeColor,
-                            inactiveTrackColor = Color(0x33FFFFFF)
+                            inactiveTrackColor = if (isDarkTheme) Color(0x33FFFFFF) else Color(0x330F172A)
                         ),
                         modifier = Modifier.testTag("sheet_flame_score_slider")
                     )
@@ -1422,10 +1454,13 @@ private fun FlameSettingsAndSimulatorSheet(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSelected) NeonCyan.copy(alpha = 0.25f) else Color(0x221E293B))
+                                    .background(
+                                        if (isSelected) accentCyan.copy(alpha = if (isDarkTheme) 0.25f else 0.16f)
+                                        else if (isDarkTheme) Color(0x221E293B) else Color.White
+                                    )
                                     .border(
                                         1.dp,
-                                        if (isSelected) NeonCyan else Color(0x4038BDF8),
+                                        if (isSelected) accentCyan else if (isDarkTheme) Color(0x4038BDF8) else Color(0xFFCBD5E1),
                                         RoundedCornerShape(8.dp)
                                     )
                                     .clickable {
@@ -1441,7 +1476,7 @@ private fun FlameSettingsAndSimulatorSheet(
                                     text = label,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) NeonCyan else Color.White
+                                    color = if (isSelected) accentCyan else if (isDarkTheme) Color.White else DayTextPrimary
                                 )
                             }
                         }
@@ -1454,18 +1489,17 @@ private fun FlameSettingsAndSimulatorSheet(
             // SECTION 2: Flame System Config (Streak Shield, Haptics, Logs)
             LiquidGlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp)
+                shape = RoundedCornerShape(18.dp),
+                darkTheme = isDarkTheme
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = if (isAr) "تفضيلات النظام" else "System Preferences",
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
-                        color = NeonCyan,
+                        color = accentCyan,
                         modifier = Modifier.padding(bottom = 10.dp)
                     )
-
-
 
                     // Haptics Feedback Row
                     Row(
@@ -1480,7 +1514,7 @@ private fun FlameSettingsAndSimulatorSheet(
                             Icon(
                                 imageVector = Icons.Default.Vibration,
                                 contentDescription = null,
-                                tint = NeonCyan,
+                                tint = accentCyan,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
@@ -1507,7 +1541,7 @@ private fun FlameSettingsAndSimulatorSheet(
                             },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
-                                checkedTrackColor = NeonCyan
+                                checkedTrackColor = accentCyan
                             )
                         )
                     }
@@ -1517,21 +1551,23 @@ private fun FlameSettingsAndSimulatorSheet(
                     // Clear Activity Log Action Button
                     Button(
                         onClick = onClearLogs,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0x25EF4444)),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonRose.copy(alpha = 0.5f)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = accentRose.copy(alpha = if (isDarkTheme) 0.16f else 0.12f)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, accentRose.copy(alpha = 0.5f)),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
                             contentDescription = null,
-                            tint = NeonRose,
+                            tint = accentRose,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = stringResource(R.string.flame_clear_history),
-                            color = NeonRose,
+                            color = accentRose,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -1941,6 +1977,8 @@ private fun FlameLevelSeekBar(
             22_500.0 to "22.5K",
             30_000.0 to "30,000"
         )
+        val icePoleColor = if (isDarkTheme) Color(0xFF7DD3FC) else DayCyan
+        val obsidianPoleColor = if (isDarkTheme) Color(0xFFE879F9) else DayPurple
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -1953,10 +1991,10 @@ private fun FlameLevelSeekBar(
                     fontWeight = if (reached) FontWeight.ExtraBold else FontWeight.Medium,
                     fontFamily = PlusJakartaSans,
                     color = when {
-                        threshold == 0.0 -> Color(0xFF7DD3FC)
-                        threshold == 30_000.0 && reached -> Color(0xFFE879F9)
+                        threshold == 0.0 -> icePoleColor
+                        threshold == 30_000.0 && reached -> obsidianPoleColor
                         reached -> stageBadgeColor
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     }
                 )
             }
@@ -1974,7 +2012,7 @@ private fun FlameLevelSeekBar(
                 Icon(
                     imageVector = Icons.Default.AcUnit,
                     contentDescription = null,
-                    tint = Color(0xFF7DD3FC),
+                    tint = icePoleColor,
                     modifier = Modifier.size(12.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -1982,7 +2020,7 @@ private fun FlameLevelSeekBar(
                     text = stringResource(R.string.flame_seekbar_ice_pole),
                     fontSize = 9.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF7DD3FC)
+                    color = icePoleColor
                 )
             }
 
@@ -1991,13 +2029,13 @@ private fun FlameLevelSeekBar(
                     text = stringResource(R.string.flame_seekbar_obsidian_pole),
                     fontSize = 9.5.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFFE879F9)
+                    color = obsidianPoleColor
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Icon(
                     imageVector = Icons.Default.Bolt,
                     contentDescription = null,
-                    tint = Color(0xFFE879F9),
+                    tint = obsidianPoleColor,
                     modifier = Modifier.size(12.dp)
                 )
             }
@@ -2011,11 +2049,18 @@ private fun FlameLevelSeekBar(
 @Composable
 private fun FlameAuditLogItemCard(
     entry: FlameLogEntry,
-    currentLang: String = "ar"
+    currentLang: String = "ar",
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val isAr = currentLang == "ar"
     val timeFormat = remember { SimpleDateFormat("yyyy-MM-dd • HH:mm:ss", Locale.getDefault()) }
     val timeStr = remember(entry.timestamp) { timeFormat.format(Date(entry.timestamp)) }
+
+    val cyanAccent = if (isDarkTheme) NeonCyan else DayCyan
+    val emeraldAccent = if (isDarkTheme) NeonEmerald else DayEmerald
+    val roseAccent = if (isDarkTheme) NeonRose else DayRose
+    val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
+    val purpleAccent = if (isDarkTheme) Color(0xFFA855F7) else DayPurple
 
     val icon: ImageVector
     val iconColor: Color
@@ -2024,77 +2069,81 @@ private fun FlameAuditLogItemCard(
     when (entry.reason) {
         "INACTIVITY" -> {
             icon = Icons.Default.Schedule
-            iconColor = NeonCyan
-            iconBgColor = NeonCyan.copy(alpha = 0.18f)
+            iconColor = cyanAccent
+            iconBgColor = cyanAccent.copy(alpha = 0.16f)
         }
         "STREAK_SHIELD" -> {
             icon = Icons.Default.Shield
-            iconColor = NeonEmerald
-            iconBgColor = NeonEmerald.copy(alpha = 0.18f)
+            iconColor = emeraldAccent
+            iconBgColor = emeraldAccent.copy(alpha = 0.16f)
         }
         "CONTACT_CALL" -> {
             icon = Icons.Default.Call
-            iconColor = NeonEmerald
-            iconBgColor = NeonEmerald.copy(alpha = 0.18f)
+            iconColor = emeraldAccent
+            iconBgColor = emeraldAccent.copy(alpha = 0.16f)
         }
         "STRIKE_DEDUCTION" -> {
             icon = Icons.Default.LocalFireDepartment
-            iconColor = NeonRose
-            iconBgColor = NeonRose.copy(alpha = 0.18f)
+            iconColor = roseAccent
+            iconBgColor = roseAccent.copy(alpha = 0.16f)
         }
         "RETROACTIVE" -> {
             icon = Icons.Default.Shield
-            iconColor = Color(0xFFA855F7)
-            iconBgColor = Color(0x28A855F7)
+            iconColor = purpleAccent
+            iconBgColor = purpleAccent.copy(alpha = 0.16f)
         }
         "DEFLAME" -> {
             icon = Icons.Default.AcUnit
-            iconColor = Color(0xFF38BDF8)
-            iconBgColor = Color(0x2838BDF8)
+            iconColor = cyanAccent
+            iconBgColor = cyanAccent.copy(alpha = 0.16f)
         }
         "GIRL" -> {
             icon = Icons.Default.Favorite
-            iconColor = Color(0xFFFB7185)
-            iconBgColor = Color(0x28FB7185)
+            iconColor = roseAccent
+            iconBgColor = roseAccent.copy(alpha = 0.16f)
         }
         "STRIKE_DELETED_REFUND", "STRIKE_RESTORED_UNDO" -> {
             icon = Icons.Default.Undo
-            iconColor = NeonAmber
-            iconBgColor = NeonAmber.copy(alpha = 0.18f)
+            iconColor = amberAccent
+            iconBgColor = amberAccent.copy(alpha = 0.16f)
         }
         "DOUBLE_STRIKE" -> {
             icon = Icons.Default.Bolt
-            iconColor = NeonAmber
-            iconBgColor = NeonAmber.copy(alpha = 0.18f)
+            iconColor = amberAccent
+            iconBgColor = amberAccent.copy(alpha = 0.16f)
         }
         "MULTI_STRIKE_COMBO" -> {
             icon = Icons.Default.LocalFireDepartment
-            iconColor = Color(0xFFF472B6)
-            iconBgColor = Color(0x33EC4899)
+            iconColor = if (isDarkTheme) Color(0xFFF472B6) else Color(0xFFBE185D)
+            iconBgColor = (if (isDarkTheme) Color(0xFFEC4899) else Color(0xFFBE185D)).copy(alpha = 0.16f)
         }
         "EXTREME_OVERLOAD" -> {
             icon = Icons.Default.Warning
-            iconColor = Color(0xFFEF4444)
-            iconBgColor = Color(0x33EF4444)
+            iconColor = roseAccent
+            iconBgColor = roseAccent.copy(alpha = 0.16f)
         }
         else -> {
             icon = Icons.Default.Tune
-            iconColor = NeonCyan
-            iconBgColor = NeonCyan.copy(alpha = 0.18f)
+            iconColor = cyanAccent
+            iconBgColor = cyanAccent.copy(alpha = 0.16f)
         }
     }
 
     val isPositive = entry.change > 0
     val isZero = entry.change == 0.0
-    val deltaColor = if (isPositive) NeonAmber else if (entry.change < 0) Color(0xFF38BDF8) else Color(0xFFA855F7)
+    val deltaColor = if (isPositive) amberAccent else if (entry.change < 0) cyanAccent else purpleAccent
     val deltaSign = if (isPositive) "+" else ""
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0x181E293B))
-            .border(1.dp, Color(0x2238BDF8), RoundedCornerShape(14.dp))
+            .background(if (isDarkTheme) Color(0x181E293B) else Color(0xF5FFFFFF))
+            .border(
+                1.dp,
+                if (isDarkTheme) Color(0x2238BDF8) else Color(0x380284C7),
+                RoundedCornerShape(14.dp)
+            )
             .padding(12.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -2187,8 +2236,12 @@ private fun FlameAuditLogItemCard(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0x221E293B))
-                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(6.dp))
+                        .background(if (isDarkTheme) Color(0x221E293B) else Color(0xFFE2E8F0))
+                        .border(
+                            1.dp,
+                            if (isDarkTheme) Color(0x33FFFFFF) else Color(0xFFCBD5E1),
+                            RoundedCornerShape(6.dp)
+                        )
                         .padding(horizontal = 7.dp, vertical = 2.dp)
                 ) {
                     Text(
@@ -2199,7 +2252,7 @@ private fun FlameAuditLogItemCard(
                         },
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFE2E8F0)
+                        color = if (isDarkTheme) Color(0xFFE2E8F0) else DayTextPrimary
                     )
                 }
             }

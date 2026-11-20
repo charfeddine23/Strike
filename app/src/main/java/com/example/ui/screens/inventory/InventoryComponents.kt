@@ -67,6 +67,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.DayEmerald
+import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
+import com.example.ui.theme.DayTextPrimary
+import com.example.ui.theme.DayTextSecondary
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -547,6 +553,7 @@ fun SubPageTopBar(
             }
         }
 
+        val guideAccent = if (isDarkTheme) NeonViolet else DayPurple
         IconButton(
             onClick = {
                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
@@ -557,14 +564,14 @@ fun SubPageTopBar(
                 .minimumInteractiveComponentSize()
                 .size(48.dp)
                 .clip(CircleShape)
-                .background(NeonViolet.copy(alpha = 0.15f))
-                .border(1.dp, NeonViolet.copy(alpha = 0.6f), CircleShape)
+                .background(guideAccent.copy(alpha = 0.15f))
+                .border(1.dp, guideAccent.copy(alpha = 0.6f), CircleShape)
                 .testTag("inventory_longpress_hint_btn")
         ) {
             Icon(
                 imageVector = Icons.Default.TouchApp,
                 contentDescription = locText(currentLang, "دليل الاستخدام", "Guide d'utilisation", "Usage Guide"),
-                tint = NeonViolet,
+                tint = guideAccent,
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -631,8 +638,13 @@ fun EmptyInventoryCategoryCard(
 fun InventoryTooltipSheetContent(
     spec: InventoryTooltipSpec,
     currentLang: String,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onClose: () -> Unit
 ) {
+    val goldOrAmberAccent = if (isDarkTheme) Color(0xFFFFD700) else Color(0xFFB45309)
+    val emeraldAccent = if (isDarkTheme) NeonEmerald else DayEmerald
+    val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -656,7 +668,7 @@ fun InventoryTooltipSheetContent(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(spec.accentColor.copy(alpha = 0.22f))
+                        .background(spec.accentColor.copy(alpha = 0.18f))
                         .border(1.5.dp, spec.accentColor, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
@@ -673,7 +685,7 @@ fun InventoryTooltipSheetContent(
                         text = spec.title,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Black,
-                        color = Color.White
+                        color = if (isDarkTheme) Color.White else DayTextPrimary
                     )
                     Text(
                         text = "${spec.subtitle} • ${spec.rarityLabel}",
@@ -693,7 +705,7 @@ fun InventoryTooltipSheetContent(
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = locText(currentLang, "إغلاق", "Fermer", "Close"),
-                    tint = Color(0xFF94A3B8)
+                    tint = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
                 )
             }
         }
@@ -704,7 +716,8 @@ fun InventoryTooltipSheetContent(
             label = locText(currentLang, "الشرح وآلية العمل", "Explication et Mécanisme", "Explanation & Mechanics"),
             body = spec.mechanics,
             icon = Icons.Default.Info,
-            color = spec.accentColor
+            color = spec.accentColor,
+            isDarkTheme = isDarkTheme
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -713,7 +726,8 @@ fun InventoryTooltipSheetContent(
             label = locText(currentLang, "كيفية الحصول على الشيء", "Comment l'obtenir", "How to Obtain"),
             body = spec.howToObtain,
             icon = Icons.Default.EmojiEvents,
-            color = Color(0xFFFFD700),
+            color = goldOrAmberAccent,
+            isDarkTheme = isDarkTheme,
             modifier = Modifier.testTag("inv_tooltip_how_to_obtain")
         )
 
@@ -723,7 +737,8 @@ fun InventoryTooltipSheetContent(
             label = locText(currentLang, "المزايا والمكافآت", "Avantages et Effets", "Bonuses & Effects"),
             body = spec.bonuses,
             icon = Icons.Default.AutoAwesome,
-            color = NeonEmerald
+            color = emeraldAccent,
+            isDarkTheme = isDarkTheme
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -732,7 +747,8 @@ fun InventoryTooltipSheetContent(
             label = locText(currentLang, "قواعد الصلاحية والاستهلاك", "Règles d'utilisation", "Expiration & Usage Rules"),
             body = spec.expirationRules,
             icon = Icons.Default.Timer,
-            color = NeonAmber
+            color = amberAccent,
+            isDarkTheme = isDarkTheme
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -745,13 +761,14 @@ private fun TooltipRuleBlock(
     body: String,
     icon: ImageVector,
     color: Color,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
     modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(color.copy(alpha = 0.1f))
+            .background(color.copy(alpha = if (isDarkTheme) 0.1f else 0.08f))
             .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
             .padding(12.dp)
     ) {
@@ -774,7 +791,7 @@ private fun TooltipRuleBlock(
         Text(
             text = body,
             fontSize = 12.sp,
-            color = Color(0xFFE2E8F0),
+            color = if (isDarkTheme) Color(0xFFE2E8F0) else DayTextPrimary,
             lineHeight = 18.sp
         )
     }
