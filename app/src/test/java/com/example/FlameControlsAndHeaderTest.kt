@@ -21,6 +21,8 @@ import com.example.data.profile.PotionType
 import com.example.data.profile.ProfileManager
 import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.XpCalculationEngine
+import com.example.ui.components.FlameVisualStage
+import com.example.ui.components.getFlameStage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -171,5 +173,43 @@ class FlameControlsAndHeaderTest {
         // Verify persistence across re-initialization
         FlameManager.resetForTesting(ctx)
         assertEquals(10.0, FlameManager.girlDeductionPoints.value, 0.001)
+    }
+
+    @Test
+    fun flameSeekBar_scalesFrom0IceTo30000ObsidianPlasma_andFillsAndEmptiesWithScore() {
+        assertEquals(FlameVisualStage.FROZEN_STATIC, getFlameStage(0.0))
+        assertEquals(FlameVisualStage.ICE_CRACKING, getFlameStage(45.0))
+        assertEquals(FlameVisualStage.COLOR_GRADIENT, getFlameStage(1_500.0))
+        assertEquals(FlameVisualStage.FULLY_IGNITED, getFlameStage(7_500.0))
+        assertEquals(FlameVisualStage.SUPERNOVA_OVERLOAD, getFlameStage(18_000.0))
+        assertEquals(FlameVisualStage.OBSIDIAN_PLASMA, getFlameStage(24_001.0))
+        assertEquals(FlameVisualStage.OBSIDIAN_PLASMA, getFlameStage(30_000.0))
+
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        FlameManager.setScore(ctx, 0.0, reason = "SIMULATION")
+
+        openFlameScreen()
+
+        composeRule.onNodeWithTag("flame_level_seekbar").assertIsDisplayed()
+        composeRule.onNodeWithTag("flame_seekbar_progress_text").assertTextContains("0 / 30,000 (0%)", substring = true)
+
+        // Rise to 50% (15,000) -> SeekBar fills halfway
+        FlameManager.setScore(ctx, 15_000.0, reason = "SIMULATION")
+        composeRule.waitForIdle()
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        composeRule.onNodeWithTag("flame_seekbar_progress_text").assertTextContains("15,000 / 30,000 (50%)", substring = true)
+
+        // Rise to Obsidian Black Plasma Max Power (30,000)
+        FlameManager.setScore(ctx, 30_000.0, reason = "SIMULATION")
+        composeRule.waitForIdle()
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        composeRule.onNodeWithTag("flame_seekbar_progress_text").assertTextContains("30,000 / 30,000 (100%)", substring = true)
+        composeRule.onNodeWithTag("flame_seekbar_stage_badge", useUnmergedTree = true).assertIsDisplayed()
+
+        // Lower back down to 0 -> SeekBar empties
+        FlameManager.setScore(ctx, 0.0, reason = "SIMULATION")
+        composeRule.waitForIdle()
+        Shadows.shadowOf(Looper.getMainLooper()).idle()
+        composeRule.onNodeWithTag("flame_seekbar_progress_text").assertTextContains("0 / 30,000 (0%)", substring = true)
     }
 }

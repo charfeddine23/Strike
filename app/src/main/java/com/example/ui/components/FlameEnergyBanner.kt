@@ -109,6 +109,7 @@ fun FlameEnergyBanner(
         FlameVisualStage.COLOR_GRADIENT -> Pair(R.string.flame_stage_gradient, colors.second)
         FlameVisualStage.FULLY_IGNITED -> Pair(R.string.flame_stage_ignited, Color(0xFFF97316))
         FlameVisualStage.SUPERNOVA_OVERLOAD -> Pair(R.string.flame_stage_supernova, Color(0xFFC084FC))
+        FlameVisualStage.OBSIDIAN_PLASMA -> Pair(R.string.flame_stage_obsidian, Color(0xFFE879F9))
     }
 
     // Dynamic multi-stop neon gradient border

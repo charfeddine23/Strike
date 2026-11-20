@@ -829,7 +829,6 @@ private fun EliteMissionsSoonPage(
                     .background(goldAccent.copy(alpha = 0.18f))
                     .border(1.2.dp, goldAccent.copy(alpha = 0.8f), RoundedCornerShape(50))
                     .padding(horizontal = 28.dp, vertical = 10.dp)
-                    .testTag("elite_missions_soon_badge")
             ) {
                 Text(
                     text = stringResource(R.string.elite_missions_soon),
@@ -837,7 +836,8 @@ private fun EliteMissionsSoonPage(
                     fontWeight = FontWeight.Black,
                     fontFamily = PlusJakartaSans,
                     color = goldAccent,
-                    textAlign = TextAlign.Center
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag("elite_missions_soon_badge")
                 )
             }
 

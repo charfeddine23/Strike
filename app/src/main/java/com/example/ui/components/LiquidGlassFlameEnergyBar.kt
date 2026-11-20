@@ -144,6 +144,7 @@ fun LiquidGlassFlameEnergyBar(
         FlameVisualStage.COLOR_GRADIENT -> "GRADIENT"
         FlameVisualStage.FULLY_IGNITED -> "SUPERCHARGED"
         FlameVisualStage.SUPERNOVA_OVERLOAD -> "SUPERNOVA"
+        FlameVisualStage.OBSIDIAN_PLASMA -> "OBSIDIAN PLASMA"
     }
 
     val formattedScore = String.format(Locale.US, "%.1f", flameScore)

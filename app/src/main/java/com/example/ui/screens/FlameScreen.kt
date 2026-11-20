@@ -2,8 +2,15 @@ package com.example.ui.screens
 
 import android.view.SoundEffectConstants
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -55,7 +62,6 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -83,20 +89,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import com.example.ui.components.DeflameAdjustmentDialog
+import com.example.ui.components.FLAME_MAX_SCALE_SCORE
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -188,6 +207,7 @@ fun FlameScreen(
         FlameVisualStage.COLOR_GRADIENT -> stringResource(R.string.flame_stage_gradient_sub)
         FlameVisualStage.FULLY_IGNITED -> stringResource(R.string.flame_stage_ignited_sub)
         FlameVisualStage.SUPERNOVA_OVERLOAD -> stringResource(R.string.flame_stage_supernova_sub)
+        FlameVisualStage.OBSIDIAN_PLASMA -> stringResource(R.string.flame_stage_obsidian_sub)
     }
 
     val stageBadgeColor = when (stage) {
@@ -195,7 +215,8 @@ fun FlameScreen(
         FlameVisualStage.ICE_CRACKING -> Color(0xFF00E5FF)
         FlameVisualStage.COLOR_GRADIENT -> colors.second
         FlameVisualStage.FULLY_IGNITED -> Color(0xFFEF4444)
-        FlameVisualStage.SUPERNOVA_OVERLOAD -> Color(0xFFC084FC) // Neon Violet
+        FlameVisualStage.SUPERNOVA_OVERLOAD -> Color(0xFFC084FC)
+        FlameVisualStage.OBSIDIAN_PLASMA -> Color(0xFFE879F9)
     }
 
     // Filtered flame logs
@@ -396,7 +417,7 @@ fun FlameScreen(
                         }
 
                         FlameVisualizer(
-                            score = flameScore,
+                            score = animatedScore.toDouble(),
                             modifier = Modifier
                                 .fillMaxSize()
                                 .scale(if (isHoldingFlame) 1f + holdProgress * 0.12f else 1f)
@@ -432,9 +453,12 @@ fun FlameScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Segmented Range Tier Bar (0-30, 31-60, 61-300, 301-600, >600)
-                    FlameTierBar(
+                    // Dynamic SeekBar Scale (0 Ice -> 30,000 Obsidian Black Plasma Max Power)
+                    FlameLevelSeekBar(
                         currentScore = flameScore,
+                        animatedScore = animatedScore.toDouble(),
+                        stageBadgeColor = stageBadgeColor,
+                        isDarkTheme = isDarkTheme,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -669,10 +693,11 @@ fun FlameScreen(
                             )
                         }
 
-                        // Dynamic state badge
+                        // Dynamic state badge across 0..30,000 scale
                         val statusText = when {
-                            flameScore > 600.0 -> stringResource(R.string.flame_status_overload)
-                            flameScore > 300.0 -> stringResource(R.string.flame_status_critical)
+                            flameScore > 24_000.0 -> stringResource(R.string.flame_status_obsidian)
+                            flameScore > 12_000.0 -> stringResource(R.string.flame_status_overload)
+                            flameScore > 3_000.0 -> stringResource(R.string.flame_status_critical)
                             flameScore > 60.0 -> stringResource(R.string.flame_status_heating)
                             else -> stringResource(R.string.flame_status_stable)
                         }
@@ -1350,10 +1375,11 @@ private fun FlameSettingsAndSimulatorSheet(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Adaptive Continuous Slider (auto-expands dynamically past 20,000)
+                    // Adaptive Continuous Slider (0..30,000 primary scale, expands dynamically beyond)
                     val sliderMax = remember(currentScore) {
                         val safe = currentScore.coerceIn(0.0, 1_000_000_000.0)
-                        if (safe <= 20000.0) 20000f else (((safe / 10000.0).toLong() + 1L) * 10000f).coerceAtMost(1_000_000_000f)
+                        if (safe <= FLAME_MAX_SCALE_SCORE) FLAME_MAX_SCALE_SCORE.toFloat()
+                        else (((safe / 10000.0).toLong() + 1L) * 10000f).coerceAtMost(1_000_000_000f)
                     }
                     Slider(
                         value = currentScore.toFloat().coerceIn(0f, sliderMax),
@@ -1372,16 +1398,15 @@ private fun FlameSettingsAndSimulatorSheet(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Presets (including beyond 20,000)
+                    // Presets spanning Ice 0 through Obsidian Plasma Max Power 30,000+
                     val presets = listOf(
                         Pair("0", 0.0),
                         Pair("45", 45.0),
-                        Pair("180", 180.0),
-                        Pair("350", 350.0),
-                        Pair(if (isAr) "750 (مستعر أعظم)" else "750 (Supernova)", 750.0),
-                        Pair("2,000", 2000.0),
-                        Pair("10,000", 10000.0),
-                        Pair("20,000", 20000.0),
+                        Pair("1,500", 1500.0),
+                        Pair("7,500", 7500.0),
+                        Pair("18,000", 18000.0),
+                        Pair("27,500", 27500.0),
+                        Pair(if (isAr) "30,000 (الطاقة القصوى)" else "30,000 (Max Plasma)", 30000.0),
                         Pair("50,000", 50000.0),
                         Pair("100,000", 100000.0)
                     )
@@ -1520,62 +1545,460 @@ private fun FlameSettingsAndSimulatorSheet(
 }
 
 /**
- * 5-Segment Tier Bar supporting Supernova (>600)
+ * Luxury Continuous Endless-Loop Flame Level SeekBar (0 Ice -> 30,000 Obsidian Black Plasma Max Power).
+ * Smoothly fills as Flame rises and empties as Flame lowers, with Ice crystal stasis at 0
+ * and Obsidian Plasma cosmic lightning energy waves at 30,000.
  */
 @Composable
-private fun FlameTierBar(
+private fun FlameLevelSeekBar(
     currentScore: Double,
+    animatedScore: Double,
+    stageBadgeColor: Color,
+    isDarkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val tiers = listOf(
-        Pair("0 - 30", Color(0xFF38BDF8)),
-        Pair("31 - 60", Color(0xFF00E5FF)),
-        Pair("61 - 300", Color(0xFFE11D48)),
-        Pair("301 - 600", Color(0xFFF97316)),
-        Pair("> 600", Color(0xFFC084FC))
+    val stage = getFlameStage(currentScore)
+    val layoutDirection = LocalLayoutDirection.current
+    val isRtl = layoutDirection == LayoutDirection.Rtl
+
+    // Single seamless endless-loop driver: integer harmonics of [0..2π] wrap with zero jump.
+    val infiniteTransition = rememberInfiniteTransition(label = "flame_seekbar_endless_loop")
+    val loopProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "seekbar_loop_progress"
     )
 
+    val progress = (animatedScore / FLAME_MAX_SCALE_SCORE).toFloat().coerceIn(0f, 1f)
+    val clampedDisplayScore = currentScore.coerceAtLeast(0.0)
+    val pct = ((clampedDisplayScore / FLAME_MAX_SCALE_SCORE) * 100.0).coerceIn(0.0, 100.0).roundToInt()
+
+    val stageLabelRes = when (stage) {
+        FlameVisualStage.FROZEN_STATIC -> R.string.flame_stage_frozen
+        FlameVisualStage.ICE_CRACKING -> R.string.flame_stage_cracking
+        FlameVisualStage.COLOR_GRADIENT -> R.string.flame_stage_gradient
+        FlameVisualStage.FULLY_IGNITED -> R.string.flame_stage_ignited
+        FlameVisualStage.SUPERNOVA_OVERLOAD -> R.string.flame_stage_supernova
+        FlameVisualStage.OBSIDIAN_PLASMA -> R.string.flame_stage_obsidian
+    }
+
+    val formattedScore = remember(clampedDisplayScore) {
+        if (clampedDisplayScore % 1.0 == 0.0) {
+            String.format(Locale.US, "%,.0f", clampedDisplayScore)
+        } else {
+            String.format(Locale.US, "%,.1f", clampedDisplayScore)
+        }
+    }
+
+    val wavePath = remember { Path() }
+
     Column(modifier = modifier) {
+        // Header Row: Stage Badge + Numeric 0..30,000 Readout
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            tiers.forEachIndexed { idx, (_, tierColor) ->
-                val isCurrent = when (idx) {
-                    0 -> currentScore <= 30.0
-                    1 -> currentScore in 30.001..60.0
-                    2 -> currentScore in 60.001..300.0
-                    3 -> currentScore in 300.001..600.0
-                    else -> currentScore > 600.0
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(stageBadgeColor.copy(alpha = 0.16f))
+                    .border(1.dp, stageBadgeColor.copy(alpha = 0.48f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 9.dp, vertical = 4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(stageBadgeColor)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(stageLabelRes),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = PlusJakartaSans,
+                        color = stageBadgeColor,
+                        modifier = Modifier.testTag("flame_seekbar_stage_badge")
+                    )
                 }
+            }
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(if (isCurrent) tierColor else tierColor.copy(alpha = 0.25f))
+            Text(
+                text = "$formattedScore / 30,000 ($pct%)",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = PlusJakartaSans,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.testTag("flame_seekbar_progress_text")
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // SeekBar Track + Endless-Loop Energy Waves + Plasma/Ice Thumb Orb
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(38.dp)
+                .testTag("flame_level_seekbar")
+        ) {
+            val w = size.width
+            val h = size.height
+            val centerY = h / 2f
+            val thumbRadius = 11.dp.toPx()
+            val trackHeight = 14.dp.toPx()
+            val trackRadius = trackHeight / 2f
+            val trackLeft = thumbRadius
+            val trackRight = w - thumbRadius
+            val trackWidth = (trackRight - trackLeft).coerceAtLeast(1f)
+            val trackTop = centerY - trackHeight / 2f
+
+            val startX = if (isRtl) trackRight else trackLeft
+            val endX = if (isRtl) trackLeft else trackRight
+            val thumbX = if (isRtl) trackRight - progress * trackWidth else trackLeft + progress * trackWidth
+
+            val loopRad = loopProgress * 2f * PI.toFloat()
+
+            // 1. Recessed Obsidian Glass Track
+            drawRoundRect(
+                brush = Brush.verticalGradient(
+                    colors = if (isDarkTheme) {
+                        listOf(Color(0xFF060913), Color(0xFF10182C))
+                    } else {
+                        listOf(Color(0xFFE2E8F0), Color(0xFFF8FAFC))
+                    }
+                ),
+                topLeft = Offset(trackLeft, trackTop),
+                size = Size(trackWidth, trackHeight),
+                cornerRadius = CornerRadius(trackRadius, trackRadius)
+            )
+
+            // Subtle frost glint sweeping gently along empty track in endless loop
+            val frostSweepCenter = if (isRtl) {
+                trackRight - ((loopProgress + 0.5f) % 1f) * trackWidth
+            } else {
+                trackLeft + ((loopProgress + 0.5f) % 1f) * trackWidth
+            }
+            drawRoundRect(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Color(0xFF7DD3FC).copy(alpha = 0.16f),
+                        Color.Transparent
+                    ),
+                    startX = frostSweepCenter - trackWidth * 0.22f,
+                    endX = frostSweepCenter + trackWidth * 0.22f
+                ),
+                topLeft = Offset(trackLeft, trackTop),
+                size = Size(trackWidth, trackHeight),
+                cornerRadius = CornerRadius(trackRadius, trackRadius)
+            )
+
+            // Quarter tick notches (25%, 50%, 75%)
+            for (q in 1..3) {
+                val frac = q * 0.25f
+                val tx = if (isRtl) trackRight - frac * trackWidth else trackLeft + frac * trackWidth
+                drawLine(
+                    color = Color.White.copy(alpha = if (progress >= frac) 0.38f else 0.16f),
+                    start = Offset(tx, trackTop + 2.5.dp.toPx()),
+                    end = Offset(tx, trackTop + trackHeight - 2.5.dp.toPx()),
+                    strokeWidth = 1.2.dp.toPx(),
+                    cap = StrokeCap.Round
                 )
             }
+
+            // 2. Active Filled Spectrum Segment (Ice 0 -> Cyan -> Orange -> Violet -> Obsidian Black Plasma 30,000)
+            val fillSpan = kotlin.math.abs(thumbX - startX)
+            if (fillSpan > 1f) {
+                val clipLeft = kotlin.math.min(startX, thumbX)
+                val clipRight = kotlin.math.max(startX, thumbX)
+
+                // Soft underglow beneath active portion of the SeekBar
+                drawRoundRect(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color(0xFF38BDF8).copy(alpha = 0.30f),
+                            Color(0xFFF97316).copy(alpha = 0.35f),
+                            stageBadgeColor.copy(alpha = 0.45f)
+                        ),
+                        startX = startX,
+                        endX = thumbX
+                    ),
+                    topLeft = Offset(clipLeft, trackTop - 3.dp.toPx()),
+                    size = Size(fillSpan, trackHeight + 6.dp.toPx()),
+                    cornerRadius = CornerRadius(trackRadius + 3.dp.toPx(), trackRadius + 3.dp.toPx())
+                )
+
+                clipRect(
+                    left = clipLeft,
+                    top = trackTop - 2.dp.toPx(),
+                    right = clipRight,
+                    bottom = trackTop + trackHeight + 2.dp.toPx()
+                ) {
+                    // Full 0..30k gradient mapped to track extremes so color intensifies continuously as fill grows
+                    drawRoundRect(
+                        brush = Brush.horizontalGradient(
+                            0.00f to Color(0xFFBAE6FD), // 0: Glacial Ice
+                            0.12f to Color(0xFF00E5FF), // Arctic Cyan
+                            0.28f to Color(0xFFA855F7), // Plasma Violet transition
+                            0.50f to Color(0xFFF97316), // Blazing Furnace Orange
+                            0.72f to Color(0xFFE11D48), // Crimson Core
+                            0.86f to Color(0xFF9333EA), // Ultraviolet Supernova
+                            0.94f to Color(0xFF2E1065), // Abyssal Violet
+                            1.00f to Color(0xFF090514), // 30,000: Obsidian Black Plasma Core
+                            startX = startX,
+                            endX = endX
+                        ),
+                        topLeft = Offset(trackLeft, trackTop),
+                        size = Size(trackWidth, trackHeight),
+                        cornerRadius = CornerRadius(trackRadius, trackRadius)
+                    )
+
+                    // Seamless endless-loop sinusoidal plasma current flowing along the filled SeekBar
+                    wavePath.reset()
+                    val waveSteps = 32
+                    for (i in 0..waveSteps) {
+                        val t = i.toFloat() / waveSteps
+                        val wx = trackLeft + t * trackWidth
+                        val directionalPhase = if (isRtl) t else (1f - t)
+                        val dy = sin(directionalPhase * 6f * PI.toFloat() + loopRad * 2f) * (trackHeight * 0.24f)
+                        val wy = centerY + dy
+                        if (i == 0) wavePath.moveTo(wx, wy) else wavePath.lineTo(wx, wy)
+                    }
+                    drawPath(
+                        path = wavePath,
+                        color = if (progress > 0.78f) Color(0xFFE879F9).copy(alpha = 0.75f)
+                        else Color.White.copy(alpha = 0.55f),
+                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                    )
+
+                    // Second counter-harmonic cyan ribbon for Obsidian Plasma richness
+                    if (progress > 0.35f) {
+                        wavePath.reset()
+                        for (i in 0..waveSteps) {
+                            val t = i.toFloat() / waveSteps
+                            val wx = trackLeft + t * trackWidth
+                            val directionalPhase = if (isRtl) t else (1f - t)
+                            val dy = cos(directionalPhase * 8f * PI.toFloat() + loopRad * 3f) * (trackHeight * 0.20f)
+                            val wy = centerY + dy
+                            if (i == 0) wavePath.moveTo(wx, wy) else wavePath.lineTo(wx, wy)
+                        }
+                        drawPath(
+                            path = wavePath,
+                            color = Color(0xFF22D3EE).copy(alpha = (progress * 0.65f).coerceIn(0.2f, 0.75f)),
+                            style = Stroke(width = 1.4.dp.toPx(), cap = StrokeCap.Round)
+                        )
+                    }
+
+                    // Endless sliding luminous energy pulse travelling from start -> thumb
+                    val pulseX = if (isRtl) {
+                        startX - loopProgress * fillSpan
+                    } else {
+                        startX + loopProgress * fillSpan
+                    }
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.85f),
+                                stageBadgeColor.copy(alpha = 0.45f),
+                                Color.Transparent
+                            ),
+                            center = Offset(pulseX, centerY),
+                            radius = trackHeight * 1.4f
+                        ),
+                        radius = trackHeight * 1.4f,
+                        center = Offset(pulseX, centerY)
+                    )
+                }
+            }
+
+            // Track crystal border
+            drawRoundRect(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color(0xFF7DD3FC).copy(alpha = 0.55f),
+                        stageBadgeColor.copy(alpha = 0.65f),
+                        Color(0xFFE879F9).copy(alpha = if (progress > 0.8f) 0.90f else 0.35f)
+                    ),
+                    startX = startX,
+                    endX = endX
+                ),
+                topLeft = Offset(trackLeft, trackTop),
+                size = Size(trackWidth, trackHeight),
+                cornerRadius = CornerRadius(trackRadius, trackRadius),
+                style = Stroke(width = 1.1.dp.toPx())
+            )
+
+            // Specular upper glass reflection across filled/unfilled track
+            drawLine(
+                color = Color.White.copy(alpha = 0.28f),
+                start = Offset(trackLeft + trackRadius, trackTop + 2.dp.toPx()),
+                end = Offset(trackRight - trackRadius, trackTop + 2.dp.toPx()),
+                strokeWidth = 1.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+
+            // 3. SeekBar Thumb Orb (Ice Crystal at 0 -> Inferno -> Obsidian Black-Hole Singularity at 30,000)
+            val thumbCenter = Offset(thumbX, centerY)
+            val breath = 1f + sin(loopRad * 2f) * 0.10f
+
+            // Outer ambient halo
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        stageBadgeColor.copy(alpha = 0.70f),
+                        if (stage == FlameVisualStage.OBSIDIAN_PLASMA) Color(0xFF22D3EE).copy(alpha = 0.40f)
+                        else Color(0xFF7DD3FC).copy(alpha = 0.25f),
+                        Color.Transparent
+                    ),
+                    center = thumbCenter,
+                    radius = thumbRadius * 1.85f * breath
+                ),
+                radius = thumbRadius * 1.85f * breath,
+                center = thumbCenter
+            )
+
+            // Rotating endless dual-orbit corona ring
+            val orbitSize = Size(thumbRadius * 2.15f, thumbRadius * 2.15f)
+            val orbitTopLeft = Offset(thumbCenter.x - orbitSize.width / 2f, thumbCenter.y - orbitSize.height / 2f)
+            val spinDeg = loopProgress * 360f
+            drawArc(
+                color = if (stage == FlameVisualStage.OBSIDIAN_PLASMA) Color(0xFF22D3EE) else Color.White.copy(alpha = 0.92f),
+                startAngle = spinDeg,
+                sweepAngle = 115f,
+                useCenter = false,
+                topLeft = orbitTopLeft,
+                size = orbitSize,
+                style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+            )
+            drawArc(
+                color = stageBadgeColor,
+                startAngle = spinDeg + 180f,
+                sweepAngle = 115f,
+                useCenter = false,
+                topLeft = orbitTopLeft,
+                size = orbitSize,
+                style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round)
+            )
+
+            // Core thumb sphere
+            val isObsidianPhase = stage == FlameVisualStage.OBSIDIAN_PLASMA
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = if (isObsidianPhase) {
+                        listOf(
+                            Color(0xFF030208), // Pitch-black obsidian void center
+                            Color(0xFF1A0733),
+                            Color(0xFFE879F9)
+                        )
+                    } else if (stage <= FlameVisualStage.ICE_CRACKING) {
+                        listOf(
+                            Color(0xFFFFFFFF),
+                            Color(0xFF7DD3FC),
+                            Color(0xFF0284C7)
+                        )
+                    } else {
+                        listOf(
+                            Color(0xFFFFFFFF),
+                            stageBadgeColor,
+                            Color(0xFF0F172A)
+                        )
+                    },
+                    center = thumbCenter,
+                    radius = thumbRadius * 0.88f
+                ),
+                radius = thumbRadius * 0.88f,
+                center = thumbCenter
+            )
+
+            // Crisp rim + 3D specular glint
+            drawCircle(
+                color = if (isObsidianPhase) Color(0xFFFDE047) else Color.White.copy(alpha = 0.92f),
+                radius = thumbRadius * 0.88f,
+                center = thumbCenter,
+                style = Stroke(width = 1.6.dp.toPx())
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = if (isObsidianPhase) 0.55f else 0.9f),
+                radius = thumbRadius * 0.24f,
+                center = Offset(thumbCenter.x - thumbRadius * 0.30f, thumbCenter.y - thumbRadius * 0.30f)
+            )
         }
+
         Spacer(modifier = Modifier.height(6.dp))
+
+        // Scale Milestones Row (0 .. 7.5K .. 15K .. 22.5K .. 30,000)
+        val milestones = listOf(
+            0.0 to "0",
+            7_500.0 to "7.5K",
+            15_000.0 to "15K",
+            22_500.0 to "22.5K",
+            30_000.0 to "30,000"
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            tiers.forEachIndexed { idx, (label, tierColor) ->
-                val isCurrent = when (idx) {
-                    0 -> currentScore <= 30.0
-                    1 -> currentScore in 30.001..60.0
-                    2 -> currentScore in 60.001..300.0
-                    3 -> currentScore in 300.001..600.0
-                    else -> currentScore > 600.0
-                }
+            milestones.forEach { (threshold, label) ->
+                val reached = currentScore >= threshold
                 Text(
                     text = label,
-                    fontSize = 8.sp,
-                    fontWeight = if (isCurrent) FontWeight.Black else FontWeight.Normal,
-                    color = if (isCurrent) tierColor else Color(0x80FFFFFF)
+                    fontSize = 9.sp,
+                    fontWeight = if (reached) FontWeight.ExtraBold else FontWeight.Medium,
+                    fontFamily = PlusJakartaSans,
+                    color = when {
+                        threshold == 0.0 -> Color(0xFF7DD3FC)
+                        threshold == 30_000.0 && reached -> Color(0xFFE879F9)
+                        reached -> stageBadgeColor
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
+                    }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Ice (0) <-> Obsidian Black Plasma Max Power (30,000) Poles Legend
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.AcUnit,
+                    contentDescription = null,
+                    tint = Color(0xFF7DD3FC),
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.flame_seekbar_ice_pole),
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF7DD3FC)
+                )
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.flame_seekbar_obsidian_pole),
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFFE879F9)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Default.Bolt,
+                    contentDescription = null,
+                    tint = Color(0xFFE879F9),
+                    modifier = Modifier.size(12.dp)
                 )
             }
         }

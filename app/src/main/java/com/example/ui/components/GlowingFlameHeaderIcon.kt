@@ -89,12 +89,12 @@ fun GlowingFlameHeaderIcon(
         label = "flame_press_scale"
     )
 
-    // Micro sparks precomputed for allocation-free drawing
+    // Micro sparks precomputed with integer speed multipliers for zero-seam endless looping
     val microSparks = remember {
         List(14) { i ->
             Triple(
                 (i * 0.071f) % 1f,
-                0.7f + (i % 5) * 0.2f,
+                1 + (i % 3),
                 (i % 2 == 0) // alternating orange / pink
             )
         }
@@ -151,6 +151,7 @@ fun GlowingFlameHeaderIcon(
                 FlameVisualStage.COLOR_GRADIENT -> colors.second.copy(alpha = 0.28f * pulseGlow)
                 FlameVisualStage.FULLY_IGNITED -> Color(0x55F97316).copy(alpha = 0.35f * pulseGlow)
                 FlameVisualStage.SUPERNOVA_OVERLOAD -> Color(0x77C084FC).copy(alpha = 0.45f * pulseGlow)
+                FlameVisualStage.OBSIDIAN_PLASMA -> Color(0x88E879F9).copy(alpha = 0.50f * pulseGlow)
             }
             drawCircle(
                 brush = Brush.radialGradient(
@@ -191,12 +192,20 @@ fun GlowingFlameHeaderIcon(
                 )
             )
 
-            // 3. Inner White-Hot Core / Flame Heart
+            // 3. Inner White-Hot Core / Obsidian Void Heart
             drawCircle(
-                color = Color.White.copy(alpha = if (stage == FlameVisualStage.FROZEN_STATIC) 0.65f else 0.9f),
-                radius = 2.2.dp.toPx(),
+                color = if (stage == FlameVisualStage.OBSIDIAN_PLASMA) Color(0xFF07050E)
+                else Color.White.copy(alpha = if (stage == FlameVisualStage.FROZEN_STATIC) 0.65f else 0.9f),
+                radius = 2.4.dp.toPx(),
                 center = Offset(tipX, tipY + 4.5.dp.toPx())
             )
+            if (stage == FlameVisualStage.OBSIDIAN_PLASMA) {
+                drawCircle(
+                    color = Color(0xFF22D3EE).copy(alpha = 0.85f),
+                    radius = 1.1.dp.toPx(),
+                    center = Offset(tipX, tipY + 4.5.dp.toPx())
+                )
+            }
 
             // 4. Rising Glowing Orange and Pink Sparks (only when thawing/igniting)
             if (stage != FlameVisualStage.FROZEN_STATIC) {
