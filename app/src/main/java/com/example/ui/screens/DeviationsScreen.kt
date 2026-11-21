@@ -57,6 +57,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -69,7 +70,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -232,54 +235,7 @@ fun DeviationsScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. PULSING CYBER WARNING BAR + INFO BUTTON
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    PulsingCyberWarningBar(
-                        isDarkTrack = isDarkTrack,
-                        flameScore = flameScore,
-                        darkRankTitle = darkRank.title,
-                        lightRankTitle = lightRank.title,
-                        gripProgress = darkRank.gripProgress,
-                        approachProgress = lightRank.approachProgress,
-                        strobe = warningStrobe,
-                        isDarkTheme = isDarkTheme
-                    )
-                }
-
-                // Info Dialog Button
-                IconButton(
-                    onClick = {
-                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                        showInfoDialog = true
-                    },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(if (isDarkTheme) Color(0x221E293B) else Color(0xFAFFFFFF))
-                        .border(
-                            1.dp,
-                            if (isDarkTheme) Color(0x3338BDF8) else Color(0x450284C7),
-                            CircleShape
-                        )
-                        .testTag("deviations_info_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = if (isAr) "معلومات" else "Info",
-                        tint = cyanAccent,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
-
-        // 2. CENTRAL 3D VOLUMETRIC DNA CANVAS & MENACING CYBER-SHADOW / ANGEL HERO CARD
+        // 1. CENTRAL 3D VOLUMETRIC DNA CANVAS & MENACING CYBER-SHADOW / ANGEL HERO CARD
         item {
             LiquidGlassCard(
                 modifier = Modifier
@@ -447,7 +403,94 @@ fun DeviationsScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // LUXURY CELESTIAL / SHADOW TRANSMISSION BAR + INFO BUTTON (below 3D DNA)
+                    val isSanctified = !isDarkTrack && flameScore >= 19990.0
+                    val infoAccent = when {
+                        isDarkTrack -> roseAccent
+                        isSanctified -> if (isDarkTheme) Color(0xFFE0F2FE) else DayCyan
+                        else -> cyanAccent
+                    }
+                    val infoSecondaryAccent = if (isDarkTrack) amberAccent else if (isDarkTheme) NeonViolet else DayPurple
+                    val infoBtnShape = RoundedCornerShape(16.dp)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            PulsingCyberWarningBar(
+                                isDarkTrack = isDarkTrack,
+                                flameScore = flameScore,
+                                darkRankTitle = darkRank.title,
+                                lightRankTitle = lightRank.title,
+                                gripProgress = darkRank.gripProgress,
+                                approachProgress = lightRank.approachProgress,
+                                strobe = warningStrobe,
+                                isDarkTheme = isDarkTheme,
+                                isAr = isAr
+                            )
+                        }
+
+                        // Luxury Glass Info Action Button
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp)
+                                .minimumInteractiveComponentSize()
+                                .shadow(
+                                    elevation = if (isDarkTheme) 10.dp else 4.dp,
+                                    shape = infoBtnShape,
+                                    ambientColor = infoAccent.copy(alpha = 0.35f),
+                                    spotColor = infoSecondaryAccent.copy(alpha = 0.3f)
+                                )
+                                .clip(infoBtnShape)
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(
+                                            if (isDarkTheme) Color(0xE60B1528) else Color(0xFAFFFFFF),
+                                            infoAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
+                                        )
+                                    )
+                                )
+                                .border(
+                                    width = 1.3.dp,
+                                    brush = Brush.linearGradient(
+                                        listOf(
+                                            infoAccent.copy(alpha = 0.90f),
+                                            infoSecondaryAccent.copy(alpha = 0.72f),
+                                            infoAccent.copy(alpha = 0.45f)
+                                        )
+                                    ),
+                                    shape = infoBtnShape
+                                )
+                                .clickable {
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    showInfoDialog = true
+                                }
+                                .testTag("deviations_info_btn"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(infoAccent.copy(alpha = if (isDarkTheme) 0.18f else 0.12f))
+                                    .border(0.8.dp, infoAccent.copy(alpha = 0.45f), RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = if (isAr) "معلومات" else "Info",
+                                    tint = if (isDarkTheme && isSanctified) Color(0xFFFFFFFF) else infoAccent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // ENTITY & RANK STATUS BADGE
                     Row(
@@ -864,35 +907,38 @@ fun PulsingCyberWarningBar(
     gripProgress: Float,
     approachProgress: Float,
     strobe: Float,
-    isDarkTheme: Boolean = LocalAppDarkTheme.current
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    isAr: Boolean = false
 ) {
-    val barColor = if (isDarkTrack) {
-        if (isDarkTheme) NeonRose else DayRose
-    } else {
-        if (isDarkTheme) NeonCyan else DayCyan
+    val isSanctified = !isDarkTrack && flameScore >= 19990.0
+    val isOverload = isDarkTrack && flameScore <= 0.0
+
+    val primaryAccent = when {
+        isDarkTrack -> if (isDarkTheme) NeonRose else DayRose
+        isSanctified -> if (isDarkTheme) Color(0xFFE0F2FE) else DayCyan
+        else -> if (isDarkTheme) NeonCyan else DayCyan
     }
-    val barBg = if (isDarkTheme) {
-        if (isDarkTrack) {
-            Color(0x33EF4444).copy(alpha = 0.25f + gripProgress * 0.2f)
-        } else {
-            Color(0x2238BDF8).copy(alpha = 0.25f + approachProgress * 0.15f)
-        }
-    } else {
-        if (isDarkTrack) {
-            Color(0xFFE11D48).copy(alpha = 0.10f + gripProgress * 0.08f)
-        } else {
-            Color(0xFF0284C7).copy(alpha = 0.10f + approachProgress * 0.08f)
-        }
+    val secondaryAccent = when {
+        isDarkTrack -> if (isDarkTheme) NeonAmber else DayOrange
+        isSanctified -> if (isDarkTheme) NeonCyan else DayPurple
+        else -> if (isDarkTheme) NeonViolet else DayPurple
+    }
+
+    val statusTag = when {
+        isOverload -> if (isAr) "تجاوز حرج" else "SYSTEM OVERLOAD"
+        isDarkTrack -> if (isAr) "تحذير الظلال" else "SHADOW HAZARD"
+        isSanctified -> if (isAr) "نور ماسي خالص" else "PURE DIAMOND LIGHT"
+        else -> if (isAr) "رنين سماوي" else "CELESTIAL HARMONY"
     }
 
     val warningText = when {
-        flameScore <= 0.0 -> stringResource(R.string.deviations_baphomet_overload)
+        isOverload -> stringResource(R.string.deviations_baphomet_overload)
         isDarkTrack -> stringResource(
             R.string.deviations_warning_shadow_hazard,
             (gripProgress * 100).toInt(),
             darkRankTitle
         )
-        flameScore >= 19990.0 -> stringResource(R.string.deviations_gabriel_ascension)
+        isSanctified -> stringResource(R.string.deviations_gabriel_ascension)
         else -> stringResource(
             R.string.deviations_harmonic_resonance,
             (approachProgress * 100).toInt(),
@@ -900,52 +946,134 @@ fun PulsingCyberWarningBar(
         )
     }
 
+    val barShape = RoundedCornerShape(18.dp)
+    val cardBaseColor = if (isDarkTheme) {
+        when {
+            isDarkTrack -> Color(0xEB1B070E)
+            isSanctified -> Color(0xEB0A182D)
+            else -> Color(0xEB091426)
+        }
+    } else {
+        Color(0xFAFFFFFF)
+    }
+
+    val borderBrush = remember(isDarkTrack, isSanctified, strobe, isDarkTheme) {
+        Brush.linearGradient(
+            colors = listOf(
+                primaryAccent.copy(alpha = (0.55f + 0.45f * strobe).coerceIn(0f, 1f)),
+                secondaryAccent.copy(alpha = (0.45f + 0.40f * strobe).coerceIn(0f, 1f)),
+                primaryAccent.copy(alpha = 0.78f)
+            )
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(barBg)
-            .border(
-                width = if (isDarkTrack && gripProgress > 0.8f) 1.8.dp else 1.2.dp,
-                color = barColor.copy(alpha = strobe),
-                shape = RoundedCornerShape(12.dp)
+            .shadow(
+                elevation = if (isDarkTheme) 12.dp else 5.dp,
+                shape = barShape,
+                ambientColor = primaryAccent.copy(alpha = 0.30f),
+                spotColor = secondaryAccent.copy(alpha = 0.25f)
             )
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .clip(barShape)
+            .background(cardBaseColor)
+            .drawWithCache {
+                val glowCenter = Offset(size.width * 0.18f, size.height * 0.35f)
+                val glowRadius = size.width * 0.78f
+                val ambientGlow = Brush.radialGradient(
+                    colors = listOf(
+                        primaryAccent.copy(alpha = if (isSanctified) 0.22f else 0.16f),
+                        secondaryAccent.copy(alpha = 0.08f),
+                        Color.Transparent
+                    ),
+                    center = glowCenter,
+                    radius = glowRadius
+                )
+                val topHighlight = if (isDarkTheme) Color(0x55FFFFFF) else Color(0x99FFFFFF)
+                val inset = 14.dp.toPx()
+                val lineY = 1.dp.toPx()
+                val lineWidth = 1.2.dp.toPx()
+                onDrawBehind {
+                    drawCircle(brush = ambientGlow, radius = glowRadius, center = glowCenter)
+                    drawLine(
+                        color = topHighlight,
+                        start = Offset(inset, lineY),
+                        end = Offset(size.width - inset, lineY),
+                        strokeWidth = lineWidth
+                    )
+                }
+            }
+            .border(
+                width = if (isSanctified || (isDarkTrack && gripProgress > 0.8f)) 1.5.dp else 1.2.dp,
+                brush = borderBrush,
+                shape = barShape
+            )
+            .padding(horizontal = 13.dp, vertical = 11.dp)
+            .testTag("deviations_warning_bar")
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Jeweled Crest Emblem
             Box(
                 modifier = Modifier
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(barColor.copy(alpha = 0.25f * strobe))
-                    .border(1.dp, barColor, CircleShape),
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                primaryAccent.copy(alpha = 0.28f * strobe + 0.10f),
+                                secondaryAccent.copy(alpha = 0.22f)
+                            )
+                        )
+                    )
+                    .border(
+                        1.1.dp,
+                        primaryAccent.copy(alpha = 0.75f),
+                        RoundedCornerShape(12.dp)
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (isDarkTrack) Icons.Default.Warning else Icons.Default.AutoAwesome,
                     contentDescription = null,
-                    tint = barColor,
-                    modifier = Modifier.size(14.dp)
+                    tint = if (isDarkTheme && isSanctified) Color.White else primaryAccent,
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(11.dp))
 
-            Text(
-                text = warningText,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isDarkTheme) {
-                    if (isDarkTrack) Color.White else Color(0xFFF0FDF4)
-                } else {
-                    DayTextPrimary
-                },
-                letterSpacing = 0.2.sp,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = statusTag,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = PlusJakartaSans,
+                    letterSpacing = 1.1.sp,
+                    color = primaryAccent
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = warningText,
+                    fontSize = 11.5.sp,
+                    lineHeight = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = PlusJakartaSans,
+                    color = if (isDarkTheme) {
+                        when {
+                            isSanctified -> Color(0xFFF8FAFC)
+                            isDarkTrack -> Color(0xFFFFF1F2)
+                            else -> Color(0xFFF0FDF4)
+                        }
+                    } else {
+                        DayTextPrimary
+                    },
+                    letterSpacing = 0.15.sp
+                )
+            }
         }
     }
 }

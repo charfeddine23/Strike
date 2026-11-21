@@ -110,7 +110,6 @@ import com.example.ui.components.FullscreenFingerprintUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.LuxurySettingsMenuButton
-import com.example.ui.components.RecordsDashboardBanner
 import com.example.ui.components.RecordsDashboardExpandablePanel
 import com.example.ui.components.SettingsSideDrawer
 import com.example.ui.screens.ComparisonScreen
@@ -364,43 +363,29 @@ fun LiquidGlassApp(
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    LiquidGlassTopBar(
-                        currentScreen = currentScreen,
-                        flameScore = flameScore,
-                        isStreakShieldActive = shieldActuallyActive,
-                        activeShieldType = effectiveActiveShieldType,
-                        shieldRemainingMillis = currentShieldRemainingMillis,
-                        available24hShields = available1DayShields,
-                        available48hShields = available48hShields,
-                        available72hShields = availableManualShields,
-                        sevenDayAutoShieldCount = sevenDayAutoShieldCount,
-                        showShieldDropdown = showShieldDropdown,
-                        onOpenShieldDropdown = { showShieldDropdown = true },
-                        onDismissShieldDropdown = { showShieldDropdown = false },
-                        onOpenProfile = { currentScreen = AppScreen.PROFILE },
-                        onOpenSettings = { showSettingsDialog = true },
-                        onLongPressProfile5s = { viewModel.hardResetAllTaskCompletionStates() },
-                        onOpenFlame = { currentScreen = AppScreen.FLAME },
-                        onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
-                        onLongPressFlame = { showStartDateDialog = true },
-                        currentLang = currentLang,
-                        isDarkTheme = isDarkTheme,
-                        isHapticEnabled = isHapticEnabled
-                    )
-                    AnimatedVisibility(
-                        visible = currentScreen == AppScreen.DASHBOARD,
-                        enter = expandVertically(tween(160, easing = FastOutSlowInEasing)) + fadeIn(tween(150)),
-                        exit = shrinkVertically(tween(120, easing = FastOutLinearInEasing)) + fadeOut(tween(90))
-                    ) {
-                        RecordsDashboardBanner(
-                            totalCount = allIndividuals.size,
-                            onClick = { showRecordsDashboardDialog = !showRecordsDashboardDialog },
-                            isExpanded = showRecordsDashboardDialog,
-                            isDarkTheme = isDarkTheme
-                        )
-                    }
-                }
+                LiquidGlassTopBar(
+                    currentScreen = currentScreen,
+                    flameScore = flameScore,
+                    isStreakShieldActive = shieldActuallyActive,
+                    activeShieldType = effectiveActiveShieldType,
+                    shieldRemainingMillis = currentShieldRemainingMillis,
+                    available24hShields = available1DayShields,
+                    available48hShields = available48hShields,
+                    available72hShields = availableManualShields,
+                    sevenDayAutoShieldCount = sevenDayAutoShieldCount,
+                    showShieldDropdown = showShieldDropdown,
+                    onOpenShieldDropdown = { showShieldDropdown = true },
+                    onDismissShieldDropdown = { showShieldDropdown = false },
+                    onOpenProfile = { currentScreen = AppScreen.PROFILE },
+                    onOpenSettings = { showSettingsDialog = true },
+                    onLongPressProfile5s = { viewModel.hardResetAllTaskCompletionStates() },
+                    onOpenFlame = { currentScreen = AppScreen.FLAME },
+                    onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
+                    onLongPressFlame = { showStartDateDialog = true },
+                    currentLang = currentLang,
+                    isDarkTheme = isDarkTheme,
+                    isHapticEnabled = isHapticEnabled
+                )
             },
             bottomBar = {
                 AnimatedVisibility(
@@ -468,7 +453,9 @@ fun LiquidGlassApp(
                             currentScreen = AppScreen.COMPARISON
                         },
                         hostDataEntryExternally = true,
-                        isDarkTheme = isDarkTheme
+                        isDarkTheme = isDarkTheme,
+                        isDashboardOpen = showRecordsDashboardDialog,
+                        onOpenDashboard = { showRecordsDashboardDialog = !showRecordsDashboardDialog }
                     )
 
                     AppScreen.INVENTORY -> InventoryScreen(
@@ -533,7 +520,7 @@ fun LiquidGlassApp(
                 }
             }
 
-            // Downward-expanding Dashboard Panel anchored directly below the Dashboard banner
+            // Downward-expanding Dashboard Panel opened from the Dashboard button next to Filter/Sort
             RecordsDashboardExpandablePanel(
                 visible = currentScreen == AppScreen.DASHBOARD && showRecordsDashboardDialog,
                 viewModel = viewModel,

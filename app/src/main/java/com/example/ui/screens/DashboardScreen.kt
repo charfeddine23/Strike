@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FilterAlt
@@ -136,7 +137,9 @@ fun DashboardScreen(
     onNavigateToCompare: (Long) -> Unit,
     modifier: Modifier = Modifier,
     hostDataEntryExternally: Boolean = false,
-    isDarkTheme: Boolean = LocalAppDarkTheme.current
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    isDashboardOpen: Boolean = false,
+    onOpenDashboard: () -> Unit = {}
 ) {
     val individuals by viewModel.filteredIndividuals.collectAsStateWithLifecycle()
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
@@ -271,6 +274,43 @@ fun DashboardScreen(
                             },
                             onDismiss = { showSortMenu = false },
                             darkTheme = isDarkTheme
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    val dashAccent = if (isDarkTheme) NeonViolet else DayPurple
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        accentCyan.copy(alpha = if (isDashboardOpen) 0.28f else if (isDarkTheme) 0.18f else 0.14f),
+                                        dashAccent.copy(alpha = if (isDashboardOpen) 0.26f else if (isDarkTheme) 0.14f else 0.10f)
+                                    )
+                                )
+                            )
+                            .border(
+                                1.2.dp,
+                                (if (isDashboardOpen) accentCyan else dashAccent).copy(alpha = if (isDashboardOpen) 0.95f else 0.50f),
+                                RoundedCornerShape(16.dp)
+                            )
+                            .clickable {
+                                HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                                showSortMenu = false
+                                onOpenDashboard()
+                            }
+                            .testTag("records_dashboard_btn"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Dashboard,
+                            contentDescription = stringResource(R.string.records_dashboard_window_title),
+                            tint = if (isDashboardOpen) accentCyan else dashAccent,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }

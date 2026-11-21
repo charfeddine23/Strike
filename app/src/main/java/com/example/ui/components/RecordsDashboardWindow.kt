@@ -4,12 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -48,7 +42,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Speed
@@ -57,7 +50,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,10 +60,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -97,183 +86,9 @@ import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.ui.viewmodel.YearlyStrikeStat
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
- * Sleek Liquid Glass "Dashboard" banner replacing the Flame Energy banner on the Records page
- * to save vertical space for the records list while giving one-tap access to key metrics.
- */
-@Composable
-fun RecordsDashboardBanner(
-    totalCount: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    isExpanded: Boolean = false,
-    isDarkTheme: Boolean = LocalAppDarkTheme.current
-) {
-    val chevronRotation by animateFloatAsState(
-        targetValue = if (isExpanded) 180f else 0f,
-        animationSpec = tween(durationMillis = 220),
-        label = "records_dash_chevron_rotation"
-    )
-    val primaryAccent = if (isDarkTheme) NeonCyan else DayCyan
-    val secondaryAccent = if (isDarkTheme) NeonViolet else DayPurple
-    val shape = RoundedCornerShape(16.dp)
-    val cardBgColor = if (isDarkTheme) Color(0xD90B1324) else Color(0xF2FFFFFF)
-    val shadowColor = if (isDarkTheme) primaryAccent.copy(alpha = 0.20f) else Color(0x180284C7)
-
-    val staticBorderBrush = remember(isDarkTheme, primaryAccent, secondaryAccent) {
-        Brush.linearGradient(
-            colors = listOf(
-                primaryAccent.copy(alpha = 0.82f),
-                NeonEmerald.copy(alpha = 0.65f),
-                secondaryAccent.copy(alpha = 0.78f),
-                primaryAccent.copy(alpha = 0.70f)
-            )
-        )
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .shadow(
-                elevation = if (isDarkTheme) 6.dp else 4.dp,
-                shape = shape,
-                ambientColor = shadowColor,
-                spotColor = shadowColor
-            )
-            .clip(shape)
-            .background(cardBgColor)
-            .drawWithCache {
-                val glowCenter = Offset(size.width * 0.85f, size.height * 0.5f)
-                val glowRadius = size.width * 0.65f
-                val glowBrush = Brush.radialGradient(
-                    colors = listOf(
-                        primaryAccent.copy(alpha = 0.16f),
-                        secondaryAccent.copy(alpha = 0.08f),
-                        Color.Transparent
-                    ),
-                    center = glowCenter,
-                    radius = glowRadius
-                )
-                val topHighlightColor = if (isDarkTheme) Color(0x33FFFFFF) else Color(0x80FFFFFF)
-                val startX = 16.dp.toPx()
-                val endX = size.width - 16.dp.toPx()
-                val lineY = 1.dp.toPx()
-                val lineStroke = 1.2.dp.toPx()
-                onDrawBehind {
-                    drawCircle(brush = glowBrush, radius = glowRadius, center = glowCenter)
-                    drawLine(
-                        color = topHighlightColor,
-                        start = Offset(startX, lineY),
-                        end = Offset(endX, lineY),
-                        strokeWidth = lineStroke
-                    )
-                }
-            }
-            .border(1.2.dp, staticBorderBrush, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-            .testTag("records_dashboard_banner")
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    primaryAccent.copy(alpha = 0.24f),
-                                    secondaryAccent.copy(alpha = 0.2f)
-                                )
-                            )
-                        )
-                        .border(1.dp, primaryAccent.copy(alpha = 0.65f), RoundedCornerShape(10.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Dashboard,
-                        contentDescription = null,
-                        tint = primaryAccent,
-                        modifier = Modifier.size(19.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(10.dp))
-
-                Column {
-                    Text(
-                        text = stringResource(R.string.records_dashboard_window_title),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = PlusJakartaSans,
-                        letterSpacing = 0.6.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = stringResource(R.string.records_dashboard_banner_subtitle),
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Medium,
-                        fontFamily = PlusJakartaSans,
-                        color = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF475569),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.End
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(primaryAccent.copy(alpha = 0.16f))
-                        .border(1.dp, primaryAccent.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 9.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        text = "$totalCount • ${stringResource(R.string.records_dashboard_open)}",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = PlusJakartaSans,
-                        color = primaryAccent
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = primaryAccent.copy(alpha = 0.9f),
-                    modifier = Modifier
-                        .size(20.dp)
-                        .rotate(chevronRotation)
-                )
-            }
-        }
-    }
-}
-
-/**
- * Downward-expanding Liquid Glass Dashboard panel anchored right below the Dashboard banner.
+ * Downward-expanding Liquid Glass Dashboard panel triggered from the Dashboard button next to Filter/Sort.
  * Expands downward smoothly from the top without popping up from the bottom of the screen.
  */
 @Composable

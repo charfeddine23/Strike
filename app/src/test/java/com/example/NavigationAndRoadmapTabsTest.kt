@@ -53,13 +53,23 @@ class NavigationAndRoadmapTabsTest {
     @Test
     fun mainNavigationSwitchesCleanlyWithoutOverlappingScreensOrStuckBanners() {
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("records_dashboard_banner").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("records_dashboard_banner").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("sort_button").assertIsDisplayed()
+        composeRule.onNodeWithTag("records_dashboard_btn").assertIsDisplayed()
+
+        // Tap the new Dashboard button next to Sort/Filter -> opens Dashboard panel
+        composeRule.onNodeWithTag("records_dashboard_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("records_dashboard_dialog").assertIsDisplayed()
+        composeRule.onNodeWithTag("close_dashboard_dialog_btn").performClick()
+        composeRule.waitForIdle()
+        assertEquals(0, composeRule.onAllNodesWithTag("records_dashboard_dialog").fetchSemanticsNodes().size)
 
         // Navigate Dashboard -> Inventory
         composeRule.onNodeWithTag("nav_tab_inventory").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("inventory_screen").assertIsDisplayed()
-        assertEquals(0, composeRule.onAllNodesWithTag("records_dashboard_banner").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("records_dashboard_btn").fetchSemanticsNodes().size)
 
         // Open Inventory sub-page and verify hub disappears cleanly
         composeRule.onNodeWithTag("inv_cat_avatars").performClick()
@@ -77,10 +87,10 @@ class NavigationAndRoadmapTabsTest {
         assertEquals(0, composeRule.onAllNodesWithText("Head-to-head metrics analysis", substring = true).fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("inventory_screen").fetchSemanticsNodes().size)
 
-        // Navigate Comparison -> Dashboard (Dashboard banner returns)
+        // Navigate Comparison -> Dashboard (Dashboard button returns)
         composeRule.onNodeWithTag("nav_tab_dashboard").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("records_dashboard_banner").assertIsDisplayed()
+        composeRule.onNodeWithTag("records_dashboard_btn").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("smart_search_banner").fetchSemanticsNodes().size)
     }
 
@@ -152,6 +162,18 @@ class NavigationAndRoadmapTabsTest {
         assertTrue(
             "Expected Track badge (${trackBounds.top}) to sit below DNA canvas (${dnaBounds.bottom})",
             trackBounds.top >= dnaBounds.bottom
+        )
+
+        // Sanctified / Warning status bar and Info button sit strictly below the 3D DNA canvas
+        val warningBounds = composeRule.onNodeWithTag("deviations_warning_bar").assertIsDisplayed().getBoundsInRoot()
+        val infoBounds = composeRule.onNodeWithTag("deviations_info_btn").assertIsDisplayed().getBoundsInRoot()
+        assertTrue(
+            "Expected warning bar (${warningBounds.top}) to sit below DNA canvas (${dnaBounds.bottom})",
+            warningBounds.top >= dnaBounds.bottom
+        )
+        assertTrue(
+            "Expected info button (${infoBounds.top}) to sit below DNA canvas (${dnaBounds.bottom})",
+            infoBounds.top >= dnaBounds.bottom
         )
     }
 }
