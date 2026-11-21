@@ -112,7 +112,6 @@ import com.example.ui.components.LuxurySettingsMenuButton
 import com.example.ui.components.RecordsDashboardBanner
 import com.example.ui.components.RecordsDashboardExpandablePanel
 import com.example.ui.components.SettingsSideDrawer
-import com.example.ui.components.SmartSearchBanner
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.DeviationsScreen
@@ -257,8 +256,6 @@ fun LiquidGlassApp(
     val snackbarHostState = remember { SnackbarHostState() }
     val appUpdateState by viewModel.appUpdateState.collectAsStateWithLifecycle()
     val allIndividuals by viewModel.allIndividuals.collectAsStateWithLifecycle()
-    val strikeSearchQuery by viewModel.strikeSearchQuery.collectAsStateWithLifecycle()
-    val filteredStrikeIndividuals by viewModel.filteredStrikeIndividuals.collectAsStateWithLifecycle()
     val isDataEntryOpen by viewModel.isDataEntryOpen.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -356,62 +353,41 @@ fun LiquidGlassApp(
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
-                AnimatedVisibility(
-                    visible = currentScreen != AppScreen.TASKS_LEDGER && currentScreen != AppScreen.XP_LOGS,
-                    enter = expandVertically(tween(170, easing = FastOutSlowInEasing)) + fadeIn(tween(150)),
-                    exit = shrinkVertically(tween(140, easing = FastOutLinearInEasing)) + fadeOut(tween(100))
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        LiquidGlassTopBar(
-                            currentScreen = currentScreen,
-                            flameScore = flameScore,
-                            isStreakShieldActive = shieldActuallyActive,
-                            activeShieldType = effectiveActiveShieldType,
-                            shieldRemainingMillis = currentShieldRemainingMillis,
-                            available24hShields = available1DayShields,
-                            available48hShields = available48hShields,
-                            available72hShields = availableManualShields,
-                            sevenDayAutoShieldCount = sevenDayAutoShieldCount,
-                            showShieldDropdown = showShieldDropdown,
-                            onOpenShieldDropdown = { showShieldDropdown = true },
-                            onDismissShieldDropdown = { showShieldDropdown = false },
-                            onOpenProfile = { currentScreen = AppScreen.PROFILE },
-                            onOpenSettings = { showSettingsDialog = true },
-                            onLongPressProfile5s = { viewModel.hardResetAllTaskCompletionStates() },
-                            onOpenFlame = { currentScreen = AppScreen.FLAME },
-                            onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
-                            onLongPressFlame = { showStartDateDialog = true },
-                            currentLang = currentLang,
-                            isDarkTheme = isDarkTheme,
-                            isHapticEnabled = isHapticEnabled
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    LiquidGlassTopBar(
+                        currentScreen = currentScreen,
+                        flameScore = flameScore,
+                        isStreakShieldActive = shieldActuallyActive,
+                        activeShieldType = effectiveActiveShieldType,
+                        shieldRemainingMillis = currentShieldRemainingMillis,
+                        available24hShields = available1DayShields,
+                        available48hShields = available48hShields,
+                        available72hShields = availableManualShields,
+                        sevenDayAutoShieldCount = sevenDayAutoShieldCount,
+                        showShieldDropdown = showShieldDropdown,
+                        onOpenShieldDropdown = { showShieldDropdown = true },
+                        onDismissShieldDropdown = { showShieldDropdown = false },
+                        onOpenProfile = { currentScreen = AppScreen.PROFILE },
+                        onOpenSettings = { showSettingsDialog = true },
+                        onLongPressProfile5s = { viewModel.hardResetAllTaskCompletionStates() },
+                        onOpenFlame = { currentScreen = AppScreen.FLAME },
+                        onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
+                        onLongPressFlame = { showStartDateDialog = true },
+                        currentLang = currentLang,
+                        isDarkTheme = isDarkTheme,
+                        isHapticEnabled = isHapticEnabled
+                    )
+                    AnimatedVisibility(
+                        visible = currentScreen == AppScreen.DASHBOARD,
+                        enter = expandVertically(tween(160, easing = FastOutSlowInEasing)) + fadeIn(tween(150)),
+                        exit = shrinkVertically(tween(120, easing = FastOutLinearInEasing)) + fadeOut(tween(90))
+                    ) {
+                        RecordsDashboardBanner(
+                            totalCount = allIndividuals.size,
+                            onClick = { showRecordsDashboardDialog = !showRecordsDashboardDialog },
+                            isExpanded = showRecordsDashboardDialog,
+                            isDarkTheme = isDarkTheme
                         )
-                        AnimatedVisibility(
-                            visible = currentScreen == AppScreen.DASHBOARD,
-                            enter = expandVertically(tween(160, easing = FastOutSlowInEasing)) + fadeIn(tween(150)),
-                            exit = shrinkVertically(tween(120, easing = FastOutLinearInEasing)) + fadeOut(tween(90))
-                        ) {
-                            RecordsDashboardBanner(
-                                totalCount = allIndividuals.size,
-                                onClick = { showRecordsDashboardDialog = !showRecordsDashboardDialog },
-                                isExpanded = showRecordsDashboardDialog,
-                                isDarkTheme = isDarkTheme
-                            )
-                        }
-                        AnimatedVisibility(
-                            visible = currentScreen == AppScreen.COMPARISON,
-                            enter = expandVertically(tween(160, easing = FastOutSlowInEasing)) + fadeIn(tween(150)),
-                            exit = shrinkVertically(tween(120, easing = FastOutLinearInEasing)) + fadeOut(tween(90))
-                        ) {
-                            SmartSearchBanner(
-                                query = strikeSearchQuery,
-                                onQueryChange = { viewModel.setStrikeSearchQuery(it) },
-                                onClearQuery = { viewModel.clearStrikeSearch() },
-                                matchedCount = filteredStrikeIndividuals.size,
-                                totalCount = allIndividuals.size,
-                                currentLang = currentLang,
-                                isDarkTheme = isDarkTheme
-                            )
-                        }
                     }
                 }
             },

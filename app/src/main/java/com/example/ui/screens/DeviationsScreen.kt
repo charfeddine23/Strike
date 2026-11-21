@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import android.view.SoundEffectConstants
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -37,7 +36,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
@@ -84,7 +82,6 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -134,12 +131,11 @@ import kotlin.math.sin
 @Composable
 fun DeviationsScreen(
     viewModel: IndividualViewModel,
-    onNavigateBack: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onNavigateBack: () -> Unit = {},
     modifier: Modifier = Modifier,
     isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val context = LocalContext.current
-    val view = LocalView.current
     val coroutineScope = rememberCoroutineScope()
     val isHapticEnabled by viewModel.isHapticFeedbackEnabled
 
@@ -236,102 +232,54 @@ fun DeviationsScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. TOP HEADER ROW
+        // 1. PULSING CYBER WARNING BAR + INFO BUTTON
         item {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            onNavigateBack()
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(if (isDarkTheme) Color(0x221E293B) else Color(0xFAFFFFFF))
-                            .border(
-                                1.dp,
-                                if (isDarkTheme) Color(0x3338BDF8) else Color(0x450284C7),
-                                CircleShape
-                            )
-                            .testTag("deviations_back_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = if (isAr) "رجوع" else "Back",
-                            tint = cyanAccent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column {
-                        Text(
-                            text = stringResource(R.string.deviations_title),
-                            fontWeight = FontWeight.Black,
-                            fontFamily = PlusJakartaSans,
-                            fontSize = 20.sp,
-                            color = if (isDarkTheme) Color.White else DayTextPrimary
-                        )
-                        Text(
-                            text = stringResource(R.string.deviations_subtitle),
-                            fontSize = 11.sp,
-                            color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
-                        )
-                    }
+                Box(modifier = Modifier.weight(1f)) {
+                    PulsingCyberWarningBar(
+                        isDarkTrack = isDarkTrack,
+                        flameScore = flameScore,
+                        darkRankTitle = darkRank.title,
+                        lightRankTitle = lightRank.title,
+                        gripProgress = darkRank.gripProgress,
+                        approachProgress = lightRank.approachProgress,
+                        strobe = warningStrobe,
+                        isDarkTheme = isDarkTheme
+                    )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Info Dialog Button
-                    IconButton(
-                        onClick = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            showInfoDialog = true
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .background(if (isDarkTheme) Color(0x221E293B) else Color(0xFAFFFFFF))
-                            .border(
-                                1.dp,
-                                if (isDarkTheme) Color(0x3338BDF8) else Color(0x450284C7),
-                                CircleShape
-                            )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = if (isAr) "معلومات" else "Info",
-                            tint = cyanAccent,
-                            modifier = Modifier.size(18.dp)
+                // Info Dialog Button
+                IconButton(
+                    onClick = {
+                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                        showInfoDialog = true
+                    },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(if (isDarkTheme) Color(0x221E293B) else Color(0xFAFFFFFF))
+                        .border(
+                            1.dp,
+                            if (isDarkTheme) Color(0x3338BDF8) else Color(0x450284C7),
+                            CircleShape
                         )
-                    }
+                        .testTag("deviations_info_btn")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = if (isAr) "معلومات" else "Info",
+                        tint = cyanAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }
 
-        // 2. PULSING CYBER WARNING BAR
-        item {
-            PulsingCyberWarningBar(
-                isDarkTrack = isDarkTrack,
-                flameScore = flameScore,
-                darkRankTitle = darkRank.title,
-                lightRankTitle = lightRank.title,
-                gripProgress = darkRank.gripProgress,
-                approachProgress = lightRank.approachProgress,
-                strobe = warningStrobe,
-                isDarkTheme = isDarkTheme
-            )
-        }
-
-        // 4. CENTRAL 3D VOLUMETRIC DNA CANVAS & MENACING CYBER-SHADOW / ANGEL HERO CARD
+        // 2. CENTRAL 3D VOLUMETRIC DNA CANVAS & MENACING CYBER-SHADOW / ANGEL HERO CARD
         item {
             LiquidGlassCard(
                 modifier = Modifier
@@ -346,46 +294,13 @@ fun DeviationsScreen(
                         .padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Track Identification Badge with Dynamic Glow
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                if (isDarkTrack) roseAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
-                                else cyanAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
-                            )
-                            .border(1.2.dp, if (isDarkTrack) roseAccent else cyanAccent, RoundedCornerShape(12.dp))
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (isDarkTrack) Icons.Default.Warning else Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = if (isDarkTrack) roseAccent else cyanAccent,
-                                modifier = Modifier.size(15.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (isDarkTrack) {
-                                    "${stringResource(R.string.deviations_dark_track)} • ${darkRank.index}/20"
-                                } else {
-                                    "${stringResource(R.string.deviations_light_track)} • ${lightRank.index}/20"
-                                },
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 11.sp,
-                                color = if (isDarkTrack) roseAccent else cyanAccent
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
                     // THE MAJESTIC 3D VOLUMETRIC CANVAS
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(370.dp)
                             .clip(RoundedCornerShape(20.dp))
+                            .testTag("deviations_dna_canvas")
                             .background(
                                 Brush.verticalGradient(
                                     listOf(
@@ -495,6 +410,41 @@ fun DeviationsScreen(
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = 8.dp)
                         )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Track Identification Badge with Dynamic Glow (below 3D DNA)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isDarkTrack) roseAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
+                                else cyanAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.14f)
+                            )
+                            .border(1.2.dp, if (isDarkTrack) roseAccent else cyanAccent, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                            .testTag("deviations_track_badge")
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isDarkTrack) Icons.Default.Warning else Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = if (isDarkTrack) roseAccent else cyanAccent,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (isDarkTrack) {
+                                    "${stringResource(R.string.deviations_dark_track)} • ${darkRank.index}/20"
+                                } else {
+                                    "${stringResource(R.string.deviations_light_track)} • ${lightRank.index}/20"
+                                },
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 11.sp,
+                                color = if (isDarkTrack) roseAccent else cyanAccent
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))

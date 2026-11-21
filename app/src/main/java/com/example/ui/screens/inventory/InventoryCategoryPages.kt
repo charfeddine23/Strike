@@ -13,12 +13,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -85,6 +88,36 @@ import com.example.util.HapticHelper
 import kotlin.math.cos
 import kotlin.math.sin
 
+private sealed interface ShieldGridEntry {
+    val id: String
+
+    data object Luxury7Day : ShieldGridEntry {
+        override val id: String = "shield_7day"
+    }
+
+    data class Manual(
+        override val id: String,
+        val title: String,
+        val rarity: String,
+        val count: Int,
+        val isCurrentlyActive: Boolean,
+        val accentColor: Color,
+        val icon: ImageVector,
+        val cardTag: String,
+        val activateBtnTag: String,
+        val onActivate: () -> Unit,
+        val onLongPress1s: () -> Unit
+    ) : ShieldGridEntry
+}
+
+private enum class PotionGridKind {
+    PULSE,
+    SHADOW,
+    GABRIEL,
+    CRYO,
+    ETERNAL
+}
+
 @Composable
 fun ShieldsSubPage(
     viewModel: IndividualViewModel,
@@ -104,6 +137,72 @@ fun ShieldsSubPage(
 ) {
     val context = LocalContext.current
     val view = LocalView.current
+
+    val shieldEntries: List<ShieldGridEntry> = remember(
+        currentLang,
+        isDarkTheme,
+        isHapticEnabled,
+        shieldActuallyActive,
+        activeShieldType,
+        shields24h,
+        shields48h,
+        shields72h
+    ) {
+        listOf(
+            ShieldGridEntry.Luxury7Day,
+            ShieldGridEntry.Manual(
+                id = "shield_24h",
+                title = locText(currentLang, "درع الـ 24 ساعة", "Bouclier 24h", "24h Protective Shield"),
+                rarity = locText(currentLang, "شائع • يدوي", "COMMUN • MANUEL", "COMMON • MANUAL"),
+                count = shields24h,
+                isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_24H,
+                accentColor = if (isDarkTheme) NeonCyan else DayCyan,
+                icon = Icons.Default.Shield,
+                cardTag = "inv_shield_24h",
+                activateBtnTag = "inv_activate_shield_24h",
+                onActivate = {
+                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    viewModel.activate1DayShield()
+                },
+                onLongPress1s = { onShowTooltip(InventoryTooltipFactory.for24hShield(currentLang)) }
+            ),
+            ShieldGridEntry.Manual(
+                id = "shield_48h",
+                title = locText(currentLang, "درع الـ 48 ساعة", "Bouclier 48h", "48h Protective Shield"),
+                rarity = locText(currentLang, "غير شائع • يدوي", "PEU COMMUN • MANUEL", "UNCOMMON • MANUAL"),
+                count = shields48h,
+                isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_48H,
+                accentColor = if (isDarkTheme) NeonEmerald else DayEmerald,
+                icon = Icons.Default.Shield,
+                cardTag = "inv_shield_48h",
+                activateBtnTag = "inv_activate_shield_48h",
+                onActivate = {
+                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    viewModel.activate48hShield()
+                },
+                onLongPress1s = { onShowTooltip(InventoryTooltipFactory.for48hShield(currentLang)) }
+            ),
+            ShieldGridEntry.Manual(
+                id = "shield_72h",
+                title = locText(currentLang, "درع الـ 72 ساعة", "Bouclier 72h", "72h Protective Shield"),
+                rarity = locText(currentLang, "نادر • يدوي", "RARE • MANUEL", "RARE • MANUAL"),
+                count = shields72h,
+                isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_72H,
+                accentColor = if (isDarkTheme) NeonAmber else DayOrange,
+                icon = Icons.Default.VerifiedUser,
+                cardTag = "inv_shield_72h",
+                activateBtnTag = "inv_activate_shield_72h",
+                onActivate = {
+                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    viewModel.activateManualShield()
+                },
+                onLongPress1s = { onShowTooltip(InventoryTooltipFactory.for72hShield(currentLang)) }
+            )
+        )
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -141,82 +240,57 @@ fun ShieldsSubPage(
             )
         }
 
-        // 1. Luxury 7-Day Automated Strike Shield (Auto trigger)
-        item {
-            val is7dActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_7D_AUTO
-            Luxury7DayAutoShieldCard(
-                currentLang = currentLang,
-                isActiveNow = is7dActive,
-                remainingText = if (is7dActive) FlameManager.formatRemaining(remainingMillis) else null,
-                totalTriggeredCount = sevenDayAutoTriggers,
-                onLongPress1s = { onShowTooltip(InventoryTooltipFactory.for7DayAutoShield(currentLang)) }
-            )
-        }
+        items(
+            items = shieldEntries.chunked(2),
+            key = { row -> row.joinToString("_") { it.id } }
+        ) { rowEntries ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                rowEntries.forEach { entry ->
+                    when (entry) {
+                        ShieldGridEntry.Luxury7Day -> {
+                            val is7dActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_7D_AUTO
+                            Luxury7DayAutoShieldCard(
+                                currentLang = currentLang,
+                                isActiveNow = is7dActive,
+                                remainingText = if (is7dActive) FlameManager.formatRemaining(remainingMillis) else null,
+                                totalTriggeredCount = sevenDayAutoTriggers,
+                                onLongPress1s = { onShowTooltip(InventoryTooltipFactory.for7DayAutoShield(currentLang)) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            )
+                        }
 
-        // 2. 24h Shield (Manual activation)
-        item {
-            InventoryShieldCard(
-                title = locText(currentLang, "درع الـ 24 ساعة", "Bouclier 24h", "24h Protective Shield"),
-                rarity = locText(currentLang, "شائع • تفعيل يدوي", "COMMUN • MANUEL", "COMMON • MANUAL"),
-                currentLang = currentLang,
-                isDarkTheme = isDarkTheme,
-                count = shields24h,
-                isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_24H,
-                accentColor = if (isDarkTheme) NeonCyan else DayCyan,
-                icon = Icons.Default.Shield,
-                onActivate = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    viewModel.activate1DayShield()
-                },
-                onLongPress1s = { onShowTooltip(InventoryTooltipFactory.for24hShield(currentLang)) },
-                cardTag = "inv_shield_24h",
-                activateBtnTag = "inv_activate_shield_24h"
-            )
-        }
-
-        // 3. 48h Shield (Manual activation)
-        item {
-            InventoryShieldCard(
-                title = locText(currentLang, "درع الـ 48 ساعة", "Bouclier 48h", "48h Protective Shield"),
-                rarity = locText(currentLang, "غير شائع • تفعيل يدوي", "PEU COMMUN • MANUEL", "UNCOMMON • MANUAL"),
-                currentLang = currentLang,
-                isDarkTheme = isDarkTheme,
-                count = shields48h,
-                isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_48H,
-                accentColor = if (isDarkTheme) NeonEmerald else DayEmerald,
-                icon = Icons.Default.Shield,
-                onActivate = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    viewModel.activate48hShield()
-                },
-                onLongPress1s = { onShowTooltip(InventoryTooltipFactory.for48hShield(currentLang)) },
-                cardTag = "inv_shield_48h",
-                activateBtnTag = "inv_activate_shield_48h"
-            )
-        }
-
-        // 4. 72h Shield (Manual activation)
-        item {
-            InventoryShieldCard(
-                title = locText(currentLang, "درع الـ 72 ساعة", "Bouclier 72h", "72h Protective Shield"),
-                rarity = locText(currentLang, "نادر • تفعيل يدوي", "RARE • MANUEL", "RARE • MANUAL"),
-                currentLang = currentLang,
-                isDarkTheme = isDarkTheme,
-                count = shields72h,
-                isCurrentlyActive = shieldActuallyActive && activeShieldType == ActiveShieldType.SHIELD_72H,
-                accentColor = if (isDarkTheme) NeonAmber else DayOrange,
-                icon = Icons.Default.VerifiedUser,
-                onActivate = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    viewModel.activateManualShield()
-                },
-                onLongPress1s = { onShowTooltip(InventoryTooltipFactory.for72hShield(currentLang)) },
-                cardTag = "inv_shield_72h",
-                activateBtnTag = "inv_activate_shield_72h"
-            )
+                        is ShieldGridEntry.Manual -> {
+                            InventoryShieldCard(
+                                title = entry.title,
+                                rarity = entry.rarity,
+                                currentLang = currentLang,
+                                isDarkTheme = isDarkTheme,
+                                count = entry.count,
+                                isCurrentlyActive = entry.isCurrentlyActive,
+                                accentColor = entry.accentColor,
+                                icon = entry.icon,
+                                onActivate = entry.onActivate,
+                                onLongPress1s = entry.onLongPress1s,
+                                cardTag = entry.cardTag,
+                                activateBtnTag = entry.activateBtnTag,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            )
+                        }
+                    }
+                }
+                if (rowEntries.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
         }
 
         item { Spacer(modifier = Modifier.height(72.dp)) }
@@ -292,38 +366,56 @@ fun KeysSubPage(
                 )
             }
         } else {
-            items(ownedKeys, key = { it.first.id }) { (type, count) ->
-                val (rarity, usesLabel, accent, tag) = when (type) {
-                    SkipKeyType.WOODEN -> Quad(
-                        locText(currentLang, "شائع", "COMMUN", "COMMON"),
-                        locText(currentLang, "استخدام واحد لكل مفتاح", "1 Utilisation / clé", "1 Use per key"),
-                        if (isDarkTheme) Color(0xFFD97706) else Color(0xFFB45309),
-                        "inv_key_wooden"
-                    )
-                    SkipKeyType.BRONZE -> Quad(
-                        locText(currentLang, "غير شائع", "PEU COMMUN", "UNCOMMON"),
-                        locText(currentLang, "استخدامان لكل مفتاح", "2 Utilisations / clé", "2 Uses per key"),
-                        if (isDarkTheme) Color(0xFFF59E0B) else DayOrange,
-                        "inv_key_bronze"
-                    )
-                    SkipKeyType.SILVER -> Quad(
-                        locText(currentLang, "نادر", "RARE", "RARE"),
-                        locText(currentLang, "3 استخدامات لكل مفتاح", "3 Utilisations / clé", "3 Uses per key"),
-                        if (isDarkTheme) Color(0xFFE2E8F0) else Color(0xFF475569),
-                        "inv_key_silver"
-                    )
-                }
+            items(
+                items = ownedKeys.chunked(2),
+                key = { row -> row.joinToString("_") { it.first.id } }
+            ) { rowKeys ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Max),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    rowKeys.forEach { (type, count) ->
+                        val (rarity, usesLabel, accent, tag) = when (type) {
+                            SkipKeyType.WOODEN -> Quad(
+                                locText(currentLang, "شائع", "COMMUN", "COMMON"),
+                                locText(currentLang, "استخدام واحد لكل مفتاح", "1 Utilisation / clé", "1 Use per key"),
+                                if (isDarkTheme) Color(0xFFD97706) else Color(0xFFB45309),
+                                "inv_key_wooden"
+                            )
+                            SkipKeyType.BRONZE -> Quad(
+                                locText(currentLang, "غير شائع", "PEU COMMUN", "UNCOMMON"),
+                                locText(currentLang, "استخدامان لكل مفتاح", "2 Utilisations / clé", "2 Uses per key"),
+                                if (isDarkTheme) Color(0xFFF59E0B) else DayOrange,
+                                "inv_key_bronze"
+                            )
+                            SkipKeyType.SILVER -> Quad(
+                                locText(currentLang, "نادر", "RARE", "RARE"),
+                                locText(currentLang, "3 استخدامات لكل مفتاح", "3 Utilisations / clé", "3 Uses per key"),
+                                if (isDarkTheme) Color(0xFFE2E8F0) else Color(0xFF475569),
+                                "inv_key_silver"
+                            )
+                        }
 
-                InventoryKeyCard(
-                    title = type.getLocalizedName(currentLang),
-                    rarity = rarity,
-                    usesLabel = usesLabel,
-                    count = count,
-                    accentColor = accent,
-                    isDarkTheme = isDarkTheme,
-                    onLongPress1s = { onShowTooltip(InventoryTooltipFactory.forSkipKey(type, currentLang)) },
-                    testTag = tag
-                )
+                        InventoryKeyCard(
+                            title = type.getLocalizedName(currentLang),
+                            rarity = rarity,
+                            usesLabel = usesLabel,
+                            count = count,
+                            accentColor = accent,
+                            isDarkTheme = isDarkTheme,
+                            onLongPress1s = { onShowTooltip(InventoryTooltipFactory.forSkipKey(type, currentLang)) },
+                            testTag = tag,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                        )
+                    }
+                    if (rowKeys.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
         }
 
@@ -361,7 +453,15 @@ fun PotionsSubPage(
     val showCryo = cryoInfusionCount > 0 || hasCryoArmed
     val showEternal = eternalRebirthCount > 0 || hasRebirthImmunity
 
-    val anyVisible = showPulse || showShadow || showGabriel || showCryo || showEternal
+    val visiblePotions = remember(showPulse, showShadow, showGabriel, showCryo, showEternal) {
+        buildList {
+            if (showPulse) add(PotionGridKind.PULSE)
+            if (showShadow) add(PotionGridKind.SHADOW)
+            if (showGabriel) add(PotionGridKind.GABRIEL)
+            if (showCryo) add(PotionGridKind.CRYO)
+            if (showEternal) add(PotionGridKind.ETERNAL)
+        }
+    }
     val ownedTotal = pulseElixirCount + shadowSerumCount + gabrielDropletCount + cryoInfusionCount + eternalRebirthCount
 
     LazyColumn(
@@ -390,7 +490,7 @@ fun PotionsSubPage(
             )
         }
 
-        if (!anyVisible) {
+        if (visiblePotions.isEmpty()) {
             item {
                 EmptyInventoryCategoryCard(
                     icon = Icons.Default.Science,
@@ -412,143 +512,167 @@ fun PotionsSubPage(
                 )
             }
         } else {
-            if (showPulse) {
-                item {
-                    InventoryPotionCard(
-                        title = PotionType.PULSE_ELIXIR.getLocalizedName(currentLang),
-                        subtitle = locText(currentLang, "الفئة الأولى", "Niveau 1", "Tier 1"),
-                        rarity = locText(currentLang, "شائع", "COMMON", "COMMON"),
-                        currentLang = currentLang,
-                        isDarkTheme = isDarkTheme,
-                        count = pulseElixirCount,
-                        statusBadge = if (pulseUsesLeft > 0) {
-                            locText(
-                                currentLang,
-                                "نشط ($pulseUsesLeft استخدامات)",
-                                "Actif ($pulseUsesLeft utilisations)",
-                                "Active ($pulseUsesLeft uses)"
+            items(
+                items = visiblePotions.chunked(2),
+                key = { row -> row.joinToString("_") { it.name } }
+            ) { rowPotions ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(IntrinsicSize.Max),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    rowPotions.forEach { kind ->
+                        when (kind) {
+                            PotionGridKind.PULSE -> InventoryPotionCard(
+                                title = PotionType.PULSE_ELIXIR.getLocalizedName(currentLang),
+                                subtitle = locText(currentLang, "الفئة الأولى", "Niveau 1", "Tier 1"),
+                                rarity = locText(currentLang, "شائع", "COMMON", "COMMON"),
+                                currentLang = currentLang,
+                                isDarkTheme = isDarkTheme,
+                                count = pulseElixirCount,
+                                statusBadge = if (pulseUsesLeft > 0) {
+                                    locText(
+                                        currentLang,
+                                        "نشط ($pulseUsesLeft استخدامات)",
+                                        "Actif ($pulseUsesLeft util.)",
+                                        "Active ($pulseUsesLeft uses)"
+                                    )
+                                } else null,
+                                accentColor = PotionType.PULSE_ELIXIR.adaptiveColor(isDarkTheme),
+                                icon = Icons.Default.Bolt,
+                                canActivate = pulseElixirCount > 0,
+                                onActivate = {
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    ProfileManager.usePulseElixir(context)
+                                },
+                                onLongPress1s = {
+                                    onShowTooltip(InventoryTooltipFactory.forPotion(PotionType.PULSE_ELIXIR, currentLang))
+                                },
+                                cardTag = "inv_potion_pulse",
+                                activateBtnTag = "inv_activate_potion_pulse",
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
                             )
-                        } else null,
-                        accentColor = PotionType.PULSE_ELIXIR.adaptiveColor(isDarkTheme),
-                        icon = Icons.Default.Bolt,
-                        canActivate = pulseElixirCount > 0,
-                        onActivate = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            ProfileManager.usePulseElixir(context)
-                        },
-                        onLongPress1s = { onShowTooltip(InventoryTooltipFactory.forPotion(PotionType.PULSE_ELIXIR, currentLang)) },
-                        cardTag = "inv_potion_pulse",
-                        activateBtnTag = "inv_activate_potion_pulse"
-                    )
-                }
-            }
 
-            if (showShadow) {
-                item {
-                    InventoryPotionCard(
-                        title = PotionType.SHADOW_GRIP_SERUM.getLocalizedName(currentLang),
-                        subtitle = locText(currentLang, "الفئة الثانية", "Niveau 2", "Tier 2"),
-                        rarity = locText(currentLang, "غير شائع", "UNCOMMON", "UNCOMMON"),
-                        currentLang = currentLang,
-                        isDarkTheme = isDarkTheme,
-                        count = shadowSerumCount,
-                        statusBadge = if (isShadowActive) {
-                            locText(
-                                currentLang,
-                                "نشط (تبطيء 50%)",
-                                "Actif (-50 % rythme)",
-                                "Active (50% Slowdown)"
+                            PotionGridKind.SHADOW -> InventoryPotionCard(
+                                title = PotionType.SHADOW_GRIP_SERUM.getLocalizedName(currentLang),
+                                subtitle = locText(currentLang, "الفئة الثانية", "Niveau 2", "Tier 2"),
+                                rarity = locText(currentLang, "غير شائع", "UNCOMMON", "UNCOMMON"),
+                                currentLang = currentLang,
+                                isDarkTheme = isDarkTheme,
+                                count = shadowSerumCount,
+                                statusBadge = if (isShadowActive) {
+                                    locText(
+                                        currentLang,
+                                        "نشط (تبطيء 50%)",
+                                        "Actif (-50 %)",
+                                        "Active (50% Slow)"
+                                    )
+                                } else null,
+                                accentColor = PotionType.SHADOW_GRIP_SERUM.adaptiveColor(isDarkTheme),
+                                icon = Icons.Default.Science,
+                                canActivate = shadowSerumCount > 0 && !isShadowActive,
+                                onActivate = {
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    ProfileManager.useShadowSerum(context)
+                                },
+                                onLongPress1s = {
+                                    onShowTooltip(InventoryTooltipFactory.forPotion(PotionType.SHADOW_GRIP_SERUM, currentLang))
+                                },
+                                cardTag = "inv_potion_shadow",
+                                activateBtnTag = "inv_activate_potion_shadow",
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
                             )
-                        } else null,
-                        accentColor = PotionType.SHADOW_GRIP_SERUM.adaptiveColor(isDarkTheme),
-                        icon = Icons.Default.Science,
-                        canActivate = shadowSerumCount > 0 && !isShadowActive,
-                        onActivate = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            ProfileManager.useShadowSerum(context)
-                        },
-                        onLongPress1s = { onShowTooltip(InventoryTooltipFactory.forPotion(PotionType.SHADOW_GRIP_SERUM, currentLang)) },
-                        cardTag = "inv_potion_shadow",
-                        activateBtnTag = "inv_activate_potion_shadow"
-                    )
-                }
-            }
 
-            if (showGabriel) {
-                item {
-                    InventoryPotionCard(
-                        title = PotionType.GABRIEL_PURITY_DROPLET.getLocalizedName(currentLang),
-                        subtitle = locText(currentLang, "الفئة الثالثة", "Niveau 3", "Tier 3"),
-                        rarity = locText(currentLang, "نادر", "RARE", "RARE"),
-                        currentLang = currentLang,
-                        isDarkTheme = isDarkTheme,
-                        count = gabrielDropletCount,
-                        statusBadge = if (isGabrielActive) {
-                            locText(
-                                currentLang,
-                                "نشط تلقائياً (+50% نمو)",
-                                "Actif Auto (+50 % croissance)",
-                                "Auto-Active (+50% Growth)"
+                            PotionGridKind.GABRIEL -> InventoryPotionCard(
+                                title = PotionType.GABRIEL_PURITY_DROPLET.getLocalizedName(currentLang),
+                                subtitle = locText(currentLang, "الفئة الثالثة", "Niveau 3", "Tier 3"),
+                                rarity = locText(currentLang, "نادر", "RARE", "RARE"),
+                                currentLang = currentLang,
+                                isDarkTheme = isDarkTheme,
+                                count = gabrielDropletCount,
+                                statusBadge = if (isGabrielActive) {
+                                    locText(
+                                        currentLang,
+                                        "نشط تلقائياً (+50%)",
+                                        "Actif Auto (+50 %)",
+                                        "Auto-Active (+50%)"
+                                    )
+                                } else null,
+                                accentColor = PotionType.GABRIEL_PURITY_DROPLET.adaptiveColor(isDarkTheme),
+                                icon = Icons.Default.WaterDrop,
+                                canActivate = false,
+                                onActivate = {},
+                                onLongPress1s = {
+                                    onShowTooltip(InventoryTooltipFactory.forPotion(PotionType.GABRIEL_PURITY_DROPLET, currentLang))
+                                },
+                                cardTag = "inv_potion_gabriel",
+                                activateBtnTag = "inv_activate_potion_gabriel",
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
                             )
-                        } else null,
-                        accentColor = PotionType.GABRIEL_PURITY_DROPLET.adaptiveColor(isDarkTheme),
-                        icon = Icons.Default.WaterDrop,
-                        canActivate = false,
-                        onActivate = {},
-                        onLongPress1s = { onShowTooltip(InventoryTooltipFactory.forPotion(PotionType.GABRIEL_PURITY_DROPLET, currentLang)) },
-                        cardTag = "inv_potion_gabriel",
-                        activateBtnTag = "inv_activate_potion_gabriel"
-                    )
-                }
-            }
 
-            if (showCryo) {
-                item {
-                    InventoryPotionCard(
-                        title = PotionType.ABSOLUTE_CRYO_INFUSION.getLocalizedName(currentLang),
-                        subtitle = locText(currentLang, "الفئة الرابعة", "Niveau 4", "Tier 4"),
-                        rarity = locText(currentLang, "ملحمي", "EPIC", "EPIC"),
-                        currentLang = currentLang,
-                        isDarkTheme = isDarkTheme,
-                        count = cryoInfusionCount,
-                        statusBadge = if (hasCryoArmed) {
-                            locText(
-                                currentLang,
-                                "مسلّح للستريك القادم (+100)",
-                                "Armé pour prochain strike (+100)",
-                                "Armed for Next Strike (+100)"
+                            PotionGridKind.CRYO -> InventoryPotionCard(
+                                title = PotionType.ABSOLUTE_CRYO_INFUSION.getLocalizedName(currentLang),
+                                subtitle = locText(currentLang, "الفئة الرابعة", "Niveau 4", "Tier 4"),
+                                rarity = locText(currentLang, "ملحمي", "EPIC", "EPIC"),
+                                currentLang = currentLang,
+                                isDarkTheme = isDarkTheme,
+                                count = cryoInfusionCount,
+                                statusBadge = if (hasCryoArmed) {
+                                    locText(
+                                        currentLang,
+                                        "مسلّح (+100)",
+                                        "Armé (+100)",
+                                        "Armed (+100)"
+                                    )
+                                } else null,
+                                accentColor = PotionType.ABSOLUTE_CRYO_INFUSION.adaptiveColor(isDarkTheme),
+                                icon = Icons.Default.AcUnit,
+                                canActivate = cryoInfusionCount > 0 && !hasCryoArmed,
+                                onActivate = {
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    ProfileManager.useCryoInfusion(context)
+                                },
+                                onLongPress1s = {
+                                    onShowTooltip(InventoryTooltipFactory.forPotion(PotionType.ABSOLUTE_CRYO_INFUSION, currentLang))
+                                },
+                                cardTag = "inv_potion_cryo",
+                                activateBtnTag = "inv_activate_potion_cryo",
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
                             )
-                        } else null,
-                        accentColor = PotionType.ABSOLUTE_CRYO_INFUSION.adaptiveColor(isDarkTheme),
-                        icon = Icons.Default.AcUnit,
-                        canActivate = cryoInfusionCount > 0 && !hasCryoArmed,
-                        onActivate = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            ProfileManager.useCryoInfusion(context)
-                        },
-                        onLongPress1s = { onShowTooltip(InventoryTooltipFactory.forPotion(PotionType.ABSOLUTE_CRYO_INFUSION, currentLang)) },
-                        cardTag = "inv_potion_cryo",
-                        activateBtnTag = "inv_activate_potion_cryo"
-                    )
-                }
-            }
 
-            if (showEternal) {
-                item {
-                    EternalResurgenceLegendaryCard(
-                        currentLang = currentLang,
-                        count = eternalRebirthCount,
-                        isActiveImmunity = hasRebirthImmunity,
-                        onActivate = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            ProfileManager.useEternalRebirth(context)
-                        },
-                        onLongPress1s = { onShowTooltip(InventoryTooltipFactory.forPotion(PotionType.ETERNAL_REBIRTH_ELIXIR, currentLang)) }
-                    )
+                            PotionGridKind.ETERNAL -> EternalResurgenceLegendaryCard(
+                                currentLang = currentLang,
+                                count = eternalRebirthCount,
+                                isActiveImmunity = hasRebirthImmunity,
+                                onActivate = {
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    ProfileManager.useEternalRebirth(context)
+                                },
+                                onLongPress1s = {
+                                    onShowTooltip(InventoryTooltipFactory.forPotion(PotionType.ETERNAL_REBIRTH_ELIXIR, currentLang))
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                            )
+                        }
+                    }
+                    if (rowPotions.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
@@ -579,7 +703,7 @@ fun TitlesSubPage(
             .fillMaxSize()
             .testTag("inv_subpage_titles"),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             SubPageTopBar(
@@ -600,25 +724,43 @@ fun TitlesSubPage(
             )
         }
 
-        items(allGameTitles, key = { it.id }) { titleItem ->
-            val isUnlocked = unlockedTitleIds.contains(titleItem.id)
-            val isEquipped = equippedTitle.id == titleItem.id
+        items(
+            items = allGameTitles.chunked(2),
+            key = { row -> row.joinToString("_") { it.id.toString() } }
+        ) { rowTitles ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                rowTitles.forEach { titleItem ->
+                    val isUnlocked = unlockedTitleIds.contains(titleItem.id)
+                    val isEquipped = equippedTitle.id == titleItem.id
 
-            InventoryTitleCard(
-                title = titleItem,
-                currentLang = currentLang,
-                isDarkTheme = isDarkTheme,
-                isUnlocked = isUnlocked,
-                isEquipped = isEquipped,
-                onActivate = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    ProfileManager.equipTitle(context, titleItem.id)
-                },
-                onLongPress1s = {
-                    onShowTooltip(InventoryTooltipFactory.forTitle(titleItem, currentLang, isUnlocked))
+                    InventoryTitleCard(
+                        title = titleItem,
+                        currentLang = currentLang,
+                        isDarkTheme = isDarkTheme,
+                        isUnlocked = isUnlocked,
+                        isEquipped = isEquipped,
+                        onActivate = {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            ProfileManager.equipTitle(context, titleItem.id)
+                        },
+                        onLongPress1s = {
+                            onShowTooltip(InventoryTooltipFactory.forTitle(titleItem, currentLang, isUnlocked))
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    )
                 }
-            )
+                if (rowTitles.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
         }
 
         item { Spacer(modifier = Modifier.height(72.dp)) }
@@ -631,7 +773,8 @@ private fun Luxury7DayAutoShieldCard(
     isActiveNow: Boolean,
     remainingText: String?,
     totalTriggeredCount: Int,
-    onLongPress1s: () -> Unit
+    onLongPress1s: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "luxury_7d_shield_anim")
     val animAngle by infiniteTransition.animateFloat(
@@ -664,11 +807,12 @@ private fun Luxury7DayAutoShieldCard(
         end = Offset(200f * (1f + dx), 100f * (1f + dy))
     )
 
-    LongPressTooltipContainer(onLongPress1s = onLongPress1s) { isHolding, progress ->
+    LongPressTooltipContainer(onLongPress1s = onLongPress1s, modifier = modifier) { isHolding, progress ->
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
+                .fillMaxSize()
+                .heightIn(min = 186.dp)
+                .clip(RoundedCornerShape(20.dp))
                 .drawBehind {
                     drawCircle(
                         brush = Brush.radialGradient(
@@ -677,8 +821,8 @@ private fun Luxury7DayAutoShieldCard(
                                 magentaGlow.copy(alpha = 0.14f * pulseWave),
                                 Color.Transparent
                             ),
-                            center = Offset(size.width * 0.8f, size.height * 0.25f),
-                            radius = size.width * 0.65f
+                            center = Offset(size.width * 0.8f, size.height * 0.2f),
+                            radius = size.width * 0.72f
                         )
                     )
                 }
@@ -691,128 +835,139 @@ private fun Luxury7DayAutoShieldCard(
                         )
                     )
                 )
-                .border(2.dp, luxuryBorder, RoundedCornerShape(22.dp))
+                .border(1.8.dp, luxuryBorder, RoundedCornerShape(20.dp))
                 .testTag("inv_shield_7day_luxury")
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
+                    .fillMaxSize()
+                    .padding(13.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Box(
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.radialGradient(
-                                        listOf(goldColor.copy(alpha = 0.35f), magentaGlow.copy(alpha = 0.18f))
-                                    )
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(goldColor.copy(alpha = 0.35f), magentaGlow.copy(alpha = 0.18f))
                                 )
-                                .border(1.8.dp, luxuryBorder, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.VerifiedUser,
-                                contentDescription = locText(currentLang, "درع الـ 7 أيام التلقائي", "Bouclier Auto 7j", "7-Day Auto Shield"),
-                                tint = goldColor,
-                                modifier = Modifier.size(26.dp)
                             )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = locText(currentLang, "درع الـ 7 أيام التلقائي", "Bouclier Automatique 7 Jours", "7-Day Automated Shield"),
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Black,
-                                fontFamily = PlusJakartaSans,
-                                color = goldColor
-                            )
-                            Text(
-                                text = locText(
-                                    currentLang,
-                                    "فئة نخبوية تلقائية • 3-5 سترايكات يومياً",
-                                    "NIVEAU ÉLITE AUTO • 3-5 Strikes/Jour",
-                                    "LUXURY AUTO TIER • 3-5 Strikes/Day"
-                                ),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFFDA4AF)
-                            )
-                        }
+                            .border(1.6.dp, luxuryBorder, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VerifiedUser,
+                            contentDescription = locText(currentLang, "درع الـ 7 أيام التلقائي", "Bouclier Auto 7j", "7-Day Auto Shield"),
+                            tint = goldColor,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
 
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(
-                                if (isActiveNow) NeonEmerald.copy(alpha = 0.25f)
-                                else goldColor.copy(alpha = 0.18f)
-                            )
-                            .border(
-                                1.dp,
-                                if (isActiveNow) NeonEmerald else goldColor.copy(alpha = 0.7f),
-                                RoundedCornerShape(10.dp)
-                            )
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(goldColor.copy(alpha = 0.18f))
+                            .border(1.dp, goldColor.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = if (isActiveNow) {
-                                locText(currentLang, "مفعّل الآن", "Actif", "Active Now")
-                            } else {
-                                locText(currentLang, "تفعيل تلقائي", "Déclenchement Auto", "Auto Trigger")
-                            },
+                            text = "×$totalTriggeredCount",
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = if (isActiveNow) NeonEmerald else goldColor
+                            fontWeight = FontWeight.Black,
+                            color = goldColor,
+                            maxLines = 1
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column {
+                    Text(
+                        text = locText(currentLang, "درع الـ 7 أيام التلقائي", "Bouclier Auto 7j", "7-Day Auto Shield"),
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = PlusJakartaSans,
+                        color = goldColor,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 17.sp
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = locText(
+                            currentLang,
+                            "نخبوي تلقائي • 3–5/يوم",
+                            "ÉLITE AUTO • 3–5/Jour",
+                            "LUXURY AUTO • 3–5/Day"
+                        ),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFDA4AF),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = if (isActiveNow && remainingText != null) {
                             locText(
                                 currentLang,
-                                "العد التنازلي المتبقي: $remainingText",
-                                "Temps restant : $remainingText",
-                                "Remaining countdown: $remainingText"
+                                "متبقي: $remainingText",
+                                "Reste : $remainingText",
+                                "Left: $remainingText"
                             )
                         } else {
                             locText(
                                 currentLang,
-                                "يُمنح ويُفعّل تلقائياً عند تسجيل 3 إلى 5 ضربات في يوم واحد",
-                                "Activé automatiquement dès 3 à 5 strikes en une journée",
-                                "Granted & activated automatically upon recording 3–5 strikes in a single day"
+                                "تفعيل تلقائي عند 3–5 سترايكات",
+                                "Auto dès 3–5 strikes/jour",
+                                "Triggers on 3–5 daily strikes"
                             )
                         },
-                        fontSize = 11.sp,
+                        fontSize = 10.5.sp,
                         color = if (isActiveNow) NeonEmerald else Color(0xFFE2E8F0),
                         fontWeight = if (isActiveNow) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.weight(1f)
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 14.sp
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = locText(
-                            currentLang,
-                            "الكمية / التفعيل: $totalTriggeredCount",
-                            "Déclenchements : $totalTriggeredCount",
-                            "Qty / Triggers: $totalTriggeredCount"
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            if (isActiveNow) NeonEmerald.copy(alpha = 0.22f)
+                            else goldColor.copy(alpha = 0.16f)
+                        )
+                        .border(
+                            1.dp,
+                            if (isActiveNow) NeonEmerald else goldColor.copy(alpha = 0.7f),
+                            RoundedCornerShape(10.dp)
                         ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isActiveNow) {
+                            locText(currentLang, "مفعّل الآن", "Actif", "Active Now")
+                        } else {
+                            locText(currentLang, "تفعيل تلقائي", "Déclenchement Auto", "Auto Trigger")
+                        },
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = goldColor
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isActiveNow) NeonEmerald else goldColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -843,35 +998,50 @@ private fun InventoryShieldCard(
     onActivate: () -> Unit,
     onLongPress1s: () -> Unit,
     cardTag: String,
-    activateBtnTag: String
+    activateBtnTag: String,
+    modifier: Modifier = Modifier
 ) {
     val activeEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
     val buttonContentLuminance = accentColor.red * 0.299f + accentColor.green * 0.587f + accentColor.blue * 0.114f
     val buttonContentColor = if (buttonContentLuminance > 0.55f) Color(0xFF03141F) else Color.White
-    LongPressTooltipContainer(onLongPress1s = onLongPress1s) { isHolding, progress ->
+
+    LongPressTooltipContainer(onLongPress1s = onLongPress1s, modifier = modifier) { isHolding, progress ->
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .fillMaxSize()
+                .heightIn(min = 186.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .drawBehind {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(accentColor.copy(alpha = 0.16f), Color.Transparent),
+                            center = Offset(size.width * 0.85f, size.height * 0.15f),
+                            radius = size.width * 0.65f
+                        )
+                    )
+                }
                 .background(cardGlassBackground(isDarkTheme))
                 .border(
                     width = if (isCurrentlyActive) 1.8.dp else 1.2.dp,
                     color = if (isCurrentlyActive) activeEmerald else accentColor.copy(alpha = 0.55f),
-                    shape = RoundedCornerShape(18.dp)
+                    shape = RoundedCornerShape(20.dp)
                 )
                 .testTag(cardTag)
         ) {
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .fillMaxSize()
+                    .padding(13.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(42.dp)
                             .clip(CircleShape)
                             .background(accentColor.copy(alpha = 0.18f))
                             .border(1.2.dp, accentColor.copy(alpha = 0.8f), CircleShape),
@@ -881,38 +1051,10 @@ private fun InventoryShieldCard(
                             imageVector = icon,
                             contentDescription = title,
                             tint = accentColor,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(21.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = title,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = cardPrimaryTextColor(isDarkTheme)
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = rarity,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = accentColor
-                            )
-                            if (isCurrentlyActive) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = locText(currentLang, "• نشط", "• Actif", "• Active"),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = activeEmerald
-                                )
-                            }
-                        }
-                    }
-                }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -922,36 +1064,72 @@ private fun InventoryShieldCard(
                     ) {
                         Text(
                             text = "×$count",
-                            fontSize = 13.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Black,
-                            color = accentColor
+                            color = accentColor,
+                            maxLines = 1
                         )
                     }
+                }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                    Button(
-                        onClick = onActivate,
-                        enabled = count > 0,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = accentColor,
-                            contentColor = buttonContentColor,
-                            disabledContainerColor = accentColor.copy(alpha = 0.16f),
-                            disabledContentColor = cardSecondaryTextColor(isDarkTheme)
-                        ),
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .height(40.dp)
-                            .testTag(activateBtnTag)
-                    ) {
+                Column {
+                    Text(
+                        text = title,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = cardPrimaryTextColor(isDarkTheme),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 17.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = rarity,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (isCurrentlyActive) {
+                        Spacer(modifier = Modifier.height(3.dp))
                         Text(
-                            locText(currentLang, "تفعيل", "Activer", "Activate"),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.ExtraBold
+                            text = locText(currentLang, "• نشط الآن", "• Actif", "• Active Now"),
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = activeEmerald,
+                            maxLines = 1
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Button(
+                    onClick = onActivate,
+                    enabled = count > 0,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = accentColor,
+                        contentColor = buttonContentColor,
+                        disabledContainerColor = accentColor.copy(alpha = 0.16f),
+                        disabledContentColor = cardSecondaryTextColor(isDarkTheme)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .minimumInteractiveComponentSize()
+                        .height(38.dp)
+                        .testTag(activateBtnTag)
+                ) {
+                    Text(
+                        locText(currentLang, "تفعيل", "Activer", "Activate"),
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 1
+                    )
                 }
             }
 
@@ -977,28 +1155,42 @@ private fun InventoryKeyCard(
     accentColor: Color,
     isDarkTheme: Boolean,
     onLongPress1s: () -> Unit,
-    testTag: String
+    testTag: String,
+    modifier: Modifier = Modifier
 ) {
-    LongPressTooltipContainer(onLongPress1s = onLongPress1s) { isHolding, progress ->
+    LongPressTooltipContainer(onLongPress1s = onLongPress1s, modifier = modifier) { isHolding, progress ->
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .fillMaxSize()
+                .heightIn(min = 152.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .drawBehind {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(accentColor.copy(alpha = 0.16f), Color.Transparent),
+                            center = Offset(size.width * 0.85f, size.height * 0.18f),
+                            radius = size.width * 0.65f
+                        )
+                    )
+                }
                 .background(cardGlassBackground(isDarkTheme))
-                .border(1.3.dp, accentColor.copy(alpha = 0.6f), RoundedCornerShape(18.dp))
+                .border(1.3.dp, accentColor.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
                 .testTag(testTag)
         ) {
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .fillMaxSize()
+                    .padding(13.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(46.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
                             .background(accentColor.copy(alpha = 0.2f))
                             .border(1.3.dp, accentColor, CircleShape),
@@ -1008,38 +1200,57 @@ private fun InventoryKeyCard(
                             imageVector = Icons.Default.VpnKey,
                             contentDescription = title,
                             tint = accentColor,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(21.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(accentColor.copy(alpha = 0.16f))
+                            .border(1.dp, accentColor.copy(alpha = 0.55f), RoundedCornerShape(9.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
                         Text(
-                            text = title,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = cardPrimaryTextColor(isDarkTheme)
-                        )
-                        Text(
-                            text = "$usesLabel • $rarity",
-                            fontSize = 11.sp,
+                            text = "$count / 30",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Black,
                             color = accentColor,
-                            fontWeight = FontWeight.SemiBold
+                            maxLines = 1
                         )
                     }
                 }
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(accentColor.copy(alpha = 0.16f))
-                        .border(1.dp, accentColor.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Column {
                     Text(
-                        text = "$count / 30",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Black,
-                        color = accentColor
+                        text = title,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = cardPrimaryTextColor(isDarkTheme),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = rarity,
+                        fontSize = 10.sp,
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = usesLabel,
+                        fontSize = 10.5.sp,
+                        color = cardSecondaryTextColor(isDarkTheme),
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 14.sp
                     )
                 }
             }
@@ -1072,40 +1283,46 @@ private fun InventoryPotionCard(
     onActivate: () -> Unit,
     onLongPress1s: () -> Unit,
     cardTag: String,
-    activateBtnTag: String
+    activateBtnTag: String,
+    modifier: Modifier = Modifier
 ) {
     val activeEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
     val buttonContentLuminance = accentColor.red * 0.299f + accentColor.green * 0.587f + accentColor.blue * 0.114f
     val buttonContentColor = if (buttonContentLuminance > 0.55f) Color(0xFF03141F) else Color.White
-    LongPressTooltipContainer(onLongPress1s = onLongPress1s) { isHolding, progress ->
+
+    LongPressTooltipContainer(onLongPress1s = onLongPress1s, modifier = modifier) { isHolding, progress ->
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .fillMaxSize()
+                .heightIn(min = 186.dp)
+                .clip(RoundedCornerShape(20.dp))
                 .drawBehind {
                     drawCircle(
                         brush = Brush.radialGradient(
-                            colors = listOf(accentColor.copy(alpha = 0.14f), Color.Transparent),
-                            center = Offset(48f, size.height / 2f),
-                            radius = 120f
+                            colors = listOf(accentColor.copy(alpha = 0.16f), Color.Transparent),
+                            center = Offset(size.width * 0.85f, size.height * 0.16f),
+                            radius = size.width * 0.68f
                         )
                     )
                 }
                 .background(cardGlassBackground(isDarkTheme))
-                .border(1.2.dp, accentColor.copy(alpha = 0.55f), RoundedCornerShape(18.dp))
+                .border(1.2.dp, accentColor.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
                 .testTag(cardTag)
         ) {
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .fillMaxSize()
+                    .padding(13.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(42.dp)
                             .clip(CircleShape)
                             .background(accentColor.copy(alpha = 0.2f))
                             .border(1.3.dp, accentColor, CircleShape),
@@ -1115,36 +1332,10 @@ private fun InventoryPotionCard(
                             imageVector = icon,
                             contentDescription = title,
                             tint = accentColor,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(21.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = title,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = cardPrimaryTextColor(isDarkTheme)
-                        )
-                        Text(
-                            text = "$subtitle • $rarity",
-                            fontSize = 10.sp,
-                            color = accentColor,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (!statusBadge.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(3.dp))
-                            Text(
-                                text = statusBadge,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = activeEmerald
-                            )
-                        }
-                    }
-                }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -1154,33 +1345,98 @@ private fun InventoryPotionCard(
                     ) {
                         Text(
                             text = "$count / 3",
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = FontWeight.Black,
-                            color = accentColor
+                            color = accentColor,
+                            maxLines = 1
                         )
                     }
+                }
 
-                    if (canActivate) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = onActivate,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = accentColor,
-                                contentColor = buttonContentColor
-                            ),
-                            modifier = Modifier
-                                .minimumInteractiveComponentSize()
-                                .height(40.dp)
-                                .testTag(activateBtnTag)
-                        ) {
-                            Text(
-                                locText(currentLang, "تفعيل", "Activer", "Activate"),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraBold
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Column {
+                    Text(
+                        text = title,
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = cardPrimaryTextColor(isDarkTheme),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 17.sp
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = "$subtitle • $rarity",
+                        fontSize = 10.sp,
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (!statusBadge.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = statusBadge,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = activeEmerald,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                if (canActivate) {
+                    Button(
+                        onClick = onActivate,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = accentColor,
+                            contentColor = buttonContentColor
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .height(38.dp)
+                            .testTag(activateBtnTag)
+                    ) {
+                        Text(
+                            locText(currentLang, "تفعيل", "Activer", "Activate"),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            maxLines = 1
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (!statusBadge.isNullOrBlank()) activeEmerald.copy(alpha = 0.14f)
+                                else accentColor.copy(alpha = 0.10f)
                             )
-                        }
+                            .border(
+                                1.dp,
+                                if (!statusBadge.isNullOrBlank()) activeEmerald.copy(alpha = 0.5f)
+                                else accentColor.copy(alpha = 0.3f),
+                                RoundedCornerShape(10.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = statusBadge ?: locText(currentLang, "جاهز", "Prêt", "Ready"),
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (!statusBadge.isNullOrBlank()) activeEmerald else accentColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
@@ -1204,7 +1460,8 @@ private fun EternalResurgenceLegendaryCard(
     count: Int,
     isActiveImmunity: Boolean,
     onActivate: () -> Unit,
-    onLongPress1s: () -> Unit
+    onLongPress1s: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "eternal_potion_anim")
     val animAngle by infiniteTransition.animateFloat(
@@ -1235,15 +1492,16 @@ private fun EternalResurgenceLegendaryCard(
 
     val ultraLuxuryBrush = Brush.linearGradient(
         colors = listOf(crimsonMagenta, gold, violet, crimsonMagenta),
-        start = Offset(300f * (1f - dx), 140f * (1f - dy)),
-        end = Offset(300f * (1f + dx), 140f * (1f + dy))
+        start = Offset(220f * (1f - dx), 120f * (1f - dy)),
+        end = Offset(220f * (1f + dx), 120f * (1f + dy))
     )
 
-    LongPressTooltipContainer(onLongPress1s = onLongPress1s) { isHolding, progress ->
+    LongPressTooltipContainer(onLongPress1s = onLongPress1s, modifier = modifier) { isHolding, progress ->
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
+                .fillMaxSize()
+                .heightIn(min = 186.dp)
+                .clip(RoundedCornerShape(20.dp))
                 .drawBehind {
                     drawCircle(
                         brush = Brush.radialGradient(
@@ -1266,106 +1524,143 @@ private fun EternalResurgenceLegendaryCard(
                         )
                     )
                 )
-                .border(2.2.dp, ultraLuxuryBrush, RoundedCornerShape(24.dp))
+                .border(2.dp, ultraLuxuryBrush, RoundedCornerShape(20.dp))
                 .testTag("inv_potion_eternal_resurgence")
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(18.dp)
+                    .fillMaxSize()
+                    .padding(13.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Box(
-                            modifier = Modifier
-                                .size(54.dp)
-                                .scale(0.96f + pulseWave * 0.06f)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.radialGradient(
-                                        listOf(crimsonMagenta.copy(alpha = 0.45f), gold.copy(alpha = 0.25f))
-                                    )
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .scale(0.96f + pulseWave * 0.05f)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.radialGradient(
+                                    listOf(crimsonMagenta.copy(alpha = 0.45f), gold.copy(alpha = 0.25f))
                                 )
-                                .border(2.dp, ultraLuxuryBrush, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = PotionType.ETERNAL_REBIRTH_ELIXIR.getLocalizedName(currentLang),
-                                tint = gold,
-                                modifier = Modifier.size(28.dp)
                             )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = PotionType.ETERNAL_REBIRTH_ELIXIR.getLocalizedName(currentLang),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Black,
-                                fontFamily = PlusJakartaSans,
-                                color = Color.White
-                            )
-                            Text(
-                                text = locText(currentLang, "الفئة الخامسة الأسطورية", "NIVEAU 5 LÉGENDAIRE", "LEGENDARY TIER 5"),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = gold
-                            )
-                        }
+                            .border(1.8.dp, ultraLuxuryBrush, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = PotionType.ETERNAL_REBIRTH_ELIXIR.getLocalizedName(currentLang),
+                            tint = gold,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
 
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(8.dp))
                             .background(crimsonMagenta.copy(alpha = 0.25f))
-                            .border(1.2.dp, gold.copy(alpha = 0.8f), RoundedCornerShape(10.dp))
-                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                            .border(1.dp, gold.copy(alpha = 0.8f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = if (isActiveImmunity) {
-                                locText(currentLang, "أبدي مفعّل ✓", "Éternel Actif ✓", "Eternal Active ✓")
+                                locText(currentLang, "أبدي ✓", "Éternel ✓", "Eternal ✓")
                             } else "$count / 3",
-                            fontSize = 12.sp,
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Black,
-                            color = gold
+                            color = gold,
+                            maxLines = 1
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Text(
-                    text = PotionType.ETERNAL_REBIRTH_ELIXIR.getLocalizedDescription(currentLang),
-                    fontSize = 11.sp,
-                    color = Color(0xFFFBCFE8),
-                    lineHeight = 16.sp
-                )
+                Column {
+                    Text(
+                        text = PotionType.ETERNAL_REBIRTH_ELIXIR.getLocalizedName(currentLang),
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = PlusJakartaSans,
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 17.sp
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = locText(currentLang, "أسطوري • الفئة 5", "LÉGENDAIRE 5", "LEGENDARY TIER 5"),
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = gold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = PotionType.ETERNAL_REBIRTH_ELIXIR.getLocalizedDescription(currentLang),
+                        fontSize = 10.sp,
+                        color = Color(0xFFFBCFE8),
+                        lineHeight = 14.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 if (count > 0 && !isActiveImmunity) {
-                    Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = onActivate,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .minimumInteractiveComponentSize()
-                            .height(48.dp)
+                            .height(38.dp)
                             .testTag("inv_activate_potion_eternal"),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = crimsonMagenta,
                             contentColor = Color.White
                         )
                     ) {
-                        Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            locText(currentLang, "تفعيل الانبعاث الأبدي", "Activer Résurgence Éternelle", "Activate Eternal Resurgence"),
+                            locText(currentLang, "تفعيل الأبدي", "Activer Éternel", "Activate"),
                             fontWeight = FontWeight.Black,
-                            fontSize = 13.sp
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(gold.copy(alpha = 0.16f))
+                            .border(1.dp, gold.copy(alpha = 0.7f), RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (isActiveImmunity) {
+                                locText(currentLang, "أبدي مفعّل ✓", "Éternel Actif ✓", "Eternal Active ✓")
+                            } else {
+                                locText(currentLang, "مناعة أبدية", "Immunité", "Immunity")
+                            },
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Black,
+                            color = gold,
+                            maxLines = 1
                         )
                     }
                 }
@@ -1392,7 +1687,8 @@ private fun InventoryTitleCard(
     isUnlocked: Boolean,
     isEquipped: Boolean,
     onActivate: () -> Unit,
-    onLongPress1s: () -> Unit
+    onLongPress1s: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val accentColor = title.rarity.adaptiveColor(isDarkTheme)
     val activeEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
@@ -1403,27 +1699,28 @@ private fun InventoryTitleCard(
         else -> title.rarity.labelEn
     }
     val statusText = when {
-        isEquipped -> locText(currentLang, "مفعّل على ملفك الشخصي", "Équipé sur votre profil", "Equipped on your profile")
-        isUnlocked -> locText(currentLang, "متوفر وجاهز للتفعيل", "Disponible et prêt à activer", "Available & ready to activate")
+        isEquipped -> locText(currentLang, "مفعّل بملفك", "Équipé", "Equipped")
+        isUnlocked -> locText(currentLang, "جاهز للتفعيل", "Prêt à activer", "Ready to equip")
         title.id == ProfileMasterInventory.MILESTONE_PEAK_TITLE.id -> locText(
             currentLang,
-            "يُفتح عند 20,000 نقطة شعلة",
-            "Débloqué à 20 000 pts Flamme",
-            "Unlocks at 20,000 Flame Score"
+            "20,000 نقطة شعلة",
+            "20 000 pts Flamme",
+            "20,000 Flame Score"
         )
         title.unlockStation != null -> locText(
             currentLang,
-            "يُفتح عند المحطة #${title.unlockStation}",
-            "Débloqué à la Station #${title.unlockStation}",
-            "Unlocks at Station #${title.unlockStation}"
+            "المحطة #${title.unlockStation}",
+            "Station #${title.unlockStation}",
+            "Station #${title.unlockStation}"
         )
         else -> locText(currentLang, "مقفل", "Verrouillé", "Locked")
     }
 
-    LongPressTooltipContainer(onLongPress1s = onLongPress1s) { isHolding, progress ->
+    LongPressTooltipContainer(onLongPress1s = onLongPress1s, modifier = modifier) { isHolding, progress ->
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .heightIn(min = 172.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(
                     if (isEquipped) accentColor.copy(alpha = if (isDarkTheme) 0.18f else 0.12f)
@@ -1440,20 +1737,20 @@ private fun InventoryTitleCard(
                 )
                 .testTag("inv_title_card_${title.id}")
         ) {
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(42.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
                             .background(
                                 if (isUnlocked) accentColor.copy(alpha = 0.18f)
@@ -1470,67 +1767,66 @@ private fun InventoryTitleCard(
                             imageVector = if (isUnlocked) Icons.Default.MilitaryTech else Icons.Default.Lock,
                             contentDescription = title.getLocalizedTitle(currentLang),
                             tint = if (isUnlocked) accentColor else Color(0xFF64748B),
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(19.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = title.getLocalizedTitle(currentLang),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = if (isUnlocked) cardPrimaryTextColor(isDarkTheme) else Color(0xFF64748B),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(accentColor.copy(alpha = if (isUnlocked) 0.18f else 0.08f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = rarityLabel,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isUnlocked) accentColor else Color(0xFF64748B)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(3.dp))
-
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(accentColor.copy(alpha = if (isUnlocked) 0.18f else 0.08f))
+                            .padding(horizontal = 7.dp, vertical = 3.dp)
+                    ) {
                         Text(
-                            text = statusText,
-                            fontSize = 11.sp,
-                            fontWeight = if (isEquipped) FontWeight.Bold else FontWeight.Medium,
-                            color = when {
-                                isEquipped -> accentColor
-                                isUnlocked -> activeEmerald
-                                else -> cardSecondaryTextColor(isDarkTheme)
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            text = rarityLabel,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isUnlocked) accentColor else Color(0xFF64748B),
+                            maxLines = 1
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Column {
+                    Text(
+                        text = title.getLocalizedTitle(currentLang),
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isUnlocked) cardPrimaryTextColor(isDarkTheme) else Color(0xFF64748B),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 17.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = statusText,
+                        fontSize = 10.5.sp,
+                        fontWeight = if (isEquipped) FontWeight.Bold else FontWeight.Medium,
+                        color = when {
+                            isEquipped -> accentColor
+                            isUnlocked -> activeEmerald
+                            else -> cardSecondaryTextColor(isDarkTheme)
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 when {
                     isEquipped -> {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
                             modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(accentColor.copy(alpha = 0.22f))
                                 .border(1.2.dp, accentColor, RoundedCornerShape(10.dp))
-                                .padding(horizontal = 10.dp, vertical = 7.dp)
                                 .testTag("inv_title_active_${title.id}")
                         ) {
                             Icon(
@@ -1544,7 +1840,8 @@ private fun InventoryTitleCard(
                                 text = locText(currentLang, "مفعّل", "Actif", "Active"),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Black,
-                                color = accentColor
+                                color = accentColor,
+                                maxLines = 1
                             )
                         }
                     }
@@ -1552,21 +1849,23 @@ private fun InventoryTitleCard(
                     isUnlocked -> {
                         Button(
                             onClick = onActivate,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = accentColor,
                                 contentColor = buttonContentColor
                             ),
                             modifier = Modifier
+                                .fillMaxWidth()
                                 .minimumInteractiveComponentSize()
-                                .height(40.dp)
+                                .height(38.dp)
                                 .testTag("inv_activate_title_${title.id}")
                         ) {
                             Text(
                                 text = locText(currentLang, "تفعيل", "Activer", "Activate"),
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraBold
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1
                             )
                         }
                     }
@@ -1574,17 +1873,20 @@ private fun InventoryTitleCard(
                     else -> {
                         Box(
                             modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color(0x1864748B))
                                 .border(1.dp, Color(0x4464748B), RoundedCornerShape(10.dp))
-                                .padding(horizontal = 10.dp, vertical = 7.dp)
-                                .testTag("inv_title_locked_${title.id}")
+                                .testTag("inv_title_locked_${title.id}"),
+                            contentAlignment = Alignment.Center
                         ) {
                             Text(
                                 text = locText(currentLang, "مقفل", "Verrouillé", "Locked"),
-                                fontSize = 10.sp,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF64748B)
+                                color = Color(0xFF64748B),
+                                maxLines = 1
                             )
                         }
                     }
@@ -1624,7 +1926,7 @@ fun AvatarsSubPage(
             .fillMaxSize()
             .testTag("inv_subpage_avatars"),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             SubPageTopBar(
@@ -1645,25 +1947,43 @@ fun AvatarsSubPage(
             )
         }
 
-        items(allGameAvatars, key = { it.id }) { avatar ->
-            val isUnlocked = unlockedAvatarIds.contains(avatar.id)
-            val isEquipped = equippedAvatar.id == avatar.id
+        items(
+            items = allGameAvatars.chunked(2),
+            key = { row -> row.joinToString("_") { it.id } }
+        ) { rowAvatars ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                rowAvatars.forEach { avatar ->
+                    val isUnlocked = unlockedAvatarIds.contains(avatar.id)
+                    val isEquipped = equippedAvatar.id == avatar.id
 
-            InventoryAvatarCard(
-                avatar = avatar,
-                currentLang = currentLang,
-                isDarkTheme = isDarkTheme,
-                isUnlocked = isUnlocked,
-                isEquipped = isEquipped,
-                onActivate = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    ProfileManager.equipAvatar(context, avatar.id)
-                },
-                onLongPress1s = {
-                    onShowTooltip(InventoryTooltipFactory.forAvatar(avatar, currentLang, isUnlocked))
+                    InventoryAvatarCard(
+                        avatar = avatar,
+                        currentLang = currentLang,
+                        isDarkTheme = isDarkTheme,
+                        isUnlocked = isUnlocked,
+                        isEquipped = isEquipped,
+                        onActivate = {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            ProfileManager.equipAvatar(context, avatar.id)
+                        },
+                        onLongPress1s = {
+                            onShowTooltip(InventoryTooltipFactory.forAvatar(avatar, currentLang, isUnlocked))
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    )
                 }
-            )
+                if (rowAvatars.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
         }
 
         item { Spacer(modifier = Modifier.height(72.dp)) }
@@ -1678,7 +1998,8 @@ private fun InventoryAvatarCard(
     isUnlocked: Boolean,
     isEquipped: Boolean,
     onActivate: () -> Unit,
-    onLongPress1s: () -> Unit
+    onLongPress1s: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val accentColor = avatar.rarity.adaptiveColor(isDarkTheme)
     val activeEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
@@ -1686,20 +2007,21 @@ private fun InventoryAvatarCard(
     val buttonContentColor = if (buttonContentLuminance > 0.55f) Color(0xFF03141F) else Color.White
     val rarityLabel = avatar.rarity.getLocalizedLabel(currentLang)
     val statusText = when {
-        isEquipped -> locText(currentLang, "مفعّل على ملفك الشخصي", "Équipé sur votre profil", "Equipped on your profile")
-        isUnlocked -> locText(currentLang, "متوفر وجاهز للتفعيل", "Disponible et prêt à activer", "Available & ready to activate")
+        isEquipped -> locText(currentLang, "مفعّل بملفك", "Équipé", "Equipped")
+        isUnlocked -> locText(currentLang, "جاهز للتفعيل", "Prêt à activer", "Ready to equip")
         else -> locText(
             currentLang,
-            "يُفتح عند المحطة #${avatar.unlockStation}",
-            "Débloqué à la Station #${avatar.unlockStation}",
-            "Unlocks at Station #${avatar.unlockStation}"
+            "المحطة #${avatar.unlockStation}",
+            "Station #${avatar.unlockStation}",
+            "Station #${avatar.unlockStation}"
         )
     }
 
-    LongPressTooltipContainer(onLongPress1s = onLongPress1s) { isHolding, progress ->
+    LongPressTooltipContainer(onLongPress1s = onLongPress1s, modifier = modifier) { isHolding, progress ->
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .heightIn(min = 172.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(
                     if (isEquipped) accentColor.copy(alpha = if (isDarkTheme) 0.18f else 0.12f)
@@ -1716,20 +2038,20 @@ private fun InventoryAvatarCard(
                 )
                 .testTag("inv_avatar_card_${avatar.id}")
         ) {
-            Row(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .fillMaxSize()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
                             .background(
                                 if (isUnlocked) accentColor.copy(alpha = 0.18f)
@@ -1746,67 +2068,66 @@ private fun InventoryAvatarCard(
                             imageVector = getAvatarVector(avatar.badgeIconName),
                             contentDescription = avatar.getLocalizedName(currentLang),
                             tint = if (isUnlocked) accentColor else Color(0xFF64748B),
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = avatar.getLocalizedName(currentLang),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = if (isUnlocked) cardPrimaryTextColor(isDarkTheme) else Color(0xFF64748B),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(accentColor.copy(alpha = if (isUnlocked) 0.18f else 0.08f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = rarityLabel,
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isUnlocked) accentColor else Color(0xFF64748B)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(3.dp))
-
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(accentColor.copy(alpha = if (isUnlocked) 0.18f else 0.08f))
+                            .padding(horizontal = 7.dp, vertical = 3.dp)
+                    ) {
                         Text(
-                            text = statusText,
-                            fontSize = 11.sp,
-                            fontWeight = if (isEquipped) FontWeight.Bold else FontWeight.Medium,
-                            color = when {
-                                isEquipped -> accentColor
-                                isUnlocked -> activeEmerald
-                                else -> cardSecondaryTextColor(isDarkTheme)
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            text = rarityLabel,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isUnlocked) accentColor else Color(0xFF64748B),
+                            maxLines = 1
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Column {
+                    Text(
+                        text = avatar.getLocalizedName(currentLang),
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isUnlocked) cardPrimaryTextColor(isDarkTheme) else Color(0xFF64748B),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 17.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = statusText,
+                        fontSize = 10.5.sp,
+                        fontWeight = if (isEquipped) FontWeight.Bold else FontWeight.Medium,
+                        color = when {
+                            isEquipped -> accentColor
+                            isUnlocked -> activeEmerald
+                            else -> cardSecondaryTextColor(isDarkTheme)
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 when {
                     isEquipped -> {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
                             modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(accentColor.copy(alpha = 0.22f))
                                 .border(1.2.dp, accentColor, RoundedCornerShape(10.dp))
-                                .padding(horizontal = 10.dp, vertical = 7.dp)
                                 .testTag("inv_avatar_active_${avatar.id}")
                         ) {
                             Icon(
@@ -1820,7 +2141,8 @@ private fun InventoryAvatarCard(
                                 text = locText(currentLang, "مفعّل", "Actif", "Active"),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Black,
-                                color = accentColor
+                                color = accentColor,
+                                maxLines = 1
                             )
                         }
                     }
@@ -1828,21 +2150,23 @@ private fun InventoryAvatarCard(
                     isUnlocked -> {
                         Button(
                             onClick = onActivate,
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = accentColor,
                                 contentColor = buttonContentColor
                             ),
                             modifier = Modifier
+                                .fillMaxWidth()
                                 .minimumInteractiveComponentSize()
-                                .height(40.dp)
+                                .height(38.dp)
                                 .testTag("inv_activate_avatar_${avatar.id}")
                         ) {
                             Text(
                                 text = locText(currentLang, "تفعيل", "Activer", "Activate"),
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.ExtraBold
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1
                             )
                         }
                     }
@@ -1850,11 +2174,13 @@ private fun InventoryAvatarCard(
                     else -> {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
                             modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color(0x1864748B))
                                 .border(1.dp, Color(0x4464748B), RoundedCornerShape(10.dp))
-                                .padding(horizontal = 10.dp, vertical = 7.dp)
                                 .testTag("inv_avatar_locked_${avatar.id}")
                         ) {
                             Icon(
@@ -1866,9 +2192,10 @@ private fun InventoryAvatarCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = locText(currentLang, "مقفل", "Verrouillé", "Locked"),
-                                fontSize = 10.sp,
+                                fontSize = 10.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF64748B)
+                                color = Color(0xFF64748B),
+                                maxLines = 1
                             )
                         }
                     }
@@ -1887,4 +2214,3 @@ private fun InventoryAvatarCard(
         }
     }
 }
-

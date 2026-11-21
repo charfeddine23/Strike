@@ -12,6 +12,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
@@ -166,13 +167,16 @@ class RoadmapAndThemeEnhancementsTest {
         assertEquals(0, composeRule.onAllNodesWithText("500 Stations, XP Progression & Egg Rewards", substring = true).fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("roadmap_back_btn").fetchSemanticsNodes().size)
 
-        // 2. Tasks Ledger sits strictly on physical LEFT, Xp Logs sits strictly on physical RIGHT
+        // 2. Tasks Ledger (left), Progress trigger (center), Xp Logs (right)
         val ledgerBounds = composeRule.onNodeWithTag("roadmap_header_ledger_btn").assertIsDisplayed().getBoundsInRoot()
+        val progressBtnBounds = composeRule.onNodeWithTag("roadmap_header_progress_btn").assertIsDisplayed().getBoundsInRoot()
         val xpLogsBounds = composeRule.onNodeWithTag("roadmap_header_xp_logs_btn").assertIsDisplayed().getBoundsInRoot()
         assertTrue(
-            "Expected Tasks Ledger (left=${ledgerBounds.left}, right=${ledgerBounds.right}) to be on the physical left of Xp Logs (left=${xpLogsBounds.left})",
-            ledgerBounds.right <= xpLogsBounds.left
+            "Expected Tasks Ledger -> Progress Button -> Xp Logs left-to-right",
+            ledgerBounds.right <= progressBtnBounds.left && progressBtnBounds.right <= xpLogsBounds.left
         )
+        // Progress card is NOT inline before opening the floating popup
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_progress_popup").fetchSemanticsNodes().size)
 
         // 3. Switch to Tasks tab -> verify 3-key inventory boxes are gone, task ID badge & key-shaped Skip appear
         composeRule.onNodeWithTag("roadmap_tab_tasks").performClick()
@@ -196,10 +200,22 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.onNodeWithTag("btn_skip_task_${skippableDaily.id}")
             .assertTextContains("تجاوز", substring = false)
 
+        // Check Eternal filter shows compact "can't skip" badge and hides long Eternal Milestone text
+        composeRule.onNodeWithText("الأبدية", substring = true).performClick()
+        composeRule.waitForIdle()
+        val firstEternal = RoadmapManager.yearlyTasks.value.first()
+        composeRule.onNode(
+            hasTestTag("task_cant_skip_badge_${firstEternal.id}") and hasAnyChild(hasText("can't skip")),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithText("Cannot be skipped with keys", substring = true).fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithText("غير قابلة للتجاوز بالمفاتيح", substring = true).fetchSemanticsNodes().size)
+
         // 4. Open Xp Logs screen from right header button & verify earned XP events + reasons
         composeRule.onNodeWithTag("roadmap_header_xp_logs_btn").performClick()
         composeRule.waitForIdle()
 
+        composeRule.onNodeWithTag("top_bar_settings_btn").assertIsDisplayed()
         composeRule.onNodeWithTag("xp_logs_screen").assertIsDisplayed()
         composeRule.onNodeWithTag("xp_logs_title").assertIsDisplayed()
         composeRule.onNode(
@@ -214,6 +230,12 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.onNodeWithTag("xp_logs_back_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
+
+        // 5. Open Tasks Ledger from left header button -> topBar also stays visible
+        composeRule.onNodeWithTag("roadmap_header_ledger_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("top_bar_settings_btn").assertIsDisplayed()
+        composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()
     }
 
     @Test
@@ -222,7 +244,13 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 
-        // Progress header reflects 700 total stations
+        // Inline card is replaced by floating button between Tasks Ledger & Xp Logs
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_header_progress_title").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
+        composeRule.waitForIdle()
+
+        // Floating menu opens and reflects 700 total stations
+        composeRule.onNodeWithTag("roadmap_progress_popup").assertIsDisplayed()
         composeRule.onNodeWithTag("roadmap_header_progress_title")
             .assertIsDisplayed()
             .assertTextContains("/ 700", substring = true)
@@ -231,17 +259,20 @@ class RoadmapAndThemeEnhancementsTest {
         assertEquals(0, composeRule.onAllNodesWithTag("glacial_viewport_backdrop").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("glacial_submersion_overlay").fetchSemanticsNodes().size)
 
-        // Jump into Permafrost Threshold (Station 501)
+        // Jump into Permafrost Threshold (Station 501) -> closes popup & scrolls to 501
         composeRule.onNodeWithTag("btn_jump_501").performScrollTo().performClick()
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
             composeRule.onAllNodesWithTag("station_501").fetchSemanticsNodes().isNotEmpty()
         }
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_progress_popup").fetchSemanticsNodes().size)
         composeRule.onNodeWithTag("glacial_threshold_banner_501").assertIsDisplayed()
         composeRule.onNodeWithTag("glacial_viewport_backdrop").assertIsDisplayed()
         composeRule.onNodeWithTag("glacial_submersion_overlay").assertIsDisplayed()
 
-        // Jump all the way to Station 700 (20M XP Glacial Crown)
+        // Re-open floating menu & jump all the way to Station 700 (20M XP Glacial Crown)
+        composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("btn_jump_700").performScrollTo().performClick()
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()

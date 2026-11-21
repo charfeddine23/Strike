@@ -47,9 +47,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MenuBook
@@ -96,6 +98,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.profile.SkipKeyType
@@ -106,6 +110,8 @@ import com.example.data.roadmap.TaskPeriod
 import com.example.data.roadmap.TaskPools
 import com.example.data.roadmap.TaskStatus
 import com.example.ui.components.ElectricMint
+import com.example.ui.components.GlacialDayCyan
+import com.example.ui.components.GlacialNightCyan
 import com.example.ui.components.GlacialSubmersionOverlay
 import com.example.ui.components.GlacialViewportBackdrop
 import com.example.ui.components.LiquidGlassCard
@@ -174,6 +180,7 @@ fun RoadmapScreen(
 
     var selectedMainTab by remember(initialMainTab) { mutableStateOf(initialMainTab) } // 0: Roadmap, 1: Tasks, 2: Elite Missions
     var selectedTaskPeriod by remember { mutableStateOf(TaskPeriod.DAILY) }
+    var showRoadmapProgressDialog by remember { mutableStateOf(false) }
 
     BackHandler(enabled = selectedMainTab != 0) {
         selectedMainTab = 0
@@ -284,8 +291,21 @@ fun RoadmapScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                // Physical LTR layout so "Tasks Ledger" sits strictly on the physical LEFT
+                // Physical LTR layout so "Tasks Ledger" sits strictly on the physical LEFT,
+                // the Roadmap Progress floating-menu trigger sits centered between them,
                 // and "Xp Logs" sits strictly on the physical RIGHT.
+                val progressFrostView = animatedGlacialDepth > 0.05f || currentStationId > TaskPools.BASE_STATIONS_COUNT
+                val progressBtnAccent = when {
+                    progressFrostView && isDarkTheme -> GlacialNightCyan
+                    progressFrostView && !isDarkTheme -> GlacialDayCyan
+                    else -> tabAquaAccent
+                }
+                val pillBgProgress = if (isDarkTheme) {
+                    if (progressFrostView) Color(0xCC0A2238) else Color(0xBB0C1A2E)
+                } else {
+                    DayGlassSurface
+                }
+
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -311,15 +331,15 @@ fun RoadmapScreen(
                                         .clip(RoundedCornerShape(50))
                                         .background(pillBgLedger)
                                         .border(1.2.dp, ledgerAccent.copy(alpha = 0.8f), RoundedCornerShape(50))
-                                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                                        .padding(horizontal = 10.dp, vertical = 7.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.MenuBook,
                                         contentDescription = if (isAr) "دفتر المهام" else "Tasks Ledger",
                                         tint = ledgerAccent,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
                                     Text(
                                         text = when {
@@ -327,10 +347,61 @@ fun RoadmapScreen(
                                             currentLang == "fr" -> "Registre"
                                             else -> "Tasks Ledger"
                                         },
-                                        fontSize = 12.sp,
+                                        fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Black,
                                         fontFamily = PlusJakartaSans,
-                                        color = ledgerAccent
+                                        color = ledgerAccent,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+
+                        // CENTER: Roadmap Progress Floating Menu Trigger
+                        val safeHeaderStation = currentStationId.coerceIn(0, TaskPools.TOTAL_STATIONS_COUNT)
+                        Box(
+                            modifier = Modifier
+                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                                .clip(RoundedCornerShape(50))
+                                .clickable {
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    showRoadmapProgressDialog = true
+                                }
+                                .testTag("roadmap_header_progress_btn"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CompositionLocalProvider(LocalLayoutDirection provides appLayoutDirection) {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(pillBgProgress)
+                                        .border(1.3.dp, progressBtnAccent.copy(alpha = 0.85f), RoundedCornerShape(50))
+                                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (progressFrostView) Icons.Default.AcUnit else Icons.Default.MilitaryTech,
+                                        contentDescription = when (currentLang) {
+                                            "ar" -> "تقدم المسار"
+                                            "fr" -> "Progression"
+                                            else -> "Roadmap Progress"
+                                        },
+                                        tint = progressBtnAccent,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Text(
+                                        text = when (currentLang) {
+                                            "ar" -> "LVL $safeHeaderStation/${TaskPools.TOTAL_STATIONS_COUNT}"
+                                            "fr" -> "Niv $safeHeaderStation/${TaskPools.TOTAL_STATIONS_COUNT}"
+                                            else -> "LVL $safeHeaderStation/${TaskPools.TOTAL_STATIONS_COUNT}"
+                                        },
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Black,
+                                        fontFamily = PlusJakartaSans,
+                                        color = progressBtnAccent,
+                                        maxLines = 1
                                     )
                                 }
                             }
@@ -355,22 +426,23 @@ fun RoadmapScreen(
                                         .clip(RoundedCornerShape(50))
                                         .background(pillBgXpLogs)
                                         .border(1.2.dp, xpLogsAccent.copy(alpha = 0.8f), RoundedCornerShape(50))
-                                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                                        .padding(horizontal = 10.dp, vertical = 7.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.History,
                                         contentDescription = if (isAr) "سجل XP" else "Xp Logs",
                                         tint = xpLogsAccent,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
                                     Text(
                                         text = "Xp Logs",
-                                        fontSize = 12.sp,
+                                        fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Black,
                                         fontFamily = PlusJakartaSans,
-                                        color = xpLogsAccent
+                                        color = xpLogsAccent,
+                                        maxLines = 1
                                     )
                                 }
                             }
@@ -461,21 +533,11 @@ fun RoadmapScreen(
                         RoadmapStationsTabContent(
                             stations = stations,
                             roadmapListState = roadmapListState,
-                            currentStationId = currentStationId,
-                            totalXp = totalXp,
                             nextStationId = stageProgress.nextStationId,
                             currentStageXp = stageProgress.currentStageXp,
-                            glacialDepth = animatedGlacialDepth,
-                            isAr = isAr,
+                            currentStationId = currentStationId,
                             currentLang = currentLang,
                             isDarkTheme = isDarkTheme,
-                            onJumpToStation = { targetStation ->
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                coroutineScope.launch {
-                                    val targetIdx = (targetStation - 2).coerceIn(0, stations.lastIndex)
-                                    roadmapListState.animateScrollToItem(targetIdx)
-                                }
-                            },
                             onClaimStation = { stationId ->
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -699,6 +761,81 @@ fun RoadmapScreen(
             isDarkTheme = isDarkTheme,
             modifier = Modifier.fillMaxSize()
         )
+
+        // Floating Roadmap Progress Popup triggered from the top-center pill button
+        if (showRoadmapProgressDialog) {
+            Dialog(
+                onDismissRequest = { showRoadmapProgressDialog = false },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .testTag("roadmap_progress_popup"),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    RoadmapProgressHeader(
+                        currentStationId = currentStationId,
+                        totalXp = totalXp,
+                        isAr = isAr,
+                        currentLang = currentLang,
+                        glacialDepth = animatedGlacialDepth,
+                        isDarkTheme = isDarkTheme,
+                        onJumpToStation = { targetStation ->
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            showRoadmapProgressDialog = false
+                            if (selectedMainTab != 0) {
+                                selectedMainTab = 0
+                                onMainTabChanged(0)
+                            }
+                            coroutineScope.launch {
+                                val targetIdx = (targetStation - 2).coerceIn(0, stations.lastIndex)
+                                roadmapListState.animateScrollToItem(targetIdx)
+                            }
+                        }
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .defaultMinSize(minWidth = 48.dp, minHeight = 42.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(if (isDarkTheme) Color(0xEA0F172A) else DayGlassSurface)
+                            .border(
+                                1.dp,
+                                tabAquaAccent.copy(alpha = 0.55f),
+                                RoundedCornerShape(50)
+                            )
+                            .clickable {
+                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                showRoadmapProgressDialog = false
+                            }
+                            .padding(horizontal = 18.dp, vertical = 9.dp)
+                            .testTag("btn_close_roadmap_progress_popup"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = null,
+                            tint = tabAquaAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = when (currentLang) {
+                                "ar" -> "إغلاق"
+                                "fr" -> "Fermer"
+                                else -> "Close"
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDarkTheme) Color.White else DayTextPrimary
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -706,15 +843,11 @@ fun RoadmapScreen(
 private fun RoadmapStationsTabContent(
     stations: List<RoadmapStation>,
     roadmapListState: LazyListState,
-    currentStationId: Int,
-    totalXp: Long,
     nextStationId: Int,
     currentStageXp: Long,
-    glacialDepth: Float,
-    isAr: Boolean,
+    currentStationId: Int,
     currentLang: String,
     isDarkTheme: Boolean,
-    onJumpToStation: (Int) -> Unit,
     onClaimStation: (Int) -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "roadmap_pulse")
@@ -774,23 +907,6 @@ private fun RoadmapStationsTabContent(
     )
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-        ) {
-            RoadmapProgressHeader(
-                currentStationId = currentStationId,
-                totalXp = totalXp,
-                isAr = isAr,
-                currentLang = currentLang,
-                glowPulse = glowPulse,
-                glacialDepth = glacialDepth,
-                isDarkTheme = isDarkTheme,
-                onJumpToStation = onJumpToStation
-            )
-        }
-
         LazyColumn(
             state = roadmapListState,
             modifier = Modifier
@@ -1281,23 +1397,49 @@ fun TaskItemCard(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // XP Bounty Badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            if (isReady) mintAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.15f)
-                            else emeraldAccent.copy(alpha = if (isDarkTheme) 0.2f else 0.14f)
-                        )
-                        .border(1.dp, if (isReady) mintAccent else emeraldAccent, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                // Top-End Badges: optional "can't skip" beside XP Bounty Badge
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = "+${task.xpBounty} XP",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 11.sp,
-                        color = if (isReady) mintAccent else emeraldAccent
-                    )
+                    if (!task.canBeSkipped) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(amberAccent.copy(alpha = if (isDarkTheme) 0.16f else 0.12f))
+                                .border(1.dp, amberAccent.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 7.dp, vertical = 4.dp)
+                                .testTag("task_cant_skip_badge_${task.id}")
+                        ) {
+                            Text(
+                                text = "can't skip",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 10.sp,
+                                color = amberAccent,
+                                maxLines = 1
+                            )
+                        }
+                    }
+
+                    // XP Bounty Badge
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(
+                                if (isReady) mintAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.15f)
+                                else emeraldAccent.copy(alpha = if (isDarkTheme) 0.2f else 0.14f)
+                            )
+                            .border(1.dp, if (isReady) mintAccent else emeraldAccent, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "+${task.xpBounty} XP",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp,
+                            color = if (isReady) mintAccent else emeraldAccent,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
 
@@ -1339,7 +1481,9 @@ fun TaskItemCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            if (isReady || isLocked || task.isCompleted || task.canBeSkipped) {
+                Spacer(modifier = Modifier.height(10.dp))
+            }
 
             // Action / Status Area
             when {
@@ -1524,35 +1668,7 @@ fun TaskItemCard(
                         )
                     }
                 }
-                !task.canBeSkipped -> {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(amberAccent.copy(alpha = if (isDarkTheme) 0.14f else 0.10f))
-                            .border(1.dp, amberAccent.copy(alpha = 0.45f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = amberAccent,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isAr) {
-                                "مهمة أبدية (غير قابلة للتجاوز بالمفاتيح - تتطلب إنجازاً فعلياً)"
-                            } else {
-                                "Eternal Milestone (Cannot be skipped with keys — genuine completion required)"
-                            },
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = amberAccent
-                        )
-                    }
-                }
+                !task.canBeSkipped -> Unit
                 else -> {
                     Row(
                         modifier = Modifier.fillMaxWidth(),

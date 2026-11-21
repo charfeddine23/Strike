@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EmojiEvents
@@ -74,8 +73,6 @@ fun ComparisonScreen(
     isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
-    val strikeSearchQuery by viewModel.strikeSearchQuery.collectAsStateWithLifecycle()
-    val filteredSearchResults by viewModel.filteredStrikeIndividuals.collectAsStateWithLifecycle()
     val personA by viewModel.personA.collectAsStateWithLifecycle()
     val personB by viewModel.personB.collectAsStateWithLifecycle()
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
@@ -85,11 +82,7 @@ fun ComparisonScreen(
     val accentViolet = if (isDarkTheme) NeonViolet else DayPurple
     val accentAmber = if (isDarkTheme) NeonAmber else DayOrange
     val accentEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
-    val selectableList = if (strikeSearchQuery.isNotBlank() && filteredSearchResults.isNotEmpty()) {
-        filteredSearchResults.map { it.individual }
-    } else {
-        allList
-    }
+    val selectableList = allList
 
     var showMenuA by remember { mutableStateOf(false) }
     var showMenuB by remember { mutableStateOf(false) }
@@ -99,51 +92,6 @@ fun ComparisonScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Top Header
-        item {
-            LiquidGlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                darkTheme = isDarkTheme
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text(
-                            text = stringResource(R.string.comparison_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = if (isAr) "تحليل المقارنة المباشرة بين المقاييس" else "Head-to-head metrics analysis",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = accentCyan
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(accentViolet.copy(alpha = 0.16f))
-                            .border(1.dp, accentViolet, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.CompareArrows,
-                            contentDescription = null,
-                            tint = accentViolet,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-            }
-        }
-
         // Person Selectors & Matchup Header
         item {
             Row(

@@ -80,11 +80,12 @@ class InventoryRedesignTest {
     }
 
     @Test
-    fun hubDisplaysProtectiveShieldsHeaderAndFourContainersInTwoByTwoGrid() {
+    fun hubDisplaysFourContainersInTwoByTwoGridWithoutProtectiveShieldsHeader() {
         openInventoryTab()
 
-        // 1. Protective Shields top section remains in its place
-        composeRule.onNodeWithTag("inv_protective_shields_section").assertIsDisplayed()
+        // 1. Protective Shields top header container + right finger hint button are completely removed
+        assertEquals(0, composeRule.onAllNodesWithTag("inv_protective_shields_section").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("inventory_longpress_hint_btn").fetchSemanticsNodes().size)
 
         // 2. All 4 containers exist and are visible
         val shieldsNode = composeRule.onNodeWithTag("inv_cat_shields").assertIsDisplayed()
@@ -93,13 +94,11 @@ class InventoryRedesignTest {
         val titlesNode = composeRule.onNodeWithTag("inv_cat_titles").assertIsDisplayed()
 
         // 3. Verify 2x2 side-by-side grid geometry
-        val headerBounds = composeRule.onNodeWithTag("inv_protective_shields_section").getUnclippedBoundsInRoot()
         val shieldsBounds = shieldsNode.getUnclippedBoundsInRoot()
         val keysBounds = keysNode.getUnclippedBoundsInRoot()
         val potionsBounds = potionsNode.getUnclippedBoundsInRoot()
         val titlesBounds = titlesNode.getUnclippedBoundsInRoot()
 
-        assertTrue("Protective Shields header must sit above grid", headerBounds.bottom <= shieldsBounds.top)
         assertTrue(
             "Shields & Keys must be side-by-side on Row 1",
             abs(shieldsBounds.top.value - keysBounds.top.value) < 4f &&
@@ -119,7 +118,7 @@ class InventoryRedesignTest {
     }
 
     @Test
-    fun shieldsSubPageListsAllShieldsWithQuantitiesAndManualActivation() {
+    fun shieldsSubPageListsAllShieldsInTwoColumnGridWithManualActivation() {
         val ctx = composeRule.activity
         FlameManager.grant1DayShield(ctx, 2)
         FlameManager.grant48hShield(ctx, 0)
@@ -131,12 +130,23 @@ class InventoryRedesignTest {
             composeRule.onAllNodesWithTag("inv_subpage_shields").fetchSemanticsNodes().isNotEmpty()
         }
 
-        // All shields appear even when some have 0 quantity
-        composeRule.onNodeWithTag("inv_shield_7day_luxury").assertIsDisplayed()
-        composeRule.onNodeWithTag("inv_shield_24h").assertIsDisplayed()
-        composeRule.onNodeWithTag("inv_shield_48h").assertIsDisplayed()
-        composeRule.onNodeWithTag("inv_subpage_shields").performScrollToNode(hasTestTag("inv_shield_72h"))
-        composeRule.onNodeWithTag("inv_shield_72h").assertIsDisplayed()
+        // All 4 shields appear in a 2-column grid (2 cards per row)
+        val s7dBounds = composeRule.onNodeWithTag("inv_shield_7day_luxury").assertIsDisplayed().getUnclippedBoundsInRoot()
+        val s24hBounds = composeRule.onNodeWithTag("inv_shield_24h").assertIsDisplayed().getUnclippedBoundsInRoot()
+        val s48hBounds = composeRule.onNodeWithTag("inv_shield_48h").assertIsDisplayed().getUnclippedBoundsInRoot()
+        val s72hBounds = composeRule.onNodeWithTag("inv_shield_72h").assertIsDisplayed().getUnclippedBoundsInRoot()
+
+        assertTrue(
+            "7-Day and 24h shields sit side-by-side in row 1",
+            abs(s7dBounds.top.value - s24hBounds.top.value) < 4f &&
+                abs(s7dBounds.left.value - s24hBounds.left.value) > 40f
+        )
+        assertTrue(
+            "48h and 72h shields sit side-by-side in row 2",
+            abs(s48hBounds.top.value - s72hBounds.top.value) < 4f &&
+                abs(s48hBounds.left.value - s72hBounds.left.value) > 40f
+        )
+        assertTrue("Row 2 sits below Row 1", s48hBounds.top > s7dBounds.bottom)
 
         // 24h Shield has qty=2 -> Activate button enabled; 48h & 72h have qty=0 -> disabled
         composeRule.onNodeWithTag("inv_activate_shield_48h").assertIsNotEnabled()
@@ -148,7 +158,7 @@ class InventoryRedesignTest {
         assertEquals(ActiveShieldType.SHIELD_24H, FlameManager.activeShieldType.value)
         assertEquals(1, FlameManager.available1DayShields.value)
 
-        // Back button returns to 4-container hub
+        // Back button returns to hub
         composeRule.onNodeWithTag("inv_subpage_back_btn").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
@@ -172,14 +182,24 @@ class InventoryRedesignTest {
         assertEquals(0, composeRule.onAllNodesWithTag("inv_key_bronze").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("inv_key_silver").fetchSemanticsNodes().size)
 
-        // 2. Grant ONLY Bronze keys -> ONLY Bronze appears; Wooden & Silver remain hidden
+        // 2. Grant Bronze keys -> ONLY Bronze appears; Wooden & Silver remain hidden
         ProfileManager.grantSkipKeys(ctx, SkipKeyType.BRONZE, 3)
         composeRule.waitForIdle()
 
         assertEquals(0, composeRule.onAllNodesWithTag("inv_keys_empty_state").fetchSemanticsNodes().size)
-        composeRule.onNodeWithTag("inv_key_bronze").assertIsDisplayed()
+        val bronzeBounds = composeRule.onNodeWithTag("inv_key_bronze").assertIsDisplayed().getUnclippedBoundsInRoot()
         assertEquals(0, composeRule.onAllNodesWithTag("inv_key_wooden").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("inv_key_silver").fetchSemanticsNodes().size)
+
+        // 3. Grant Silver keys too -> Bronze and Silver sit side-by-side in 2-column grid
+        ProfileManager.grantSkipKeys(ctx, SkipKeyType.SILVER, 2)
+        composeRule.waitForIdle()
+        val silverBounds = composeRule.onNodeWithTag("inv_key_silver").assertIsDisplayed().getUnclippedBoundsInRoot()
+        assertTrue(
+            "Bronze & Silver keys sit side-by-side in 2-column grid",
+            abs(bronzeBounds.top.value - silverBounds.top.value) < 4f &&
+                abs(bronzeBounds.left.value - silverBounds.left.value) > 40f
+        )
     }
 
     @Test
@@ -195,13 +215,19 @@ class InventoryRedesignTest {
         }
         composeRule.onNodeWithTag("inv_potions_empty_state").assertIsDisplayed()
 
-        // 2. Grant Pulse Elixir only -> ONLY Pulse Elixir shows up with Activate button
+        // 2. Grant Pulse Elixir & Shadow Serum -> appear side-by-side in 2-column grid
         ProfileManager.grantPotion(ctx, PotionType.PULSE_ELIXIR, 1, notifyRoadmapTask = false)
+        ProfileManager.grantPotion(ctx, PotionType.SHADOW_GRIP_SERUM, 1, notifyRoadmapTask = false)
         composeRule.waitForIdle()
 
         assertEquals(0, composeRule.onAllNodesWithTag("inv_potions_empty_state").fetchSemanticsNodes().size)
-        composeRule.onNodeWithTag("inv_potion_pulse").assertIsDisplayed()
-        assertEquals(0, composeRule.onAllNodesWithTag("inv_potion_shadow").fetchSemanticsNodes().size)
+        val pulseBounds = composeRule.onNodeWithTag("inv_potion_pulse").assertIsDisplayed().getUnclippedBoundsInRoot()
+        val shadowBounds = composeRule.onNodeWithTag("inv_potion_shadow").assertIsDisplayed().getUnclippedBoundsInRoot()
+        assertTrue(
+            "Pulse & Shadow potions sit side-by-side in 2-column grid",
+            abs(pulseBounds.top.value - shadowBounds.top.value) < 4f &&
+                abs(pulseBounds.left.value - shadowBounds.left.value) > 40f
+        )
         assertEquals(0, composeRule.onAllNodesWithTag("inv_potion_cryo").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("inv_potion_eternal_resurgence").fetchSemanticsNodes().size)
 
@@ -217,7 +243,7 @@ class InventoryRedesignTest {
     }
 
     @Test
-    fun titlesSubPageListsAllGameTitlesAndEquipsOnlyUnlockedTitles() {
+    fun titlesSubPageListsAllGameTitlesInTwoColumnGridAndEquipsOnlyUnlockedTitles() {
         val ctx = composeRule.activity
         ProfileManager.unlockTitle(ctx, 25)
 
@@ -228,14 +254,17 @@ class InventoryRedesignTest {
             composeRule.onAllNodesWithTag("inv_subpage_titles").fetchSemanticsNodes().isNotEmpty()
         }
 
-        // Starter title #1 is equipped initially
-        composeRule.onNodeWithTag("inv_title_card_1").assertIsDisplayed()
+        // Starter title #1 and locked title #2 sit side-by-side in 2-column grid
+        val title1Bounds = composeRule.onNodeWithTag("inv_title_card_1").assertIsDisplayed().getUnclippedBoundsInRoot()
         composeRule.onNodeWithTag("inv_title_active_1").assertIsDisplayed()
-
-        // Locked title (#2) shows Locked badge and NO Activate button
-        composeRule.onNodeWithTag("inv_subpage_titles").performScrollToNode(hasTestTag("inv_title_card_2"))
+        val title2Bounds = composeRule.onNodeWithTag("inv_title_card_2").assertIsDisplayed().getUnclippedBoundsInRoot()
         composeRule.onNodeWithTag("inv_title_locked_2").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("inv_activate_title_2").fetchSemanticsNodes().size)
+        assertTrue(
+            "Title #1 & #2 sit side-by-side in 2-column grid",
+            abs(title1Bounds.top.value - title2Bounds.top.value) < 4f &&
+                abs(title1Bounds.left.value - title2Bounds.left.value) > 40f
+        )
 
         // Unlocked title (#25) shows Activate button -> clicking equips it
         composeRule.onNodeWithTag("inv_subpage_titles").performScrollToNode(hasTestTag("inv_title_card_25"))
@@ -297,14 +326,17 @@ class InventoryRedesignTest {
             composeRule.onAllNodesWithTag("inv_subpage_avatars").fetchSemanticsNodes().isNotEmpty()
         }
 
-        // Starter avatar is equipped initially
-        composeRule.onNodeWithTag("inv_avatar_card_av_core_node").assertIsDisplayed()
+        // Starter avatar and locked avatar #2 sit side-by-side in 2-column grid
+        val av1Bounds = composeRule.onNodeWithTag("inv_avatar_card_av_core_node").assertIsDisplayed().getUnclippedBoundsInRoot()
         composeRule.onNodeWithTag("inv_avatar_active_av_core_node").assertIsDisplayed()
-
-        // Locked avatar shows Locked pill and NO Activate button
-        composeRule.onNodeWithTag("inv_subpage_avatars").performScrollToNode(hasTestTag("inv_avatar_card_av_std_circuit"))
+        val av2Bounds = composeRule.onNodeWithTag("inv_avatar_card_av_std_circuit").assertIsDisplayed().getUnclippedBoundsInRoot()
         composeRule.onNodeWithTag("inv_avatar_locked_av_std_circuit").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("inv_activate_avatar_av_std_circuit").fetchSemanticsNodes().size)
+        assertTrue(
+            "Avatars #1 & #2 sit side-by-side in 2-column grid",
+            abs(av1Bounds.top.value - av2Bounds.top.value) < 4f &&
+                abs(av1Bounds.left.value - av2Bounds.left.value) > 40f
+        )
 
         // Unlocked avatar shows Activate button -> clicking equips it
         composeRule.onNodeWithTag("inv_subpage_avatars").performScrollToNode(hasTestTag("inv_avatar_card_av_gabriel_wings"))

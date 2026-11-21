@@ -6,11 +6,13 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,13 +23,16 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,6 +59,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,9 +68,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -89,6 +98,7 @@ import com.example.ui.viewmodel.IndividualViewModel
 import com.example.util.ContactsPickerHelper
 import com.example.util.ImportedContact
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
@@ -97,6 +107,7 @@ import java.util.Calendar
  * Full-screen Cyberpunk Glassmorphism Data Entry Modal Sheet/Dialog.
  * Triggered directly from the "+" FAB or Edit button inside the Records Screen.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DataEntryDialog(
     viewModel: IndividualViewModel,
@@ -228,6 +239,31 @@ fun DataEntryDialog(
     val accentAmber = if (isDarkTheme) NeonAmber else DayOrange
     val accentViolet = if (isDarkTheme) NeonViolet else DayPurple
     val scrollState = rememberScrollState()
+    val historicalBringIntoViewRequester = remember { BringIntoViewRequester() }
+    var isHistoricalYearFocused by remember { mutableStateOf(false) }
+    var isHistoricalCountFocused by remember { mutableStateOf(false) }
+    val isHistoricalFocused = isHistoricalYearFocused || isHistoricalCountFocused
+    val density = LocalDensity.current
+    val imeBottomPx = WindowInsets.ime.getBottom(density)
+
+    suspend fun revealHistoricalSectionAboveKeyboard() {
+        // Allow keyboard inset animation & layout pass to update scroll bounds cleanly
+        delay(80)
+        val targetBottom = scrollState.maxValue
+        if (scrollState.value < targetBottom) {
+            scrollState.animateScrollTo(
+                value = targetBottom,
+                animationSpec = tween(durationMillis = 360, easing = FastOutSlowInEasing)
+            )
+        }
+        historicalBringIntoViewRequester.bringIntoView()
+    }
+
+    LaunchedEffect(isHistoricalFocused, imeBottomPx, historicalEntries.size) {
+        if (isHistoricalFocused) {
+            revealHistoricalSectionAboveKeyboard()
+        }
+    }
 
     BackHandler(enabled = !showInAppContactsPicker && !showContactsPermissionDialog) {
         onDismiss()
@@ -237,11 +273,14 @@ fun DataEntryDialog(
         modifier = Modifier
             .fillMaxSize()
             .background(modalBg)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = {}
-            )
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        event.changes.forEach { it.consume() }
+                    }
+                }
+            }
             .testTag("data_entry_overlay")
     ) {
         Surface(
@@ -253,7 +292,6 @@ fun DataEntryDialog(
                     modifier = Modifier
                         .fillMaxSize()
                         .windowInsetsPadding(WindowInsets.statusBars)
-                        .windowInsetsPadding(WindowInsets.navigationBars)
                 ) {
                     // Modal Header with Close button
                     Row(
@@ -355,8 +393,8 @@ fun DataEntryDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
+                            .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
                             .verticalScroll(scrollState)
-                            .imePadding()
                             .padding(16.dp)
                             .testTag("data_entry_scroll_container"),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -820,7 +858,10 @@ fun DataEntryDialog(
 
                         // Section 4: Historical Strikes Entry per Year
                         LiquidGlassCard(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .bringIntoViewRequester(historicalBringIntoViewRequester)
+                                    .testTag("historical_strikes_section"),
                                 shape = RoundedCornerShape(20.dp),
                                 darkTheme = isDarkTheme
                             ) {
@@ -881,10 +922,18 @@ fun DataEntryDialog(
                                     ) {
                                         OutlinedTextField(
                                             value = inputYear,
-                                            onValueChange = { inputYear = it },
+                                            onValueChange = { newValue ->
+                                                inputYear = newValue
+                                                coroutineScope.launch {
+                                                    revealHistoricalSectionAboveKeyboard()
+                                                }
+                                            },
                                             label = { Text(stringResource(R.string.year)) },
                                             modifier = Modifier
                                                 .weight(1f)
+                                                .onFocusChanged { focusState ->
+                                                    isHistoricalYearFocused = focusState.isFocused
+                                                }
                                                 .testTag("input_historical_year"),
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                             singleLine = true,
@@ -897,10 +946,18 @@ fun DataEntryDialog(
 
                                         OutlinedTextField(
                                             value = inputStrikeCount,
-                                            onValueChange = { inputStrikeCount = it },
+                                            onValueChange = { newValue ->
+                                                inputStrikeCount = newValue
+                                                coroutineScope.launch {
+                                                    revealHistoricalSectionAboveKeyboard()
+                                                }
+                                            },
                                             label = { Text(stringResource(R.string.strikes_amount)) },
                                             modifier = Modifier
                                                 .weight(1f)
+                                                .onFocusChanged { focusState ->
+                                                    isHistoricalCountFocused = focusState.isFocused
+                                                }
                                                 .testTag("input_historical_count"),
                                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                             singleLine = true,

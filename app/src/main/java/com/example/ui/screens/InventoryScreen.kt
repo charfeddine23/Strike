@@ -76,7 +76,6 @@ import com.example.ui.screens.inventory.InventoryTooltipSheetContent
 import com.example.ui.screens.inventory.InventoryTooltipSpec
 import com.example.ui.screens.inventory.KeysSubPage
 import com.example.ui.screens.inventory.PotionsSubPage
-import com.example.ui.screens.inventory.ProtectiveShieldsHeaderCard
 import com.example.ui.screens.inventory.ShieldsSubPage
 import com.example.ui.screens.inventory.TitlesSubPage
 import com.example.ui.screens.inventory.cardSecondaryTextColor
@@ -145,7 +144,6 @@ fun InventoryScreen(
         }
     }
     val shieldActuallyActive = isShieldActive && (activeShieldExpiresAt == null || remainingMillis > 0L)
-    val activeShieldLabel = if (currentLang == "ar") activeShieldType.labelAr else activeShieldType.labelEn
 
     // Skip Keys State
     val woodenKeys by ProfileManager.woodenKeysCount.collectAsStateWithLifecycle()
@@ -219,10 +217,6 @@ fun InventoryScreen(
                     InventoryHubContent(
                         currentLang = currentLang,
                         isDarkTheme = isDarkTheme,
-                        isHapticEnabled = isHapticEnabled,
-                        shieldActuallyActive = shieldActuallyActive,
-                        activeShieldLabel = activeShieldLabel,
-                        remainingFormatted = FlameManager.formatRemaining(remainingMillis),
                         totalManualShields = shields24h + shields48h + shields72h,
                         totalKeys = woodenKeys + bronzeKeys + silverKeys,
                         totalPotions = pulseElixirCount + shadowSerumCount + gabrielDropletCount + cryoInfusionCount + eternalRebirthCount,
@@ -233,7 +227,6 @@ fun InventoryScreen(
                         totalAvatarsCount = ProfileMasterInventory.MASTER_AVATARS.size,
                         equippedAvatarName = equippedAvatar.getLocalizedName(currentLang),
                         equippedAvatarIconName = equippedAvatar.badgeIconName,
-                        onOpenGuide = { showLongPressGuideDialog = true },
                         onSelectCategory = navigateToCategory,
                         onShowTooltip = { selectedTooltip = it }
                     )
@@ -413,10 +406,6 @@ fun InventoryScreen(
 private fun InventoryHubContent(
     currentLang: String,
     isDarkTheme: Boolean,
-    isHapticEnabled: Boolean,
-    shieldActuallyActive: Boolean,
-    activeShieldLabel: String,
-    remainingFormatted: String,
     totalManualShields: Int,
     totalKeys: Int,
     totalPotions: Int,
@@ -427,7 +416,6 @@ private fun InventoryHubContent(
     totalAvatarsCount: Int,
     equippedAvatarName: String,
     equippedAvatarIconName: String,
-    onOpenGuide: () -> Unit,
     onSelectCategory: (InventoryCategory) -> Unit,
     onShowTooltip: (InventoryTooltipSpec) -> Unit
 ) {
@@ -438,19 +426,6 @@ private fun InventoryHubContent(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Keep Protective Shields section in its place at the top
-        item {
-            ProtectiveShieldsHeaderCard(
-                currentLang = currentLang,
-                shieldActuallyActive = shieldActuallyActive,
-                activeShieldLabel = activeShieldLabel,
-                remainingFormatted = remainingFormatted,
-                isDarkTheme = isDarkTheme,
-                isHapticEnabled = isHapticEnabled,
-                onOpenGuide = onOpenGuide
-            )
-        }
-
         // Subtle 1-second long-press hint row
         item {
             Row(
