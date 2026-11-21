@@ -31,6 +31,14 @@ data class BackupResult(
 
 class BackupManager(private val repository: IndividualRepository) {
 
+    companion object {
+        private const val MAX_BACKUP_CHARS = 25 * 1024 * 1024
+        private val SUPPORTED_APP_IDS = setOf("Obsidian", "StrikePulse")
+    }
+
+    private fun finiteNonNegative(value: Double, fallback: Double = 0.0): Double =
+        if (value.isFinite() && value >= 0.0) value else fallback
+
     /**
      * Exports a 100% complete, literal snapshot of the entire StrikePulse application state:
      * - Room DB (`individuals` & `strike_events`)
@@ -134,11 +142,11 @@ class BackupManager(private val repository: IndividualRepository) {
                 individualsCount = individuals.size,
                 strikeEventsCount = strikeEvents.size
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             val errMsg = if (lang == "ar") {
-                "فشل حفظ النسخة الاحتياطية: ${e.localizedMessage}"
+                "فشل حفظ النسخة الاحتياطية؛ تعذّر الوصول إلى ملف الوجهة."
             } else {
-                "Backup export failed: ${e.localizedMessage}"
+                "Backup export failed; unable to write to destination file."
             }
             BackupResult(false, errMsg)
         }
@@ -157,7 +165,26 @@ class BackupManager(private val repository: IndividualRepository) {
         try {
             val jsonString = context.contentResolver.openInputStream(sourceUri)?.use { inputStream ->
                 BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8)).use { reader ->
-                    reader.readText()
+                    val sb = StringBuilder()
+                    val buffer = CharArray(8192)
+                    var totalChars = 0
+                    while (true) {
+                        val read = reader.read(buffer)
+                        if (read == -1) break
+                        totalChars += read
+                        if (totalChars > MAX_BACKUP_CHARS) {
+                            return@withContext BackupResult(
+                                success = false,
+                                message = if (lang == "ar") {
+                                    "حجم ملف النسخة الاحتياطية يتجاوز الحد الأقصى المسموح به."
+                                } else {
+                                    "Backup file exceeds the maximum allowed size."
+                                }
+                            )
+                        }
+                        sb.append(buffer, 0, read)
+                    }
+                    sb.toString()
                 }
             } ?: return@withContext BackupResult(
                 success = false,
@@ -165,6 +192,13 @@ class BackupManager(private val repository: IndividualRepository) {
             )
 
             val rootJson = JSONObject(jsonString)
+            val appHeader = rootJson.optString("app", "").trim()
+            if (appHeader.isNotEmpty() && appHeader !in SUPPORTED_APP_IDS) {
+                return@withContext BackupResult(
+                    success = false,
+                    message = if (lang == "ar") "ملف النسخة الاحتياطية لا يخص هذا التطبيق." else "Selected backup file does not belong to Obsidian."
+                )
+            }
 
             val individualsJson = rootJson.optJSONArray("individuals") ?: JSONArray()
             val eventsJson = rootJson.optJSONArray("strike_events") ?: JSONArray()
@@ -186,28 +220,28 @@ class BackupManager(private val repository: IndividualRepository) {
             val individualsList = mutableListOf<Individual>()
             for (i in 0 until individualsJson.length()) {
                 val obj = individualsJson.getJSONObject(i)
-                val length = obj.optDouble("length", 0.0)
-                val width = obj.optDouble("width", 0.0)
-                val sScore = obj.optDouble("sScore", 0.0)
-                val fScore = obj.optDouble("fScore", 0.0)
-                val cScore = obj.optDouble("cScore", 0.0)
-                val size = if (obj.has("size")) obj.optDouble("size") else Individual.calculateSize(length, width)
-                val boost = if (obj.has("boost")) obj.optDouble("boost") else Individual.calculateBoost(sScore, fScore, cScore, size)
+                val length = finiteNonNegative(obj.optDouble("length", 0.0))
+                val width = finiteNonNegative(obj.optDouble("width", 0.0))
+                val sScore = finiteNonNegative(obj.optDouble("sScore", 0.0))
+                val fScore = finiteNonNegative(obj.optDouble("fScore", 0.0))
+                val cScore = finiteNonNegative(obj.optDouble("cScore", 0.0))
+                val rawSize = if (obj.has("size")) finiteNonNegative(obj.optDouble("size", 0.0)) else Individual.calculateSize(length, width)
+                val rawBoost = if (obj.has("boost")) finiteNonNegative(obj.optDouble("boost", 0.0)) else Individual.calculateBoost(sScore, fScore, cScore, rawSize)
 
                 individualsList.add(
                     Individual(
-                        id = obj.optLong("id", 0L),
-                        fullName = obj.optString("fullName", "Unnamed"),
-                        type = obj.optString("type", "M"),
+                        id = obj.optLong("id", 0L).coerceAtLeast(0L),
+                        fullName = obj.optString("fullName", "Unnamed").ifBlank { "Unnamed" }.take(200),
+                        type = obj.optString("type", "M").ifBlank { "M" }.take(20),
                         length = length,
                         width = width,
-                        size = size,
+                        size = rawSize,
                         sScore = sScore,
                         fScore = fScore,
                         cScore = cScore,
-                        boost = boost,
-                        strikeCount = obj.optInt("strikeCount", 0),
-                        phoneNumber = obj.optString("phoneNumber", ""),
+                        boost = rawBoost,
+                        strikeCount = obj.optInt("strikeCount", 0).coerceAtLeast(0),
+                        phoneNumber = obj.optString("phoneNumber", "").take(64),
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                     )
                 )
@@ -218,16 +252,16 @@ class BackupManager(private val repository: IndividualRepository) {
                 val obj = eventsJson.getJSONObject(i)
                 eventsList.add(
                     StrikeEvent(
-                        id = obj.optLong("id", 0L),
-                        individualId = obj.optLong("individualId", 1L),
-                        individualName = obj.optString("individualName", ""),
-                        year = obj.optInt("year", 2026),
-                        date = obj.optString("date", "2026-01-01"),
-                        time = obj.optString("time", "12:00:00"),
-                        count = obj.optInt("count", 1),
-                        strikeType = obj.optString("strikeType", "Automatic"),
-                        performanceValue = obj.optDouble("performanceValue", 0.0),
-                        notes = obj.optString("notes", ""),
+                        id = obj.optLong("id", 0L).coerceAtLeast(0L),
+                        individualId = obj.optLong("individualId", 1L).coerceAtLeast(1L),
+                        individualName = obj.optString("individualName", "").take(200),
+                        year = obj.optInt("year", 2026).coerceIn(1970, 2100),
+                        date = obj.optString("date", "2026-01-01").take(32),
+                        time = obj.optString("time", "12:00:00").take(32),
+                        count = obj.optInt("count", 1).coerceAtLeast(1),
+                        strikeType = obj.optString("strikeType", "Automatic").take(64),
+                        performanceValue = finiteNonNegative(obj.optDouble("performanceValue", 0.0)),
+                        notes = obj.optString("notes", "").take(1000),
                         timestamp = obj.optLong("timestamp", System.currentTimeMillis())
                     )
                 )
@@ -255,11 +289,11 @@ class BackupManager(private val repository: IndividualRepository) {
                 individualsCount = result.first,
                 strikeEventsCount = result.second
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             val errMsg = if (lang == "ar") {
-                "ملف غير صالح أو حدث خطأ أثناء الاسترجاع: ${e.localizedMessage}"
+                "ملف النسخة الاحتياطية غير صالح أو تالف."
             } else {
-                "Invalid backup file or restore error: ${e.localizedMessage}"
+                "Invalid or corrupted backup file."
             }
             BackupResult(false, errMsg)
         }

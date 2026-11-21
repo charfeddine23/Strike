@@ -109,8 +109,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -271,38 +269,6 @@ fun SettingsSideDrawer(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun SettingsDialog(
-    viewModel: IndividualViewModel,
-    onDismiss: () -> Unit,
-    onLockAppNow: () -> Unit
-) {
-    val isDarkTheme = LocalAppDarkTheme.current
-    val dialogBg = if (isDarkTheme) Color(0xF00B132B) else Color(0xFFF6F9FD)
-    val dialogBorder = if (isDarkTheme) Color(0x6038BDF8) else Color(0xFFCBD5E1)
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .clip(RoundedCornerShape(24.dp))
-                .background(dialogBg)
-                .border(1.5.dp, dialogBorder, RoundedCornerShape(24.dp))
-                .padding(20.dp)
-        ) {
-            SettingsPanelBody(
-                viewModel = viewModel,
-                onDismiss = onDismiss,
-                onLockAppNow = onLockAppNow,
-                modifier = Modifier.fillMaxWidth()
-            )
         }
     }
 }

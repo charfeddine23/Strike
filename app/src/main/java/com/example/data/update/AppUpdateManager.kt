@@ -21,6 +21,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.net.URI
 import java.net.URLEncoder
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -83,6 +84,33 @@ object AppUpdateManager {
 
     private val dottedVersionRegex = Regex("""\d+(?:\.\d+)+""")
     private val singleVersionRegex = Regex("""\d+""")
+
+    private const val MAX_METADATA_BYTES = 5L * 1024L * 1024L
+    private const val MAX_APK_DOWNLOAD_BYTES = 250L * 1024L * 1024L
+
+    private val TRUSTED_GITHUB_HOSTS = setOf(
+        "github.com",
+        "api.github.com",
+        "raw.githubusercontent.com",
+        "objects.githubusercontent.com",
+        "github-releases.githubusercontent.com",
+        "release-assets.githubusercontent.com",
+        "codeload.github.com"
+    )
+
+    internal fun isTrustedGitHubUrl(rawUrl: String?): Boolean {
+        val candidate = rawUrl?.trim().orEmpty()
+        if (candidate.isEmpty()) return false
+        return try {
+            val uri = URI(candidate)
+            if (!uri.scheme.equals("https", ignoreCase = true)) return false
+            if (uri.userInfo != null) return false
+            val host = uri.host?.lowercase(Locale.US) ?: return false
+            host in TRUSTED_GITHUB_HOSTS
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -222,7 +250,8 @@ object AppUpdateManager {
 
         val releaseName = obj.optString("name", tagName).ifBlank { tagName }
         val releaseNotes = obj.optString("body", "").trim()
-        val htmlUrl = obj.optString("html_url", GITHUB_RELEASES_URL).ifBlank { GITHUB_RELEASES_URL }
+        val rawHtmlUrl = obj.optString("html_url", GITHUB_RELEASES_URL).ifBlank { GITHUB_RELEASES_URL }
+        val htmlUrl = if (isTrustedGitHubUrl(rawHtmlUrl)) rawHtmlUrl else GITHUB_RELEASES_URL
 
         var apkUrl: String? = null
         var apkFileName: String? = null
@@ -239,9 +268,9 @@ object AppUpdateManager {
                 val isApk = name.endsWith(".apk", ignoreCase = true) ||
                     contentType.equals("application/vnd.android.package-archive", ignoreCase = true) ||
                     dlUrl.substringBefore("?").endsWith(".apk", ignoreCase = true)
-                if (isApk && dlUrl.isNotBlank()) {
+                if (isApk && isTrustedGitHubUrl(dlUrl)) {
                     val resolvedName = name.ifBlank { dlUrl.substringAfterLast("/").substringBefore("?") }
-                    apkAssets.add(Triple(resolvedName, dlUrl, asset.optLong("size", 0L)))
+                    apkAssets.add(Triple(resolvedName, dlUrl, asset.optLong("size", 0L).coerceAtLeast(0L)))
                 }
             }
             // Prefer non-debug release APK when multiple APKs exist
@@ -293,7 +322,8 @@ object AppUpdateManager {
             val rawTitle = titleRegex.find(entryBlock)?.groupValues?.getOrNull(1)?.trim().orEmpty()
             val releaseName = decodeBasicXmlEntities(rawTitle).ifBlank { decodedTag }
             val versionName = extractVersionString(decodedTag, releaseName)
-            val htmlUrl = href.ifBlank { "$GITHUB_RELEASES_URL/tag/$tagFromHref" }
+            val fallbackTagUrl = "$GITHUB_RELEASES_URL/tag/${encodePathSegment(decodedTag)}"
+            val htmlUrl = if (isTrustedGitHubUrl(href)) href else fallbackTagUrl
 
             results.add(
                 GitHubReleaseInfo(
@@ -323,12 +353,13 @@ object AppUpdateManager {
         val candidates = hrefRegex.findAll(html)
             .map { it.groupValues[1].trim() }
             .distinct()
-            .map { rawHref ->
-                val fullUrl = if (rawHref.startsWith("http", ignoreCase = true)) {
-                    rawHref
-                } else {
-                    "https://github.com$rawHref"
+            .mapNotNull { rawHref ->
+                val fullUrl = when {
+                    rawHref.startsWith("https://", ignoreCase = true) -> rawHref
+                    rawHref.startsWith("/") -> "https://github.com$rawHref"
+                    else -> return@mapNotNull null
                 }
+                if (!isTrustedGitHubUrl(fullUrl)) return@mapNotNull null
                 val fileName = fullUrl.substringBefore("?").substringAfterLast("/")
                 fileName to fullUrl
             }
@@ -383,9 +414,11 @@ object AppUpdateManager {
             val type = obj.optString("type", "")
             val name = obj.optString("name", "").trim()
             if (type == "file" && name.endsWith(".apk", ignoreCase = true)) {
-                val dlUrl = obj.optString("download_url", "").trim().takeIf { it.isNotBlank() } ?: continue
-                val htmlUrl = obj.optString("html_url", GITHUB_REPO_URL).ifBlank { GITHUB_REPO_URL }
-                val size = obj.optLong("size", 0L)
+                val dlUrl = obj.optString("download_url", "").trim()
+                if (!isTrustedGitHubUrl(dlUrl)) continue
+                val rawHtmlUrl = obj.optString("html_url", GITHUB_REPO_URL).ifBlank { GITHUB_REPO_URL }
+                val htmlUrl = if (isTrustedGitHubUrl(rawHtmlUrl)) rawHtmlUrl else GITHUB_REPO_URL
+                val size = obj.optLong("size", 0L).coerceAtLeast(0L)
                 val versionName = extractVersionString(name)
                 if (normalizeVersionParts(versionName).isEmpty()) continue
                 candidates.add(
@@ -512,12 +545,13 @@ object AppUpdateManager {
                     } catch (_: Exception) {
                         tagFromRedirect
                     }
+                    val safeHtmlUrl = if (isTrustedGitHubUrl(finalUrl)) finalUrl else GITHUB_RELEASES_URL
                     bestRelease = GitHubReleaseInfo(
                         tagName = decodedTag,
                         versionName = extractVersionString(decodedTag),
                         releaseName = decodedTag,
                         releaseNotes = "",
-                        htmlUrl = finalUrl,
+                        htmlUrl = safeHtmlUrl,
                         apkDownloadUrl = null,
                         apkFileName = null,
                         apkSizeBytes = 0L
@@ -632,11 +666,20 @@ object AppUpdateManager {
         release: GitHubReleaseInfo
     ): AppUpdateState = withContext(Dispatchers.IO) {
         val downloadUrl = release.apkDownloadUrl
-        if (downloadUrl.isNullOrBlank()) {
+        val safeFallbackUrl = if (isTrustedGitHubUrl(release.htmlUrl)) release.htmlUrl else GITHUB_RELEASES_URL
+        if (downloadUrl.isNullOrBlank() || !isTrustedGitHubUrl(downloadUrl)) {
             val err = AppUpdateState.Error(
-                messageAr = "لا يوجد ملف APK مرفق في هذا الإصدار؛ يمكنك الفتح من GitHub",
-                fallbackUrl = release.htmlUrl,
-                messageEn = "No APK asset attached to this release; you can open GitHub instead"
+                messageAr = if (downloadUrl.isNullOrBlank()) {
+                    "لا يوجد ملف APK مرفق في هذا الإصدار؛ يمكنك الفتح من GitHub"
+                } else {
+                    "تم رفض رابط التحميل لأنه خارج نطاق GitHub الموثوق"
+                },
+                fallbackUrl = safeFallbackUrl,
+                messageEn = if (downloadUrl.isNullOrBlank()) {
+                    "No APK asset attached to this release; you can open GitHub instead"
+                } else {
+                    "Download URL rejected because it is outside the trusted GitHub host allowlist"
+                }
             )
             _state.value = err
             return@withContext err
@@ -664,10 +707,11 @@ object AppUpdateManager {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
+                val resolvedUrl = response.request.url.toString()
+                if (!response.isSuccessful || !isTrustedGitHubUrl(resolvedUrl)) {
                     val err = AppUpdateState.Error(
                         messageAr = "فشل تحميل التحديث من الخادم (HTTP ${response.code})",
-                        fallbackUrl = release.htmlUrl,
+                        fallbackUrl = safeFallbackUrl,
                         messageEn = "Failed to download update from server (HTTP ${response.code})"
                     )
                     _state.value = err
@@ -677,7 +721,7 @@ object AppUpdateManager {
                 val body = response.body ?: run {
                     val err = AppUpdateState.Error(
                         messageAr = "ملف التحديث فارغ أو غير صالح",
-                        fallbackUrl = release.htmlUrl,
+                        fallbackUrl = safeFallbackUrl,
                         messageEn = "Update package is empty or invalid"
                     )
                     _state.value = err
@@ -686,6 +730,15 @@ object AppUpdateManager {
 
                 val totalBytes = body.contentLength().let { len ->
                     if (len > 0L) len else release.apkSizeBytes
+                }
+                if (totalBytes > MAX_APK_DOWNLOAD_BYTES) {
+                    val err = AppUpdateState.Error(
+                        messageAr = "حجم ملف التحديث يتجاوز الحد الأقصى المسموح به",
+                        fallbackUrl = safeFallbackUrl,
+                        messageEn = "Update package exceeds the maximum allowed size"
+                    )
+                    _state.value = err
+                    return@withContext err
                 }
 
                 _state.value = AppUpdateState.Downloading(
@@ -705,8 +758,11 @@ object AppUpdateManager {
                             currentCoroutineContext().ensureActive()
                             val read = input.read(buffer)
                             if (read == -1) break
-                            output.write(buffer, 0, read)
                             downloaded += read
+                            if (downloaded > MAX_APK_DOWNLOAD_BYTES) {
+                                throw SecurityException("Downloaded APK exceeds maximum permitted size")
+                            }
+                            output.write(buffer, 0, read)
 
                             val now = System.currentTimeMillis()
                             if (now - lastEmitTime >= 80L || downloaded == totalBytes) {
@@ -758,7 +814,15 @@ object AppUpdateManager {
      * Returns true if the installer intent was launched, false if user must first allow unknown sources.
      */
     fun installDownloadedApk(context: Context, apkFile: File): Boolean {
-        if (!apkFile.exists()) return false
+        if (!apkFile.exists() || !apkFile.name.endsWith(".apk", ignoreCase = true)) return false
+        val updatesRoot = File(context.cacheDir, "updates").canonicalPath
+        val resolvedPath = try {
+            apkFile.canonicalPath
+        } catch (_: Exception) {
+            return false
+        }
+        if (!resolvedPath.startsWith(updatesRoot + File.separator)) return false
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!context.packageManager.canRequestPackageInstalls()) {
                 val permIntent = Intent(
@@ -786,14 +850,16 @@ object AppUpdateManager {
         return true
     }
 
-    fun openUrlExternally(context: Context, url: String) {
-        try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+    fun openUrlExternally(context: Context, url: String): Boolean {
+        if (!isTrustedGitHubUrl(url)) return false
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url.trim())).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
+            true
         } catch (_: Exception) {
-            // No external browser/handler available
+            false
         }
     }
 
@@ -812,6 +878,7 @@ object AppUpdateManager {
         url: String,
         accept: String = "application/vnd.github+json"
     ): FetchResult? {
+        if (!isTrustedGitHubUrl(url)) return null
         return try {
             val request = Request.Builder()
                 .url(url)
@@ -819,10 +886,32 @@ object AppUpdateManager {
                 .header("User-Agent", "Obsidian-Android/1.0")
                 .build()
             client.newCall(request).execute().use { response ->
+                val resolvedUrl = response.request.url.toString()
+                if (!isTrustedGitHubUrl(resolvedUrl)) return null
+                val bodyString = if (response.isSuccessful) {
+                    val body = response.body
+                    val contentLen = body?.contentLength() ?: -1L
+                    if (contentLen > MAX_METADATA_BYTES) return null
+                    body?.byteStream()?.use { stream ->
+                        val limited = ByteArray(4096)
+                        val out = java.io.ByteArrayOutputStream()
+                        var total = 0L
+                        while (true) {
+                            val n = stream.read(limited)
+                            if (n == -1) break
+                            total += n
+                            if (total > MAX_METADATA_BYTES) return null
+                            out.write(limited, 0, n)
+                        }
+                        out.toString(Charsets.UTF_8.name())
+                    }
+                } else {
+                    null
+                }
                 FetchResult(
                     code = response.code,
-                    body = if (response.isSuccessful) response.body?.string() else null,
-                    finalUrl = response.request.url.toString()
+                    body = bodyString,
+                    finalUrl = resolvedUrl
                 )
             }
         } catch (_: Exception) {

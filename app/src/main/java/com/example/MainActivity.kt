@@ -6,6 +6,7 @@ import android.content.res.AssetManager
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivityResultRegistryOwner
@@ -178,6 +179,7 @@ class MainActivity : FragmentActivity() {
             }
             val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
             val isAppUnlocked by viewModel.isAppUnlocked.collectAsStateWithLifecycle()
+            val isFingerprintLockEnabled by viewModel.isFingerprintLockEnabled
 
             val rootView = LocalView.current
             if (!rootView.isInEditMode) {
@@ -185,6 +187,15 @@ class MainActivity : FragmentActivity() {
                     val controller = WindowCompat.getInsetsController(window, rootView)
                     controller.isAppearanceLightStatusBars = !isDarkTheme
                     controller.isAppearanceLightNavigationBars = !isDarkTheme
+
+                    if (isFingerprintLockEnabled || !isAppUnlocked) {
+                        window.setFlags(
+                            WindowManager.LayoutParams.FLAG_SECURE,
+                            WindowManager.LayoutParams.FLAG_SECURE
+                        )
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    }
                 }
             }
 

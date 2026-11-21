@@ -195,8 +195,6 @@ class FullBackupRestoreTest {
         secPrefs.isHapticFeedbackEnabled = false
         secPrefs.isAutoUpdateEnabled = false
         secPrefs.isFingerprintLockEnabled = true
-        secPrefs.savedPattern = "1-2-3-6-9"
-        secPrefs.isPatternLockEnabled = true
 
         // Snapshot expected flame state after all mutations (including station claim shield activations)
         val expectedFlameScore = FlameManager.flameScore.value
@@ -289,7 +287,61 @@ class FullBackupRestoreTest {
         assertFalse(restoredSec.isHapticFeedbackEnabled)
         assertFalse(restoredSec.isAutoUpdateEnabled)
         assertTrue(restoredSec.isFingerprintLockEnabled)
-        assertTrue(restoredSec.isPatternLockEnabled)
-        assertEquals("1-2-3-6-9", restoredSec.savedPattern)
+
+        val exportedSnapshot = restoredSec.exportSnapshot()
+        assertFalse(exportedSnapshot.has("savedPattern"))
+        assertFalse(exportedSnapshot.has("isPatternLockEnabled"))
+    }
+
+    @Test
+    fun testBackupRejectsForeignAppHeaderAndSanitizesNegativeNumbers() = runBlocking {
+        val foreignFile = File(app.cacheDir, "foreign_backup.json")
+        val maliciousNumbersFile = File(app.cacheDir, "sanitized_backup.json")
+        try {
+            foreignFile.writeText("""{"app":"UntrustedThirdParty","individuals":[{"fullName":"Test"}]}""")
+            val foreignRes = backupManager.importBackup(app, Uri.fromFile(foreignFile), replaceExisting = false, lang = "en")
+            assertFalse(foreignRes.success)
+
+            maliciousNumbersFile.writeText(
+                """
+                {
+                  "app": "Obsidian",
+                  "individuals": [
+                    {
+                      "id": 99,
+                      "fullName": "Sanitized Target",
+                      "type": "M",
+                      "length": -50.0,
+                      "width": -10.0,
+                      "sScore": -5.0,
+                      "fScore": 40.0,
+                      "cScore": 50.0,
+                      "strikeCount": -9
+                    }
+                  ],
+                  "preferences_state": {
+                    "selectedLanguage": "en",
+                    "savedPattern": "legacy-secret-123",
+                    "isPatternLockEnabled": true
+                  }
+                }
+                """.trimIndent()
+            )
+            val importRes = backupManager.importBackup(app, Uri.fromFile(maliciousNumbersFile), replaceExisting = true, lang = "en")
+            assertTrue("Expected sanitized import success: ${importRes.message}", importRes.success)
+
+            val restored = repository.getAllIndividualsList().first { it.id == 99L }
+            assertEquals(0.0, restored.length, 0.001)
+            assertEquals(0.0, restored.width, 0.001)
+            assertEquals(0.0, restored.sScore, 0.001)
+            assertEquals(0, restored.strikeCount)
+
+            val rawPrefs = app.getSharedPreferences("strikepulse_security_prefs", Application.MODE_PRIVATE)
+            assertFalse(rawPrefs.contains("saved_pattern"))
+            assertFalse(rawPrefs.contains("pattern_lock_enabled"))
+        } finally {
+            foreignFile.delete()
+            maliciousNumbersFile.delete()
+        }
     }
 }

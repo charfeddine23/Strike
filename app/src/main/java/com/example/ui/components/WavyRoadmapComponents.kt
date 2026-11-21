@@ -241,31 +241,6 @@ fun wavyNodeNormalizedX(continuousStationIndex: Float): Float {
 }
 
 /**
- * Top Frosted Glass Roadmap Progress HUD Card with quick-jump milestone chips.
- * Delegates to [RoadmapProgressHeader] which includes the glowing XP Guide icon & Liquid Glass modal.
- */
-@Composable
-fun RoadmapProgressHudCard(
-    currentStationId: Int,
-    totalXp: Long,
-    isAr: Boolean,
-    onJumpToStation: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-    glowPulse: Float = 0.85f,
-    isDarkTheme: Boolean = LocalAppDarkTheme.current
-) {
-    RoadmapProgressHeader(
-        currentStationId = currentStationId,
-        totalXp = totalXp,
-        isAr = isAr,
-        onJumpToStation = onJumpToStation,
-        modifier = modifier,
-        glowPulse = glowPulse,
-        isDarkTheme = isDarkTheme
-    )
-}
-
-/**
  * Single continuous wavy snake-road segment + circular neon node + frosted glass reward card.
  * Positioned in physical LTR horizontal coordinates so the Bezier/sine Canvas curve aligns with
  * every orb pixel-for-pixel in both RTL ("ar") and LTR ("en"), while restoring layout direction inside the card.

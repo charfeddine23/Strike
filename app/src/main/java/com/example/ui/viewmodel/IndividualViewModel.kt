@@ -25,7 +25,6 @@ import com.example.data.roadmap.TaskItem
 import com.example.data.roadmap.XpCalculationEngine
 import com.example.data.roadmap.XpHistoryEntry
 import com.example.util.SmartSearchMatcher
-import com.example.util.SmartSearchResult
 import com.example.data.update.AppUpdateManager
 import com.example.data.update.AppUpdateState
 import com.example.data.update.GitHubReleaseInfo
@@ -221,21 +220,6 @@ class IndividualViewModel(
         } else {
             SmartSearchMatcher.filterAndRank(typeFiltered, query).map { it.individual }
         }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
-
-    // Instant Smart Search Engine State (replaces the old FlameEnergyBanner header slot)
-    private val _strikeSearchQuery = MutableStateFlow("")
-    val strikeSearchQuery: StateFlow<String> = _strikeSearchQuery.asStateFlow()
-
-    val filteredStrikeIndividuals: StateFlow<List<SmartSearchResult>> = combine(
-        allIndividuals,
-        _strikeSearchQuery
-    ) { list, query ->
-        SmartSearchMatcher.filterAndRank(list, query)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -946,14 +930,6 @@ class IndividualViewModel(
 
     fun clearSearch() {
         _searchQuery.value = ""
-    }
-
-    fun setStrikeSearchQuery(query: String) {
-        _strikeSearchQuery.value = query
-    }
-
-    fun clearStrikeSearch() {
-        _strikeSearchQuery.value = ""
     }
 
     fun setFilterType(type: String) {

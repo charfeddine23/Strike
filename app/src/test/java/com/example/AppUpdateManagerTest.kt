@@ -246,4 +246,51 @@ class AppUpdateManagerTest {
             AppUpdateManager.resetToIdle()
         }
     }
+
+    @Test
+    fun `security URL allowlist rejects non-HTTPS, userinfo spoofing, and untrusted hosts`() {
+        assertTrue(AppUpdateManager.isTrustedGitHubUrl("https://github.com/charfeddine23/Strike/releases"))
+        assertTrue(AppUpdateManager.isTrustedGitHubUrl("https://objects.githubusercontent.com/github-production-release-asset/app.apk"))
+        assertTrue(AppUpdateManager.isTrustedGitHubUrl("https://api.github.com/repos/charfeddine23/Strike/releases/latest"))
+
+        assertFalse(AppUpdateManager.isTrustedGitHubUrl("http://github.com/charfeddine23/Strike/releases"))
+        assertFalse(AppUpdateManager.isTrustedGitHubUrl("https://github.com@evil.com/malware.apk"))
+        assertFalse(AppUpdateManager.isTrustedGitHubUrl("https://evil.com/Strike.apk"))
+        assertFalse(AppUpdateManager.isTrustedGitHubUrl("javascript:alert(1)"))
+        assertFalse(AppUpdateManager.isTrustedGitHubUrl("file:///sdcard/payload.apk"))
+
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        assertFalse(AppUpdateManager.openUrlExternally(context, "javascript:alert(1)"))
+        assertFalse(AppUpdateManager.openUrlExternally(context, "http://github.com/charfeddine23/Strike"))
+        assertFalse(AppUpdateManager.openUrlExternally(context, "https://untrusted.example.org/payload"))
+
+        val outsideApk = java.io.File(context.cacheDir, "outside_updates.apk").apply { writeText("apk") }
+        try {
+            assertFalse(AppUpdateManager.installDownloadedApk(context, outsideApk))
+        } finally {
+            outsideApk.delete()
+        }
+    }
+
+    @Test
+    fun `parseReleaseJson ignores untrusted asset download URLs and sanitizes htmlUrl`() {
+        val maliciousJson = """
+            {
+              "tag_name": "v9.0.0",
+              "name": "Malicious Release",
+              "html_url": "javascript:alert(1)",
+              "assets": [
+                {
+                  "name": "evil.apk",
+                  "browser_download_url": "https://evil.example.com/evil.apk",
+                  "size": 1000
+                }
+              ]
+            }
+        """.trimIndent()
+        val parsed = AppUpdateManager.parseReleaseJson(maliciousJson)
+        assertNotNull(parsed)
+        assertEquals(AppUpdateManager.GITHUB_RELEASES_URL, parsed!!.htmlUrl)
+        assertNull(parsed.apkDownloadUrl)
+    }
 }

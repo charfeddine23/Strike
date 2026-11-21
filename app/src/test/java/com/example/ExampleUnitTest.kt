@@ -86,16 +86,6 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun test_pattern_lock_matching_logic() {
-        val savedPattern = "0-1-2-5-8"
-        val correctAttempt = "0-1-2-5-8"
-        val wrongAttempt = "0-1-2-4-7"
-
-        assertTrue(savedPattern == correctAttempt)
-        assertFalse(savedPattern == wrongAttempt)
-    }
-
-    @Test
     fun test_score_calculation_boost_times_strike() {
         val boost = 250.0
         val strikes = 15

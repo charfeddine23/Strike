@@ -11,25 +11,26 @@ class SecurityPreferences(context: Context) {
 
     companion object {
         private const val KEY_FINGERPRINT_LOCK_ENABLED = "fingerprint_lock_enabled"
-        private const val KEY_PATTERN_LOCK_ENABLED = "pattern_lock_enabled"
-        private const val KEY_SAVED_PATTERN = "saved_pattern"
+        private const val LEGACY_KEY_PATTERN_LOCK_ENABLED = "pattern_lock_enabled"
+        private const val LEGACY_KEY_SAVED_PATTERN = "saved_pattern"
         private const val KEY_APP_LANGUAGE = "app_language"
         private const val KEY_HAPTIC_ENABLED = "haptic_feedback_enabled"
         private const val KEY_AUTO_UPDATE_ENABLED = "auto_update_enabled"
         private const val KEY_THEME_MODE = "app_theme_mode"
     }
 
+    init {
+        if (prefs.contains(LEGACY_KEY_SAVED_PATTERN) || prefs.contains(LEGACY_KEY_PATTERN_LOCK_ENABLED)) {
+            prefs.edit()
+                .remove(LEGACY_KEY_SAVED_PATTERN)
+                .remove(LEGACY_KEY_PATTERN_LOCK_ENABLED)
+                .apply()
+        }
+    }
+
     var isFingerprintLockEnabled: Boolean
         get() = prefs.getBoolean(KEY_FINGERPRINT_LOCK_ENABLED, false)
         set(value) = prefs.edit().putBoolean(KEY_FINGERPRINT_LOCK_ENABLED, value).apply()
-
-    var isPatternLockEnabled: Boolean
-        get() = prefs.getBoolean(KEY_PATTERN_LOCK_ENABLED, false)
-        set(value) = prefs.edit().putBoolean(KEY_PATTERN_LOCK_ENABLED, value).apply()
-
-    var savedPattern: String?
-        get() = prefs.getString(KEY_SAVED_PATTERN, null)
-        set(value) = prefs.edit().putString(KEY_SAVED_PATTERN, value).apply()
 
     var selectedLanguage: String
         get() = prefs.getString(KEY_APP_LANGUAGE, "ar") ?: "ar"
@@ -47,23 +48,9 @@ class SecurityPreferences(context: Context) {
         get() = AppThemeMode.fromPref(prefs.getString(KEY_THEME_MODE, AppThemeMode.SYSTEM.prefValue))
         set(value) = prefs.edit().putString(KEY_THEME_MODE, value.prefValue).apply()
 
-    fun verifyPattern(pattern: String): Boolean {
-        val stored = savedPattern ?: return false
-        return stored == pattern
-    }
-
-    fun clearPattern() {
-        prefs.edit()
-            .remove(KEY_SAVED_PATTERN)
-            .putBoolean(KEY_PATTERN_LOCK_ENABLED, false)
-            .apply()
-    }
-
     fun exportSnapshot(): JSONObject {
         return JSONObject().apply {
             put("isFingerprintLockEnabled", isFingerprintLockEnabled)
-            put("isPatternLockEnabled", isPatternLockEnabled)
-            put("savedPattern", savedPattern ?: "")
             put("selectedLanguage", selectedLanguage)
             put("isHapticFeedbackEnabled", isHapticFeedbackEnabled)
             put("isAutoUpdateEnabled", isAutoUpdateEnabled)
@@ -72,10 +59,9 @@ class SecurityPreferences(context: Context) {
     }
 
     fun restoreSnapshot(json: JSONObject) {
-        val lang = json.optString("selectedLanguage", selectedLanguage).ifBlank { "ar" }
+        val rawLang = json.optString("selectedLanguage", selectedLanguage)
+        val lang = if (rawLang in setOf("ar", "fr", "en")) rawLang else selectedLanguage
         val fingerprintEnabled = json.optBoolean("isFingerprintLockEnabled", isFingerprintLockEnabled)
-        val patternEnabled = json.optBoolean("isPatternLockEnabled", isPatternLockEnabled)
-        val pattern = json.optString("savedPattern", "").ifBlank { null }
         val haptic = json.optBoolean("isHapticFeedbackEnabled", isHapticFeedbackEnabled)
         val autoUpdate = json.optBoolean("isAutoUpdateEnabled", isAutoUpdateEnabled)
         val restoredThemeMode = AppThemeMode.fromPref(json.optString("themeMode", themeMode.prefValue))
@@ -83,8 +69,8 @@ class SecurityPreferences(context: Context) {
         prefs.edit().apply {
             putString(KEY_APP_LANGUAGE, lang)
             putBoolean(KEY_FINGERPRINT_LOCK_ENABLED, fingerprintEnabled)
-            putBoolean(KEY_PATTERN_LOCK_ENABLED, patternEnabled && pattern != null)
-            if (pattern != null) putString(KEY_SAVED_PATTERN, pattern) else remove(KEY_SAVED_PATTERN)
+            remove(LEGACY_KEY_SAVED_PATTERN)
+            remove(LEGACY_KEY_PATTERN_LOCK_ENABLED)
             putBoolean(KEY_HAPTIC_ENABLED, haptic)
             putBoolean(KEY_AUTO_UPDATE_ENABLED, autoUpdate)
             putString(KEY_THEME_MODE, restoredThemeMode.prefValue)
