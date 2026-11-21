@@ -279,4 +279,6 @@
     <string name="records_dashboard_open">Ouvrir</string>
     <string name="expand_card">Développer les détails</string>
     <string name="collapse_card">Réduire les détails</string>
+    <string name="screenshot_protection_title">Bloquer les captures (Non-Screenshot)</string>
+    <string name="screenshot_protection_desc">Empêcher les captures et l\'enregistrement d\'écran dans l\'application</string>
 </resources>

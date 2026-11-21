@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.view.SoundEffectConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -14,8 +15,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -74,6 +77,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -87,6 +91,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
@@ -560,6 +567,103 @@ fun RoadmapScreen(
                                 .padding(horizontal = 16.dp)
                         ) {
                             var everlastingFilter by remember { mutableStateOf(0) } // 0: All active, 1: Collect, 2: Pending
+                            var showEternalGoalsHeader by remember { mutableStateOf(true) }
+                            val tasksListState = rememberLazyListState()
+
+                            val currentTasks = when (selectedTaskPeriod) {
+                                TaskPeriod.DAILY -> dailyTasks
+                                TaskPeriod.WEEKLY -> weeklyTasks
+                                TaskPeriod.MONTHLY -> monthlyTasks
+                                TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> when (everlastingFilter) {
+                                    1 -> yearlyTasks.filter { it.isReadyToClaim }
+                                    2 -> yearlyTasks.filter { !it.isReadyToClaim }
+                                    else -> yearlyTasks
+                                }
+                            }
+
+                            LaunchedEffect(selectedTaskPeriod) {
+                                showEternalGoalsHeader = true
+                                tasksListState.scrollToItem(0)
+                            }
+
+                            LaunchedEffect(tasksListState, selectedTaskPeriod) {
+                                if (selectedTaskPeriod == TaskPeriod.YEARLY || selectedTaskPeriod == TaskPeriod.EVERLASTING) {
+                                    snapshotFlow {
+                                        tasksListState.firstVisibleItemIndex to tasksListState.firstVisibleItemScrollOffset
+                                    }.collect { (index, offset) ->
+                                        if ((index > 0 || offset > 24) && showEternalGoalsHeader) {
+                                            showEternalGoalsHeader = false
+                                        }
+                                    }
+                                }
+                            }
+
+                            LaunchedEffect(currentTasks.isEmpty(), selectedTaskPeriod) {
+                                if ((selectedTaskPeriod == TaskPeriod.YEARLY || selectedTaskPeriod == TaskPeriod.EVERLASTING) &&
+                                    currentTasks.isEmpty()
+                                ) {
+                                    showEternalGoalsHeader = true
+                                }
+                            }
+
+                            val eternalHeaderNestedScroll = remember(selectedTaskPeriod) {
+                                object : NestedScrollConnection {
+                                    private var upwardSwipeDelta = 0f
+                                    private var downwardPullAtTopDelta = 0f
+
+                                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                                        if (selectedTaskPeriod != TaskPeriod.YEARLY && selectedTaskPeriod != TaskPeriod.EVERLASTING) {
+                                            return Offset.Zero
+                                        }
+                                        if (source == NestedScrollSource.UserInput) {
+                                            val atFirstTask = tasksListState.firstVisibleItemIndex == 0 &&
+                                                tasksListState.firstVisibleItemScrollOffset == 0
+                                            if (available.y < 0f && showEternalGoalsHeader) {
+                                                downwardPullAtTopDelta = 0f
+                                                upwardSwipeDelta += -available.y
+                                                if (upwardSwipeDelta >= 12f) {
+                                                    upwardSwipeDelta = 0f
+                                                    showEternalGoalsHeader = false
+                                                }
+                                            } else if (available.y > 0f) {
+                                                upwardSwipeDelta = 0f
+                                                if (atFirstTask && !showEternalGoalsHeader) {
+                                                    downwardPullAtTopDelta += available.y
+                                                    if (downwardPullAtTopDelta >= 14f) {
+                                                        downwardPullAtTopDelta = 0f
+                                                        showEternalGoalsHeader = true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        return Offset.Zero
+                                    }
+
+                                    override fun onPostScroll(
+                                        consumed: Offset,
+                                        available: Offset,
+                                        source: NestedScrollSource
+                                    ): Offset {
+                                        if (selectedTaskPeriod != TaskPeriod.YEARLY && selectedTaskPeriod != TaskPeriod.EVERLASTING) {
+                                            return Offset.Zero
+                                        }
+                                        val atFirstTask = tasksListState.firstVisibleItemIndex == 0 &&
+                                            tasksListState.firstVisibleItemScrollOffset == 0
+                                        if (!atFirstTask) {
+                                            downwardPullAtTopDelta = 0f
+                                            return Offset.Zero
+                                        }
+                                        if (source == NestedScrollSource.UserInput && available.y > 0f && !showEternalGoalsHeader) {
+                                            downwardPullAtTopDelta += available.y
+                                            if (downwardPullAtTopDelta >= 14f) {
+                                                downwardPullAtTopDelta = 0f
+                                                showEternalGoalsHeader = true
+                                            }
+                                        }
+                                        return Offset.Zero
+                                    }
+                                }
+                            }
 
                             // Period Selector Chips
                             Row(
@@ -595,12 +699,25 @@ fun RoadmapScreen(
                                     isSelected = selectedTaskPeriod == TaskPeriod.YEARLY,
                                     accentColor = cyanAccent,
                                     isDarkTheme = isDarkTheme,
+                                    modifier = Modifier.testTag("period_chip_eternal"),
                                     onClick = { selectedTaskPeriod = TaskPeriod.YEARLY }
                                 )
                             }
 
-                            // Eternal Master Goals Header Banner
-                            if (selectedTaskPeriod == TaskPeriod.YEARLY) {
+                            // Eternal Master Goals Header Banner (smoothly hides on upward scroll, returns on pull-down at first task)
+                            AnimatedVisibility(
+                                visible = (selectedTaskPeriod == TaskPeriod.YEARLY || selectedTaskPeriod == TaskPeriod.EVERLASTING) &&
+                                    showEternalGoalsHeader,
+                                enter = expandVertically(
+                                    expandFrom = Alignment.Top,
+                                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                                ) + fadeIn(animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing)),
+                                exit = shrinkVertically(
+                                    shrinkTowards = Alignment.Top,
+                                    animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing)
+                                ) + fadeOut(animationSpec = tween(durationMillis = 160, easing = FastOutLinearInEasing)),
+                                label = "eternal_goals_header_visibility"
+                            ) {
                                 val readyEternalCount = yearlyTasks.count { it.isReadyToClaim }
                                 val claimedEternalCount = (TaskPools.ALL_EVERLASTING_TASKS.size - yearlyTasks.size).coerceAtLeast(0)
                                 val totalEternal = TaskPools.ALL_EVERLASTING_TASKS.size.coerceAtLeast(1)
@@ -609,7 +726,8 @@ fun RoadmapScreen(
                                 LiquidGlassCard(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(bottom = 10.dp),
+                                        .padding(bottom = 10.dp)
+                                        .testTag("eternal_goals_header"),
                                     shape = RoundedCornerShape(14.dp),
                                     darkTheme = isDarkTheme
                                 ) {
@@ -702,19 +820,12 @@ fun RoadmapScreen(
                                 }
                             }
 
-                            val currentTasks = when (selectedTaskPeriod) {
-                                TaskPeriod.DAILY -> dailyTasks
-                                TaskPeriod.WEEKLY -> weeklyTasks
-                                TaskPeriod.MONTHLY -> monthlyTasks
-                                TaskPeriod.YEARLY, TaskPeriod.EVERLASTING -> when (everlastingFilter) {
-                                    1 -> yearlyTasks.filter { it.isReadyToClaim }
-                                    2 -> yearlyTasks.filter { !it.isReadyToClaim }
-                                    else -> yearlyTasks
-                                }
-                            }
-
                             LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
+                                state = tasksListState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .nestedScroll(eternalHeaderNestedScroll)
+                                    .testTag("tasks_lazy_list"),
                                 contentPadding = PaddingValues(bottom = 48.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
@@ -1732,6 +1843,7 @@ fun PeriodFilterChip(
     isSelected: Boolean,
     accentColor: Color = NeonCyan,
     isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val bgColor = when {
@@ -1751,7 +1863,7 @@ fun PeriodFilterChip(
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(bgColor)
             .border(1.dp, borderColor, RoundedCornerShape(10.dp))

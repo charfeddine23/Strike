@@ -178,7 +178,8 @@ class MainActivity : FragmentActivity() {
             }
             val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
             val isAppUnlocked by viewModel.isAppUnlocked.collectAsStateWithLifecycle()
-            val isFingerprintLockEnabled by viewModel.isFingerprintLockEnabled
+            val isScreenshotBlockingEnabled = viewModel.isScreenshotBlockingEnabled.value
+            val isScreenSecureRequired = isScreenshotBlockingEnabled || !isAppUnlocked
 
             val rootView = LocalView.current
             if (!rootView.isInEditMode) {
@@ -187,7 +188,7 @@ class MainActivity : FragmentActivity() {
                     controller.isAppearanceLightStatusBars = !isDarkTheme
                     controller.isAppearanceLightNavigationBars = !isDarkTheme
 
-                    if (isFingerprintLockEnabled || !isAppUnlocked) {
+                    if (isScreenSecureRequired) {
                         window.setFlags(
                             WindowManager.LayoutParams.FLAG_SECURE,
                             WindowManager.LayoutParams.FLAG_SECURE

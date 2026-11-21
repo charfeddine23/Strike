@@ -279,4 +279,6 @@
     <string name="records_dashboard_open">عرض</string>
     <string name="expand_card">تمديد التفاصيل</string>
     <string name="collapse_card">تقليص التفاصيل</string>
+    <string name="screenshot_protection_title">منع لقطات الشاشة (Non-Screenshot)</string>
+    <string name="screenshot_protection_desc">حظر تصوير الشاشة وتسجيلها لحماية خصوصيتك داخل التطبيق</string>
 </resources>

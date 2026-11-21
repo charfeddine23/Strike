@@ -129,6 +129,17 @@ class StrikeBiometricDeleteTest {
                 false
             }
         }
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            val nodes = composeRule.onAllNodesWithTag("strike_button_total_count", useUnmergedTree = true)
+                .fetchSemanticsNodes()
+            val text = nodes.firstOrNull()?.config?.getOrElse(SemanticsProperties.Text) { emptyList() }
+                ?.joinToString("") { it.text }
+            if (text == "1") true else {
+                Thread.sleep(20)
+                false
+            }
+        }
         composeRule.waitForIdle()
         assertEquals(0, composeRule.onAllNodesWithTag("delete_strike_biometric_dialog").fetchSemanticsNodes().size)
         composeRule.onNodeWithTag("strike_button_total_count", useUnmergedTree = true)

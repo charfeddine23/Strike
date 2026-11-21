@@ -17,6 +17,7 @@ class SecurityPreferences(context: Context) {
         private const val KEY_HAPTIC_ENABLED = "haptic_feedback_enabled"
         private const val KEY_AUTO_UPDATE_ENABLED = "auto_update_enabled"
         private const val KEY_THEME_MODE = "app_theme_mode"
+        private const val KEY_SCREENSHOT_BLOCKING_ENABLED = "screenshot_blocking_enabled"
     }
 
     init {
@@ -44,6 +45,10 @@ class SecurityPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_AUTO_UPDATE_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_UPDATE_ENABLED, value).apply()
 
+    var isScreenshotBlockingEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SCREENSHOT_BLOCKING_ENABLED, true)
+        set(value) = prefs.edit().putBoolean(KEY_SCREENSHOT_BLOCKING_ENABLED, value).apply()
+
     var themeMode: AppThemeMode
         get() = AppThemeMode.fromPref(prefs.getString(KEY_THEME_MODE, AppThemeMode.SYSTEM.prefValue))
         set(value) = prefs.edit().putString(KEY_THEME_MODE, value.prefValue).apply()
@@ -54,6 +59,7 @@ class SecurityPreferences(context: Context) {
             put("selectedLanguage", selectedLanguage)
             put("isHapticFeedbackEnabled", isHapticFeedbackEnabled)
             put("isAutoUpdateEnabled", isAutoUpdateEnabled)
+            put("isScreenshotBlockingEnabled", isScreenshotBlockingEnabled)
             put("themeMode", themeMode.prefValue)
         }
     }
@@ -64,6 +70,7 @@ class SecurityPreferences(context: Context) {
         val fingerprintEnabled = json.optBoolean("isFingerprintLockEnabled", isFingerprintLockEnabled)
         val haptic = json.optBoolean("isHapticFeedbackEnabled", isHapticFeedbackEnabled)
         val autoUpdate = json.optBoolean("isAutoUpdateEnabled", isAutoUpdateEnabled)
+        val screenshotBlocking = json.optBoolean("isScreenshotBlockingEnabled", isScreenshotBlockingEnabled)
         val restoredThemeMode = AppThemeMode.fromPref(json.optString("themeMode", themeMode.prefValue))
 
         prefs.edit().apply {
@@ -73,6 +80,7 @@ class SecurityPreferences(context: Context) {
             remove(LEGACY_KEY_PATTERN_LOCK_ENABLED)
             putBoolean(KEY_HAPTIC_ENABLED, haptic)
             putBoolean(KEY_AUTO_UPDATE_ENABLED, autoUpdate)
+            putBoolean(KEY_SCREENSHOT_BLOCKING_ENABLED, screenshotBlocking)
             putString(KEY_THEME_MODE, restoredThemeMode.prefValue)
             apply()
         }

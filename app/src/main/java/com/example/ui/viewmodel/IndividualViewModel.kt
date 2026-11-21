@@ -84,8 +84,9 @@ class IndividualViewModel(
     private val securityPrefs = SecurityPreferences(application)
     val backupManager = BackupManager(repository)
 
-    // Security, Fingerprint Authentication, Haptics & Auto-Update
+    // Security, Fingerprint Authentication, Screenshot Protection, Haptics & Auto-Update
     val isFingerprintLockEnabled = mutableStateOf(securityPrefs.isFingerprintLockEnabled)
+    val isScreenshotBlockingEnabled = mutableStateOf(securityPrefs.isScreenshotBlockingEnabled)
     val isHapticFeedbackEnabled = mutableStateOf(securityPrefs.isHapticFeedbackEnabled)
     val isAutoUpdateEnabled = mutableStateOf(securityPrefs.isAutoUpdateEnabled)
     val appUpdateState: StateFlow<AppUpdateState> = AppUpdateManager.state
@@ -812,6 +813,27 @@ class IndividualViewModel(
         }
     }
 
+    fun setScreenshotBlockingEnabled(enabled: Boolean) {
+        securityPrefs.isScreenshotBlockingEnabled = enabled
+        isScreenshotBlockingEnabled.value = enabled
+        viewModelScope.launch {
+            val msg = if (enabled) {
+                when (currentLanguage.value) {
+                    "ar" -> "تم تفعيل منع لقطات الشاشة"
+                    "fr" -> "Blocage des captures d'écran activé"
+                    else -> "Screenshot blocking enabled"
+                }
+            } else {
+                when (currentLanguage.value) {
+                    "ar" -> "تم تعطيل منع لقطات الشاشة"
+                    "fr" -> "Blocage des captures d'écran désactivé"
+                    else -> "Screenshot blocking disabled"
+                }
+            }
+            emitMessage(msg)
+        }
+    }
+
     fun notifyMessage(msg: String) {
         viewModelScope.launch {
             emitMessage(msg)
@@ -1476,6 +1498,7 @@ class IndividualViewModel(
                 _currentLanguage.value = securityPrefs.selectedLanguage
                 _themeMode.value = securityPrefs.themeMode
                 isFingerprintLockEnabled.value = securityPrefs.isFingerprintLockEnabled
+                isScreenshotBlockingEnabled.value = securityPrefs.isScreenshotBlockingEnabled
                 isHapticFeedbackEnabled.value = securityPrefs.isHapticFeedbackEnabled
                 isAutoUpdateEnabled.value = securityPrefs.isAutoUpdateEnabled
                 _isAppUnlocked.value = true

@@ -279,4 +279,6 @@
     <string name="records_dashboard_open">Open</string>
     <string name="expand_card">Expand details</string>
     <string name="collapse_card">Collapse details</string>
+    <string name="screenshot_protection_title">Block Screenshots (Non-Screenshot)</string>
+    <string name="screenshot_protection_desc">Prevent screenshots and screen recording inside the app</string>
 </resources>

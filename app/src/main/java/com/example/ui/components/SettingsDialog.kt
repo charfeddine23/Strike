@@ -284,6 +284,7 @@ private fun SettingsPanelBody(
     val hostActivity = rememberFragmentActivity()
     val lifecycleOwner = LocalLifecycleOwner.current
     val isFingerprintLockEnabled by viewModel.isFingerprintLockEnabled
+    val isScreenshotBlockingEnabled by viewModel.isScreenshotBlockingEnabled
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
     val isAutoUpdateEnabled by viewModel.isAutoUpdateEnabled
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
@@ -571,7 +572,61 @@ private fun SettingsPanelBody(
                     }
                 }
 
-                // 2. Haptic Feedback Setting (الاهتزاز اللمسي للضربات)
+                // 2. Non-Screenshot Protection Setting (منع أو السماح بلقطات الشاشة)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(cardBg)
+                        .border(1.dp, cardBorder, RoundedCornerShape(16.dp))
+                        .padding(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                tint = activeCyan,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = stringResource(R.string.screenshot_protection_title),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = titleColor
+                                )
+                                Text(
+                                    text = stringResource(R.string.screenshot_protection_desc),
+                                    fontSize = 11.sp,
+                                    color = descColor
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = isScreenshotBlockingEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.setScreenshotBlockingEnabled(enabled)
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = activeCyan,
+                                checkedTrackColor = activeCyan.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier.testTag("screenshot_blocking_switch")
+                        )
+                    }
+                }
+
+                // 3. Haptic Feedback Setting (الاهتزاز اللمسي للضربات)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()

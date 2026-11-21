@@ -1,6 +1,7 @@
 package com.example
 
 import android.content.Context
+import android.view.WindowManager
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.getBoundsInRoot
@@ -12,11 +13,16 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeUp
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.AppDatabase
+import com.example.data.local.SecurityPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -174,6 +180,67 @@ class NavigationAndRoadmapTabsTest {
         assertTrue(
             "Expected info button (${infoBounds.top}) to sit below DNA canvas (${dnaBounds.bottom})",
             infoBounds.top >= dnaBounds.bottom
+        )
+    }
+
+    @Test
+    fun eternalGoalsHeader_hidesOnUpwardSwipe_andReappearsOnDownwardPullAtFirstTask() {
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("roadmap_tab_tasks").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("period_chip_eternal").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("eternal_goals_header").assertIsDisplayed()
+
+        // Swipe up to browse Eternal tasks -> Eternal Goals header collapses smoothly
+        composeRule.onNodeWithTag("tasks_lazy_list").performTouchInput { swipeUp() }
+        composeRule.waitForIdle()
+        assertEquals(0, composeRule.onAllNodesWithTag("eternal_goals_header").fetchSemanticsNodes().size)
+
+        // Return to the top (first task) and swipe down -> Eternal Goals header reappears smoothly
+        composeRule.onNodeWithTag("tasks_lazy_list").performTouchInput { swipeDown() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("tasks_lazy_list").performTouchInput { swipeDown() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("eternal_goals_header").assertIsDisplayed()
+    }
+
+    @Test
+    fun screenshotBlockingToggle_inSettings_updatesFlagSecureAndPersists() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        SecurityPreferences(ctx).isScreenshotBlockingEnabled = true
+
+        composeRule.waitForIdle()
+        assertTrue(
+            "Expected FLAG_SECURE enabled by default",
+            (composeRule.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
+        )
+
+        // Open Settings side drawer and disable Non-Screenshot toggle
+        composeRule.onNodeWithTag("top_bar_settings_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("screenshot_blocking_switch").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        assertFalse(SecurityPreferences(ctx).isScreenshotBlockingEnabled)
+        assertEquals(
+            0,
+            composeRule.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE
+        )
+
+        // Re-enable Non-Screenshot toggle -> FLAG_SECURE restored
+        composeRule.onNodeWithTag("screenshot_blocking_switch").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        assertTrue(SecurityPreferences(ctx).isScreenshotBlockingEnabled)
+        assertTrue(
+            "Expected FLAG_SECURE re-enabled when switch is turned back on",
+            (composeRule.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
         )
     }
 }
