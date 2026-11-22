@@ -19,6 +19,13 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -80,6 +87,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -100,16 +111,22 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.flame.ActiveShieldType
 import com.example.data.flame.FlameManager
+import com.example.data.roadmap.RoadmapManager
+import com.example.data.roadmap.TaskPools
 import com.example.data.update.AppUpdateState
 import com.example.ui.components.AppUpdateCardDialog
 import com.example.ui.components.DnaHeaderIcon
 import com.example.ui.components.DynamicStreakShieldHeaderButton
 import com.example.ui.components.FullscreenFingerprintUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
+import com.example.ui.components.IphoneLiquidGlassBarSurface
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.LuxurySettingsMenuButton
 import com.example.ui.components.RecordsDashboardExpandablePanel
+import com.example.ui.components.RoadmapBiomeBackdrop
+import com.example.ui.components.RoadmapBiomeSubmersionOverlay
 import com.example.ui.components.SettingsSideDrawer
+import com.example.ui.components.roadmapBiomeStateForStation
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.DeviationsScreen
@@ -121,16 +138,12 @@ import com.example.ui.screens.TasksLedgerScreen
 import com.example.ui.screens.XpLogsScreen
 import com.example.ui.theme.AppThemeMode
 import com.example.ui.theme.CosmicDarkSurface
-import com.example.ui.theme.DarkNavBg
-import com.example.ui.theme.DarkNavBorder
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
 import com.example.ui.theme.DayPurple
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
-import com.example.ui.theme.LightNavBg
-import com.example.ui.theme.LightNavBorder
 import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
@@ -257,6 +270,7 @@ fun LiquidGlassApp(
 ) {
     var currentScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
     var roadmapMainTab by remember { mutableIntStateOf(0) }
+    var sharedRoadmapStationPos by remember { mutableStateOf<Float?>(null) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showShieldDropdown by remember { mutableStateOf(false) }
     var showStartDateDialog by remember { mutableStateOf(false) }
@@ -358,7 +372,44 @@ fun LiquidGlassApp(
         }
     }
 
+    val totalXpForBiome by viewModel.totalXp.collectAsStateWithLifecycle()
+    val unlockedBiomeStationPos = remember(totalXpForBiome) {
+        RoadmapManager.getStageProgress(totalXpForBiome).unlockedStationId.toFloat()
+            .coerceIn(1f, TaskPools.TOTAL_STATIONS_COUNT.toFloat())
+    }
+    val targetFullBleedStationPos = if (currentScreen == AppScreen.ROADMAP && sharedRoadmapStationPos != null) {
+        sharedRoadmapStationPos!!
+    } else {
+        unlockedBiomeStationPos
+    }
+    val animatedFullBleedStationPos by animateFloatAsState(
+        targetValue = targetFullBleedStationPos,
+        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        label = "full_page_biome_station"
+    )
+    val isRoadmapFamilyScreen = currentScreen == AppScreen.ROADMAP ||
+        currentScreen == AppScreen.TASKS_LEDGER ||
+        currentScreen == AppScreen.XP_LOGS
+    val sharedGlacialTransition = rememberInfiniteTransition(label = "shared_biome_atmosphere")
+    val sharedGlacialDriftPhase by sharedGlacialTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2.0 * kotlin.math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 14000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shared_biome_drift"
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
+        if (isRoadmapFamilyScreen) {
+            RoadmapBiomeBackdrop(
+                biomeState = roadmapBiomeStateForStation(animatedFullBleedStationPos),
+                driftPhase = sharedGlacialDriftPhase,
+                isDarkTheme = isDarkTheme,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
@@ -425,7 +476,19 @@ fun LiquidGlassApp(
                     .fillMaxSize()
                     .clipToBounds(),
                 transitionSpec = {
-                    val dir = (if (targetState.ordinal >= initialState.ordinal) 1 else -1) * rtlSign
+                    val isSubRoutePair = (initialState == AppScreen.TASKS_LEDGER || initialState == AppScreen.ROADMAP || initialState == AppScreen.XP_LOGS) &&
+                        (targetState == AppScreen.TASKS_LEDGER || targetState == AppScreen.ROADMAP || targetState == AppScreen.XP_LOGS)
+                    val dir = if (isSubRoutePair) {
+                        fun slotOf(s: AppScreen): Int = when (s) {
+                            AppScreen.TASKS_LEDGER -> -1
+                            AppScreen.ROADMAP -> 0
+                            AppScreen.XP_LOGS -> 1
+                            else -> 0
+                        }
+                        if (slotOf(targetState) >= slotOf(initialState)) 1 else -1
+                    } else {
+                        (if (targetState.ordinal >= initialState.ordinal) 1 else -1) * rtlSign
+                    }
                     val exitAnim = fadeOut(
                         animationSpec = tween(durationMillis = 65, easing = FastOutLinearInEasing)
                     ) + slideOutHorizontally(
@@ -496,19 +559,30 @@ fun LiquidGlassApp(
                         },
                         onOpenXpLogs = {
                             currentScreen = AppScreen.XP_LOGS
+                        },
+                        hostedWithFullBleedBiome = true,
+                        onBiomeStationChanged = { stationPos ->
+                            sharedRoadmapStationPos = stationPos
                         }
                     )
 
                     AppScreen.TASKS_LEDGER -> TasksLedgerScreen(
                         viewModel = viewModel,
                         onNavigateBack = { currentScreen = AppScreen.ROADMAP },
-                        isDarkTheme = isDarkTheme
+                        isDarkTheme = isDarkTheme,
+                        hostedWithFullBleedBiome = true,
+                        onOpenXpLogs = { currentScreen = AppScreen.XP_LOGS }
                     )
 
                     AppScreen.XP_LOGS -> XpLogsScreen(
                         viewModel = viewModel,
                         onNavigateBack = { currentScreen = AppScreen.ROADMAP },
-                        isDarkTheme = isDarkTheme
+                        isDarkTheme = isDarkTheme,
+                        hostedWithFullBleedBiome = true,
+                        onOpenTasksLedger = {
+                            roadmapMainTab = 1
+                            currentScreen = AppScreen.TASKS_LEDGER
+                        }
                     )
 
                     AppScreen.PROFILE -> com.example.ui.screens.ProfileScreen(
@@ -545,6 +619,16 @@ fun LiquidGlassApp(
                 viewModel = viewModel,
                 onDismiss = { viewModel.closeDataEntry() },
                 isDarkTheme = isDarkTheme
+            )
+        }
+
+        // Full-page non-blocking atmospheric perimeter haze / ice mist / magma glow
+        if (isRoadmapFamilyScreen && !isDataEntryOpen && !showSettingsDialog) {
+            RoadmapBiomeSubmersionOverlay(
+                biomeState = roadmapBiomeStateForStation(animatedFullBleedStationPos),
+                driftPhase = sharedGlacialDriftPhase,
+                isDarkTheme = isDarkTheme,
+                modifier = Modifier.fillMaxSize()
             )
         }
     }
@@ -653,80 +737,94 @@ fun LiquidGlassTopBar(
     val equippedAvatar by com.example.data.profile.ProfileManager.equippedAvatar.collectAsStateWithLifecycle()
     val equippedTitle by com.example.data.profile.ProfileManager.equippedTitle.collectAsStateWithLifecycle()
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
+    IphoneLiquidGlassBarSurface(
+        isTopBar = true,
+        cornerRadius = 24.dp,
+        outerModifier = Modifier.testTag("top_bar_fade_container"),
+        capsulePaddingModifier = Modifier
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .testTag("top_bar_liquid_glass_capsule"),
+        innerPaddingModifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+        isDarkTheme = isDarkTheme
     ) {
-        // Profile Avatar replaces the old Bolt app icon next to App Name & Screen Title
         Row(
-            modifier = Modifier
-                .weight(1f, fill = false)
-                .padding(end = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            com.example.ui.components.ProfileAvatarHeaderIcon(
-                avatar = equippedAvatar,
-                title = equippedTitle,
-                onClick = onOpenProfile,
-                onLongClick5s = onLongPressProfile5s,
-                size = 40.dp
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = com.example.ui.theme.PlusJakartaSans,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    letterSpacing = 0.5.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+            // Profile Avatar replaces the old Bolt app icon next to App Name & Screen Title
+            Row(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .padding(end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                com.example.ui.components.ProfileAvatarHeaderIcon(
+                    avatar = equippedAvatar,
+                    title = equippedTitle,
+                    onClick = onOpenProfile,
+                    onLongClick5s = onLongPressProfile5s,
+                    size = 40.dp
                 )
-                AnimatedContent(
-                    targetState = title,
-                    transitionSpec = {
-                        fadeIn(tween(130, delayMillis = 40))
-                            .togetherWith(fadeOut(tween(40)))
-                    },
-                    label = "topbar_title_transition"
-                ) { animatedTitle ->
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
                     Text(
-                        text = animatedTitle,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = cyanColor,
-                        fontFamily = com.example.ui.theme.CaveatHandwriting,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
+                        text = stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = com.example.ui.theme.PlusJakartaSans,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        letterSpacing = 0.5.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    AnimatedContent(
+                        targetState = title,
+                        transitionSpec = {
+                            fadeIn(tween(130, delayMillis = 40))
+                                .togetherWith(fadeOut(tween(40)))
+                        },
+                        label = "topbar_title_transition"
+                    ) { animatedTitle ->
+                        Text(
+                            text = animatedTitle,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cyanColor,
+                            fontFamily = com.example.ui.theme.CaveatHandwriting,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
-        }
 
-        // Right/End Cluster: Telemetry Pill (Shield -> Flame -> DNA) + Luxury 3-Line Settings Button
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
+            // Right/End Cluster: Translucent Crystal Telemetry Pill (Shield -> Flame -> DNA) + Luxury 3-Line Settings Button
             Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(if (isDarkTheme) Color(0x660F1E36) else Color(0x1800B4D8))
-                    .border(
-                        1.dp,
-                        if (isDarkTheme) Color(0x3338BDF8) else Color(0x330077B6),
-                        RoundedCornerShape(50)
-                    )
-                    .padding(horizontal = 7.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (isDarkTheme) Color(0x16FFFFFF) else Color(0x3DFFFFFF))
+                        .border(
+                            1.dp,
+                            Brush.verticalGradient(
+                                colors = if (isDarkTheme) {
+                                    listOf(Color(0x5CFFFFFF), Color(0x2838BDF8))
+                                } else {
+                                    listOf(Color(0xCCFFFFFF), Color(0x4D0284C7))
+                                }
+                            ),
+                            RoundedCornerShape(50)
+                        )
+                        .padding(horizontal = 7.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                 // Dynamic Streak Shield Element + Strictly Read-Only Monitoring Dropdown
                 Box {
                     DynamicStreakShieldHeaderButton(
@@ -920,27 +1018,25 @@ fun LiquidGlassBottomBar(
     isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onScreenSelected: (AppScreen) -> Unit
 ) {
-    val navBg = if (isDarkTheme) DarkNavBg else LightNavBg
-    val navBorder = if (isDarkTheme) DarkNavBorder else LightNavBorder
     val dashColor = if (isDarkTheme) NeonCyan else DayCyan
     val invColor = if (isDarkTheme) NeonEmerald else DayEmerald
     val strikeColor = if (isDarkTheme) NeonAmber else DayOrange
     val compareColor = if (isDarkTheme) NeonViolet else DayPurple
     val roadmapColor = if (isDarkTheme) NeonAmber else DayOrange
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
+    IphoneLiquidGlassBarSurface(
+        isTopBar = false,
+        cornerRadius = 28.dp,
+        outerModifier = Modifier.testTag("bottom_bar_fade_container"),
+        capsulePaddingModifier = Modifier
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 16.dp, vertical = 8.dp)
+            .testTag("bottom_bar_liquid_glass_capsule"),
+        innerPaddingModifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+        isDarkTheme = isDarkTheme
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(navBg)
-                .border(1.dp, navBorder, RoundedCornerShape(22.dp))
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1013,29 +1109,92 @@ private fun BottomNavItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val bgColor by animateColorAsState(
-        targetValue = if (isSelected) activeColor.copy(alpha = if (isDarkTheme) 0.22f else 0.15f) else Color.Transparent,
-        animationSpec = tween(160),
-        label = "nav_bg"
+    val dropletTopBg by animateColorAsState(
+        targetValue = if (isSelected) {
+            if (isDarkTheme) Color(0x28FFFFFF) else Color(0xB8FFFFFF)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = tween(180),
+        label = "nav_droplet_top"
     )
-    val borderColor by animateColorAsState(
-        targetValue = if (isSelected) activeColor.copy(alpha = if (isDarkTheme) 0.85f else 0.7f) else Color.Transparent,
-        animationSpec = tween(160),
-        label = "nav_border"
+    val dropletBottomBg by animateColorAsState(
+        targetValue = if (isSelected) {
+            activeColor.copy(alpha = if (isDarkTheme) 0.22f else 0.16f)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = tween(180),
+        label = "nav_droplet_bottom"
+    )
+    val borderTopColor by animateColorAsState(
+        targetValue = if (isSelected) Color.White.copy(alpha = if (isDarkTheme) 0.72f else 0.95f) else Color.Transparent,
+        animationSpec = tween(180),
+        label = "nav_border_top"
+    )
+    val borderBottomColor by animateColorAsState(
+        targetValue = if (isSelected) activeColor.copy(alpha = if (isDarkTheme) 0.78f else 0.58f) else Color.Transparent,
+        animationSpec = tween(180),
+        label = "nav_border_bottom"
     )
     val iconTint by animateColorAsState(
-        targetValue = if (isSelected) activeColor else if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF475569),
-        animationSpec = tween(160),
+        targetValue = if (isSelected) activeColor else if (isDarkTheme) Color(0xFFB8C4D4) else Color(0xFF475569),
+        animationSpec = tween(180),
         label = "nav_tint"
     )
+    val iconScale by animateFloatAsState(
+        targetValue = if (isSelected) 1.08f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 480f),
+        label = "nav_icon_scale"
+    )
+    val haloAlpha by animateFloatAsState(
+        targetValue = if (isSelected) (if (isDarkTheme) 0.24f else 0.16f) else 0f,
+        animationSpec = tween(180),
+        label = "nav_halo_alpha"
+    )
+
+    val dropletShape = RoundedCornerShape(20.dp)
 
     Box(
         modifier = modifier
             .height(48.dp)
             .minimumInteractiveComponentSize()
-            .clip(RoundedCornerShape(14.dp))
-            .background(bgColor)
-            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
+            .clip(dropletShape)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(dropletTopBg, dropletBottomBg)
+                )
+            )
+            .drawBehind {
+                if (haloAlpha > 0.01f) {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(activeColor.copy(alpha = haloAlpha), Color.Transparent),
+                            center = center,
+                            radius = size.minDimension * 0.72f
+                        ),
+                        radius = size.minDimension * 0.72f,
+                        center = center
+                    )
+                    drawLine(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.White.copy(alpha = if (isDarkTheme) 0.62f else 0.92f),
+                                Color.Transparent
+                            )
+                        ),
+                        start = Offset(size.width * 0.22f, 1.2.dp.toPx()),
+                        end = Offset(size.width * 0.78f, 1.2.dp.toPx()),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                }
+            }
+            .border(
+                1.dp,
+                Brush.verticalGradient(listOf(borderTopColor, borderBottomColor)),
+                dropletShape
+            )
             .clickable(onClick = onClick)
             .testTag(testTag),
         contentAlignment = Alignment.Center
@@ -1044,7 +1203,9 @@ private fun BottomNavItem(
             imageVector = icon,
             contentDescription = label,
             tint = iconTint,
-            modifier = Modifier.size(23.dp)
+            modifier = Modifier
+                .size(23.dp)
+                .scale(iconScale)
         )
     }
 }

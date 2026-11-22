@@ -299,14 +299,6 @@ fun WavySnakeStationRow(
         val maxWidthDp = maxWidth
         val nodeCenterDp = maxWidthDp * nodeNormX
 
-        // Layer 0: Continuous 4-Stage Blended Biome Rim Encasement (Glacial -> Rocky -> Forest -> Volcanic)
-        RoadmapRowBiomeDecoration(
-            biomeState = biomeState,
-            glowPulse = glowPulse,
-            isDarkTheme = isDarkTheme,
-            modifier = Modifier.fillMaxSize()
-        )
-
         // Layer 1: Continuous Seamless Glowing / Dashed Snake Track Canvas
         GlowingWavyRoadmapSegmentCanvas(
             stationId = station.id,

@@ -105,7 +105,7 @@ fun LuxurySettingsMenuButton(
         end = Offset(42f * (1f + dirX), 42f * (1f + dirY))
     )
 
-    val containerBg = if (isDarkTheme) Color(0xE00A1428) else Color(0xEBF1F5F9)
+    val containerBg = if (isDarkTheme) Color(0x1CFFFFFF) else Color(0x4DFFFFFF)
     val shape = RoundedCornerShape(13.dp)
 
     Box(

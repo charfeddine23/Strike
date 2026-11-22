@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import com.example.data.local.IndividualDao
 import com.example.data.local.IndividualLatestDateTuple
+import com.example.data.local.IndividualYearAggregateTuple
 import com.example.data.local.StrikeEventDao
 import com.example.data.local.YearlyPersonAggregate
 import com.example.data.model.Individual
@@ -26,6 +27,8 @@ class IndividualRepository(
     val yearlyPersonAggregatesFlow: Flow<List<YearlyPersonAggregate>> = strikeEventDao.getYearlyPersonAggregatesFlow()
     val latestStrikeDateByIndividualFlow: Flow<List<IndividualLatestDateTuple>> =
         strikeEventDao.getLatestStrikeDateByIndividualFlow()
+    val historicalStrikesByIndividualFlow: Flow<List<IndividualYearAggregateTuple>> =
+        strikeEventDao.getAllHistoricalStrikesByIndividualFlow()
 
     suspend fun getAllTimeStrikesCount(): Int = strikeEventDao.getAllTimeStrikesCount()
 
@@ -239,6 +242,67 @@ class IndividualRepository(
                 strikeEventDao.insertAll(chunk)
             }
         }
+    }
+
+    suspend fun getHistoricalStrikesByYearForIndividual(individualId: Long): List<Pair<Int, Int>> =
+        strikeEventDao.getHistoricalStrikesByYearForIndividual(individualId)
+            .map { it.year to it.totalStrikes }
+            .filter { it.second > 0 }
+            .sortedByDescending { it.first }
+
+    suspend fun getHistoricalStrikeSumForIndividual(individualId: Long): Int =
+        strikeEventDao.getHistoricalStrikeSumForIndividual(individualId)
+
+    suspend fun updateIndividualNameInEvents(individualId: Long, newName: String) {
+        strikeEventDao.updateIndividualNameInEvents(individualId, newName)
+    }
+
+    suspend fun replaceHistoricalStrikesOnlyEvents(
+        individualId: Long,
+        historicalEntries: List<Pair<Int, Int>>,
+        lang: String = "ar"
+    ) {
+        val merged = mergeHistoricalEntries(historicalEntries)
+        strikeEventDao.deleteHistoricalEventsForIndividual(individualId)
+        if (merged.isNotEmpty()) {
+            recordHistoricalStrikes(individualId, merged, lang)
+        }
+    }
+
+    suspend fun replaceIndividualHistoricalStrikesAndSyncCount(
+        individualId: Long,
+        historicalEntries: List<Pair<Int, Int>>,
+        lang: String = "ar"
+    ) {
+        val existing = dao.getIndividualById(individualId) ?: return
+        val oldHistoricalSum = strikeEventDao.getHistoricalStrikeSumForIndividual(individualId)
+        val merged = mergeHistoricalEntries(historicalEntries)
+        val newHistoricalSum = merged.sumOf { it.second.toLong().coerceAtLeast(0L) }
+            .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        val updatedStrikeCount = (existing.strikeCount.toLong() - oldHistoricalSum.toLong() + newHistoricalSum.toLong())
+            .coerceAtLeast(newHistoricalSum.toLong())
+            .coerceAtMost(Int.MAX_VALUE.toLong())
+            .toInt()
+
+        strikeEventDao.deleteHistoricalEventsForIndividual(individualId)
+        if (merged.isNotEmpty()) {
+            recordHistoricalStrikes(individualId, merged, lang)
+        }
+        dao.setStrikeCount(individualId, updatedStrikeCount)
+    }
+
+    private fun mergeHistoricalEntries(entries: List<Pair<Int, Int>>): List<Pair<Int, Int>> {
+        if (entries.isEmpty()) return emptyList()
+        val map = linkedMapOf<Int, Int>()
+        for ((year, count) in entries) {
+            if (year in 2000..2050 && count > 0) {
+                val sum = (map[year]?.toLong() ?: 0L) + count.toLong()
+                map[year] = sum.coerceAtMost(100_000L).toInt()
+            }
+        }
+        return map.entries
+            .map { it.key to it.value }
+            .sortedByDescending { it.first }
     }
 
     /**

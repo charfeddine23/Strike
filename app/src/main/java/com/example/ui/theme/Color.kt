@@ -53,11 +53,11 @@ val DayEmeraldContainer = Color(0x2210B981)   // Translucent emerald glass fill
 val DayRose = Color(0xFFBE123C)               // Crimson rose for delete/warning
 val DayRoseContainer = Color(0x20F43F5E)
 
-// Navigation Bar Tokens (strictly separated for Night vs Day)
-val DarkNavBg = Color(0xF00A1120)
-val DarkNavBorder = Color(0x4D38BDF8)
-val LightNavBg = Color(0xF5FFFFFF)
-val LightNavBorder = Color(0x550284C7)
+// Navigation Bar Tokens (transparent iOS-style Liquid Glass)
+val DarkNavBg = Color(0x16FFFFFF)
+val DarkNavBorder = Color(0x52FFFFFF)
+val LightNavBg = Color(0x66FFFFFF)
+val LightNavBorder = Color(0xAAFFFFFF)
 
 // ==========================================
 // Vivid Neon Accents for Liquid Glass (Dark Mode)

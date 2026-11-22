@@ -675,3 +675,182 @@ fun WinnerBadge(
         )
     }
 }
+
+/**
+ * Full-bleed edge Fade-in-Black atmospheric scrim + floating iPhone-style Liquid Glass capsule
+ * for Top Header and Bottom Navigation Dock.
+ */
+@Composable
+fun IphoneLiquidGlassBarSurface(
+    isTopBar: Boolean,
+    cornerRadius: Dp,
+    outerModifier: Modifier = Modifier,
+    capsulePaddingModifier: Modifier = Modifier,
+    innerPaddingModifier: Modifier = Modifier,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val shape = RoundedCornerShape(cornerRadius)
+
+    val fadeScrimBrush = remember(isTopBar, isDarkTheme) {
+        if (isTopBar) {
+            if (isDarkTheme) {
+                Brush.verticalGradient(
+                    0.00f to Color(0xF5000000),
+                    0.36f to Color(0xCC000000),
+                    0.68f to Color(0x7A000000),
+                    0.88f to Color(0x2E000000),
+                    1.00f to Color.Transparent
+                )
+            } else {
+                Brush.verticalGradient(
+                    0.00f to Color(0x94000000),
+                    0.36f to Color(0x58000000),
+                    0.72f to Color(0x22000000),
+                    1.00f to Color.Transparent
+                )
+            }
+        } else {
+            if (isDarkTheme) {
+                Brush.verticalGradient(
+                    0.00f to Color.Transparent,
+                    0.16f to Color(0x2E000000),
+                    0.44f to Color(0x82000000),
+                    0.76f to Color(0xD8000000),
+                    1.00f to Color(0xFA000000)
+                )
+            } else {
+                Brush.verticalGradient(
+                    0.00f to Color.Transparent,
+                    0.18f to Color(0x1C000000),
+                    0.48f to Color(0x52000000),
+                    0.80f to Color(0x86000000),
+                    1.00f to Color(0xAD000000)
+                )
+            }
+        }
+    }
+
+    val glassFillBrush = remember(isDarkTheme) {
+        if (isDarkTheme) {
+            Brush.verticalGradient(
+                0.00f to Color(0x24FFFFFF),
+                0.28f to Color(0x0DFFFFFF),
+                0.72f to Color(0x07FFFFFF),
+                1.00f to Color(0x16FFFFFF)
+            )
+        } else {
+            Brush.verticalGradient(
+                0.00f to Color(0x9EFFFFFF),
+                0.36f to Color(0x68FFFFFF),
+                0.76f to Color(0x5CEFF6FF),
+                1.00f to Color(0x82FFFFFF)
+            )
+        }
+    }
+
+    val fresnelBorderBrush = remember(isDarkTheme) {
+        if (isDarkTheme) {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color(0x9EFFFFFF),
+                    Color(0x4838BDF8),
+                    Color(0x22FFFFFF),
+                    Color(0x5CFFFFFF)
+                )
+            )
+        } else {
+            Brush.linearGradient(
+                colors = listOf(
+                    Color(0xEEFFFFFF),
+                    Color(0x660284C7),
+                    Color(0x44FFFFFF),
+                    Color(0x9EFFFFFF)
+                )
+            )
+        }
+    }
+
+    Box(
+        modifier = outerModifier
+            .fillMaxWidth()
+            .background(fadeScrimBrush)
+    ) {
+        Box(
+            modifier = capsulePaddingModifier
+                .fillMaxWidth()
+                .shadow(
+                    elevation = if (isDarkTheme) 12.dp else 14.dp,
+                    shape = shape,
+                    clip = false,
+                    ambientColor = Color(0x55000000),
+                    spotColor = Color(0x66000000)
+                )
+                .clip(shape)
+                .background(glassFillBrush)
+                .drawBehind {
+                    val w = size.width
+                    val h = size.height
+                    // Soft upper-left liquid light glare
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                if (isDarkTheme) Color(0x1EFFFFFF) else Color(0x44FFFFFF),
+                                Color.Transparent
+                            ),
+                            center = Offset(w * 0.16f, h * 0.08f),
+                            radius = w * 0.42f
+                        ),
+                        center = Offset(w * 0.16f, h * 0.08f),
+                        radius = w * 0.42f
+                    )
+                    // Subtle prismatic cyan-violet caustic whisper on the right arc
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                if (isDarkTheme) Color(0x1838BDF8) else Color(0x180284C7),
+                                Color.Transparent
+                            ),
+                            center = Offset(w * 0.86f, h * 0.18f),
+                            radius = w * 0.34f
+                        ),
+                        center = Offset(w * 0.86f, h * 0.18f),
+                        radius = w * 0.34f
+                    )
+                    // Top curved specular meniscus sheen
+                    val inset = cornerRadius.toPx().coerceAtMost(w * 0.25f) * 0.55f
+                    drawLine(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color(0x70FFFFFF),
+                                if (isDarkTheme) Color(0xCCFFFFFF) else Color(0xF5FFFFFF),
+                                Color(0x70FFFFFF),
+                                Color.Transparent
+                            )
+                        ),
+                        start = Offset(inset, 1.1.dp.toPx()),
+                        end = Offset(w - inset, 1.1.dp.toPx()),
+                        strokeWidth = 1.25.dp.toPx()
+                    )
+                    // Subtle bottom rim bounce reflection
+                    drawLine(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                if (isDarkTheme) Color(0x38FFFFFF) else Color(0x66FFFFFF),
+                                Color.Transparent
+                            )
+                        ),
+                        start = Offset(inset * 1.2f, h - 1.dp.toPx()),
+                        end = Offset(w - inset * 1.2f, h - 1.dp.toPx()),
+                        strokeWidth = 0.85.dp.toPx()
+                    )
+                }
+                .border(1.15.dp, fresnelBorderBrush, shape)
+                .then(innerPaddingModifier),
+            content = content
+        )
+    }
+}
+

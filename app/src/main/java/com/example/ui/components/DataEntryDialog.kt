@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Contacts
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Phone
@@ -229,8 +230,9 @@ fun DataEntryDialog(
     }
 
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-    var inputYear by remember { mutableStateOf((currentYear - 1).toString()) }
-    var inputStrikeCount by remember { mutableStateOf("15") }
+    var inputYear by remember(isEditing, viewModel.editingId) { mutableStateOf((currentYear - 1).toString()) }
+    var inputStrikeCount by remember(isEditing, viewModel.editingId) { mutableStateOf("15") }
+    var editingHistOriginalYear by remember(isEditing, viewModel.editingId) { mutableStateOf<Int?>(null) }
     val totalHistoricalStrikes = historicalEntries.sumOf { it.second }
 
     val modalBg = if (isDarkTheme) Color(0xFF070B14) else Color(0xFFF1F5F9)
@@ -967,7 +969,13 @@ fun DataEntryDialog(
                                                 val y = IndividualViewModel.parseLocalizedInt(inputYear)
                                                 val c = IndividualViewModel.parseLocalizedInt(inputStrikeCount)
                                                 if (y != null && y in 2000..2050 && c != null && c in 1..100_000) {
-                                                    viewModel.addHistoricalYearEntry(y, c)
+                                                    val origYr = editingHistOriginalYear
+                                                    if (origYr != null) {
+                                                        viewModel.updateHistoricalYearEntry(origYr, y, c)
+                                                        editingHistOriginalYear = null
+                                                    } else {
+                                                        viewModel.addHistoricalYearEntry(y, c)
+                                                    }
                                                     inputYear = (y - 1).toString()
                                                     inputStrikeCount = "10"
                                                 } else {
@@ -983,13 +991,66 @@ fun DataEntryDialog(
                                                 .testTag("add_historical_entry_btn"),
                                             shape = RoundedCornerShape(12.dp),
                                             colors = ButtonDefaults.buttonColors(
-                                                containerColor = NeonCyan,
+                                                containerColor = if (editingHistOriginalYear != null) NeonEmerald else NeonCyan,
                                                 contentColor = Color(0xFF021B26)
                                             )
                                         ) {
-                                            Icon(imageVector = Icons.Default.Add, contentDescription = null)
+                                            Icon(
+                                                imageVector = if (editingHistOriginalYear != null) Icons.Default.Check else Icons.Default.Add,
+                                                contentDescription = null
+                                            )
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text(stringResource(R.string.add_year_entry), fontWeight = FontWeight.Bold)
+                                            Text(
+                                                text = if (editingHistOriginalYear != null) {
+                                                    when (currentLang) {
+                                                        "ar" -> "تحديث"
+                                                        "fr" -> "MàJ"
+                                                        else -> "Update"
+                                                    }
+                                                } else {
+                                                    stringResource(R.string.add_year_entry)
+                                                },
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+
+                                    if (editingHistOriginalYear != null) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(accentCyan.copy(alpha = 0.14f))
+                                                .border(1.dp, accentCyan.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = when (currentLang) {
+                                                    "ar" -> "تعديل بيانات سنة $editingHistOriginalYear"
+                                                    "fr" -> "Modification de l'année $editingHistOriginalYear"
+                                                    else -> "Editing year $editingHistOriginalYear"
+                                                },
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = accentCyan
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.cancel),
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = NeonRose,
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .clickable {
+                                                        editingHistOriginalYear = null
+                                                        inputYear = (currentYear - 1).toString()
+                                                        inputStrikeCount = "15"
+                                                    }
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
                                         }
                                     }
 
@@ -1025,12 +1086,17 @@ fun DataEntryDialog(
                                         Spacer(modifier = Modifier.height(14.dp))
                                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                             historicalEntries.forEachIndexed { index, (yr, cnt) ->
+                                                val isRowEditing = editingHistOriginalYear == yr
                                                 Row(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
                                                         .clip(RoundedCornerShape(10.dp))
                                                         .background(if (isDarkTheme) Color(0x250F172A) else Color(0xFFF1F5F9))
-                                                        .border(1.dp, accentEmerald.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                                                        .border(
+                                                            1.dp,
+                                                            if (isRowEditing) accentCyan else accentEmerald.copy(alpha = 0.4f),
+                                                            RoundedCornerShape(10.dp)
+                                                        )
                                                         .padding(horizontal = 12.dp, vertical = 8.dp),
                                                     horizontalArrangement = Arrangement.SpaceBetween,
                                                     verticalAlignment = Alignment.CenterVertically
@@ -1050,16 +1116,44 @@ fun DataEntryDialog(
                                                         )
                                                     }
 
-                                                    IconButton(
-                                                        onClick = { viewModel.removeHistoricalYearEntry(index) },
-                                                        modifier = Modifier.size(28.dp)
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                     ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Close,
-                                                            contentDescription = if (isAr) "حذف" else "Remove",
-                                                            tint = NeonRose,
-                                                            modifier = Modifier.size(16.dp)
-                                                        )
+                                                        IconButton(
+                                                            onClick = {
+                                                                editingHistOriginalYear = yr
+                                                                inputYear = yr.toString()
+                                                                inputStrikeCount = cnt.toString()
+                                                            },
+                                                            modifier = Modifier
+                                                                .size(28.dp)
+                                                                .testTag("edit_historical_entry_btn_$yr")
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Edit,
+                                                                contentDescription = if (isAr) "تعديل" else "Edit",
+                                                                tint = accentCyan,
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
+
+                                                        IconButton(
+                                                            onClick = {
+                                                                if (editingHistOriginalYear == yr) {
+                                                                    editingHistOriginalYear = null
+                                                                }
+                                                                viewModel.removeHistoricalYearEntry(index)
+                                                            },
+                                                            modifier = Modifier.size(28.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Close,
+                                                                contentDescription = if (isAr) "حذف" else "Remove",
+                                                                tint = NeonRose,
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }

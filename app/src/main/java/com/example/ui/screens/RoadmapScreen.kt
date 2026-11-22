@@ -125,7 +125,9 @@ import com.example.ui.components.NeonAqua
 import com.example.ui.components.RoadmapAmbientBackground
 import com.example.ui.components.RoadmapBiome
 import com.example.ui.components.RoadmapBiomeBackdrop
+import com.example.ui.components.RoadmapBiomeState
 import com.example.ui.components.RoadmapBiomeSubmersionOverlay
+import com.example.ui.components.RoadmapCommandDock
 import com.example.ui.components.RoadmapProgressHeader
 import com.example.ui.components.WavySnakeStationRow
 import com.example.ui.components.biomePrimaryAccent
@@ -167,7 +169,9 @@ fun RoadmapScreen(
     initialMainTab: Int = 0,
     onMainTabChanged: (Int) -> Unit = {},
     onOpenTasksLedger: () -> Unit = {},
-    onOpenXpLogs: () -> Unit = {}
+    onOpenXpLogs: () -> Unit = {},
+    hostedWithFullBleedBiome: Boolean = false,
+    onBiomeStationChanged: (Float) -> Unit = {}
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -273,6 +277,9 @@ fun RoadmapScreen(
         label = "biome_continuous_station"
     )
     val viewportBiomeState = roadmapBiomeStateForStation(animatedStationPos)
+    LaunchedEffect(animatedStationPos) {
+        onBiomeStationChanged(animatedStationPos)
+    }
     val glacialTransition = rememberInfiniteTransition(label = "glacial_atmosphere")
     val glacialDriftPhase by glacialTransition.animateFloat(
         initialValue = 0f,
@@ -285,10 +292,6 @@ fun RoadmapScreen(
     )
 
     val rtlSign = if (appLayoutDirection == LayoutDirection.Rtl) -1 else 1
-    val ledgerAccent = if (isDarkTheme) ElectricMint else DayEmerald
-    val xpLogsAccent = if (isDarkTheme) NeonViolet else DayPurple
-    val pillBgLedger = if (isDarkTheme) Color(0xBB0D1D24) else DayGlassSurface
-    val pillBgXpLogs = if (isDarkTheme) Color(0xBB191229) else DayGlassSurface
     val tabAquaAccent = if (isDarkTheme) NeonAqua else DayCyan
     val tabEliteAccent = if (isDarkTheme) NeonAmber else DayOrange
 
@@ -298,191 +301,57 @@ fun RoadmapScreen(
             .clipToBounds()
             .testTag("roadmap_screen")
     ) {
-        if (selectedMainTab == 0) {
+        if (!hostedWithFullBleedBiome) {
             RoadmapBiomeBackdrop(
                 biomeState = viewportBiomeState,
                 driftPhase = glacialDriftPhase,
                 isDarkTheme = isDarkTheme,
                 modifier = Modifier.fillMaxSize()
             )
-        } else {
-            RoadmapAmbientBackground(
-                modifier = Modifier.fillMaxSize(),
-                darkTheme = isDarkTheme
+        }
+        if (selectedMainTab != 0) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(if (isDarkTheme) Color(0x36060B14) else Color(0x28FFFFFF))
             )
         }
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // TOP QUICK-ACTION ROW & NAVIGATION PILLS
+            // TOP UNIFIED 3-WAY LIQUID GLASS COMMAND DOCK & MAIN TAB SWITCHER
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                // Physical LTR layout so "Tasks Ledger" sits strictly on the physical LEFT,
-                // the Roadmap Progress floating-menu trigger sits centered between them,
-                // and "Xp Logs" sits strictly on the physical RIGHT.
-                val progressBtnAccent = if (selectedMainTab == 0) {
-                    biomePrimaryAccent(viewportBiomeState, isDarkTheme)
-                } else {
-                    tabAquaAccent
-                }
-                val progressBtnIcon = when {
-                    selectedMainTab != 0 -> Icons.Default.MilitaryTech
-                    viewportBiomeState.dominantBiome == RoadmapBiome.GLACIAL -> Icons.Default.AcUnit
-                    viewportBiomeState.dominantBiome == RoadmapBiome.ROCKY -> Icons.Default.Landscape
-                    viewportBiomeState.dominantBiome == RoadmapBiome.FOREST -> Icons.Default.Park
-                    else -> Icons.Default.LocalFireDepartment
-                }
-                val pillBgProgress = if (isDarkTheme) {
-                    blendBiomeColor(Color(0xCC0A2238), Color(0xCC211B1F), Color(0xCC092218), Color(0xCC330B06), viewportBiomeState)
-                } else {
-                    DayGlassSurface
-                }
+                val safeHeaderStation = currentStationId.coerceIn(0, TaskPools.TOTAL_STATIONS_COUNT)
+                val stageReq = stageProgress.xpRequiredForNextStage.coerceAtLeast(1L)
+                val stageFraction = (stageProgress.currentStageXp.toFloat() / stageReq.toFloat()).coerceIn(0f, 1f)
 
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // LEFT: Tasks Ledger button
-                        Box(
-                            modifier = Modifier
-                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                                .clip(RoundedCornerShape(50))
-                                .clickable {
-                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    onOpenTasksLedger()
-                                }
-                                .testTag("roadmap_header_ledger_btn"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CompositionLocalProvider(LocalLayoutDirection provides appLayoutDirection) {
-                                Row(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(pillBgLedger)
-                                        .border(1.2.dp, ledgerAccent.copy(alpha = 0.8f), RoundedCornerShape(50))
-                                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.MenuBook,
-                                        contentDescription = if (isAr) "دفتر المهام" else "Tasks Ledger",
-                                        tint = ledgerAccent,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Text(
-                                        text = when {
-                                            isAr -> "دفتر المهام"
-                                            currentLang == "fr" -> "Registre"
-                                            else -> "Tasks Ledger"
-                                        },
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Black,
-                                        fontFamily = PlusJakartaSans,
-                                        color = ledgerAccent,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-
-                        // CENTER: Roadmap Progress Floating Menu Trigger
-                        val safeHeaderStation = currentStationId.coerceIn(0, TaskPools.TOTAL_STATIONS_COUNT)
-                        Box(
-                            modifier = Modifier
-                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                                .clip(RoundedCornerShape(50))
-                                .clickable {
-                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    showRoadmapProgressDialog = true
-                                }
-                                .testTag("roadmap_header_progress_btn"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CompositionLocalProvider(LocalLayoutDirection provides appLayoutDirection) {
-                                Row(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(pillBgProgress)
-                                        .border(1.3.dp, progressBtnAccent.copy(alpha = 0.85f), RoundedCornerShape(50))
-                                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = progressBtnIcon,
-                                        contentDescription = when (currentLang) {
-                                            "ar" -> "تقدم المسار"
-                                            "fr" -> "Progression"
-                                            else -> "Roadmap Progress"
-                                        },
-                                        tint = progressBtnAccent,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Text(
-                                        text = when (currentLang) {
-                                            "ar" -> "LVL $safeHeaderStation/${TaskPools.TOTAL_STATIONS_COUNT}"
-                                            "fr" -> "Niv $safeHeaderStation/${TaskPools.TOTAL_STATIONS_COUNT}"
-                                            else -> "LVL $safeHeaderStation/${TaskPools.TOTAL_STATIONS_COUNT}"
-                                        },
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Black,
-                                        fontFamily = PlusJakartaSans,
-                                        color = progressBtnAccent,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-
-                        // RIGHT: Xp Logs button
-                        Box(
-                            modifier = Modifier
-                                .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                                .clip(RoundedCornerShape(50))
-                                .clickable {
-                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    onOpenXpLogs()
-                                }
-                                .testTag("roadmap_header_xp_logs_btn"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CompositionLocalProvider(LocalLayoutDirection provides appLayoutDirection) {
-                                Row(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(50))
-                                        .background(pillBgXpLogs)
-                                        .border(1.2.dp, xpLogsAccent.copy(alpha = 0.8f), RoundedCornerShape(50))
-                                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.History,
-                                        contentDescription = if (isAr) "سجل XP" else "Xp Logs",
-                                        tint = xpLogsAccent,
-                                        modifier = Modifier.size(15.dp)
-                                    )
-                                    Text(
-                                        text = "Xp Logs",
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Black,
-                                        fontFamily = PlusJakartaSans,
-                                        color = xpLogsAccent,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                RoadmapCommandDock(
+                    activeSlot = 1,
+                    safeStationId = safeHeaderStation,
+                    totalStationsCount = TaskPools.TOTAL_STATIONS_COUNT,
+                    stageProgressFraction = stageFraction,
+                    biomeState = viewportBiomeState,
+                    currentLang = currentLang,
+                    onOpenTasksLedger = {
+                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        onOpenTasksLedger()
+                    },
+                    onOpenProgressOrRoadmap = {
+                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        showRoadmapProgressDialog = true
+                    },
+                    onOpenXpLogs = {
+                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        onOpenXpLogs()
+                    },
+                    isDarkTheme = isDarkTheme
+                )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
@@ -893,7 +762,7 @@ fun RoadmapScreen(
             }
         }
         // Non-blocking foreground 4-stage biome rim overlay (deep ice at 1 -> magma abyss at 700)
-        if (selectedMainTab == 0) {
+        if (!hostedWithFullBleedBiome) {
             RoadmapBiomeSubmersionOverlay(
                 biomeState = viewportBiomeState,
                 driftPhase = glacialDriftPhase,
