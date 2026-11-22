@@ -30,8 +30,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Female
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Landscape
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.TaskAlt
@@ -104,7 +107,7 @@ fun RoadmapProgressHeader(
     onJumpToStation: (Int) -> Unit,
     modifier: Modifier = Modifier,
     glowPulse: Float = 0.85f,
-    glacialDepth: Float = 0f,
+    biomeState: RoadmapBiomeState = roadmapBiomeStateForStation(currentStationId.toFloat().coerceAtLeast(1f)),
     currentLang: String = if (isAr) "ar" else "en",
     isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
@@ -121,39 +124,32 @@ fun RoadmapProgressHeader(
     val stageReqFormatted = remember(stageProgress) { nf.format(stageProgress.nextStageRequiredXp) }
 
     val effectiveLayoutDirection = if (isAr || currentLang == "ar") LayoutDirection.Rtl else LayoutDirection.Ltr
-    val inFrostView = glacialDepth > 0.05f || safeStation > TaskPools.BASE_STATIONS_COUNT
-    val aquaTone = when {
-        inFrostView && isDarkTheme -> GlacialNightCyan
-        inFrostView && !isDarkTheme -> GlacialDayCyan
-        isDarkTheme -> NeonAqua
-        else -> DayCyan
-    }
-    val mintTone = if (isDarkTheme) ElectricMint else DayEmerald
+    val aquaTone = biomePrimaryAccent(biomeState, isDarkTheme)
+    val mintTone = biomeSecondaryAccent(biomeState, isDarkTheme)
     val goldTone = if (isDarkTheme) MilestoneGold else DayOrange
+    val headerIcon = when (biomeState.dominantBiome) {
+        RoadmapBiome.GLACIAL -> Icons.Default.AcUnit
+        RoadmapBiome.ROCKY -> Icons.Default.Landscape
+        RoadmapBiome.FOREST -> Icons.Default.Park
+        RoadmapBiome.VOLCANIC -> Icons.Default.LocalFireDepartment
+    }
     val cardBgBrush = if (isDarkTheme) {
-        if (inFrostView) {
-            Brush.verticalGradient(colors = listOf(Color(0xE0092138), Color(0xD8051526)))
-        } else {
-            Brush.verticalGradient(colors = listOf(Color(0xDD141C2E), Color(0xCC0C1220)))
-        }
+        val top = blendBiomeColor(Color(0xE0092138), Color(0xE01F191C), Color(0xE0082319), Color(0xE02D0A06), biomeState)
+        val bot = blendBiomeColor(Color(0xD8051526), Color(0xD8151216), Color(0xD8051710), Color(0xD81C0604), biomeState)
+        Brush.verticalGradient(colors = listOf(top, bot))
     } else {
-        if (inFrostView) {
-            Brush.verticalGradient(colors = listOf(Color(0xFAFFFFFF), Color(0xF5D9F0FE)))
-        } else {
-            Brush.verticalGradient(colors = listOf(DayGlassSurface, Color(0xF5EFF5FB)))
-        }
+        val bot = blendBiomeColor(Color(0xF5D9F0FE), Color(0xF5F1E5D5), Color(0xF5DCFCE7), Color(0xF5FFE2D6), biomeState)
+        Brush.verticalGradient(colors = listOf(Color(0xFAFFFFFF), bot))
     }
     val cardBorderBrush = Brush.linearGradient(
         colors = listOf(
-            aquaTone.copy(alpha = if (isDarkTheme) 0.56f else 0.65f),
-            if (inFrostView && isDarkTheme) GlacialNightCrystal.copy(alpha = 0.42f)
-            else if (isDarkTheme) Color.White.copy(alpha = 0.16f)
-            else Color(0xFFCBD5E1),
-            mintTone.copy(alpha = if (isDarkTheme) 0.36f else 0.45f)
+            aquaTone.copy(alpha = if (isDarkTheme) 0.65f else 0.72f),
+            mintTone.copy(alpha = if (isDarkTheme) 0.45f else 0.55f),
+            goldTone.copy(alpha = 0.36f)
         )
     )
     val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
-    val subtitleColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+    val subtitleColor = if (isDarkTheme) Color(0xFFCBD5E1) else DayTextSecondary
 
     CompositionLocalProvider(LocalLayoutDirection provides effectiveLayoutDirection) {
         Box(
@@ -162,7 +158,7 @@ fun RoadmapProgressHeader(
                 .clip(RoundedCornerShape(22.dp))
                 .background(cardBgBrush)
                 .border(
-                    width = if (inFrostView) 1.3.dp else 1.1.dp,
+                    width = 1.3.dp,
                     brush = cardBorderBrush,
                     shape = RoundedCornerShape(22.dp)
                 )
@@ -178,12 +174,12 @@ fun RoadmapProgressHeader(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .background(aquaTone.copy(alpha = 0.15f))
-                            .border(1.4.dp, aquaTone.copy(alpha = 0.82f), CircleShape),
+                            .background(aquaTone.copy(alpha = 0.16f))
+                            .border(1.4.dp, aquaTone.copy(alpha = 0.85f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (inFrostView) Icons.Default.AcUnit else Icons.Default.MilitaryTech,
+                            imageVector = headerIcon,
                             contentDescription = null,
                             tint = aquaTone,
                             modifier = Modifier.size(21.dp)
@@ -354,6 +350,11 @@ fun RoadmapProgressHeader(
                     horizontalArrangement = Arrangement.spacedBy(7.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val iceAccent = if (isDarkTheme) GlacialNightCyan else GlacialDayDeepBlue
+                    val rockAccent = if (isDarkTheme) RockyNightAmber else RockyDayAmber
+                    val forestAccent = if (isDarkTheme) ForestNightEmerald else ForestDayEmerald
+                    val lavaAccent = if (isDarkTheme) VolcanicNightMagma else VolcanicDayMagma
+
                     HeaderQuickJumpChip(
                         label = when (currentLang) {
                             "ar" -> "موقعي ($safeStation)"
@@ -368,24 +369,43 @@ fun RoadmapProgressHeader(
                         modifier = Modifier.testTag("btn_jump_me")
                     )
                     HeaderQuickJumpChip(
-                        label = if (currentLang == "ar") "م 1" else "LVL 1",
+                        label = when (currentLang) {
+                            "ar" -> "جليد 1"
+                            "fr" -> "Glace 1"
+                            else -> "1 Ice"
+                        },
+                        icon = Icons.Default.AcUnit,
+                        isHighlighted = biomeState.dominantBiome == RoadmapBiome.GLACIAL,
+                        accentColor = iceAccent,
                         isDarkTheme = isDarkTheme,
-                        onClick = { onJumpToStation(1) }
+                        onClick = { onJumpToStation(1) },
+                        modifier = Modifier.testTag("btn_jump_1")
                     )
                     HeaderQuickJumpChip(
-                        label = if (currentLang == "ar") "م 100" else "LVL 100",
+                        label = when (currentLang) {
+                            "ar" -> "صخر 176"
+                            "fr" -> "Roche 176"
+                            else -> "176 Rock"
+                        },
+                        icon = Icons.Default.Landscape,
+                        isHighlighted = biomeState.dominantBiome == RoadmapBiome.ROCKY,
+                        accentColor = rockAccent,
                         isDarkTheme = isDarkTheme,
-                        onClick = { onJumpToStation(100) }
+                        onClick = { onJumpToStation(176) },
+                        modifier = Modifier.testTag("btn_jump_176")
                     )
                     HeaderQuickJumpChip(
-                        label = if (currentLang == "ar") "م 250" else "LVL 250",
+                        label = when (currentLang) {
+                            "ar" -> "غابة 351"
+                            "fr" -> "Forêt 351"
+                            else -> "351 Forest"
+                        },
+                        icon = Icons.Default.Park,
+                        isHighlighted = biomeState.dominantBiome == RoadmapBiome.FOREST,
+                        accentColor = forestAccent,
                         isDarkTheme = isDarkTheme,
-                        onClick = { onJumpToStation(250) }
-                    )
-                    HeaderQuickJumpChip(
-                        label = if (currentLang == "ar") "م 400" else "LVL 400",
-                        isDarkTheme = isDarkTheme,
-                        onClick = { onJumpToStation(400) }
+                        onClick = { onJumpToStation(351) },
+                        modifier = Modifier.testTag("btn_jump_351")
                     )
                     HeaderQuickJumpChip(
                         label = "500",
@@ -397,30 +417,24 @@ fun RoadmapProgressHeader(
                         onClick = { onJumpToStation(500) },
                         modifier = Modifier.testTag("btn_jump_500")
                     )
-                    val frostChipAccent = if (isDarkTheme) GlacialNightCyan else GlacialDayDeepBlue
                     HeaderQuickJumpChip(
-                        label = if (currentLang == "ar") "جليد 501" else "501 Ice",
-                        icon = Icons.Default.AcUnit,
-                        isHighlighted = glacialDepth in 0.01f..0.49f,
-                        accentColor = frostChipAccent,
+                        label = when (currentLang) {
+                            "ar" -> "كارثة 526"
+                            "fr" -> "Volcan 526"
+                            else -> "526 Lava"
+                        },
+                        icon = Icons.Default.LocalFireDepartment,
+                        isHighlighted = biomeState.dominantBiome == RoadmapBiome.VOLCANIC && biomeState.lavaSubmersion < 0.85f,
+                        accentColor = lavaAccent,
                         isDarkTheme = isDarkTheme,
-                        onClick = { onJumpToStation(501) },
-                        modifier = Modifier.testTag("btn_jump_501")
-                    )
-                    HeaderQuickJumpChip(
-                        label = if (currentLang == "ar") "م 600" else "LVL 600",
-                        icon = Icons.Default.AcUnit,
-                        isHighlighted = glacialDepth in 0.50f..0.89f,
-                        accentColor = frostChipAccent,
-                        isDarkTheme = isDarkTheme,
-                        onClick = { onJumpToStation(600) },
-                        modifier = Modifier.testTag("btn_jump_600")
+                        onClick = { onJumpToStation(526) },
+                        modifier = Modifier.testTag("btn_jump_526")
                     )
                     HeaderQuickJumpChip(
                         label = "700",
-                        icon = Icons.Default.AcUnit,
-                        isHighlighted = glacialDepth >= 0.90f,
-                        accentColor = frostChipAccent,
+                        icon = Icons.Default.LocalFireDepartment,
+                        isHighlighted = biomeState.dominantBiome == RoadmapBiome.VOLCANIC && biomeState.lavaSubmersion >= 0.85f,
+                        accentColor = lavaAccent,
                         isCrown = true,
                         isDarkTheme = isDarkTheme,
                         onClick = { onJumpToStation(700) },

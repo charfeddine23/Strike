@@ -100,6 +100,8 @@ class IndividualViewModel(
     private val _uiEvents = MutableSharedFlow<UiEvent>()
     val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
 
+    val titleRegrindTargets = com.example.data.profile.ProfileManager.titleRegrindTargets
+
     private suspend fun emitMessage(msg: String) {
         _eventFlow.emit(msg)
         _uiEvents.emit(UiEvent.ShowMessage(msg))
@@ -1471,6 +1473,41 @@ class IndividualViewModel(
                 "ar" -> "تم تصفير كافة المستويات والمخزون وإعادة قفل الألقاب والأفاتارات إلى حالتها الأولية (مع الحفاظ على الأفراد وسجلات السترايك)!"
                 "fr" -> "Tous les niveaux, consommables, titres et avatars ont été réinitialisés à l'état initial (individus et strikes conservés) !"
                 else -> "All game levels, consumables, titles & avatars reset to initial state (individuals & strike logs preserved)!"
+            }
+            emitMessage(msg)
+        }
+    }
+
+    /**
+     * Resets an unlocked Title back to Locked so the user must re-earn XP/Flame points
+     * to unlock it again (triggered ONLY after a 10-second continuous hold on Profile titles).
+     */
+    fun resetTitleForReGrind(titleId: Int) {
+        val app = getApplication<Application>()
+        val target = ProfileManager.resetTitleForReGrind(app, titleId) ?: return
+        val titleSpec = if (titleId == com.example.data.profile.ProfileMasterInventory.MILESTONE_PEAK_TITLE.id) {
+            com.example.data.profile.ProfileMasterInventory.MILESTONE_PEAK_TITLE
+        } else {
+            com.example.data.profile.ProfileMasterInventory.MASTER_TITLES.find { it.id == titleId }
+        }
+        val titleName = titleSpec?.getLocalizedTitle(currentLanguage.value).orEmpty()
+        viewModelScope.launch {
+            val msg = when (currentLanguage.value) {
+                "ar" -> if (titleId == com.example.data.profile.ProfileMasterInventory.MILESTONE_PEAK_TITLE.id) {
+                    "تم تصفير اللقب «$titleName»! اكسب ${target.requiredGain} نقطة شعلة وبلغ 20,000 لاستعادته."
+                } else {
+                    "تم تصفير اللقب «$titleName»! اجمع ${target.requiredGain} XP جديدة لاستعادته."
+                }
+                "fr" -> if (titleId == com.example.data.profile.ProfileMasterInventory.MILESTONE_PEAK_TITLE.id) {
+                    "Titre « $titleName » réinitialisé ! Gagnez ${target.requiredGain} pts de flamme à 20 000 pts."
+                } else {
+                    "Titre « $titleName » réinitialisé ! Gagnez ${target.requiredGain} XP pour le regagner."
+                }
+                else -> if (titleId == com.example.data.profile.ProfileMasterInventory.MILESTONE_PEAK_TITLE.id) {
+                    "Title \"$titleName\" reset! Gain ${target.requiredGain} flame pts (at 20k+) to re-unlock."
+                } else {
+                    "Title \"$titleName\" reset! Earn ${target.requiredGain} XP to re-unlock."
+                }
             }
             emitMessage(msg)
         }

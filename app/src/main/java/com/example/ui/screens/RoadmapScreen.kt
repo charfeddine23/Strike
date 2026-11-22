@@ -56,9 +56,12 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Landscape
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MilitaryTech
+import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Button
@@ -117,16 +120,17 @@ import com.example.data.roadmap.TaskPeriod
 import com.example.data.roadmap.TaskPools
 import com.example.data.roadmap.TaskStatus
 import com.example.ui.components.ElectricMint
-import com.example.ui.components.GlacialDayCyan
-import com.example.ui.components.GlacialNightCyan
-import com.example.ui.components.GlacialSubmersionOverlay
-import com.example.ui.components.GlacialViewportBackdrop
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.NeonAqua
 import com.example.ui.components.RoadmapAmbientBackground
+import com.example.ui.components.RoadmapBiome
+import com.example.ui.components.RoadmapBiomeBackdrop
+import com.example.ui.components.RoadmapBiomeSubmersionOverlay
 import com.example.ui.components.RoadmapProgressHeader
 import com.example.ui.components.WavySnakeStationRow
-import com.example.ui.components.glacialDepthForStation
+import com.example.ui.components.biomePrimaryAccent
+import com.example.ui.components.blendBiomeColor
+import com.example.ui.components.roadmapBiomeStateForStation
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayGlassSurface
@@ -229,31 +233,46 @@ fun RoadmapScreen(
         }
     }
 
-    // Live scroll-driven glacial immersion depth (0f for Stations 1..500 -> 1f at Station 700)
-    val rawGlacialDepth by remember(selectedMainTab, currentStationId) {
+    // Live scroll-driven continuous station position (1f deep ice -> 700f molten lava)
+    val rawContinuousStation by remember(selectedMainTab, currentStationId, stations.size) {
         derivedStateOf {
             if (selectedMainTab != 0) {
-                0f
+                currentStationId.toFloat().coerceIn(1f, TaskPools.TOTAL_STATIONS_COUNT.toFloat())
             } else {
-                val visible = roadmapListState.layoutInfo.visibleItemsInfo
-                val deepestVisible = if (visible.isNotEmpty()) {
-                    visible.maxOf { it.index + 1 }
+                val layoutInfo = roadmapListState.layoutInfo
+                val visible = layoutInfo.visibleItemsInfo
+                if (visible.isEmpty()) {
+                    currentStationId.toFloat().coerceIn(1f, TaskPools.TOTAL_STATIONS_COUNT.toFloat())
                 } else {
-                    currentStationId
-                }
-                if (deepestVisible > TaskPools.BASE_STATIONS_COUNT) {
-                    glacialDepthForStation(deepestVisible).coerceAtLeast(0.10f)
-                } else {
-                    0f
+                    val first = visible.first()
+                    val last = visible.last()
+                    val maxStationF = TaskPools.TOTAL_STATIONS_COUNT.toFloat()
+                    when {
+                        first.index == 0 && first.offset >= -12 -> 1f
+                        last.index == stations.lastIndex && last.offset + last.size <= layoutInfo.viewportEndOffset + 24 -> maxStationF
+                        else -> {
+                            val midY = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) * 0.5f
+                            val centerItem = visible.minByOrNull { item ->
+                                kotlin.math.abs((item.offset + item.size * 0.5f) - midY)
+                            } ?: first
+                            val frac = if (centerItem.size > 0) {
+                                ((midY - centerItem.offset) / centerItem.size.toFloat()).coerceIn(0f, 1f)
+                            } else {
+                                0.5f
+                            }
+                            (centerItem.index + 1 + (frac - 0.5f)).coerceIn(1f, maxStationF)
+                        }
+                    }
                 }
             }
         }
     }
-    val animatedGlacialDepth by animateFloatAsState(
-        targetValue = rawGlacialDepth,
-        animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
-        label = "glacial_submersion_depth"
+    val animatedStationPos by animateFloatAsState(
+        targetValue = rawContinuousStation,
+        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+        label = "biome_continuous_station"
     )
+    val viewportBiomeState = roadmapBiomeStateForStation(animatedStationPos)
     val glacialTransition = rememberInfiniteTransition(label = "glacial_atmosphere")
     val glacialDriftPhase by glacialTransition.animateFloat(
         initialValue = 0f,
@@ -279,17 +298,19 @@ fun RoadmapScreen(
             .clipToBounds()
             .testTag("roadmap_screen")
     ) {
-        RoadmapAmbientBackground(
-            modifier = Modifier.fillMaxSize(),
-            darkTheme = isDarkTheme
-        )
-
-        GlacialViewportBackdrop(
-            glacialDepth = animatedGlacialDepth,
-            driftPhase = glacialDriftPhase,
-            isDarkTheme = isDarkTheme,
-            modifier = Modifier.fillMaxSize()
-        )
+        if (selectedMainTab == 0) {
+            RoadmapBiomeBackdrop(
+                biomeState = viewportBiomeState,
+                driftPhase = glacialDriftPhase,
+                isDarkTheme = isDarkTheme,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            RoadmapAmbientBackground(
+                modifier = Modifier.fillMaxSize(),
+                darkTheme = isDarkTheme
+            )
+        }
 
         Column(modifier = Modifier.fillMaxSize()) {
             // TOP QUICK-ACTION ROW & NAVIGATION PILLS
@@ -301,14 +322,20 @@ fun RoadmapScreen(
                 // Physical LTR layout so "Tasks Ledger" sits strictly on the physical LEFT,
                 // the Roadmap Progress floating-menu trigger sits centered between them,
                 // and "Xp Logs" sits strictly on the physical RIGHT.
-                val progressFrostView = animatedGlacialDepth > 0.05f || currentStationId > TaskPools.BASE_STATIONS_COUNT
-                val progressBtnAccent = when {
-                    progressFrostView && isDarkTheme -> GlacialNightCyan
-                    progressFrostView && !isDarkTheme -> GlacialDayCyan
-                    else -> tabAquaAccent
+                val progressBtnAccent = if (selectedMainTab == 0) {
+                    biomePrimaryAccent(viewportBiomeState, isDarkTheme)
+                } else {
+                    tabAquaAccent
+                }
+                val progressBtnIcon = when {
+                    selectedMainTab != 0 -> Icons.Default.MilitaryTech
+                    viewportBiomeState.dominantBiome == RoadmapBiome.GLACIAL -> Icons.Default.AcUnit
+                    viewportBiomeState.dominantBiome == RoadmapBiome.ROCKY -> Icons.Default.Landscape
+                    viewportBiomeState.dominantBiome == RoadmapBiome.FOREST -> Icons.Default.Park
+                    else -> Icons.Default.LocalFireDepartment
                 }
                 val pillBgProgress = if (isDarkTheme) {
-                    if (progressFrostView) Color(0xCC0A2238) else Color(0xBB0C1A2E)
+                    blendBiomeColor(Color(0xCC0A2238), Color(0xCC211B1F), Color(0xCC092218), Color(0xCC330B06), viewportBiomeState)
                 } else {
                     DayGlassSurface
                 }
@@ -389,7 +416,7 @@ fun RoadmapScreen(
                                     horizontalArrangement = Arrangement.spacedBy(5.dp)
                                 ) {
                                     Icon(
-                                        imageVector = if (progressFrostView) Icons.Default.AcUnit else Icons.Default.MilitaryTech,
+                                        imageVector = progressBtnIcon,
                                         contentDescription = when (currentLang) {
                                             "ar" -> "تقدم المسار"
                                             "fr" -> "Progression"
@@ -865,13 +892,15 @@ fun RoadmapScreen(
                 }
             }
         }
-        // Non-blocking foreground edge-creeping frost & branching ice dendrites when above Station 500
-        GlacialSubmersionOverlay(
-            glacialDepth = animatedGlacialDepth,
-            driftPhase = glacialDriftPhase,
-            isDarkTheme = isDarkTheme,
-            modifier = Modifier.fillMaxSize()
-        )
+        // Non-blocking foreground 4-stage biome rim overlay (deep ice at 1 -> magma abyss at 700)
+        if (selectedMainTab == 0) {
+            RoadmapBiomeSubmersionOverlay(
+                biomeState = viewportBiomeState,
+                driftPhase = glacialDriftPhase,
+                isDarkTheme = isDarkTheme,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         // Floating Roadmap Progress Popup triggered from the top-center pill button
         if (showRoadmapProgressDialog) {
@@ -892,7 +921,7 @@ fun RoadmapScreen(
                         totalXp = totalXp,
                         isAr = isAr,
                         currentLang = currentLang,
-                        glacialDepth = animatedGlacialDepth,
+                        biomeState = viewportBiomeState,
                         isDarkTheme = isDarkTheme,
                         onJumpToStation = { targetStation ->
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)

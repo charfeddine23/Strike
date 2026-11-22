@@ -25,6 +25,8 @@ import com.example.data.roadmap.TaskItem
 import com.example.data.roadmap.TaskPeriod
 import com.example.data.roadmap.TaskPools
 import com.example.data.roadmap.XpCalculationEngine
+import com.example.ui.components.RoadmapBiome
+import com.example.ui.components.roadmapBiomeStateForStation
 import com.example.ui.theme.AppThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -239,38 +241,80 @@ class RoadmapAndThemeEnhancementsTest {
     }
 
     @Test
-    fun frozenGlacialStations_renderAndDeepenWhenScrollingPast500() {
+    fun roadmapBiomes_transitionSmoothlyAcrossAll4StagesFromIce1ToLava700() {
+        // 1. Continuous mathematical biome interpolation verification across all 4 stages
+        val s1 = roadmapBiomeStateForStation(1f)
+        assertEquals(RoadmapBiome.GLACIAL, s1.dominantBiome)
+        assertEquals(1.0f, s1.iceSubmersion, 0.01f)
+        assertEquals(0.0f, s1.lavaSubmersion, 0.01f)
+
+        val mid12 = roadmapBiomeStateForStation(175.5f)
+        assertTrue(mid12.iceWeight in 0.45f..0.55f && mid12.rockWeight in 0.45f..0.55f)
+
+        val s260 = roadmapBiomeStateForStation(260f)
+        assertEquals(RoadmapBiome.ROCKY, s260.dominantBiome)
+        assertTrue(s260.rockIntensity > 0.95f)
+
+        val s440 = roadmapBiomeStateForStation(440f)
+        assertEquals(RoadmapBiome.FOREST, s440.dominantBiome)
+        assertTrue(s440.forestIntensity > 0.95f)
+
+        val s526 = roadmapBiomeStateForStation(526f)
+        assertEquals(RoadmapBiome.VOLCANIC, s526.dominantBiome)
+        assertTrue(s526.lavaSubmersion > 0f && s526.lavaSubmersion < 0.35f)
+
+        val s700 = roadmapBiomeStateForStation(700f)
+        assertEquals(RoadmapBiome.VOLCANIC, s700.dominantBiome)
+        assertEquals(1.0f, s700.lavaSubmersion, 0.01f)
+
+        // 2. UI verification across all 4 stages on RoadmapScreen
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 
-        // Inline card is replaced by floating button between Tasks Ledger & Xp Logs
+        // Level 1 starts deeply submerged in Glacial ice
+        composeRule.onNodeWithTag("roadmap_biome_backdrop").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_biome_submersion_overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("stage_banner_1").assertIsDisplayed()
+
+        // Floating progress menu shows / 700
         assertEquals(0, composeRule.onAllNodesWithTag("roadmap_header_progress_title").fetchSemanticsNodes().size)
         composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
         composeRule.waitForIdle()
-
-        // Floating menu opens and reflects 700 total stations
         composeRule.onNodeWithTag("roadmap_progress_popup").assertIsDisplayed()
         composeRule.onNodeWithTag("roadmap_header_progress_title")
             .assertIsDisplayed()
             .assertTextContains("/ 700", substring = true)
 
-        // Initially at Station 1 -> glacial immersion overlays are inactive
-        assertEquals(0, composeRule.onAllNodesWithTag("glacial_viewport_backdrop").fetchSemanticsNodes().size)
-        assertEquals(0, composeRule.onAllNodesWithTag("glacial_submersion_overlay").fetchSemanticsNodes().size)
-
-        // Jump into Permafrost Threshold (Station 501) -> closes popup & scrolls to 501
-        composeRule.onNodeWithTag("btn_jump_501").performScrollTo().performClick()
+        // Jump to Stage 2: Rocky (176)
+        composeRule.onNodeWithTag("btn_jump_176").performScrollTo().performClick()
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
-            composeRule.onAllNodesWithTag("station_501").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("station_176").fetchSemanticsNodes().isNotEmpty()
         }
-        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_progress_popup").fetchSemanticsNodes().size)
-        composeRule.onNodeWithTag("glacial_threshold_banner_501").assertIsDisplayed()
-        composeRule.onNodeWithTag("glacial_viewport_backdrop").assertIsDisplayed()
-        composeRule.onNodeWithTag("glacial_submersion_overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("stage_banner_176").assertIsDisplayed()
 
-        // Re-open floating menu & jump all the way to Station 700 (20M XP Glacial Crown)
+        // Jump to Stage 3: Forest (351)
+        composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("btn_jump_351").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("station_351").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("stage_banner_351").assertIsDisplayed()
+
+        // Jump to Stage 4: Cataclysm & Volcanic (526)
+        composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("btn_jump_526").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("station_526").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("stage_banner_526").assertIsDisplayed()
+
+        // Jump to Level 700: Deepest Volcanic Magma Abyss
         composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("btn_jump_700").performScrollTo().performClick()
@@ -279,7 +323,8 @@ class RoadmapAndThemeEnhancementsTest {
             composeRule.onAllNodesWithTag("station_700").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag("station_700").assertIsDisplayed()
-        composeRule.onNodeWithTag("glacial_viewport_backdrop").assertIsDisplayed()
-        composeRule.onNodeWithTag("glacial_submersion_overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("stage_banner_700").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_biome_backdrop").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_biome_submersion_overlay").assertIsDisplayed()
     }
 }

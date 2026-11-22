@@ -6,13 +6,12 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +49,7 @@ import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +58,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,7 +72,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -246,22 +246,17 @@ fun DataEntryDialog(
     val density = LocalDensity.current
     val imeBottomPx = WindowInsets.ime.getBottom(density)
 
-    suspend fun revealHistoricalSectionAboveKeyboard() {
-        // Allow keyboard inset animation & layout pass to update scroll bounds cleanly
-        delay(80)
-        val targetBottom = scrollState.maxValue
-        if (scrollState.value < targetBottom) {
-            scrollState.animateScrollTo(
-                value = targetBottom,
-                animationSpec = tween(durationMillis = 360, easing = FastOutSlowInEasing)
-            )
+    LaunchedEffect(isHistoricalFocused, imeBottomPx) {
+        if (isHistoricalFocused && imeBottomPx > 0) {
+            delay(80)
+            scrollState.animateScrollTo(scrollState.maxValue)
+            historicalBringIntoViewRequester.bringIntoView()
         }
-        historicalBringIntoViewRequester.bringIntoView()
     }
 
-    LaunchedEffect(isHistoricalFocused, imeBottomPx, historicalEntries.size) {
-        if (isHistoricalFocused) {
-            revealHistoricalSectionAboveKeyboard()
+    LaunchedEffect(error) {
+        if (error != null) {
+            scrollState.animateScrollTo(0)
         }
     }
 
@@ -273,16 +268,19 @@ fun DataEntryDialog(
         modifier = Modifier
             .fillMaxSize()
             .background(modalBg)
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        event.changes.forEach { it.consume() }
-                    }
-                }
-            }
             .testTag("data_entry_overlay")
     ) {
+        // Non-interfering backdrop blocker so clicks never leak through to underlying screens
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {}
+                )
+        )
+
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = modalBg
@@ -337,8 +335,9 @@ fun DataEntryDialog(
                                         contentColor = Color(0xFF021B26)
                                     ),
                                     modifier = Modifier
-                                        .height(40.dp)
-                                        .testTag("save_record_btn")
+                                        .minimumInteractiveComponentSize()
+                                        .height(44.dp)
+                                        .testTag("header_update_record_btn")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Check,
@@ -374,7 +373,8 @@ fun DataEntryDialog(
                             IconButton(
                                 onClick = onDismiss,
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .minimumInteractiveComponentSize()
+                                    .size(44.dp)
                                     .clip(CircleShape)
                                     .background(if (isDarkTheme) Color(0x221E293B) else Color(0xFFE2E8F0))
                                     .border(1.dp, accentCyan.copy(alpha = 0.45f), CircleShape)
@@ -924,9 +924,6 @@ fun DataEntryDialog(
                                             value = inputYear,
                                             onValueChange = { newValue ->
                                                 inputYear = newValue
-                                                coroutineScope.launch {
-                                                    revealHistoricalSectionAboveKeyboard()
-                                                }
                                             },
                                             label = { Text(stringResource(R.string.year)) },
                                             modifier = Modifier
@@ -948,9 +945,6 @@ fun DataEntryDialog(
                                             value = inputStrikeCount,
                                             onValueChange = { newValue ->
                                                 inputStrikeCount = newValue
-                                                coroutineScope.launch {
-                                                    revealHistoricalSectionAboveKeyboard()
-                                                }
                                             },
                                             label = { Text(stringResource(R.string.strikes_amount)) },
                                             modifier = Modifier
@@ -1074,7 +1068,25 @@ fun DataEntryDialog(
                                 }
                         }
 
-                        // Action Buttons: Save & Cancel
+                        if (error != null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(NeonRose.copy(alpha = 0.14f))
+                                    .border(1.dp, NeonRose.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = error ?: "",
+                                    color = NeonRose,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        // Action Buttons: Save / Update & Cancel
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1099,36 +1111,42 @@ fun DataEntryDialog(
                                 Text(stringResource(R.string.cancel))
                             }
 
-                            if (!isEditing) {
-                                Button(
-                                    onClick = {
-                                        viewModel.saveCurrentForm {
-                                            onDismiss()
-                                        }
-                                    },
-                                    enabled = !isSaving,
-                                    modifier = Modifier
-                                        .weight(2f)
-                                        .height(52.dp)
-                                        .testTag("save_record_btn"),
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = NeonCyan,
-                                        contentColor = Color(0xFF021B26)
+                            Button(
+                                onClick = {
+                                    viewModel.saveCurrentForm {
+                                        onDismiss()
+                                    }
+                                },
+                                enabled = !isSaving,
+                                modifier = Modifier
+                                    .weight(2f)
+                                    .height(52.dp)
+                                    .testTag("save_record_btn"),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = NeonCyan,
+                                    contentColor = Color(0xFF021B26)
+                                )
+                            ) {
+                                if (isSaving) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = Color(0xFF021B26)
                                     )
-                                ) {
+                                } else {
                                     Icon(
                                         imageVector = Icons.Default.Check,
                                         contentDescription = null,
                                         modifier = Modifier.size(20.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = stringResource(R.string.save_record),
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp
-                                    )
                                 }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isEditing) stringResource(R.string.update_record) else stringResource(R.string.save_record),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp
+                                )
                             }
                         }
 

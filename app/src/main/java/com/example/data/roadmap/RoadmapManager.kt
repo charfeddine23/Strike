@@ -545,6 +545,7 @@ object RoadmapManager {
         }
 
         editor.apply()
+        ProfileManager.onTotalXpUpdated(context, newXp)
         return newXp
     }
 

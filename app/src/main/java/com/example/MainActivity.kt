@@ -20,11 +20,9 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -943,7 +941,7 @@ fun LiquidGlassBottomBar(
                 .background(navBg)
                 .border(1.dp, navBorder, RoundedCornerShape(22.dp))
                 .padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             BottomNavItem(
@@ -953,7 +951,8 @@ fun LiquidGlassBottomBar(
                 activeColor = dashColor,
                 isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_dashboard",
-                onClick = { onScreenSelected(AppScreen.DASHBOARD) }
+                onClick = { onScreenSelected(AppScreen.DASHBOARD) },
+                modifier = Modifier.weight(1f)
             )
 
             BottomNavItem(
@@ -963,7 +962,8 @@ fun LiquidGlassBottomBar(
                 activeColor = invColor,
                 isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_inventory",
-                onClick = { onScreenSelected(AppScreen.INVENTORY) }
+                onClick = { onScreenSelected(AppScreen.INVENTORY) },
+                modifier = Modifier.weight(1f)
             )
 
             BottomNavItem(
@@ -973,7 +973,8 @@ fun LiquidGlassBottomBar(
                 activeColor = strikeColor,
                 isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_strike",
-                onClick = { onScreenSelected(AppScreen.STRIKE) }
+                onClick = { onScreenSelected(AppScreen.STRIKE) },
+                modifier = Modifier.weight(1f)
             )
 
             BottomNavItem(
@@ -983,7 +984,8 @@ fun LiquidGlassBottomBar(
                 activeColor = compareColor,
                 isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_compare",
-                onClick = { onScreenSelected(AppScreen.COMPARISON) }
+                onClick = { onScreenSelected(AppScreen.COMPARISON) },
+                modifier = Modifier.weight(1f)
             )
 
             BottomNavItem(
@@ -993,7 +995,8 @@ fun LiquidGlassBottomBar(
                 activeColor = roadmapColor,
                 isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_roadmap",
-                onClick = { onScreenSelected(AppScreen.ROADMAP) }
+                onClick = { onScreenSelected(AppScreen.ROADMAP) },
+                modifier = Modifier.weight(1f)
             )
         }
     }
@@ -1007,15 +1010,16 @@ private fun BottomNavItem(
     activeColor: Color,
     isDarkTheme: Boolean = LocalAppDarkTheme.current,
     testTag: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val bgColor by animateColorAsState(
-        targetValue = if (isSelected) activeColor.copy(alpha = if (isDarkTheme) 0.2f else 0.14f) else Color.Transparent,
+        targetValue = if (isSelected) activeColor.copy(alpha = if (isDarkTheme) 0.22f else 0.15f) else Color.Transparent,
         animationSpec = tween(160),
         label = "nav_bg"
     )
     val borderColor by animateColorAsState(
-        targetValue = if (isSelected) activeColor.copy(alpha = if (isDarkTheme) 0.8f else 0.65f) else Color.Transparent,
+        targetValue = if (isSelected) activeColor.copy(alpha = if (isDarkTheme) 0.85f else 0.7f) else Color.Transparent,
         animationSpec = tween(160),
         label = "nav_border"
     )
@@ -1026,44 +1030,21 @@ private fun BottomNavItem(
     )
 
     Box(
-        modifier = Modifier
+        modifier = modifier
+            .height(48.dp)
             .minimumInteractiveComponentSize()
             .clip(RoundedCornerShape(14.dp))
             .background(bgColor)
             .border(1.dp, borderColor, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp)
             .testTag(testTag),
         contentAlignment = Alignment.Center
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                tint = iconTint,
-                modifier = Modifier.size(20.dp)
-            )
-            AnimatedVisibility(
-                visible = isSelected,
-                enter = expandHorizontally(tween(160, easing = FastOutSlowInEasing)) + fadeIn(tween(140)),
-                exit = shrinkHorizontally(tween(110, easing = FastOutLinearInEasing)) + fadeOut(tween(80))
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = label,
-                        color = activeColor,
-                        fontFamily = com.example.ui.theme.PlusJakartaSans,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
-            }
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = iconTint,
+            modifier = Modifier.size(23.dp)
+        )
     }
 }

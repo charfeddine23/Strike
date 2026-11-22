@@ -243,4 +243,34 @@ class NavigationAndRoadmapTabsTest {
             (composeRule.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
         )
     }
+
+    @Test
+    fun bottomNavBar_showsIconsOnlyAndKeepsFixedTabBoundsAcrossSwitches() {
+        composeRule.waitForIdle()
+        val navTags = listOf(
+            "nav_tab_dashboard",
+            "nav_tab_inventory",
+            "nav_tab_strike",
+            "nav_tab_compare",
+            "nav_tab_roadmap"
+        )
+        val initialBounds = navTags.associateWith { tag ->
+            composeRule.onNodeWithTag(tag).assertIsDisplayed().getBoundsInRoot()
+        }
+
+        // Bottom bar tab label for Strike Recording ("تسجيل ضربة") is not rendered anywhere in the bar
+        assertEquals(0, composeRule.onAllNodesWithText("تسجيل ضربة", substring = false).fetchSemanticsNodes().size)
+
+        // Switch across multiple tabs and confirm every bottom bar tab stays in its exact fixed X slot
+        listOf("nav_tab_inventory", "nav_tab_strike", "nav_tab_compare", "nav_tab_roadmap").forEach { targetTab ->
+            composeRule.onNodeWithTag(targetTab).performClick()
+            composeRule.waitForIdle()
+            navTags.forEach { tag ->
+                val updated = composeRule.onNodeWithTag(tag).assertIsDisplayed().getBoundsInRoot()
+                val base = initialBounds.getValue(tag)
+                assertEquals("Left X shifted for $tag after clicking $targetTab", base.left.value, updated.left.value, 0.5f)
+                assertEquals("Right X shifted for $tag after clicking $targetTab", base.right.value, updated.right.value, 0.5f)
+            }
+        }
+    }
 }

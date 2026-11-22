@@ -673,11 +673,12 @@ class RoadmapEngineTest {
 
     @Test
     fun testGlacialDepthScalingAndSnapshotRestoreUpTo700() {
-        assertEquals(0f, com.example.ui.components.glacialDepthForStation(1), 0.0001f)
-        assertEquals(0f, com.example.ui.components.glacialDepthForStation(500), 0.0001f)
-        assertEquals(0.005f, com.example.ui.components.glacialDepthForStation(501), 0.0001f)
-        assertEquals(0.5f, com.example.ui.components.glacialDepthForStation(600), 0.0001f)
-        assertEquals(1.0f, com.example.ui.components.glacialDepthForStation(700), 0.0001f)
+        // Level 1 starts submerged in glacial ice; 260 is Rocky, 440 is Forest, 700 is deeply submerged in volcanic magma
+        assertEquals(1.0f, com.example.ui.components.glacialDepthForStation(1), 0.0001f)
+        assertEquals(0.0f, com.example.ui.components.glacialDepthForStation(350), 0.0001f)
+        assertTrue(com.example.ui.components.roadmapBiomeStateForStation(260f).rockIntensity > 0.95f)
+        assertTrue(com.example.ui.components.roadmapBiomeStateForStation(440f).forestIntensity > 0.95f)
+        assertEquals(1.0f, com.example.ui.components.roadmapBiomeStateForStation(700f).lavaSubmersion, 0.0001f)
 
         // Unlock all 700 stations using cumulative XP at station 700
         val maxCumulative = TaskPools.getCumulativeXpForStation(700)

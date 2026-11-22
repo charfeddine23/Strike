@@ -47,56 +47,46 @@ fun GlowingWavyRoadmapSegmentCanvas(
     glowPulse: Float = 0.85f,
     darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
-    val frostDepth = glacialDepthForStation(stationId)
-    val isFrozenZone = frostDepth > 0f
+    val biomeState = roadmapBiomeStateForStation(stationId.toFloat())
+    val prominence = maxOf(
+        biomeState.iceSubmersion,
+        biomeState.rockIntensity * 0.72f,
+        biomeState.forestIntensity * 0.78f,
+        biomeState.lavaSubmersion
+    ).coerceIn(0.25f, 1f)
 
     Canvas(modifier = modifier.fillMaxSize()) {
         val stepsPerHalf = 22
         val totalSteps = stepsPerHalf * 2
         val midY = size.height * 0.5f
 
-        val activeStartTone = when {
-            isFrozenZone && darkTheme -> GlacialNightAurora
-            isFrozenZone && !darkTheme -> GlacialDayCyan
-            darkTheme -> NeonAqua
-            else -> DayCyan
+        val activeStartTone = if (darkTheme) {
+            blendBiomeColor(GlacialNightAurora, RockyNightAmber, ForestNightEmerald, VolcanicNightMagma, biomeState)
+        } else {
+            blendBiomeColor(GlacialDayCyan, RockyDayAmber, ForestDayEmerald, VolcanicDayMagma, biomeState)
         }
-        val activeEndTone = when {
-            isFrozenZone && darkTheme -> GlacialNightIce
-            isFrozenZone && !darkTheme -> GlacialDayDeepBlue
-            darkTheme -> ElectricMint
-            else -> DayEmerald
+        val activeEndTone = if (darkTheme) {
+            blendBiomeColor(GlacialNightIce, RockyNightOchre, ForestNightLime, VolcanicNightGold, biomeState)
+        } else {
+            blendBiomeColor(GlacialDayDeepBlue, RockyDaySlate, ForestDayLeaf, VolcanicDayOrange, biomeState)
         }
-        val coreTone = when {
-            isFrozenZone && darkTheme -> GlacialNightCrystal
-            isFrozenZone && !darkTheme -> Color.White
-            darkTheme -> Color(0xFFC8FDFF)
-            else -> Color(0xFF0EA5E9)
+        val coreTone = if (darkTheme) {
+            blendBiomeColor(GlacialNightCrystal, Color(0xFFFEF3C7), ForestNightMint, Color(0xFFFFEDD5), biomeState)
+        } else {
+            Color.White
         }
         val orbHaloTone = if (darkTheme) Color(0xFFE6FFFF) else Color.White
         val orbCenterTone = if (darkTheme) Color(0xFFF2FFFF) else Color.White
-        val lockedConduitBg = when {
-            isFrozenZone && darkTheme -> Color(0x88103554)
-            isFrozenZone && !darkTheme -> Color(0x557DD3FC)
-            darkTheme -> Color(0x66161F33)
-            else -> Color(0x3394A3B8)
-        }
-        val lockedDashColor = when {
-            isFrozenZone && darkTheme -> GlacialNightIce.copy(alpha = 0.45f + 0.30f * frostDepth)
-            isFrozenZone && !darkTheme -> GlacialDayCyan.copy(alpha = 0.55f + 0.28f * frostDepth)
-            darkTheme -> Color(0xFF4A5873)
-            else -> Color(0xFF94A3B8)
-        }
-        val frontierOuterTone = if (isFrozenZone) {
-            if (darkTheme) GlacialNightCyan else GlacialDayDeepBlue
+        val lockedConduitBg = if (darkTheme) {
+            blendBiomeColor(Color(0x88103554), Color(0x8829221C), Color(0x880E2E21), Color(0x883D120B), biomeState)
         } else {
-            if (darkTheme) WarmFireOrange else DayOrange
+            blendBiomeColor(Color(0x557DD3FC), Color(0x55D6C3A5), Color(0x5586EFAC), Color(0x55FCA5A5), biomeState)
         }
-        val frontierInnerTone = if (isFrozenZone) {
-            if (darkTheme) GlacialNightCrystal else Color.White
-        } else {
-            if (darkTheme) MilestoneGold else WarmFireOrange
-        }
+        val lockedDashColor = biomePrimaryAccent(biomeState, darkTheme).copy(
+            alpha = if (darkTheme) (0.42f + 0.32f * prominence) else (0.52f + 0.30f * prominence)
+        )
+        val frontierOuterTone = activeStartTone
+        val frontierInnerTone = if (darkTheme) activeEndTone else coreTone
 
         fun pointAtFrac(yFrac: Float): Offset {
             val t = (stationId - 0.5f) + yFrac
@@ -193,12 +183,13 @@ fun GlowingWavyRoadmapSegmentCanvas(
                     }
                 }
             } else {
-                // Underlying shadow conduit + animated streaming dashed line (+ outer rime sheen in permafrost zone)
-                if (isFrozenZone) {
+                // Underlying shadow conduit + animated streaming dashed line + biome atmospheric sheen
+                val rimSubmersion = maxOf(biomeState.iceSubmersion, biomeState.lavaSubmersion)
+                if (rimSubmersion > 0.05f) {
                     drawPath(
                         path = path,
-                        color = (if (darkTheme) GlacialNightCyan else Color.White).copy(alpha = (0.14f + 0.16f * frostDepth) * glowPulse),
-                        style = Stroke(width = (8f + 4f * frostDepth).dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        color = biomePrimaryAccent(biomeState, darkTheme).copy(alpha = (0.14f + 0.16f * rimSubmersion) * glowPulse),
+                        style = Stroke(width = (7.5f + 4f * rimSubmersion).dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                     )
                 }
                 drawPath(

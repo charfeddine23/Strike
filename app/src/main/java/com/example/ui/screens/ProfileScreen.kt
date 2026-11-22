@@ -12,6 +12,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,6 +44,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Timeline
@@ -62,8 +66,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +78,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -82,11 +91,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.deviations.DeviationsManager
+import com.example.data.flame.FlameManager
 import com.example.data.profile.AvatarItem
 import com.example.data.profile.ProfileManager
 import com.example.data.profile.ProfileMasterInventory
 import com.example.data.profile.TitleItem
 import com.example.data.profile.TitleRarity
+import com.example.data.profile.TitleRegrindTarget
 import com.example.data.roadmap.RoadmapManager
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.ProfileAvatarHeaderIcon
@@ -102,11 +113,17 @@ import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
+import com.example.ui.theme.NeonRose
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.util.HapticHelper
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
+import kotlin.math.ceil
+
+private const val TITLE_RESET_HOLD_DURATION_MS = 10_000L
 
 /**
  * Cyberpunk Glassmorphism Profile Dashboard Screen:
@@ -139,9 +156,11 @@ fun ProfileScreen(
     val equippedTitle by ProfileManager.equippedTitle.collectAsStateWithLifecycle()
     val unlockedAvatars by ProfileManager.unlockedAvatarIds.collectAsStateWithLifecycle()
     val unlockedTitles by ProfileManager.unlockedTitleIds.collectAsStateWithLifecycle()
+    val titleRegrindTargets by viewModel.titleRegrindTargets.collectAsStateWithLifecycle()
 
     // Telemetry metrics
     val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
+    val totalPointsGained by FlameManager.totalPointsGained.collectAsStateWithLifecycle()
     val totalXp by viewModel.totalXp.collectAsStateWithLifecycle()
     val unlockedStation = remember(totalXp) { RoadmapManager.calculateUnlockedStationId(totalXp) }
     val darkRank = remember(flameScore, currentLang) { DeviationsManager.getDarkRank(flameScore, currentLang) }
@@ -225,7 +244,9 @@ fun ProfileScreen(
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .testTag("profile_lazy_list"),
             contentPadding = PaddingValues(bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -325,26 +346,36 @@ fun ProfileScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (isAr) "اللقب المجهّز (${rarity.labelAr})" else "Equipped Title (${rarity.labelEn})",
+                                    text = if (equippedTitle.id == 0) {
+                                        when (currentLang) {
+                                            "ar" -> "لا يوجد لقب مجهّز"
+                                            "fr" -> "Aucun titre équipé"
+                                            else -> "No Equipped Title"
+                                        }
+                                    } else {
+                                        if (isAr) "اللقب المجهّز (${rarity.labelAr})" else "Equipped Title (${rarity.labelEn})"
+                                    },
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = rarityAccent
                                 )
                             }
 
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(rarityAccent.copy(alpha = if (isDarkTheme) 0.2f else 0.14f))
-                                    .border(1.dp, rarityAccent.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = (if (isAr) rarity.labelAr else rarity.labelEn).uppercase(Locale.US),
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = rarityAccent
-                                )
+                            if (equippedTitle.id != 0) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(rarityAccent.copy(alpha = if (isDarkTheme) 0.2f else 0.14f))
+                                        .border(1.dp, rarityAccent.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = (if (isAr) rarity.labelAr else rarity.labelEn).uppercase(Locale.US),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = rarityAccent
+                                    )
+                                }
                             }
                         }
 
@@ -355,7 +386,8 @@ fun ProfileScreen(
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
                             fontFamily = PlusJakartaSans,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.testTag("profile_equipped_title_text")
                         )
 
                         val localizedDesc = equippedTitle.getLocalizedDescription(currentLang)
@@ -481,6 +513,7 @@ fun ProfileScreen(
                     Tab(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
+                        modifier = Modifier.testTag("profile_tab_avatars"),
                         text = {
                             Text(
                                 if (isAr) "الأفاتار (${unlockedAvatars.size}/20)" else "Avatars (${unlockedAvatars.size}/20)",
@@ -492,6 +525,7 @@ fun ProfileScreen(
                     Tab(
                         selected = selectedTab == 1,
                         onClick = { selectedTab = 1 },
+                        modifier = Modifier.testTag("profile_tab_titles"),
                         text = {
                             Text(
                                 if (isAr) "الألقاب (${unlockedTitles.size}/50)" else "Titles (${unlockedTitles.size}/50)",
@@ -503,6 +537,7 @@ fun ProfileScreen(
                     Tab(
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },
+                        modifier = Modifier.testTag("profile_tab_arsenal"),
                         text = {
                             Text(
                                 if (isAr) "الجرعات والمفاتيح" else "Potions & Keys",
@@ -538,22 +573,62 @@ fun ProfileScreen(
                 }
             }
 
-            // TAB 1: 50 TITLES MASTER INVENTORY + MILESTONE
+            // TAB 1: 50 TITLES MASTER INVENTORY + MILESTONE (Exclusive 10s Hold-to-Reset Re-Grind)
             if (selectedTab == 1) {
-                // Milestone Title if unlocked
                 item {
-                    val isMilestoneUnlocked = unlockedTitles.contains(ProfileMasterInventory.MILESTONE_PEAK_TITLE.id)
-                    val isEquipped = equippedTitle.id == ProfileMasterInventory.MILESTONE_PEAK_TITLE.id
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(accentAmber.copy(alpha = if (isDarkTheme) 0.11f else 0.09f))
+                            .border(1.dp, accentAmber.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 9.dp)
+                            .testTag("profile_titles_hold_reset_hint"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = accentAmber,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = when (currentLang) {
+                                "ar" -> "اضغط مطولاً 10 ثوانٍ على أي لقب مفتوح لتصفيره وإعادة التعب لكسبه مجدداً."
+                                "fr" -> "Maintenez 10s sur un titre débloqué pour le réinitialiser et le regagner."
+                                else -> "Hold any unlocked title for 10 seconds to reset it and re-grind for it."
+                            },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Milestone Title
+                item {
+                    val peakTitle = ProfileMasterInventory.MILESTONE_PEAK_TITLE
+                    val isMilestoneUnlocked = unlockedTitles.contains(peakTitle.id)
+                    val isEquipped = equippedTitle.id == peakTitle.id
                     TitleItemCard(
-                        title = ProfileMasterInventory.MILESTONE_PEAK_TITLE,
+                        title = peakTitle,
                         currentLang = currentLang,
                         isDarkTheme = isDarkTheme,
                         isUnlocked = isMilestoneUnlocked,
                         isEquipped = isEquipped,
+                        regrindTarget = titleRegrindTargets[peakTitle.id],
+                        currentTotalXp = totalXp,
+                        currentTotalFlameGained = totalPointsGained.toLong().coerceAtLeast(0L),
                         onEquip = {
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             view.playSoundEffect(SoundEffectConstants.CLICK)
-                            ProfileManager.equipTitle(context, ProfileMasterInventory.MILESTONE_PEAK_TITLE.id)
+                            ProfileManager.equipTitle(context, peakTitle.id)
+                        },
+                        onResetForReGrind = {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            viewModel.resetTitleForReGrind(peakTitle.id)
                         }
                     )
                 }
@@ -567,10 +642,18 @@ fun ProfileScreen(
                         isDarkTheme = isDarkTheme,
                         isUnlocked = isUnlocked,
                         isEquipped = isEquipped,
+                        regrindTarget = titleRegrindTargets[title.id],
+                        currentTotalXp = totalXp,
+                        currentTotalFlameGained = totalPointsGained.toLong().coerceAtLeast(0L),
                         onEquip = {
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             view.playSoundEffect(SoundEffectConstants.CLICK)
                             ProfileManager.equipTitle(context, title.id)
+                        },
+                        onResetForReGrind = {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            viewModel.resetTitleForReGrind(title.id)
                         }
                     )
                 }
@@ -1087,97 +1170,302 @@ private fun TitleItemCard(
     isDarkTheme: Boolean = LocalAppDarkTheme.current,
     isUnlocked: Boolean,
     isEquipped: Boolean,
-    onEquip: () -> Unit
+    regrindTarget: TitleRegrindTarget? = null,
+    currentTotalXp: Long = 0L,
+    currentTotalFlameGained: Long = 0L,
+    onEquip: () -> Unit,
+    onResetForReGrind: () -> Unit
 ) {
     val isAr = currentLang == "ar"
     val rarityColor = title.rarity.adaptiveColor(isDarkTheme)
     val equipColor = if (isDarkTheme) NeonCyan else DayCyan
     val unlockHintColor = if (isDarkTheme) NeonAmber else DayOrange
+    val resetAccentColor = if (isDarkTheme) NeonRose else Color(0xFFDC2626)
+
+    val currentOnReset by rememberUpdatedState(onResetForReGrind)
+    val holdScope = rememberCoroutineScope()
+    var isHolding by remember { mutableStateOf(false) }
+    var holdElapsedMs by remember { mutableLongStateOf(0L) }
+    var holdTriggered by remember { mutableStateOf(false) }
+
+    val isHoldProgressVisible = isUnlocked && isHolding && holdElapsedMs > 150L
+    val holdProgress = (holdElapsedMs.toFloat() / TITLE_RESET_HOLD_DURATION_MS.toFloat()).coerceIn(0f, 1f)
+    val remainingSeconds = ceil((TITLE_RESET_HOLD_DURATION_MS - holdElapsedMs) / 1000.0).toInt().coerceIn(1, 10)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(
-                if (isEquipped) rarityColor.copy(alpha = if (isDarkTheme) 0.15f else 0.12f)
-                else if (isDarkTheme) Color(0x181E293B) else Color(0xF5FFFFFF)
+                when {
+                    isHoldProgressVisible -> resetAccentColor.copy(alpha = if (isDarkTheme) 0.16f else 0.10f)
+                    isEquipped -> rarityColor.copy(alpha = if (isDarkTheme) 0.15f else 0.12f)
+                    isDarkTheme -> Color(0x181E293B)
+                    else -> Color(0xF5FFFFFF)
+                }
             )
             .border(
-                1.dp,
-                if (isEquipped) rarityColor else if (isDarkTheme) Color(0x2238BDF8) else Color(0x55CBD5E1),
+                if (isHoldProgressVisible) 1.5.dp else 1.dp,
+                when {
+                    isHoldProgressVisible -> resetAccentColor
+                    isEquipped -> rarityColor
+                    isDarkTheme -> Color(0x2238BDF8)
+                    else -> Color(0x55CBD5E1)
+                },
                 RoundedCornerShape(12.dp)
             )
-            .clickable(enabled = isUnlocked && !isEquipped, onClick = onEquip)
+            .then(
+                if (isUnlocked) {
+                    Modifier.pointerInput(title.id) {
+                        val touchSlop = viewConfiguration.touchSlop
+                        awaitEachGesture {
+                            val down = awaitFirstDown(
+                                requireUnconsumed = false,
+                                pass = PointerEventPass.Initial
+                            )
+                            isHolding = true
+                            holdTriggered = false
+                            holdElapsedMs = 0L
+                            var activePointerId = down.id
+                            val startPos = down.position
+                            val holdJob = holdScope.launch {
+                                var elapsed = 0L
+                                val tickMs = 50L
+                                while (elapsed < TITLE_RESET_HOLD_DURATION_MS) {
+                                    delay(tickMs)
+                                    elapsed += tickMs
+                                    holdElapsedMs = elapsed.coerceAtMost(TITLE_RESET_HOLD_DURATION_MS)
+                                }
+                                holdTriggered = true
+                                isHolding = false
+                                currentOnReset()
+                            }
+                            try {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    val change = event.changes.firstOrNull { it.id == activePointerId }
+                                        ?: event.changes.firstOrNull()
+                                        ?: break
+                                    activePointerId = change.id
+                                    val movedDistance = (change.position - startPos).getDistance()
+                                    if (!change.pressed || movedDistance > touchSlop) {
+                                        if (holdTriggered && !change.pressed) {
+                                            change.consume()
+                                        }
+                                        break
+                                    }
+                                    if (holdTriggered) {
+                                        change.consume()
+                                    }
+                                }
+                            } finally {
+                                holdJob.cancel()
+                                isHolding = false
+                                holdElapsedMs = 0L
+                            }
+                        }
+                    }
+                } else {
+                    Modifier
+                }
+            )
+            .then(
+                if (isUnlocked && !isEquipped) {
+                    Modifier.clickable {
+                        if (!holdTriggered) {
+                            onEquip()
+                        } else {
+                            holdTriggered = false
+                        }
+                    }
+                } else {
+                    Modifier
+                }
+            )
+            .testTag("profile_title_card_${title.id}")
             .padding(12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = title.getLocalizedTitle(currentLang),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isUnlocked) rarityColor else Color(0xFF64748B)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(rarityColor.copy(alpha = 0.15f))
-                            .padding(horizontal = 5.dp, vertical = 1.dp)
-                    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = if (isAr) title.rarity.labelAr else title.rarity.labelEn,
-                            fontSize = 8.sp,
-                            color = rarityColor,
-                            fontWeight = FontWeight.Bold
+                            text = title.getLocalizedTitle(currentLang),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isUnlocked) rarityColor else Color(0xFF64748B)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(rarityColor.copy(alpha = 0.15f))
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = if (isAr) title.rarity.labelAr else title.rarity.labelEn,
+                                fontSize = 8.sp,
+                                color = rarityColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    val titleDesc = title.getLocalizedDescription(currentLang)
+                    if (titleDesc.isNotBlank()) {
+                        Text(
+                            text = titleDesc,
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (!isUnlocked && regrindTarget == null && title.unlockStation != null) {
+                        Text(
+                            text = if (isAr) "يُفتح عند إتمام المحطة #${title.unlockStation}" else "Unlocks at Station #${title.unlockStation}",
+                            fontSize = 9.sp,
+                            color = unlockHintColor
                         )
                     }
                 }
-                val titleDesc = title.getLocalizedDescription(currentLang)
-                if (titleDesc.isNotBlank()) {
-                    Text(
-                        text = titleDesc,
-                        fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (!isUnlocked && title.unlockStation != null) {
-                    Text(
-                        text = if (isAr) "يُفتح عند إتمام المحطة #${title.unlockStation}" else "Unlocks at Station #${title.unlockStation}",
-                        fontSize = 9.sp,
-                        color = unlockHintColor
+
+                if (isEquipped) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(rarityColor.copy(alpha = 0.2f))
+                            .border(1.dp, rarityColor, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            if (isAr) "مجهّز ✓" else "Equipped ✓",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            color = rarityColor
+                        )
+                    }
+                } else if (isUnlocked) {
+                    Text(if (isAr) "تجهيز" else "Equip", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = equipColor)
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = if (isAr) "مقفل" else "Locked",
+                        tint = Color(0xFF64748B),
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
 
-            if (isEquipped) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(rarityColor.copy(alpha = 0.2f))
-                        .border(1.dp, rarityColor, RoundedCornerShape(6.dp))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+            // Live 10-second hold countdown bar for unlocked Profile titles
+            if (isHoldProgressVisible) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        if (isAr) "مجهّز ✓" else "Equipped ✓",
+                        text = when (currentLang) {
+                            "ar" -> "أبقِ الضغط $remainingSeconds ث لتصفير اللقب..."
+                            "fr" -> "Maintenez ${remainingSeconds}s pour réinitialiser..."
+                            else -> "Hold ${remainingSeconds}s to reset title..."
+                        },
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = resetAccentColor,
+                        modifier = Modifier.testTag("profile_title_reset_countdown_${title.id}")
+                    )
+                    Text(
+                        text = "${(holdProgress * 100).toInt()}%",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Black,
-                        color = rarityColor
+                        color = resetAccentColor
                     )
                 }
-            } else if (isUnlocked) {
-                Text(if (isAr) "تجهيز" else "Equip", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = equipColor)
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = if (isAr) "مقفل" else "Locked",
-                    tint = Color(0xFF64748B),
-                    modifier = Modifier.size(16.dp)
-                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(resetAccentColor.copy(alpha = 0.2f))
+                        .testTag("profile_title_reset_progress_${title.id}")
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(holdProgress)
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Brush.horizontalGradient(listOf(unlockHintColor, resetAccentColor)))
+                    )
+                }
+            } else if (!isUnlocked && regrindTarget != null) {
+                // Active Re-Grind challenge progress when title has been reset
+                val req = regrindTarget.requiredGain.coerceAtLeast(1L)
+                val earned = if (title.id == ProfileMasterInventory.MILESTONE_PEAK_TITLE.id) {
+                    (currentTotalFlameGained - regrindTarget.baselineProgress).coerceIn(0L, req)
+                } else {
+                    (currentTotalXp - regrindTarget.baselineProgress).coerceIn(0L, req)
+                }
+                val progressFrac = (earned.toFloat() / req.toFloat()).coerceIn(0f, 1f)
+                val regrindLabel = if (title.id == ProfileMasterInventory.MILESTONE_PEAK_TITLE.id) {
+                    when (currentLang) {
+                        "ar" -> "إعادة التعب للّقب: $earned / $req نقطة شعلة (عند 20,000+)"
+                        "fr" -> "Re-progression : $earned / $req pts flamme (à 20k+)"
+                        else -> "Re-Grind: $earned / $req Flame pts (at 20k+)"
+                    }
+                } else {
+                    when (currentLang) {
+                        "ar" -> "إعادة التعب للّقب: $earned / $req XP جديدة"
+                        "fr" -> "Re-progression : $earned / $req nouveaux XP"
+                        else -> "Re-Grind: $earned / $req new XP"
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("profile_title_regrind_${title.id}")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = regrindLabel,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = unlockHintColor
+                        )
+                        Text(
+                            text = "${(progressFrac * 100).toInt()}%",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            color = unlockHintColor
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(unlockHintColor.copy(alpha = 0.2f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progressFrac)
+                                .height(5.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(Brush.horizontalGradient(listOf(unlockHintColor, equipColor)))
+                        )
+                    }
+                }
             }
         }
     }

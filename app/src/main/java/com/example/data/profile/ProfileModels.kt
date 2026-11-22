@@ -49,9 +49,23 @@ data class TitleItem(
     val description: String = "",
     val descriptionEn: String = description
 ) {
-    fun getLocalizedTitle(lang: String): String = if (lang == "ar") titleAr else titleEn
-    fun getLocalizedDescription(lang: String): String = if (lang == "ar") description else descriptionEn
+    fun getLocalizedTitle(lang: String): String = when {
+        id == 0 && lang == "fr" -> "Aucun titre"
+        lang == "ar" -> titleAr
+        else -> titleEn
+    }
+    fun getLocalizedDescription(lang: String): String = when {
+        id == 0 && lang == "fr" -> "Débloquez ou sélectionnez un titre pour l'équiper."
+        lang == "ar" -> description
+        else -> descriptionEn
+    }
 }
+
+data class TitleRegrindTarget(
+    val titleId: Int,
+    val baselineProgress: Long,
+    val requiredGain: Long
+)
 
 enum class AvatarRarity(
     val labelAr: String,
@@ -174,6 +188,17 @@ enum class SkipKeyType(
 }
 
 object ProfileMasterInventory {
+
+    // Placeholder used when all unlocked titles are reset for re-grind
+    val NO_TITLE_PLACEHOLDER = TitleItem(
+        id = 0,
+        titleAr = "بدون لقب",
+        titleEn = "No Title",
+        rarity = TitleRarity.COMMON,
+        unlockStation = null,
+        description = "تم تصفير الألقاب لإعادة الكسب — افتح أي لقب مجدداً لتجهيزه.",
+        descriptionEn = "Titles reset for re-grind — earn XP to unlock a title again."
+    )
 
     // MILESTONE TITLE (20,000 PTS PEAK FLAME SCORE)
     val MILESTONE_PEAK_TITLE = TitleItem(

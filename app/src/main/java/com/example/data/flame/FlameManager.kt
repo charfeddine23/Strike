@@ -646,8 +646,13 @@ object FlameManager {
             }
         }
 
+        val projectedGained = _totalPointsGained.value + if (diff > 0) diff else 0.0
         // Check Milestone Peak Title unlock at 20,000+ pts
-        com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(context, clamped)
+        com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(
+            context = context,
+            flameScore = clamped,
+            totalGainedPoints = projectedGained
+        )
 
         if (diff > 0) {
             val updatedGained = _totalPointsGained.value + diff
@@ -705,9 +710,6 @@ object FlameManager {
             }
         }
 
-        // Check Milestone Peak Title unlock at 20,000+ pts
-        com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(context, updated)
-
         val updatedGained = _totalPointsGained.value + effectiveDelta
         _totalPointsGained.value = updatedGained
         getPrefs(context).edit().apply {
@@ -715,6 +717,13 @@ object FlameManager {
             saveDouble(this, KEY_TOTAL_POINTS_GAINED, KEY_TOTAL_POINTS_GAINED_BITS, updatedGained)
             apply()
         }
+
+        // Check Milestone Peak Title unlock at 20,000+ pts
+        com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(
+            context = context,
+            flameScore = updated,
+            totalGainedPoints = updatedGained
+        )
 
         val eventTitle = title.ifBlank {
             when (reason) {
@@ -1398,7 +1407,11 @@ object FlameManager {
         }
 
         // Check Milestone Peak Title unlock at 20,000+ pts
-        com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(context, syncedPeak)
+        com.example.data.profile.ProfileManager.checkMilestonePeakUnlock(
+            context = context,
+            flameScore = syncedPeak,
+            totalGainedPoints = syncedGained
+        )
 
         val rangesJson = JSONObject().apply {
             fun putRange(key: String, range: DateRangeConfig?) {

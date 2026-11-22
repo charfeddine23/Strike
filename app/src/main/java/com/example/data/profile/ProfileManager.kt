@@ -21,6 +21,9 @@ object ProfileManager {
     private const val KEY_EQUIPPED_TITLE_ID = "key_equipped_title_id"
     private const val KEY_UNLOCKED_AVATARS = "key_unlocked_avatars"
     private const val KEY_UNLOCKED_TITLES = "key_unlocked_titles"
+    private const val KEY_TITLE_REGRIND_TARGETS_JSON = "key_title_regrind_targets_json"
+
+    const val MILESTONE_PEAK_REGRIND_FLAME_GAIN: Long = 5_000L
 
     // Potions Inventory (Capacity cap: 3 per item)
     private const val KEY_POTION_PULSE_ELIXIR = "key_potion_pulse_elixir"
@@ -57,6 +60,9 @@ object ProfileManager {
 
     private val _unlockedTitleIds = MutableStateFlow<Set<Int>>(setOf(1))
     val unlockedTitleIds: StateFlow<Set<Int>> = _unlockedTitleIds.asStateFlow()
+
+    private val _titleRegrindTargets = MutableStateFlow<Map<Int, TitleRegrindTarget>>(emptyMap())
+    val titleRegrindTargets: StateFlow<Map<Int, TitleRegrindTarget>> = _titleRegrindTargets.asStateFlow()
 
     // Potions Inventory Counts (0..3)
     private val _pulseElixirCount = MutableStateFlow(0)
@@ -120,18 +126,16 @@ object ProfileManager {
         val savedTitles = prefs.getStringSet(KEY_UNLOCKED_TITLES, null) ?: setOf("1")
         _unlockedTitleIds.value = savedTitles.mapNotNull { it.toIntOrNull() }.toSet()
 
+        _titleRegrindTargets.value = parseRegrindTargets(prefs.getString(KEY_TITLE_REGRIND_TARGETS_JSON, null))
+
         // Equipped avatar
         val eqAvId = prefs.getString(KEY_EQUIPPED_AVATAR_ID, "av_core_node") ?: "av_core_node"
         _equippedAvatar.value = ProfileMasterInventory.MASTER_AVATARS.find { it.id == eqAvId }
             ?: ProfileMasterInventory.MASTER_AVATARS.first()
 
-        // Equipped title
+        // Equipped title (supports NO_TITLE_PLACEHOLDER id = 0 when all titles reset)
         val eqTitleId = prefs.getInt(KEY_EQUIPPED_TITLE_ID, 1)
-        _equippedTitle.value = if (eqTitleId == ProfileMasterInventory.MILESTONE_PEAK_TITLE.id) {
-            ProfileMasterInventory.MILESTONE_PEAK_TITLE
-        } else {
-            ProfileMasterInventory.MASTER_TITLES.find { it.id == eqTitleId } ?: ProfileMasterInventory.MASTER_TITLES.first()
-        }
+        _equippedTitle.value = resolveTitleByIdIfUnlocked(eqTitleId, _unlockedTitleIds.value)
 
         // Potions counts
         _pulseElixirCount.value = prefs.getInt(KEY_POTION_PULSE_ELIXIR, 0)
@@ -213,33 +217,168 @@ object ProfileManager {
                 .putStringSet(KEY_UNLOCKED_TITLES, updated.map { it.toString() }.toSet())
                 .apply()
         }
+        // If no real title was equipped yet (NO_TITLE_PLACEHOLDER), auto-equip this newly unlocked title
+        if (_equippedTitle.value.id == 0) {
+            findTitleSpec(titleId)?.let { resolved ->
+                _equippedTitle.value = resolved
+                getPrefs(context).edit().putInt(KEY_EQUIPPED_TITLE_ID, resolved.id).apply()
+            }
+        }
     }
 
     /**
-     * Called whenever Flame score hits 20,000 points.
-     * Unlocks the exclusive peak milestone title "سيد الجمر التائب".
+     * Resets an unlocked title back to Locked so the user can re-grind for it cleanly.
+     * Should ONLY be invoked from the Profile Titles long-press (10s) gesture.
      */
     @Synchronized
-    fun checkMilestonePeakUnlock(context: Context, flameScore: Double): Boolean {
+    fun resetTitleForReGrind(context: Context, titleId: Int): TitleRegrindTarget? {
         init(context)
-        if (flameScore >= 20000.0) {
-            if (!_unlockedTitleIds.value.contains(ProfileMasterInventory.MILESTONE_PEAK_TITLE.id)) {
-                unlockTitle(context, ProfileMasterInventory.MILESTONE_PEAK_TITLE.id)
+        if (!_unlockedTitleIds.value.contains(titleId)) return null
+        val titleSpec = findTitleSpec(titleId) ?: return null
+
+        com.example.data.roadmap.RoadmapManager.init(context)
+        com.example.data.flame.FlameManager.init(context)
+
+        val target = if (titleSpec.id == ProfileMasterInventory.MILESTONE_PEAK_TITLE.id) {
+            val baselineFlame = com.example.data.flame.FlameManager.totalPointsGained.value
+                .toLong()
+                .coerceAtLeast(0L)
+            TitleRegrindTarget(
+                titleId = titleSpec.id,
+                baselineProgress = baselineFlame,
+                requiredGain = MILESTONE_PEAK_REGRIND_FLAME_GAIN
+            )
+        } else {
+            val station = titleSpec.unlockStation ?: 1
+            val baselineXp = com.example.data.roadmap.RoadmapManager.totalXp.value.coerceAtLeast(0L)
+            val reqXp = com.example.data.roadmap.TaskPools.getRequiredXpForStation(station)
+                .coerceAtLeast(com.example.data.roadmap.TaskPools.ROADMAP_LEVEL_1_XP)
+            TitleRegrindTarget(
+                titleId = titleSpec.id,
+                baselineProgress = baselineXp,
+                requiredGain = reqXp
+            )
+        }
+
+        val updatedUnlocked = _unlockedTitleIds.value.toMutableSet().apply { remove(titleId) }
+        _unlockedTitleIds.value = updatedUnlocked
+
+        val updatedTargets = _titleRegrindTargets.value.toMutableMap().apply {
+            put(titleId, target)
+        }
+        _titleRegrindTargets.value = updatedTargets
+
+        val newEquipped = if (_equippedTitle.value.id == titleId) {
+            fallbackEquippedTitleForUnlocked(updatedUnlocked)
+        } else {
+            _equippedTitle.value
+        }
+        _equippedTitle.value = newEquipped
+
+        getPrefs(context).edit()
+            .putStringSet(KEY_UNLOCKED_TITLES, updatedUnlocked.map { it.toString() }.toSet())
+            .putInt(KEY_EQUIPPED_TITLE_ID, newEquipped.id)
+            .putString(KEY_TITLE_REGRIND_TARGETS_JSON, regrindTargetsToJson(updatedTargets).toString())
+            .apply()
+
+        return target
+    }
+
+    /**
+     * Checks whether any titles reset for re-grind have met their newly earned XP target.
+     */
+    @Synchronized
+    fun onTotalXpUpdated(context: Context, currentTotalXp: Long) {
+        init(context)
+        val targets = _titleRegrindTargets.value
+        if (targets.isEmpty()) return
+
+        var modified = false
+        val updatedTargets = targets.toMutableMap()
+        val titlesToUnlock = mutableListOf<Int>()
+
+        for ((titleId, target) in targets) {
+            if (titleId == ProfileMasterInventory.MILESTONE_PEAK_TITLE.id) continue
+            if (currentTotalXp < target.baselineProgress) {
+                updatedTargets[titleId] = target.copy(baselineProgress = currentTotalXp.coerceAtLeast(0L))
+                modified = true
+                continue
+            }
+            val gained = currentTotalXp - target.baselineProgress
+            if (gained >= target.requiredGain) {
+                updatedTargets.remove(titleId)
+                titlesToUnlock.add(titleId)
+                modified = true
+            }
+        }
+
+        if (modified) {
+            _titleRegrindTargets.value = updatedTargets
+            getPrefs(context).edit()
+                .putString(KEY_TITLE_REGRIND_TARGETS_JSON, regrindTargetsToJson(updatedTargets).toString())
+                .apply()
+        }
+        titlesToUnlock.forEach { tid -> unlockTitle(context, tid) }
+    }
+
+    /**
+     * Called whenever Flame score hits 20,000 points or flame points accrue.
+     * Unlocks the exclusive peak milestone title "سيد الجمر التائب", respecting any active re-grind challenge.
+     */
+    @Synchronized
+    fun checkMilestonePeakUnlock(
+        context: Context,
+        flameScore: Double,
+        totalGainedPoints: Double = 0.0
+    ): Boolean {
+        init(context)
+        val peakId = ProfileMasterInventory.MILESTONE_PEAK_TITLE.id
+        if (_unlockedTitleIds.value.contains(peakId)) return false
+
+        val activeTarget = _titleRegrindTargets.value[peakId]
+        if (activeTarget != null) {
+            val currentTotalGained = totalGainedPoints.toLong().coerceAtLeast(0L)
+            if (currentTotalGained < activeTarget.baselineProgress) {
+                val updated = _titleRegrindTargets.value.toMutableMap().apply {
+                    put(peakId, activeTarget.copy(baselineProgress = currentTotalGained))
+                }
+                _titleRegrindTargets.value = updated
+                getPrefs(context).edit()
+                    .putString(KEY_TITLE_REGRIND_TARGETS_JSON, regrindTargetsToJson(updated).toString())
+                    .apply()
+                return false
+            }
+            val gained = currentTotalGained - activeTarget.baselineProgress
+            if (flameScore >= 20000.0 && gained >= activeTarget.requiredGain) {
+                val updated = _titleRegrindTargets.value.toMutableMap().apply { remove(peakId) }
+                _titleRegrindTargets.value = updated
+                getPrefs(context).edit()
+                    .putString(KEY_TITLE_REGRIND_TARGETS_JSON, regrindTargetsToJson(updated).toString())
+                    .apply()
+                unlockTitle(context, peakId)
                 return true
             }
+            return false
+        }
+
+        if (flameScore >= 20000.0) {
+            unlockTitle(context, peakId)
+            return true
         }
         return false
     }
 
     /**
      * Unlocks rewards associated with reaching a roadmap station (Avatars & Titles).
+     * Titles currently in an active Re-Grind challenge are skipped until their fresh XP target is met.
      */
     @Synchronized
     fun onStationUnlocked(context: Context, stationId: Int) {
         init(context)
-        // Unlock matching titles
+        val activeRegrindIds = _titleRegrindTargets.value.keys
+        // Unlock matching titles (skipping any title intentionally reset for re-grind)
         ProfileMasterInventory.MASTER_TITLES.forEach { t ->
-            if (t.unlockStation != null && t.unlockStation <= stationId) {
+            if (t.unlockStation != null && t.unlockStation <= stationId && !activeRegrindIds.contains(t.id)) {
                 unlockTitle(context, t.id)
             }
         }
@@ -389,11 +528,16 @@ object ProfileManager {
         val newCount = _eternalRebirthCount.value - 1
         _eternalRebirthCount.value = newCount
         _hasRebirthImmunity.value = true
-        unlockTitle(context, 50) // Unlock Gary Master
-        getPrefs(context).edit()
+        val editor = getPrefs(context).edit()
             .putInt(KEY_POTION_ETERNAL_REBIRTH, newCount)
             .putBoolean(KEY_HAS_REBIRTH_ACTIVE, true)
-            .apply()
+        if (_titleRegrindTargets.value.containsKey(50)) {
+            val updated = _titleRegrindTargets.value.toMutableMap().apply { remove(50) }
+            _titleRegrindTargets.value = updated
+            editor.putString(KEY_TITLE_REGRIND_TARGETS_JSON, regrindTargetsToJson(updated).toString())
+        }
+        editor.apply()
+        unlockTitle(context, 50) // Unlock Gary Master
         com.example.data.roadmap.RoadmapManager.onActionOccurred(context, "POTION")
         return true
     }
@@ -483,6 +627,7 @@ object ProfileManager {
         _equippedTitle.value = initialTitle
         _unlockedAvatarIds.value = setOf(initialAvatar.id)
         _unlockedTitleIds.value = setOf(initialTitle.id)
+        _titleRegrindTargets.value = emptyMap()
 
         _pulseElixirCount.value = 0
         _shadowSerumCount.value = 0
@@ -505,6 +650,7 @@ object ProfileManager {
             .putInt(KEY_EQUIPPED_TITLE_ID, initialTitle.id)
             .putStringSet(KEY_UNLOCKED_AVATARS, setOf(initialAvatar.id))
             .putStringSet(KEY_UNLOCKED_TITLES, setOf(initialTitle.id.toString()))
+            .remove(KEY_TITLE_REGRIND_TARGETS_JSON)
             .putInt(KEY_POTION_PULSE_ELIXIR, 0)
             .putInt(KEY_POTION_SHADOW_SERUM, 0)
             .putInt(KEY_POTION_GABRIEL_DROPLET, 0)
@@ -532,6 +678,7 @@ object ProfileManager {
             put("equippedTitleId", _equippedTitle.value.id)
             put("unlockedAvatarIds", JSONArray(_unlockedAvatarIds.value.sorted()))
             put("unlockedTitleIds", JSONArray(_unlockedTitleIds.value.sorted()))
+            put("titleRegrindTargets", regrindTargetsToJson(_titleRegrindTargets.value))
 
             put("pulseElixirCount", _pulseElixirCount.value)
             put("shadowSerumCount", _shadowSerumCount.value)
@@ -567,28 +714,33 @@ object ProfileManager {
             }
         }
         val importedTitlesArr = json.optJSONArray("unlockedTitleIds")
-        val importedTitles = mutableSetOf(1)
-        if (importedTitlesArr != null) {
-            for (i in 0 until importedTitlesArr.length()) {
-                val tid = importedTitlesArr.optInt(i, -1)
-                if (tid > 0) importedTitles.add(tid)
+        val importedTitles = if (importedTitlesArr != null) {
+            mutableSetOf<Int>().apply {
+                for (i in 0 until importedTitlesArr.length()) {
+                    val tid = importedTitlesArr.optInt(i, -1)
+                    if (tid > 0) add(tid)
+                }
             }
+        } else {
+            mutableSetOf(1)
         }
+
+        val importedRegrindMap = parseRegrindTargets(json.optJSONArray("titleRegrindTargets")?.toString())
 
         val finalAvatars = if (replaceExisting) importedAvatars else (_unlockedAvatarIds.value + importedAvatars)
         val finalTitles = if (replaceExisting) importedTitles else (_unlockedTitleIds.value + importedTitles)
+        val finalRegrindTargets = if (replaceExisting) {
+            importedRegrindMap.filterKeys { !finalTitles.contains(it) }
+        } else {
+            (_titleRegrindTargets.value + importedRegrindMap).filterKeys { !finalTitles.contains(it) }
+        }
 
         val eqAvId = json.optString("equippedAvatarId", _equippedAvatar.value.id)
         val resolvedAvatar = ProfileMasterInventory.MASTER_AVATARS.find { it.id == eqAvId && finalAvatars.contains(it.id) }
             ?: ProfileMasterInventory.MASTER_AVATARS.first()
 
         val eqTitleId = json.optInt("equippedTitleId", _equippedTitle.value.id)
-        val resolvedTitle = if (eqTitleId == ProfileMasterInventory.MILESTONE_PEAK_TITLE.id && finalTitles.contains(eqTitleId)) {
-            ProfileMasterInventory.MILESTONE_PEAK_TITLE
-        } else {
-            ProfileMasterInventory.MASTER_TITLES.find { it.id == eqTitleId && finalTitles.contains(it.id) }
-                ?: ProfileMasterInventory.MASTER_TITLES.first()
-        }
+        val resolvedTitle = resolveTitleByIdIfUnlocked(eqTitleId, finalTitles)
 
         val pulse = if (replaceExisting) json.optInt("pulseElixirCount", 0) else (_pulseElixirCount.value + json.optInt("pulseElixirCount", 0))
         val shadow = if (replaceExisting) json.optInt("shadowSerumCount", 0) else (_shadowSerumCount.value + json.optInt("shadowSerumCount", 0))
@@ -613,6 +765,7 @@ object ProfileManager {
         _userName.value = importedName
         _unlockedAvatarIds.value = finalAvatars
         _unlockedTitleIds.value = finalTitles
+        _titleRegrindTargets.value = finalRegrindTargets
         _equippedAvatar.value = resolvedAvatar
         _equippedTitle.value = resolvedTitle
 
@@ -636,6 +789,11 @@ object ProfileManager {
             putString(KEY_USER_NAME, _userName.value)
             putStringSet(KEY_UNLOCKED_AVATARS, _unlockedAvatarIds.value)
             putStringSet(KEY_UNLOCKED_TITLES, _unlockedTitleIds.value.map { it.toString() }.toSet())
+            if (finalRegrindTargets.isNotEmpty()) {
+                putString(KEY_TITLE_REGRIND_TARGETS_JSON, regrindTargetsToJson(finalRegrindTargets).toString())
+            } else {
+                remove(KEY_TITLE_REGRIND_TARGETS_JSON)
+            }
             putString(KEY_EQUIPPED_AVATAR_ID, resolvedAvatar.id)
             putInt(KEY_EQUIPPED_TITLE_ID, resolvedTitle.id)
             putInt(KEY_POTION_PULSE_ELIXIR, _pulseElixirCount.value)
@@ -654,6 +812,66 @@ object ProfileManager {
             putInt(KEY_KEYS_SILVER, _silverKeysCount.value)
             apply()
         }
+    }
+
+    private fun findTitleSpec(titleId: Int): TitleItem? = when (titleId) {
+        ProfileMasterInventory.MILESTONE_PEAK_TITLE.id -> ProfileMasterInventory.MILESTONE_PEAK_TITLE
+        else -> ProfileMasterInventory.MASTER_TITLES.find { it.id == titleId }
+    }
+
+    private fun fallbackEquippedTitleForUnlocked(unlockedIds: Set<Int>): TitleItem {
+        val highestMaster = ProfileMasterInventory.MASTER_TITLES.lastOrNull { unlockedIds.contains(it.id) }
+        if (highestMaster != null) return highestMaster
+        if (unlockedIds.contains(ProfileMasterInventory.MILESTONE_PEAK_TITLE.id)) {
+            return ProfileMasterInventory.MILESTONE_PEAK_TITLE
+        }
+        return ProfileMasterInventory.NO_TITLE_PLACEHOLDER
+    }
+
+    private fun resolveTitleByIdIfUnlocked(titleId: Int, unlockedIds: Set<Int>): TitleItem {
+        if (titleId == 0) return ProfileMasterInventory.NO_TITLE_PLACEHOLDER
+        val candidate = findTitleSpec(titleId)
+        return if (candidate != null && unlockedIds.contains(candidate.id)) {
+            candidate
+        } else {
+            fallbackEquippedTitleForUnlocked(unlockedIds)
+        }
+    }
+
+    private fun parseRegrindTargets(rawJson: String?): Map<Int, TitleRegrindTarget> {
+        if (rawJson.isNullOrBlank()) return emptyMap()
+        return try {
+            val arr = JSONArray(rawJson)
+            val result = mutableMapOf<Int, TitleRegrindTarget>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.optJSONObject(i) ?: continue
+                val titleId = obj.optInt("titleId", -1)
+                val baseline = obj.optLong("baselineProgress", 0L).coerceAtLeast(0L)
+                val required = obj.optLong("requiredGain", 0L)
+                if (titleId > 0 && required > 0L) {
+                    result[titleId] = TitleRegrindTarget(
+                        titleId = titleId,
+                        baselineProgress = baseline,
+                        requiredGain = required
+                    )
+                }
+            }
+            result
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun regrindTargetsToJson(map: Map<Int, TitleRegrindTarget>): JSONArray {
+        val arr = JSONArray()
+        map.values.sortedBy { it.titleId }.forEach { target ->
+            arr.put(JSONObject().apply {
+                put("titleId", target.titleId)
+                put("baselineProgress", target.baselineProgress)
+                put("requiredGain", target.requiredGain)
+            })
+        }
+        return arr
     }
 
     @Synchronized

@@ -161,4 +161,51 @@ class AddIndividualCrashTest {
             db.close()
         }
     }
+
+    @Test
+    fun dataEntryDialog_validatesEmptyNameAndEditsExistingRecordCleanly() {
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("add_record_fab").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("data_entry_overlay").assertIsDisplayed()
+
+        // Saving with empty name displays validation error & stays open
+        composeRule.onNodeWithTag("save_record_btn").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("data_entry_overlay").assertIsDisplayed()
+        composeRule.waitForIdle()
+        val errorNodes = composeRule.onAllNodesWithText("الاسم واللقب حقل إلزامي", substring = true)
+        org.junit.Assert.assertTrue(errorNodes.fetchSemanticsNodes().isNotEmpty())
+        errorNodes[0].performScrollTo().assertIsDisplayed()
+
+        // Fill name and save
+        composeRule.onNodeWithTag("input_fullname").performScrollTo().performTextInput("سارة")
+        composeRule.onNodeWithTag("save_record_btn").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            composeRule.onAllNodesWithTag("data_entry_overlay").fetchSemanticsNodes().isEmpty()
+        }
+
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val savedId = runBlocking(Dispatchers.IO) {
+            AppDatabase.getDatabase(ctx).individualDao().getAllIndividualsList().first().id
+        }
+
+        // Expand record card and click Edit icon
+        composeRule.onNodeWithTag("record_expand_btn_$savedId").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("record_edit_btn_$savedId").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("data_entry_overlay").assertIsDisplayed()
+
+        // Edit name and confirm via bottom Save button (previously hidden/broken in edit mode)
+        composeRule.onNodeWithTag("input_fullname").performScrollTo().performTextReplacement("سارة المعدلة")
+        composeRule.onNodeWithTag("save_record_btn").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            composeRule.onAllNodesWithTag("data_entry_overlay").fetchSemanticsNodes().isEmpty()
+        }
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            composeRule.onAllNodesWithText("سارة المعدلة").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("سارة المعدلة").assertIsDisplayed()
+    }
 }

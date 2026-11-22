@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -1014,7 +1015,9 @@ fun IndividualRecordCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onGoToStrike,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(38.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Bolt,
@@ -1026,7 +1029,9 @@ fun IndividualRecordCard(
 
                     IconButton(
                         onClick = onCompare,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(38.dp)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.CompareArrows,
@@ -1037,8 +1042,25 @@ fun IndividualRecordCard(
                     }
 
                     IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(38.dp)
+                            .testTag("record_edit_btn_${individual.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = stringResource(R.string.update_record),
+                            tint = if (darkTheme) NeonEmerald else DayEmerald,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
                         onClick = onDelete,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(38.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
