@@ -99,6 +99,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.components.TopBottomEdgeFadeBlurOverlay
+import com.example.ui.components.edgeFadeInBlur
 import com.example.data.flame.ActiveShieldType
 import com.example.data.flame.FlameManager
 import com.example.data.update.AppUpdateState
@@ -416,16 +418,27 @@ fun LiquidGlassApp(
             }
         ) { innerPadding ->
             CompositionLocalProvider(LocalScaffoldContentPadding provides innerPadding) {
+                val topBlurHeight = innerPadding.calculateTopPadding() + 20.dp
+                val bottomBlurHeight = innerPadding.calculateBottomPadding().coerceAtLeast(32.dp) + 22.dp
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .clipToBounds()
                 ) {
-            AnimatedContent(
-                targetState = currentScreen,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clipToBounds(),
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clipToBounds()
+                            .edgeFadeInBlur(
+                                topHeight = topBlurHeight,
+                                bottomHeight = bottomBlurHeight
+                            )
+                    ) {
+                        AnimatedContent(
+                            targetState = currentScreen,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clipToBounds(),
                 transitionSpec = {
                     val hubIndex = mapOf(
                         AppScreen.TASKS_LEDGER to -1,
@@ -535,6 +548,13 @@ fun LiquidGlassApp(
                     )
                 }
             }
+                    }
+
+                    TopBottomEdgeFadeBlurOverlay(
+                        topHeight = topBlurHeight,
+                        bottomHeight = bottomBlurHeight,
+                        isDarkTheme = isDarkTheme
+                    )
 
             // Downward-expanding Dashboard Panel opened from the Dashboard button next to Filter/Sort
             RecordsDashboardExpandablePanel(

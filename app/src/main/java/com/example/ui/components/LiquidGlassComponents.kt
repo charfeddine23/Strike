@@ -43,14 +43,29 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import android.graphics.RenderEffect as AndroidRenderEffect
+import android.graphics.Shader
+import android.os.Build
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.CaveatHandwriting
@@ -853,4 +868,195 @@ fun IphoneLiquidGlassBarSurface(
         )
     }
 }
+
+private fun isRobolectricRuntime(): Boolean =
+    Build.FINGERPRINT.contains("robolectric", ignoreCase = true) ||
+        Build.HARDWARE.contains("robolectric", ignoreCase = true)
+
+/**
+ * High-FPS Progressive Top & Bottom Edge Fade-In Blur Modifier.
+ * On Android 12+ (API 31+) real hardware devices, records the viewport once into a GPU
+ * GraphicsLayer (zero Composable tree duplication) and renders two compact edge-height
+ * blurred slices (top & bottom) masked with a smooth cubic vertical BlendMode.DstIn gradient.
+ * Below API 31 (and in Robolectric JVM tests), acts as a pass-through paired cleanly with
+ * [TopBottomEdgeFadeBlurOverlay] atmospheric frosted feathering.
+ */
+fun Modifier.edgeFadeInBlur(
+    topHeight: Dp,
+    bottomHeight: Dp,
+    blurRadius: Dp = 18.dp
+): Modifier = composed {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || isRobolectricRuntime()) {
+        return@composed this
+    }
+
+    val contentLayer = rememberGraphicsLayer()
+    val topBlurLayer = rememberGraphicsLayer()
+    val bottomBlurLayer = rememberGraphicsLayer()
+    val offscreenPaint = remember { Paint() }
+
+    this.drawWithContent {
+        val totalW = size.width
+        val totalH = size.height
+        val topH = topHeight.toPx().coerceIn(0f, totalH * 0.35f)
+        val bottomH = bottomHeight.toPx().coerceIn(0f, totalH * 0.35f)
+        val radiusPx = blurRadius.toPx().coerceAtLeast(1f)
+
+        if (totalW < 2f || totalH < 2f || (topH < 2f && bottomH < 2f)) {
+            drawContent()
+            return@drawWithContent
+        }
+
+        // Single-pass capture + crisp base pass
+        contentLayer.record {
+            this@drawWithContent.drawContent()
+        }
+        drawLayer(contentLayer)
+
+        val renderBlur = AndroidRenderEffect.createBlurEffect(
+            radiusPx,
+            radiusPx,
+            Shader.TileMode.CLAMP
+        ).asComposeRenderEffect()
+
+        val wInt = totalW.toInt().coerceAtLeast(1)
+
+        if (topH >= 2f) {
+            val topHInt = topH.toInt().coerceAtLeast(1)
+            topBlurLayer.renderEffect = renderBlur
+            topBlurLayer.record(size = IntSize(wInt, topHInt)) {
+                drawLayer(contentLayer)
+            }
+            val topMaskBrush = Brush.verticalGradient(
+                0.00f to Color.White,
+                0.38f to Color.White.copy(alpha = 0.88f),
+                0.68f to Color.White.copy(alpha = 0.42f),
+                0.88f to Color.White.copy(alpha = 0.12f),
+                1.00f to Color.Transparent,
+                startY = 0f,
+                endY = topH
+            )
+            drawIntoCanvas { canvas ->
+                canvas.saveLayer(Rect(0f, 0f, totalW, topH), offscreenPaint)
+                drawLayer(topBlurLayer)
+                drawRect(
+                    brush = topMaskBrush,
+                    topLeft = Offset.Zero,
+                    size = Size(totalW, topH),
+                    blendMode = BlendMode.DstIn
+                )
+                canvas.restore()
+            }
+        }
+
+        if (bottomH >= 2f) {
+            val bottomHInt = bottomH.toInt().coerceAtLeast(1)
+            val bottomStartY = (totalH - bottomH).coerceAtLeast(0f)
+            bottomBlurLayer.renderEffect = renderBlur
+            bottomBlurLayer.record(size = IntSize(wInt, bottomHInt)) {
+                translate(left = 0f, top = -bottomStartY) {
+                    drawLayer(contentLayer)
+                }
+            }
+            val bottomMaskBrush = Brush.verticalGradient(
+                0.00f to Color.Transparent,
+                0.12f to Color.White.copy(alpha = 0.12f),
+                0.32f to Color.White.copy(alpha = 0.42f),
+                0.62f to Color.White.copy(alpha = 0.88f),
+                1.00f to Color.White,
+                startY = bottomStartY,
+                endY = totalH
+            )
+            drawIntoCanvas { canvas ->
+                canvas.saveLayer(Rect(0f, bottomStartY, totalW, totalH), offscreenPaint)
+                translate(left = 0f, top = bottomStartY) {
+                    drawLayer(bottomBlurLayer)
+                }
+                drawRect(
+                    brush = bottomMaskBrush,
+                    topLeft = Offset(0f, bottomStartY),
+                    size = Size(totalW, bottomH),
+                    blendMode = BlendMode.DstIn
+                )
+                canvas.restore()
+            }
+        }
+    }
+}
+
+/**
+ * Lightweight atmospheric frosted edge veil layered beneath the floating transparent Top & Bottom Bars.
+ * Complements [edgeFadeInBlur] with multi-stop cubic-eased translucent tint + soft crystalline
+ * luminance diffusion so scrolling cards melt seamlessly behind the transparent outer bars without
+ * restoring opaque black scrims. Non-interactive (zero touch interception).
+ */
+@Composable
+fun BoxScope.TopBottomEdgeFadeBlurOverlay(
+    topHeight: Dp,
+    bottomHeight: Dp,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
+) {
+    val topFrostBrush = remember(isDarkTheme) {
+        if (isDarkTheme) {
+            Brush.verticalGradient(
+                0.00f to Color(0x88050A14),
+                0.32f to Color(0x62070E1D),
+                0.64f to Color(0x2E091326),
+                0.86f to Color(0x0E0B182E),
+                1.00f to Color.Transparent
+            )
+        } else {
+            Brush.verticalGradient(
+                0.00f to Color(0x9EF4F8FD),
+                0.35f to Color(0x6CEEF4FB),
+                0.68f to Color(0x30EAF1FA),
+                0.88f to Color(0x10E8F1FA),
+                1.00f to Color.Transparent
+            )
+        }
+    }
+
+    val bottomFrostBrush = remember(isDarkTheme) {
+        if (isDarkTheme) {
+            Brush.verticalGradient(
+                0.00f to Color.Transparent,
+                0.14f to Color(0x0E0B182E),
+                0.36f to Color(0x30091326),
+                0.68f to Color(0x68070E1D),
+                1.00f to Color(0x92050A14)
+            )
+        } else {
+            Brush.verticalGradient(
+                0.00f to Color.Transparent,
+                0.12f to Color(0x10E8F1FA),
+                0.32f to Color(0x32EAF1FA),
+                0.65f to Color(0x70EEF4FB),
+                1.00f to Color(0xA6F4F8FD)
+            )
+        }
+    }
+
+    if (topHeight > 0.dp) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(topHeight)
+                .background(topFrostBrush)
+                .testTag("edge_fade_blur_top")
+        )
+    }
+
+    if (bottomHeight > 0.dp) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(bottomHeight)
+                .background(bottomFrostBrush)
+                .testTag("edge_fade_blur_bottom")
+        )
+    }
+}
+
 

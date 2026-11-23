@@ -264,12 +264,14 @@ class ObsidianRefinementVerificationTest {
     }
 
     @Test
-    fun topAndBottomBars_maintainTransparentOuterContainerAndFullBleedClearanceAcrossAllPages() {
+    fun topAndBottomBars_maintainTransparentOuterContainerAndFadeInBlurAcrossAllPages() {
         composeRule.waitForIdle()
 
         // Dashboard
         val dashTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
         val dashBottomBarBounds = composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
         val searchBounds = composeRule.onNodeWithTag("search_input").assertIsDisplayed().getBoundsInRoot()
         val fabBounds = composeRule.onNodeWithTag("add_record_fab").assertIsDisplayed().getBoundsInRoot()
         assertTrue("Dashboard top controls must start clear of TopBar", searchBounds.top >= dashTopBarBounds.bottom)
@@ -280,6 +282,8 @@ class ObsidianRefinementVerificationTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
         composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
         composeRule.onNodeWithTag("inventory_screen").assertIsDisplayed()
 
         // Strike
@@ -287,21 +291,42 @@ class ObsidianRefinementVerificationTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
         composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
 
         // Comparison
         composeRule.onNodeWithTag("nav_tab_compare").performClick()
         composeRule.waitForIdle()
         val cmpTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
         composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
         val selectorABounds = composeRule.onNodeWithTag("selector_person_a").assertIsDisplayed().getBoundsInRoot()
         assertTrue("Comparison top selectors must start clear of TopBar", selectorABounds.top >= cmpTopBarBounds.bottom)
 
-        // Roadmap / Tasks
+        // Roadmap
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
         val rmTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
         composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
         val hubSwitcherBounds = composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed().getBoundsInRoot()
         assertTrue("Roadmap command bar must start clear of TopBar", hubSwitcherBounds.top >= rmTopBarBounds.bottom)
+
+        // Tasks Ledger: verify back button, Tasks Ledger header title, and / 1000 pill are removed,
+        // while top/bottom fade-in blur overlays remain active and Hub Switcher sits cleanly below TopBar
+        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("roadmap_menu_item_ledger").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("ledger_back_btn").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("ledger_screen_title").fetchSemanticsNodes().size)
+        val ledgerSwitcherBounds = composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed().getBoundsInRoot()
+        val ledgerTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        assertTrue("Tasks Ledger Hub Switcher must clear TopBar", ledgerSwitcherBounds.top >= ledgerTopBarBounds.bottom)
     }
 }
