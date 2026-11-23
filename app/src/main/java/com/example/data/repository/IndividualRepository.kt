@@ -2,7 +2,6 @@ package com.example.data.repository
 
 import com.example.data.local.IndividualDao
 import com.example.data.local.IndividualLatestDateTuple
-import com.example.data.local.IndividualYearAggregateTuple
 import com.example.data.local.StrikeEventDao
 import com.example.data.local.YearlyPersonAggregate
 import com.example.data.model.Individual
@@ -19,6 +18,10 @@ class IndividualRepository(
     companion object {
         const val MAX_LITERAL_RECENT_STRIKES = 10_000
         private const val DB_INSERT_CHUNK_SIZE = 500
+
+        fun isHistoricalStrikeType(strikeType: String): Boolean {
+            return strikeType.startsWith("Historical", ignoreCase = true)
+        }
     }
 
     val allIndividuals: Flow<List<Individual>> = dao.getAllIndividuals()
@@ -27,8 +30,6 @@ class IndividualRepository(
     val yearlyPersonAggregatesFlow: Flow<List<YearlyPersonAggregate>> = strikeEventDao.getYearlyPersonAggregatesFlow()
     val latestStrikeDateByIndividualFlow: Flow<List<IndividualLatestDateTuple>> =
         strikeEventDao.getLatestStrikeDateByIndividualFlow()
-    val historicalStrikesByIndividualFlow: Flow<List<IndividualYearAggregateTuple>> =
-        strikeEventDao.getAllHistoricalStrikesByIndividualFlow()
 
     suspend fun getAllTimeStrikesCount(): Int = strikeEventDao.getAllTimeStrikesCount()
 
@@ -57,6 +58,7 @@ class IndividualRepository(
         )
         return if (prepared.id > 0L) {
             dao.update(prepared)
+            strikeEventDao.updateIndividualNameForEvents(prepared.id, prepared.fullName)
             prepared.id
         } else {
             dao.insert(prepared)
@@ -244,65 +246,61 @@ class IndividualRepository(
         }
     }
 
-    suspend fun getHistoricalStrikesByYearForIndividual(individualId: Long): List<Pair<Int, Int>> =
-        strikeEventDao.getHistoricalStrikesByYearForIndividual(individualId)
-            .map { it.year to it.totalStrikes }
-            .filter { it.second > 0 }
-            .sortedByDescending { it.first }
-
-    suspend fun getHistoricalStrikeSumForIndividual(individualId: Long): Int =
-        strikeEventDao.getHistoricalStrikeSumForIndividual(individualId)
-
-    suspend fun updateIndividualNameInEvents(individualId: Long, newName: String) {
-        strikeEventDao.updateIndividualNameInEvents(individualId, newName)
+    /**
+     * Loads the individual's historical strikes grouped and summed by year (descending by year).
+     */
+    suspend fun getHistoricalStrikesByYear(individualId: Long): List<Pair<Int, Int>> {
+        val events = strikeEventDao.getEventsForIndividualList(individualId)
+        return events
+            .filter { isHistoricalStrikeType(it.strikeType) }
+            .groupBy { it.year }
+            .mapValues { (_, list) -> list.sumOf { it.count.coerceAtLeast(1) } }
+            .entries
+            .filter { it.value > 0 }
+            .sortedByDescending { it.key }
+            .map { it.key to it.value }
     }
 
-    suspend fun replaceHistoricalStrikesOnlyEvents(
+    /**
+     * Atomically replaces all historical strikes by year for [individualId] while preserving
+     * live (non-historical) strike events and recomputing Individual.strikeCount accurately.
+     */
+    suspend fun replaceHistoricalStrikesForIndividual(
         individualId: Long,
         historicalEntries: List<Pair<Int, Int>>,
         lang: String = "ar"
-    ) {
-        val merged = mergeHistoricalEntries(historicalEntries)
-        strikeEventDao.deleteHistoricalEventsForIndividual(individualId)
-        if (merged.isNotEmpty()) {
-            recordHistoricalStrikes(individualId, merged, lang)
-        }
-    }
-
-    suspend fun replaceIndividualHistoricalStrikesAndSyncCount(
-        individualId: Long,
-        historicalEntries: List<Pair<Int, Int>>,
-        lang: String = "ar"
-    ) {
-        val existing = dao.getIndividualById(individualId) ?: return
-        val oldHistoricalSum = strikeEventDao.getHistoricalStrikeSumForIndividual(individualId)
-        val merged = mergeHistoricalEntries(historicalEntries)
-        val newHistoricalSum = merged.sumOf { it.second.toLong().coerceAtLeast(0L) }
-            .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        val updatedStrikeCount = (existing.strikeCount.toLong() - oldHistoricalSum.toLong() + newHistoricalSum.toLong())
-            .coerceAtLeast(newHistoricalSum.toLong())
-            .coerceAtMost(Int.MAX_VALUE.toLong())
-            .toInt()
-
-        strikeEventDao.deleteHistoricalEventsForIndividual(individualId)
-        if (merged.isNotEmpty()) {
-            recordHistoricalStrikes(individualId, merged, lang)
-        }
-        dao.setStrikeCount(individualId, updatedStrikeCount)
-    }
-
-    private fun mergeHistoricalEntries(entries: List<Pair<Int, Int>>): List<Pair<Int, Int>> {
-        if (entries.isEmpty()) return emptyList()
-        val map = linkedMapOf<Int, Int>()
-        for ((year, count) in entries) {
+    ): Int {
+        val mergedByYear = linkedMapOf<Int, Int>()
+        for ((year, count) in historicalEntries) {
             if (year in 2000..2050 && count > 0) {
-                val sum = (map[year]?.toLong() ?: 0L) + count.toLong()
-                map[year] = sum.coerceAtMost(100_000L).toInt()
+                mergedByYear[year] = (mergedByYear[year] ?: 0) + count
             }
         }
-        return map.entries
+        val cleanEntries = mergedByYear.entries
+            .sortedByDescending { it.key }
             .map { it.key to it.value }
-            .sortedByDescending { it.first }
+
+        val existingEvents = strikeEventDao.getEventsForIndividualList(individualId)
+        val liveSum = existingEvents
+            .filterNot { isHistoricalStrikeType(it.strikeType) }
+            .sumOf { it.count.coerceAtLeast(1).toLong() }
+        val oldHistoricalSum = existingEvents
+            .filter { isHistoricalStrikeType(it.strikeType) }
+            .sumOf { it.count.coerceAtLeast(1).toLong() }
+        val currentPersonCount = (dao.getIndividualById(individualId)?.strikeCount ?: 0).toLong()
+        val legacyUntracked = (currentPersonCount - (liveSum + oldHistoricalSum)).coerceAtLeast(0L)
+
+        strikeEventDao.deleteHistoricalEventsForIndividual(individualId)
+        if (cleanEntries.isNotEmpty()) {
+            recordHistoricalStrikes(individualId, cleanEntries, lang)
+        }
+
+        val newHistoricalSum = cleanEntries.sumOf { it.second.toLong() }
+        val newTotal = (liveSum + legacyUntracked + newHistoricalSum)
+            .coerceAtMost(Int.MAX_VALUE.toLong())
+            .toInt()
+        dao.setStrikeCount(individualId, newTotal)
+        return newTotal
     }
 
     /**

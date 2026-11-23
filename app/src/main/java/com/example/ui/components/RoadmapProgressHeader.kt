@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -7,8 +10,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -32,6 +38,7 @@ import androidx.compose.material.icons.filled.Female
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Park
@@ -92,6 +99,260 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+enum class RoadmapHubDestination {
+    TASKS_LEDGER,
+    ROADMAP,
+    XP_LOGS
+}
+
+/**
+ * Cohesive Obsidian Liquid Glass 3-way capsule switcher shared across:
+ * - Tasks Ledger (Left)
+ * - Cyber Roadmap / LVL X/700 (Center)
+ * - XP Logs (Right)
+ */
+@Composable
+fun ObsidianRoadmapHubSwitcher(
+    activeDestination: RoadmapHubDestination,
+    unlockedStationId: Int,
+    progressFraction: Float,
+    currentLang: String,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    roadmapAccent: Color = if (isDarkTheme) NeonAqua else DayCyan,
+    roadmapIcon: ImageVector = Icons.Default.MilitaryTech,
+    onTasksLedgerClick: () -> Unit,
+    onProgressClick: () -> Unit,
+    onXpLogsClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isAr = currentLang == "ar"
+    val appDir = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
+    val safeStation = unlockedStationId.coerceIn(0, TaskPools.TOTAL_STATIONS_COUNT)
+    val clampedProgress = progressFraction.coerceIn(0.03f, 1f)
+
+    val ledgerAccent = if (isDarkTheme) ElectricMint else DayEmerald
+    val xpLogsAccent = if (isDarkTheme) NeonViolet else DayPurple
+
+    val shellBg = if (isDarkTheme) {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xDA0A0E17),
+                Color(0xE205080E)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xF5FFFFFF),
+                Color(0xF0F1F5F9)
+            )
+        )
+    }
+    val shellBorder = if (isDarkTheme) {
+        Brush.verticalGradient(
+            listOf(
+                Color.White.copy(alpha = 0.24f),
+                roadmapAccent.copy(alpha = 0.20f),
+                Color.White.copy(alpha = 0.08f)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xFFCBD5E1),
+                roadmapAccent.copy(alpha = 0.35f)
+            )
+        )
+    }
+    val dividerColor = if (isDarkTheme) Color.White.copy(alpha = 0.09f) else Color(0xFFE2E8F0)
+
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                .clip(RoundedCornerShape(24.dp))
+                .background(shellBg)
+                .border(1.dp, shellBorder, RoundedCornerShape(24.dp))
+                .padding(4.dp)
+                .testTag("obsidian_roadmap_hub_switcher"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            // LEFT: Tasks Ledger
+            HubSwitcherSegment(
+                selected = activeDestination == RoadmapHubDestination.TASKS_LEDGER,
+                label = when (currentLang) {
+                    "ar" -> "دفتر المهام"
+                    "fr" -> "Registre"
+                    else -> "Tasks Ledger"
+                },
+                icon = Icons.Default.MenuBook,
+                contentDescription = if (isAr) "دفتر المهام" else "Tasks Ledger",
+                accentColor = ledgerAccent,
+                isDarkTheme = isDarkTheme,
+                layoutDirection = appDir,
+                onClick = onTasksLedgerClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("roadmap_header_ledger_btn")
+            )
+
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .fillMaxHeight(0.52f)
+                    .background(dividerColor)
+            )
+
+            // CENTER: LVL X/700
+            HubSwitcherSegment(
+                selected = activeDestination == RoadmapHubDestination.ROADMAP,
+                label = when (currentLang) {
+                    "fr" -> "Niv $safeStation/${TaskPools.TOTAL_STATIONS_COUNT}"
+                    else -> "LVL $safeStation/${TaskPools.TOTAL_STATIONS_COUNT}"
+                },
+                icon = roadmapIcon,
+                contentDescription = when (currentLang) {
+                    "ar" -> "تقدم المسار"
+                    "fr" -> "Progression"
+                    else -> "Roadmap Progress"
+                },
+                accentColor = roadmapAccent,
+                isDarkTheme = isDarkTheme,
+                layoutDirection = appDir,
+                progressFraction = clampedProgress,
+                onClick = onProgressClick,
+                modifier = Modifier
+                    .weight(1.08f)
+                    .testTag("roadmap_header_progress_btn")
+            )
+
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .fillMaxHeight(0.52f)
+                    .background(dividerColor)
+            )
+
+            // RIGHT: XP Logs
+            HubSwitcherSegment(
+                selected = activeDestination == RoadmapHubDestination.XP_LOGS,
+                label = "Xp Logs",
+                icon = Icons.Default.History,
+                contentDescription = if (isAr) "سجل XP" else "Xp Logs",
+                accentColor = xpLogsAccent,
+                isDarkTheme = isDarkTheme,
+                layoutDirection = appDir,
+                onClick = onXpLogsClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("roadmap_header_xp_logs_btn")
+            )
+        }
+    }
+}
+
+@Composable
+private fun HubSwitcherSegment(
+    selected: Boolean,
+    label: String,
+    icon: ImageVector,
+    contentDescription: String,
+    accentColor: Color,
+    isDarkTheme: Boolean,
+    layoutDirection: LayoutDirection,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    progressFraction: Float? = null
+) {
+    val bgColor by animateColorAsState(
+        targetValue = when {
+            selected -> accentColor.copy(alpha = if (isDarkTheme) 0.18f else 0.14f)
+            else -> Color.Transparent
+        },
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        label = "hub_segment_bg"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = when {
+            selected -> accentColor.copy(alpha = if (isDarkTheme) 0.85f else 0.78f)
+            else -> Color.Transparent
+        },
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        label = "hub_segment_border"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = when {
+            selected -> accentColor
+            isDarkTheme -> Color(0xFFB8C4D6)
+            else -> DayTextSecondary
+        },
+        animationSpec = tween(200, easing = FastOutSlowInEasing),
+        label = "hub_segment_content"
+    )
+
+    Box(
+        modifier = modifier
+            .defaultMinSize(minWidth = 48.dp, minHeight = 46.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(bgColor)
+            .border(1.1.dp, borderColor, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = contentDescription,
+                        tint = if (selected) accentColor else accentColor.copy(alpha = 0.78f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = label,
+                        fontSize = 11.sp,
+                        fontWeight = if (selected) FontWeight.Black else FontWeight.Bold,
+                        fontFamily = PlusJakartaSans,
+                        color = contentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                if (progressFraction != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.72f)
+                            .height(2.5.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                if (isDarkTheme) Color.White.copy(alpha = 0.12f)
+                                else Color(0xFFE2E8F0)
+                            )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progressFraction)
+                                .height(2.5.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(accentColor)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 /**
  * Top Frosted Liquid Glass Roadmap Progress Header Card ("وعاء تقدم المسار").
  * Features:
@@ -109,7 +370,8 @@ fun RoadmapProgressHeader(
     glowPulse: Float = 0.85f,
     biomeState: RoadmapBiomeState = roadmapBiomeStateForStation(currentStationId.toFloat().coerceAtLeast(1f)),
     currentLang: String = if (isAr) "ar" else "en",
-    isDarkTheme: Boolean = LocalAppDarkTheme.current
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    onOpenXpLogs: (() -> Unit)? = null
 ) {
     var showXpGuideDialog by remember { mutableStateOf(false) }
 
@@ -440,6 +702,43 @@ fun RoadmapProgressHeader(
                         onClick = { onJumpToStation(700) },
                         modifier = Modifier.testTag("btn_jump_700")
                     )
+                }
+
+                if (onOpenXpLogs != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    val violetAccent = if (isDarkTheme) NeonViolet else DayPurple
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 42.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(violetAccent.copy(alpha = if (isDarkTheme) 0.14f else 0.10f))
+                            .border(1.dp, violetAccent.copy(alpha = 0.52f), RoundedCornerShape(14.dp))
+                            .clickable(onClick = onOpenXpLogs)
+                            .padding(horizontal = 12.dp, vertical = 9.dp)
+                            .testTag("btn_popup_switch_xp_logs"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = null,
+                            tint = violetAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = when (currentLang) {
+                                "ar" -> "الانتقال إلى سجل نقاط XP (Xp Logs)"
+                                "fr" -> "Ouvrir les journaux XP"
+                                else -> "Switch to Xp Logs"
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = PlusJakartaSans,
+                            color = violetAccent
+                        )
+                    }
                 }
             }
         }

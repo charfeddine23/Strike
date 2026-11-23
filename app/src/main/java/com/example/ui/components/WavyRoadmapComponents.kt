@@ -206,17 +206,13 @@ fun RoadmapAmbientBackground(
 
                 if (dot.hasHalo) {
                     drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(dot.color.copy(alpha = 0.22f * pulse * dotAlphaScale), Color.Transparent),
-                            center = center,
-                            radius = r * 4.2f
-                        ),
-                        radius = r * 4.2f,
+                        color = dot.color.copy(alpha = 0.08f * pulse * dotAlphaScale),
+                        radius = r * 3.4f,
                         center = center
                     )
                     drawCircle(
                         color = dot.color.copy(alpha = 0.16f * pulse * dotAlphaScale),
-                        radius = r * 2.1f,
+                        radius = r * 2.0f,
                         center = center
                     )
                 }
@@ -298,6 +294,14 @@ fun WavySnakeStationRow(
         val totalHeightPx = constraints.maxHeight.toFloat()
         val maxWidthDp = maxWidth
         val nodeCenterDp = maxWidthDp * nodeNormX
+
+        // Layer 0: Continuous 4-Stage Blended Biome Rim Encasement (Glacial -> Rocky -> Forest -> Volcanic)
+        RoadmapRowBiomeDecoration(
+            biomeState = biomeState,
+            glowPulse = glowPulse,
+            isDarkTheme = isDarkTheme,
+            modifier = Modifier.fillMaxSize()
+        )
 
         // Layer 1: Continuous Seamless Glowing / Dashed Snake Track Canvas
         GlowingWavyRoadmapSegmentCanvas(
@@ -426,27 +430,22 @@ fun WavySnakeStationRow(
                             )
                         }
                     } else {
-                        // Locked nodes shimmer with their 4-stage biome aura ring
+                        // Locked nodes display a clean, understated obsidian metallic aura ring
                         val biomeAccent = biomePrimaryAccent(biomeState, isDarkTheme)
                         val auraStrength = maxOf(
                             biomeState.iceSubmersion,
-                            biomeState.rockIntensity * 0.72f,
-                            biomeState.forestIntensity * 0.78f,
+                            biomeState.rockIntensity * 0.68f,
+                            biomeState.forestIntensity * 0.72f,
                             biomeState.lavaSubmersion
-                        ).coerceIn(0.25f, 1f)
+                        ).coerceIn(0.22f, 1f)
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val center = Offset(size.width / 2f, size.height / 2f)
-                            rotate(degrees = orbitRotation * 0.4f, pivot = center) {
-                                drawCircle(
-                                    color = biomeAccent.copy(alpha = (0.24f + 0.42f * auraStrength) * glowPulse),
-                                    radius = size.minDimension * 0.34f,
-                                    center = center,
-                                    style = Stroke(
-                                        width = (1.1f + 0.6f * auraStrength).dp.toPx(),
-                                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f), 0f)
-                                    )
-                                )
-                            }
+                            drawCircle(
+                                color = biomeAccent.copy(alpha = (0.16f + 0.24f * auraStrength) * glowPulse),
+                                radius = size.minDimension * 0.33f,
+                                center = center,
+                                style = Stroke(width = 1.dp.toPx())
+                            )
                         }
                     }
 
@@ -631,25 +630,27 @@ private fun StationGlassRewardCard(
     val goldTone = if (isDarkTheme) MilestoneGold else DayOrange
 
     val borderBrush = when {
-        isCurrentMilestone || (isMajorMilestone && station.state != StationState.LOCKED) -> Brush.linearGradient(
-            listOf(secondaryBiomeTone, primaryBiomeTone, goldTone)
+        isCurrentMilestone || (isMajorMilestone && station.state != StationState.LOCKED) -> Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = if (isDarkTheme) 0.56f else 0.90f), secondaryBiomeTone, goldTone)
         )
-        station.state == StationState.UNLOCKED -> Brush.linearGradient(
-            listOf(primaryBiomeTone, mintTone)
+        station.state == StationState.UNLOCKED -> Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = if (isDarkTheme) 0.52f else 0.85f), primaryBiomeTone, mintTone)
         )
-        station.state == StationState.CLAIMED -> Brush.linearGradient(
-            listOf(mintTone.copy(alpha = 0.65f), primaryBiomeTone.copy(alpha = 0.45f))
+        station.state == StationState.CLAIMED -> Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = if (isDarkTheme) 0.32f else 0.80f), mintTone.copy(alpha = 0.68f), primaryBiomeTone.copy(alpha = 0.42f))
         )
-        else -> Brush.linearGradient(
+        else -> Brush.verticalGradient(
             if (isDarkTheme) {
                 listOf(
-                    secondaryBiomeTone.copy(alpha = 0.34f),
-                    primaryBiomeTone.copy(alpha = 0.30f)
+                    Color.White.copy(alpha = 0.24f),
+                    secondaryBiomeTone.copy(alpha = 0.28f),
+                    primaryBiomeTone.copy(alpha = 0.24f)
                 )
             } else {
                 listOf(
-                    secondaryBiomeTone.copy(alpha = 0.45f),
-                    primaryBiomeTone.copy(alpha = 0.50f)
+                    Color(0xFFFFFFFF),
+                    secondaryBiomeTone.copy(alpha = 0.38f),
+                    primaryBiomeTone.copy(alpha = 0.44f)
                 )
             }
         )
@@ -657,22 +658,22 @@ private fun StationGlassRewardCard(
 
     val cardFillBrush = if (isDarkTheme) {
         val darkCardTop = blendBiomeColor(
-            Color(0xD80A2138),
-            Color(0xD8211B1D),
-            Color(0xD8082319),
-            Color(0xDC300B08),
+            Color(0xD60C2036),
+            Color(0xD6201A1D),
+            Color(0xD6092218),
+            Color(0xDA2E0B08),
             biomeState
         )
         val darkCardBot = blendBiomeColor(
-            Color(0xCC061626),
-            Color(0xCC161317),
-            Color(0xCC051710),
-            Color(0xD41D0604),
+            Color(0xDF06111F),
+            Color(0xDF131015),
+            Color(0xDF05140E),
+            Color(0xDF180504),
             biomeState
         )
         when {
-            station.state == StationState.UNLOCKED -> Brush.verticalGradient(listOf(Color(0xDC0D2842), darkCardBot))
-            station.state == StationState.CLAIMED -> Brush.verticalGradient(listOf(Color(0xD60D2136), darkCardBot))
+            station.state == StationState.UNLOCKED -> Brush.verticalGradient(listOf(Color(0xE2112B46), darkCardBot))
+            station.state == StationState.CLAIMED -> Brush.verticalGradient(listOf(Color(0xDA0C2136), darkCardBot))
             else -> Brush.verticalGradient(listOf(darkCardTop, darkCardBot))
         }
     } else {
@@ -690,12 +691,10 @@ private fun StationGlassRewardCard(
         }
     }
 
-    val borderWidth = if (isCurrentMilestone || station.state == StationState.UNLOCKED ||
-        biomeState.iceSubmersion > 0.55f || biomeState.lavaSubmersion > 0.55f
-    ) {
-        1.4.dp
+    val borderWidth = if (isCurrentMilestone || station.state == StationState.UNLOCKED) {
+        1.25.dp
     } else {
-        1.1.dp
+        0.95.dp
     }
     val titleColor = if (isDarkTheme) {
         blendBiomeColor(GlacialNightCrystal, Color(0xFFFDE68A), ForestNightMint, Color(0xFFFFEDD5), biomeState)

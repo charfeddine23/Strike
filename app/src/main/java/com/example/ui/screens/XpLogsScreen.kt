@@ -55,17 +55,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.roadmap.RoadmapManager
-import com.example.data.roadmap.TaskPools
 import com.example.data.roadmap.XpHistoryEntry
 import com.example.data.roadmap.XpSourceCategory
 import com.example.ui.components.ElectricMint
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.MilestoneGold
 import com.example.ui.components.NeonAqua
-import com.example.ui.components.RoadmapBiomeBackdrop
-import com.example.ui.components.RoadmapCommandDock
+import com.example.ui.components.ObsidianRoadmapHubSwitcher
+import com.example.ui.components.RoadmapAmbientBackground
+import com.example.ui.components.RoadmapHubDestination
 import com.example.ui.components.WarmFireOrange
-import com.example.ui.components.roadmapBiomeStateForStation
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayGlassSurface
@@ -92,9 +91,9 @@ fun XpLogsScreen(
     viewModel: IndividualViewModel,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    isDarkTheme: Boolean = LocalAppDarkTheme.current,
-    hostedWithFullBleedBiome: Boolean = false,
-    onOpenTasksLedger: () -> Unit = {}
+    onOpenTasksLedger: () -> Unit = {},
+    onOpenRoadmap: () -> Unit = onNavigateBack,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -105,6 +104,7 @@ fun XpLogsScreen(
 
     val xpHistory by viewModel.xpHistory.collectAsStateWithLifecycle()
     val totalXp by viewModel.totalXp.collectAsStateWithLifecycle()
+    val stageProgress = remember(totalXp) { RoadmapManager.getStageProgress(totalXp) }
 
     var selectedCategory by remember { mutableStateOf<XpSourceCategory?>(null) }
 
@@ -126,28 +126,14 @@ fun XpLogsScreen(
     val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
     val descColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
 
-    val stageProgress = remember(totalXp) { RoadmapManager.getStageProgress(totalXp) }
-    val safeStationId = stageProgress.unlockedStationId.coerceIn(0, TaskPools.TOTAL_STATIONS_COUNT)
-    val stageFraction = (stageProgress.currentStageXp.toFloat() / stageProgress.xpRequiredForNextStage.coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f)
-    val biomeState = remember(safeStationId) { roadmapBiomeStateForStation(safeStationId.toFloat().coerceAtLeast(1f)) }
-
     Box(
         modifier = modifier
             .fillMaxSize()
             .testTag("xp_logs_screen")
     ) {
-        if (!hostedWithFullBleedBiome) {
-            RoadmapBiomeBackdrop(
-                biomeState = biomeState,
-                driftPhase = 0f,
-                isDarkTheme = isDarkTheme,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(if (isDarkTheme) Color(0x40060B14) else Color(0x2EFFFFFF))
+        RoadmapAmbientBackground(
+            modifier = Modifier.fillMaxSize(),
+            darkTheme = isDarkTheme
         )
 
         Column(
@@ -155,27 +141,6 @@ fun XpLogsScreen(
                 .fillMaxSize()
                 .padding(horizontal = 14.dp, vertical = 8.dp)
         ) {
-            RoadmapCommandDock(
-                activeSlot = 2,
-                safeStationId = safeStationId,
-                totalStationsCount = TaskPools.TOTAL_STATIONS_COUNT,
-                stageProgressFraction = stageFraction,
-                biomeState = biomeState,
-                currentLang = currentLang,
-                onOpenTasksLedger = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    onOpenTasksLedger()
-                },
-                onOpenProgressOrRoadmap = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    onNavigateBack()
-                },
-                onOpenXpLogs = {},
-                isDarkTheme = isDarkTheme,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
             // 1. TOP BAR
             Row(
                 modifier = Modifier
@@ -257,6 +222,28 @@ fun XpLogsScreen(
                     )
                 }
             }
+
+            // Unified Hub Switcher (Tasks Ledger <-> LVL X/700 <-> Xp Logs)
+            ObsidianRoadmapHubSwitcher(
+                activeDestination = RoadmapHubDestination.XP_LOGS,
+                unlockedStationId = stageProgress.unlockedStationId,
+                progressFraction = stageProgress.progressFraction,
+                currentLang = currentLang,
+                isDarkTheme = isDarkTheme,
+                roadmapAccent = cyanTone,
+                onTasksLedgerClick = {
+                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    onOpenTasksLedger()
+                },
+                onProgressClick = {
+                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    onOpenRoadmap()
+                },
+                onXpLogsClick = {},
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
 
             // 2. SUMMARY COUNTERS
             Row(

@@ -19,13 +19,6 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -87,9 +80,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -111,22 +101,16 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.flame.ActiveShieldType
 import com.example.data.flame.FlameManager
-import com.example.data.roadmap.RoadmapManager
-import com.example.data.roadmap.TaskPools
 import com.example.data.update.AppUpdateState
 import com.example.ui.components.AppUpdateCardDialog
 import com.example.ui.components.DnaHeaderIcon
 import com.example.ui.components.DynamicStreakShieldHeaderButton
 import com.example.ui.components.FullscreenFingerprintUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
-import com.example.ui.components.IphoneLiquidGlassBarSurface
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.LuxurySettingsMenuButton
 import com.example.ui.components.RecordsDashboardExpandablePanel
-import com.example.ui.components.RoadmapBiomeBackdrop
-import com.example.ui.components.RoadmapBiomeSubmersionOverlay
 import com.example.ui.components.SettingsSideDrawer
-import com.example.ui.components.roadmapBiomeStateForStation
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.DeviationsScreen
@@ -138,12 +122,16 @@ import com.example.ui.screens.TasksLedgerScreen
 import com.example.ui.screens.XpLogsScreen
 import com.example.ui.theme.AppThemeMode
 import com.example.ui.theme.CosmicDarkSurface
+import com.example.ui.theme.DarkNavBg
+import com.example.ui.theme.DarkNavBorder
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
 import com.example.ui.theme.DayPurple
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
+import com.example.ui.theme.LightNavBg
+import com.example.ui.theme.LightNavBorder
 import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
@@ -270,7 +258,6 @@ fun LiquidGlassApp(
 ) {
     var currentScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
     var roadmapMainTab by remember { mutableIntStateOf(0) }
-    var sharedRoadmapStationPos by remember { mutableStateOf<Float?>(null) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showShieldDropdown by remember { mutableStateOf(false) }
     var showStartDateDialog by remember { mutableStateOf(false) }
@@ -372,44 +359,7 @@ fun LiquidGlassApp(
         }
     }
 
-    val totalXpForBiome by viewModel.totalXp.collectAsStateWithLifecycle()
-    val unlockedBiomeStationPos = remember(totalXpForBiome) {
-        RoadmapManager.getStageProgress(totalXpForBiome).unlockedStationId.toFloat()
-            .coerceIn(1f, TaskPools.TOTAL_STATIONS_COUNT.toFloat())
-    }
-    val targetFullBleedStationPos = if (currentScreen == AppScreen.ROADMAP && sharedRoadmapStationPos != null) {
-        sharedRoadmapStationPos!!
-    } else {
-        unlockedBiomeStationPos
-    }
-    val animatedFullBleedStationPos by animateFloatAsState(
-        targetValue = targetFullBleedStationPos,
-        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-        label = "full_page_biome_station"
-    )
-    val isRoadmapFamilyScreen = currentScreen == AppScreen.ROADMAP ||
-        currentScreen == AppScreen.TASKS_LEDGER ||
-        currentScreen == AppScreen.XP_LOGS
-    val sharedGlacialTransition = rememberInfiniteTransition(label = "shared_biome_atmosphere")
-    val sharedGlacialDriftPhase by sharedGlacialTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2.0 * kotlin.math.PI).toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 14000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shared_biome_drift"
-    )
-
     Box(modifier = Modifier.fillMaxSize()) {
-        if (isRoadmapFamilyScreen) {
-            RoadmapBiomeBackdrop(
-                biomeState = roadmapBiomeStateForStation(animatedFullBleedStationPos),
-                driftPhase = sharedGlacialDriftPhase,
-                isDarkTheme = isDarkTheme,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
@@ -476,16 +426,15 @@ fun LiquidGlassApp(
                     .fillMaxSize()
                     .clipToBounds(),
                 transitionSpec = {
-                    val isSubRoutePair = (initialState == AppScreen.TASKS_LEDGER || initialState == AppScreen.ROADMAP || initialState == AppScreen.XP_LOGS) &&
-                        (targetState == AppScreen.TASKS_LEDGER || targetState == AppScreen.ROADMAP || targetState == AppScreen.XP_LOGS)
-                    val dir = if (isSubRoutePair) {
-                        fun slotOf(s: AppScreen): Int = when (s) {
-                            AppScreen.TASKS_LEDGER -> -1
-                            AppScreen.ROADMAP -> 0
-                            AppScreen.XP_LOGS -> 1
-                            else -> 0
-                        }
-                        if (slotOf(targetState) >= slotOf(initialState)) 1 else -1
+                    val hubIndex = mapOf(
+                        AppScreen.TASKS_LEDGER to -1,
+                        AppScreen.ROADMAP to 0,
+                        AppScreen.XP_LOGS to 1
+                    )
+                    val initialHub = hubIndex[initialState]
+                    val targetHub = hubIndex[targetState]
+                    val dir = if (initialHub != null && targetHub != null) {
+                        if (targetHub >= initialHub) 1 else -1
                     } else {
                         (if (targetState.ordinal >= initialState.ordinal) 1 else -1) * rtlSign
                     }
@@ -493,12 +442,12 @@ fun LiquidGlassApp(
                         animationSpec = tween(durationMillis = 65, easing = FastOutLinearInEasing)
                     ) + slideOutHorizontally(
                         animationSpec = tween(durationMillis = 70, easing = FastOutLinearInEasing)
-                    ) { fullWidth -> -dir * (fullWidth / 18) }
+                    ) { fullWidth -> -dir * (fullWidth / 16) }
                     val enterAnim = fadeIn(
                         animationSpec = tween(durationMillis = 165, delayMillis = 65, easing = FastOutSlowInEasing)
                     ) + slideInHorizontally(
                         animationSpec = tween(durationMillis = 180, delayMillis = 65, easing = FastOutSlowInEasing)
-                    ) { fullWidth -> dir * (fullWidth / 14) }
+                    ) { fullWidth -> dir * (fullWidth / 12) }
                     enterAnim.togetherWith(exitAnim).using(SizeTransform(clip = true))
                 },
                 label = "screen_transition"
@@ -559,30 +508,23 @@ fun LiquidGlassApp(
                         },
                         onOpenXpLogs = {
                             currentScreen = AppScreen.XP_LOGS
-                        },
-                        hostedWithFullBleedBiome = true,
-                        onBiomeStationChanged = { stationPos ->
-                            sharedRoadmapStationPos = stationPos
                         }
                     )
 
                     AppScreen.TASKS_LEDGER -> TasksLedgerScreen(
                         viewModel = viewModel,
                         onNavigateBack = { currentScreen = AppScreen.ROADMAP },
-                        isDarkTheme = isDarkTheme,
-                        hostedWithFullBleedBiome = true,
-                        onOpenXpLogs = { currentScreen = AppScreen.XP_LOGS }
+                        onOpenRoadmap = { currentScreen = AppScreen.ROADMAP },
+                        onOpenXpLogs = { currentScreen = AppScreen.XP_LOGS },
+                        isDarkTheme = isDarkTheme
                     )
 
                     AppScreen.XP_LOGS -> XpLogsScreen(
                         viewModel = viewModel,
                         onNavigateBack = { currentScreen = AppScreen.ROADMAP },
-                        isDarkTheme = isDarkTheme,
-                        hostedWithFullBleedBiome = true,
-                        onOpenTasksLedger = {
-                            roadmapMainTab = 1
-                            currentScreen = AppScreen.TASKS_LEDGER
-                        }
+                        onOpenTasksLedger = { currentScreen = AppScreen.TASKS_LEDGER },
+                        onOpenRoadmap = { currentScreen = AppScreen.ROADMAP },
+                        isDarkTheme = isDarkTheme
                     )
 
                     AppScreen.PROFILE -> com.example.ui.screens.ProfileScreen(
@@ -619,16 +561,6 @@ fun LiquidGlassApp(
                 viewModel = viewModel,
                 onDismiss = { viewModel.closeDataEntry() },
                 isDarkTheme = isDarkTheme
-            )
-        }
-
-        // Full-page non-blocking atmospheric perimeter haze / ice mist / magma glow
-        if (isRoadmapFamilyScreen && !isDataEntryOpen && !showSettingsDialog) {
-            RoadmapBiomeSubmersionOverlay(
-                biomeState = roadmapBiomeStateForStation(animatedFullBleedStationPos),
-                driftPhase = sharedGlacialDriftPhase,
-                isDarkTheme = isDarkTheme,
-                modifier = Modifier.fillMaxSize()
             )
         }
     }
@@ -737,19 +669,107 @@ fun LiquidGlassTopBar(
     val equippedAvatar by com.example.data.profile.ProfileManager.equippedAvatar.collectAsStateWithLifecycle()
     val equippedTitle by com.example.data.profile.ProfileManager.equippedTitle.collectAsStateWithLifecycle()
 
-    IphoneLiquidGlassBarSurface(
-        isTopBar = true,
-        cornerRadius = 24.dp,
-        outerModifier = Modifier.testTag("top_bar_fade_container"),
-        capsulePaddingModifier = Modifier
+    val topScrimBrush = if (isDarkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xF0000000),
+                Color(0xA8020408),
+                Color(0x4204070D),
+                Color.Transparent
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xEAF6FAFF),
+                Color(0x9CEEF4FA),
+                Color(0x36EEF4FA),
+                Color.Transparent
+            )
+        )
+    }
+
+    val topGlassFill = if (isDarkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0x28FFFFFF),
+                Color(0x140A101E),
+                Color(0x1C050810)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xDCFFFFFF),
+                Color(0xB4F1F6FC)
+            )
+        )
+    }
+
+    val topGlassBorder = if (isDarkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0x58FFFFFF),
+                Color(0x1EFFFFFF),
+                Color(0x2C38BDF8)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0x520284C7),
+                Color(0x66CBD5E1)
+            )
+        )
+    }
+
+    val telemetryPillFill = if (isDarkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0x26FFFFFF),
+                Color(0x1A091222)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xD8FFFFFF),
+                Color(0xA6E6F2FA)
+            )
+        )
+    }
+
+    val telemetryPillBorder = if (isDarkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0x4DFFFFFF),
+                Color(0x2438BDF8)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0x420284C7)
+            )
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(topScrimBrush)
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .testTag("top_bar_liquid_glass_capsule"),
-        innerPaddingModifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-        isDarkTheme = isDarkTheme
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(topGlassFill)
+                .border(0.9.dp, topGlassBorder, RoundedCornerShape(24.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -801,7 +821,7 @@ fun LiquidGlassTopBar(
                 }
             }
 
-            // Right/End Cluster: Translucent Crystal Telemetry Pill (Shield -> Flame -> DNA) + Luxury 3-Line Settings Button
+            // Right/End Cluster: Telemetry Pill (Shield -> Flame -> DNA) + Luxury 3-Line Settings Button
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -809,18 +829,8 @@ fun LiquidGlassTopBar(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
-                        .background(if (isDarkTheme) Color(0x16FFFFFF) else Color(0x3DFFFFFF))
-                        .border(
-                            1.dp,
-                            Brush.verticalGradient(
-                                colors = if (isDarkTheme) {
-                                    listOf(Color(0x5CFFFFFF), Color(0x2838BDF8))
-                                } else {
-                                    listOf(Color(0xCCFFFFFF), Color(0x4D0284C7))
-                                }
-                            ),
-                            RoundedCornerShape(50)
-                        )
+                        .background(telemetryPillFill)
+                        .border(0.85.dp, telemetryPillBorder, RoundedCornerShape(50))
                         .padding(horizontal = 7.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -975,12 +985,13 @@ fun LiquidGlassTopBar(
             )
         }
 
-            // Luxury 3-stacked-lines Settings Menu Button at the outer right edge
-            LuxurySettingsMenuButton(
-                onClick = onOpenSettings,
-                isDarkTheme = isDarkTheme,
-                isHapticEnabled = isHapticEnabled
-            )
+                // Luxury 3-stacked-lines Settings Menu Button at the outer right edge
+                LuxurySettingsMenuButton(
+                    onClick = onOpenSettings,
+                    isDarkTheme = isDarkTheme,
+                    isHapticEnabled = isHapticEnabled
+                )
+            }
         }
     }
 }
@@ -1024,19 +1035,75 @@ fun LiquidGlassBottomBar(
     val compareColor = if (isDarkTheme) NeonViolet else DayPurple
     val roadmapColor = if (isDarkTheme) NeonAmber else DayOrange
 
-    IphoneLiquidGlassBarSurface(
-        isTopBar = false,
-        cornerRadius = 28.dp,
-        outerModifier = Modifier.testTag("bottom_bar_fade_container"),
-        capsulePaddingModifier = Modifier
+    val bottomScrimBrush = if (isDarkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color.Transparent,
+                Color(0x4D020408),
+                Color(0xC4010306),
+                Color(0xF5000000)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color.Transparent,
+                Color(0x45EEF4FA),
+                Color(0xB8EEF4FA),
+                Color(0xF0F6FAFF)
+            )
+        )
+    }
+
+    val navGlassFill = if (isDarkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0x2BFFFFFF),
+                Color(0x160C1424),
+                Color(0x2204070E)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xDCFFFFFF),
+                Color(0xB8F1F6FC)
+            )
+        )
+    }
+
+    val navGlassBorder = if (isDarkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0x62FFFFFF),
+                Color(0x20FFFFFF),
+                Color(0x3638BDF8)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0x4D0284C7),
+                Color(0x6ECBD5E1)
+            )
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bottomScrimBrush)
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .testTag("bottom_bar_liquid_glass_capsule"),
-        innerPaddingModifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-        isDarkTheme = isDarkTheme
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(26.dp))
+                .background(navGlassFill)
+                .border(0.95.dp, navGlassBorder, RoundedCornerShape(26.dp))
+                .padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1109,92 +1176,43 @@ private fun BottomNavItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val dropletTopBg by animateColorAsState(
+    val bgColor by animateColorAsState(
         targetValue = if (isSelected) {
-            if (isDarkTheme) Color(0x28FFFFFF) else Color(0xB8FFFFFF)
+            activeColor.copy(alpha = if (isDarkTheme) 0.20f else 0.16f)
         } else {
             Color.Transparent
         },
-        animationSpec = tween(180),
-        label = "nav_droplet_top"
+        animationSpec = tween(160),
+        label = "nav_bg"
     )
-    val dropletBottomBg by animateColorAsState(
+    val borderColor by animateColorAsState(
         targetValue = if (isSelected) {
-            activeColor.copy(alpha = if (isDarkTheme) 0.22f else 0.16f)
+            activeColor.copy(alpha = if (isDarkTheme) 0.72f else 0.65f)
         } else {
             Color.Transparent
         },
-        animationSpec = tween(180),
-        label = "nav_droplet_bottom"
-    )
-    val borderTopColor by animateColorAsState(
-        targetValue = if (isSelected) Color.White.copy(alpha = if (isDarkTheme) 0.72f else 0.95f) else Color.Transparent,
-        animationSpec = tween(180),
-        label = "nav_border_top"
-    )
-    val borderBottomColor by animateColorAsState(
-        targetValue = if (isSelected) activeColor.copy(alpha = if (isDarkTheme) 0.78f else 0.58f) else Color.Transparent,
-        animationSpec = tween(180),
-        label = "nav_border_bottom"
+        animationSpec = tween(160),
+        label = "nav_border"
     )
     val iconTint by animateColorAsState(
-        targetValue = if (isSelected) activeColor else if (isDarkTheme) Color(0xFFB8C4D4) else Color(0xFF475569),
-        animationSpec = tween(180),
+        targetValue = if (isSelected) {
+            activeColor
+        } else if (isDarkTheme) {
+            Color(0xFFB6C2D4)
+        } else {
+            Color(0xFF475569)
+        },
+        animationSpec = tween(160),
         label = "nav_tint"
     )
-    val iconScale by animateFloatAsState(
-        targetValue = if (isSelected) 1.08f else 1.0f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = 480f),
-        label = "nav_icon_scale"
-    )
-    val haloAlpha by animateFloatAsState(
-        targetValue = if (isSelected) (if (isDarkTheme) 0.24f else 0.16f) else 0f,
-        animationSpec = tween(180),
-        label = "nav_halo_alpha"
-    )
-
-    val dropletShape = RoundedCornerShape(20.dp)
 
     Box(
         modifier = modifier
             .height(48.dp)
             .minimumInteractiveComponentSize()
-            .clip(dropletShape)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(dropletTopBg, dropletBottomBg)
-                )
-            )
-            .drawBehind {
-                if (haloAlpha > 0.01f) {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(activeColor.copy(alpha = haloAlpha), Color.Transparent),
-                            center = center,
-                            radius = size.minDimension * 0.72f
-                        ),
-                        radius = size.minDimension * 0.72f,
-                        center = center
-                    )
-                    drawLine(
-                        brush = Brush.horizontalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.White.copy(alpha = if (isDarkTheme) 0.62f else 0.92f),
-                                Color.Transparent
-                            )
-                        ),
-                        start = Offset(size.width * 0.22f, 1.2.dp.toPx()),
-                        end = Offset(size.width * 0.78f, 1.2.dp.toPx()),
-                        strokeWidth = 1.dp.toPx()
-                    )
-                }
-            }
-            .border(
-                1.dp,
-                Brush.verticalGradient(listOf(borderTopColor, borderBottomColor)),
-                dropletShape
-            )
+            .clip(RoundedCornerShape(18.dp))
+            .background(bgColor)
+            .border(0.9.dp, borderColor, RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
             .testTag(testTag),
         contentAlignment = Alignment.Center
@@ -1203,9 +1221,7 @@ private fun BottomNavItem(
             imageVector = icon,
             contentDescription = label,
             tint = iconTint,
-            modifier = Modifier
-                .size(23.dp)
-                .scale(iconScale)
+            modifier = Modifier.size(23.dp)
         )
     }
 }

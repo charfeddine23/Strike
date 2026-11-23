@@ -122,12 +122,12 @@ import com.example.data.roadmap.TaskStatus
 import com.example.ui.components.ElectricMint
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.NeonAqua
+import com.example.ui.components.ObsidianRoadmapHubSwitcher
 import com.example.ui.components.RoadmapAmbientBackground
 import com.example.ui.components.RoadmapBiome
 import com.example.ui.components.RoadmapBiomeBackdrop
-import com.example.ui.components.RoadmapBiomeState
 import com.example.ui.components.RoadmapBiomeSubmersionOverlay
-import com.example.ui.components.RoadmapCommandDock
+import com.example.ui.components.RoadmapHubDestination
 import com.example.ui.components.RoadmapProgressHeader
 import com.example.ui.components.WavySnakeStationRow
 import com.example.ui.components.biomePrimaryAccent
@@ -169,9 +169,7 @@ fun RoadmapScreen(
     initialMainTab: Int = 0,
     onMainTabChanged: (Int) -> Unit = {},
     onOpenTasksLedger: () -> Unit = {},
-    onOpenXpLogs: () -> Unit = {},
-    hostedWithFullBleedBiome: Boolean = false,
-    onBiomeStationChanged: (Float) -> Unit = {}
+    onOpenXpLogs: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -277,9 +275,6 @@ fun RoadmapScreen(
         label = "biome_continuous_station"
     )
     val viewportBiomeState = roadmapBiomeStateForStation(animatedStationPos)
-    LaunchedEffect(animatedStationPos) {
-        onBiomeStationChanged(animatedStationPos)
-    }
     val glacialTransition = rememberInfiniteTransition(label = "glacial_atmosphere")
     val glacialDriftPhase by glacialTransition.animateFloat(
         initialValue = 0f,
@@ -292,6 +287,10 @@ fun RoadmapScreen(
     )
 
     val rtlSign = if (appLayoutDirection == LayoutDirection.Rtl) -1 else 1
+    val ledgerAccent = if (isDarkTheme) ElectricMint else DayEmerald
+    val xpLogsAccent = if (isDarkTheme) NeonViolet else DayPurple
+    val pillBgLedger = if (isDarkTheme) Color(0xBB0D1D24) else DayGlassSurface
+    val pillBgXpLogs = if (isDarkTheme) Color(0xBB191229) else DayGlassSurface
     val tabAquaAccent = if (isDarkTheme) NeonAqua else DayCyan
     val tabEliteAccent = if (isDarkTheme) NeonAmber else DayOrange
 
@@ -301,56 +300,66 @@ fun RoadmapScreen(
             .clipToBounds()
             .testTag("roadmap_screen")
     ) {
-        if (!hostedWithFullBleedBiome) {
+        if (selectedMainTab == 0) {
             RoadmapBiomeBackdrop(
                 biomeState = viewportBiomeState,
                 driftPhase = glacialDriftPhase,
                 isDarkTheme = isDarkTheme,
                 modifier = Modifier.fillMaxSize()
             )
-        }
-        if (selectedMainTab != 0) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(if (isDarkTheme) Color(0x36060B14) else Color(0x28FFFFFF))
+        } else {
+            RoadmapAmbientBackground(
+                modifier = Modifier.fillMaxSize(),
+                darkTheme = isDarkTheme
             )
         }
 
         Column(modifier = Modifier.fillMaxSize()) {
-            // TOP UNIFIED 3-WAY LIQUID GLASS COMMAND DOCK & MAIN TAB SWITCHER
+            // TOP QUICK-ACTION ROW & NAVIGATION PILLS
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                val safeHeaderStation = currentStationId.coerceIn(0, TaskPools.TOTAL_STATIONS_COUNT)
-                val stageReq = stageProgress.xpRequiredForNextStage.coerceAtLeast(1L)
-                val stageFraction = (stageProgress.currentStageXp.toFloat() / stageReq.toFloat()).coerceIn(0f, 1f)
+                val progressBtnAccent = if (selectedMainTab == 0) {
+                    biomePrimaryAccent(viewportBiomeState, isDarkTheme)
+                } else {
+                    tabAquaAccent
+                }
+                val progressBtnIcon = when {
+                    selectedMainTab != 0 -> Icons.Default.MilitaryTech
+                    viewportBiomeState.dominantBiome == RoadmapBiome.GLACIAL -> Icons.Default.AcUnit
+                    viewportBiomeState.dominantBiome == RoadmapBiome.ROCKY -> Icons.Default.Landscape
+                    viewportBiomeState.dominantBiome == RoadmapBiome.FOREST -> Icons.Default.Park
+                    else -> Icons.Default.LocalFireDepartment
+                }
+                val hubProgressFraction = remember(totalXp) {
+                    RoadmapManager.getStageProgress(totalXp).progressFraction
+                }
 
-                RoadmapCommandDock(
-                    activeSlot = 1,
-                    safeStationId = safeHeaderStation,
-                    totalStationsCount = TaskPools.TOTAL_STATIONS_COUNT,
-                    stageProgressFraction = stageFraction,
-                    biomeState = viewportBiomeState,
+                ObsidianRoadmapHubSwitcher(
+                    activeDestination = RoadmapHubDestination.ROADMAP,
+                    unlockedStationId = currentStationId,
+                    progressFraction = hubProgressFraction,
                     currentLang = currentLang,
-                    onOpenTasksLedger = {
+                    isDarkTheme = isDarkTheme,
+                    roadmapAccent = progressBtnAccent,
+                    roadmapIcon = progressBtnIcon,
+                    onTasksLedgerClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         onOpenTasksLedger()
                     },
-                    onOpenProgressOrRoadmap = {
+                    onProgressClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         showRoadmapProgressDialog = true
                     },
-                    onOpenXpLogs = {
+                    onXpLogsClick = {
                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                         view.playSoundEffect(SoundEffectConstants.CLICK)
                         onOpenXpLogs()
-                    },
-                    isDarkTheme = isDarkTheme
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -762,7 +771,7 @@ fun RoadmapScreen(
             }
         }
         // Non-blocking foreground 4-stage biome rim overlay (deep ice at 1 -> magma abyss at 700)
-        if (!hostedWithFullBleedBiome) {
+        if (selectedMainTab == 0) {
             RoadmapBiomeSubmersionOverlay(
                 biomeState = viewportBiomeState,
                 driftPhase = glacialDriftPhase,
@@ -792,6 +801,11 @@ fun RoadmapScreen(
                         currentLang = currentLang,
                         biomeState = viewportBiomeState,
                         isDarkTheme = isDarkTheme,
+                        onOpenXpLogs = {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            showRoadmapProgressDialog = false
+                            onOpenXpLogs()
+                        },
                         onJumpToStation = { targetStation ->
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             showRoadmapProgressDialog = false

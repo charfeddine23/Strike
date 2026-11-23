@@ -20,17 +20,6 @@ data class IndividualLatestDateTuple(
     val latestDate: String?
 )
 
-data class IndividualYearTotalTuple(
-    val year: Int,
-    val totalStrikes: Int
-)
-
-data class IndividualYearAggregateTuple(
-    val individualId: Long,
-    val year: Int,
-    val totalStrikes: Int
-)
-
 @Dao
 interface StrikeEventDao {
     @Query("SELECT * FROM strike_events ORDER BY timestamp DESC, id DESC LIMIT 10000")
@@ -66,52 +55,14 @@ interface StrikeEventDao {
     )
     suspend fun getYearlyPersonAggregates(): List<YearlyPersonAggregate>
 
-    @Query(
-        """
-        SELECT individualId, year, COALESCE(SUM(count), 0) AS totalStrikes
-        FROM strike_events
-        WHERE LOWER(strikeType) LIKE 'historical%'
-        GROUP BY individualId, year
-        HAVING totalStrikes > 0
-        ORDER BY year DESC
-        """
-    )
-    fun getAllHistoricalStrikesByIndividualFlow(): Flow<List<IndividualYearAggregateTuple>>
-
-    @Query(
-        """
-        SELECT year, COALESCE(SUM(count), 0) AS totalStrikes
-        FROM strike_events
-        WHERE individualId = :individualId
-          AND LOWER(strikeType) LIKE 'historical%'
-        GROUP BY year
-        HAVING totalStrikes > 0
-        ORDER BY year DESC
-        """
-    )
-    suspend fun getHistoricalStrikesByYearForIndividual(individualId: Long): List<IndividualYearTotalTuple>
-
-    @Query(
-        """
-        SELECT COALESCE(SUM(count), 0)
-        FROM strike_events
-        WHERE individualId = :individualId
-          AND LOWER(strikeType) LIKE 'historical%'
-        """
-    )
-    suspend fun getHistoricalStrikeSumForIndividual(individualId: Long): Int
-
-    @Query("DELETE FROM strike_events WHERE individualId = :individualId AND LOWER(strikeType) LIKE 'historical%'")
-    suspend fun deleteHistoricalEventsForIndividual(individualId: Long)
-
-    @Query("UPDATE strike_events SET individualName = :newName WHERE individualId = :individualId")
-    suspend fun updateIndividualNameInEvents(individualId: Long, newName: String)
-
     @Query("SELECT individualId, MAX(date) AS latestDate FROM strike_events GROUP BY individualId")
     fun getLatestStrikeDateByIndividualFlow(): Flow<List<IndividualLatestDateTuple>>
 
     @Query("SELECT * FROM strike_events WHERE individualId = :id ORDER BY timestamp DESC, id DESC")
     fun getEventsForIndividual(id: Long): Flow<List<StrikeEvent>>
+
+    @Query("SELECT * FROM strike_events WHERE individualId = :id ORDER BY year DESC, timestamp DESC, id DESC")
+    suspend fun getEventsForIndividualList(id: Long): List<StrikeEvent>
 
     @Query("SELECT * FROM strike_events WHERE year = :year ORDER BY timestamp DESC, id DESC")
     fun getEventsForYear(year: Int): Flow<List<StrikeEvent>>
@@ -130,6 +81,12 @@ interface StrikeEventDao {
 
     @Query("DELETE FROM strike_events WHERE individualId = :id")
     suspend fun deleteEventsForIndividual(id: Long)
+
+    @Query("DELETE FROM strike_events WHERE individualId = :id AND (strikeType LIKE 'Historical%' OR strikeType = 'Historical')")
+    suspend fun deleteHistoricalEventsForIndividual(id: Long)
+
+    @Query("UPDATE strike_events SET individualName = :name WHERE individualId = :id")
+    suspend fun updateIndividualNameForEvents(id: Long, name: String)
 
     @Query("SELECT COUNT(*) FROM strike_events")
     suspend fun getCount(): Int

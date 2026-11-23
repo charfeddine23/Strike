@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -230,9 +231,8 @@ fun DataEntryDialog(
     }
 
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
-    var inputYear by remember(isEditing, viewModel.editingId) { mutableStateOf((currentYear - 1).toString()) }
-    var inputStrikeCount by remember(isEditing, viewModel.editingId) { mutableStateOf("15") }
-    var editingHistOriginalYear by remember(isEditing, viewModel.editingId) { mutableStateOf<Int?>(null) }
+    var inputYear by remember { mutableStateOf((currentYear - 1).toString()) }
+    var inputStrikeCount by remember { mutableStateOf("15") }
     val totalHistoricalStrikes = historicalEntries.sumOf { it.second }
 
     val modalBg = if (isDarkTheme) Color(0xFF070B14) else Color(0xFFF1F5F9)
@@ -969,13 +969,7 @@ fun DataEntryDialog(
                                                 val y = IndividualViewModel.parseLocalizedInt(inputYear)
                                                 val c = IndividualViewModel.parseLocalizedInt(inputStrikeCount)
                                                 if (y != null && y in 2000..2050 && c != null && c in 1..100_000) {
-                                                    val origYr = editingHistOriginalYear
-                                                    if (origYr != null) {
-                                                        viewModel.updateHistoricalYearEntry(origYr, y, c)
-                                                        editingHistOriginalYear = null
-                                                    } else {
-                                                        viewModel.addHistoricalYearEntry(y, c)
-                                                    }
+                                                    viewModel.addHistoricalYearEntry(y, c)
                                                     inputYear = (y - 1).toString()
                                                     inputStrikeCount = "10"
                                                 } else {
@@ -991,66 +985,13 @@ fun DataEntryDialog(
                                                 .testTag("add_historical_entry_btn"),
                                             shape = RoundedCornerShape(12.dp),
                                             colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (editingHistOriginalYear != null) NeonEmerald else NeonCyan,
+                                                containerColor = NeonCyan,
                                                 contentColor = Color(0xFF021B26)
                                             )
                                         ) {
-                                            Icon(
-                                                imageVector = if (editingHistOriginalYear != null) Icons.Default.Check else Icons.Default.Add,
-                                                contentDescription = null
-                                            )
+                                            Icon(imageVector = Icons.Default.Add, contentDescription = null)
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = if (editingHistOriginalYear != null) {
-                                                    when (currentLang) {
-                                                        "ar" -> "تحديث"
-                                                        "fr" -> "MàJ"
-                                                        else -> "Update"
-                                                    }
-                                                } else {
-                                                    stringResource(R.string.add_year_entry)
-                                                },
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-
-                                    if (editingHistOriginalYear != null) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(accentCyan.copy(alpha = 0.14f))
-                                                .border(1.dp, accentCyan.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = when (currentLang) {
-                                                    "ar" -> "تعديل بيانات سنة $editingHistOriginalYear"
-                                                    "fr" -> "Modification de l'année $editingHistOriginalYear"
-                                                    else -> "Editing year $editingHistOriginalYear"
-                                                },
-                                                fontSize = 11.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = accentCyan
-                                            )
-                                            Text(
-                                                text = stringResource(R.string.cancel),
-                                                fontSize = 11.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = NeonRose,
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .clickable {
-                                                        editingHistOriginalYear = null
-                                                        inputYear = (currentYear - 1).toString()
-                                                        inputStrikeCount = "15"
-                                                    }
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
+                                            Text(stringResource(R.string.add_year_entry), fontWeight = FontWeight.Bold)
                                         }
                                     }
 
@@ -1083,76 +1024,187 @@ fun DataEntryDialog(
                                     }
 
                                     if (historicalEntries.isNotEmpty()) {
+                                        var inlineEditingYear by remember { mutableStateOf<Int?>(null) }
+                                        var inlineEditYearText by remember { mutableStateOf("") }
+                                        var inlineEditCountText by remember { mutableStateOf("") }
+
                                         Spacer(modifier = Modifier.height(14.dp))
-                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             historicalEntries.forEachIndexed { index, (yr, cnt) ->
-                                                val isRowEditing = editingHistOriginalYear == yr
-                                                Row(
+                                                val isRowEditing = inlineEditingYear == yr
+                                                Column(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .clip(RoundedCornerShape(10.dp))
-                                                        .background(if (isDarkTheme) Color(0x250F172A) else Color(0xFFF1F5F9))
+                                                        .clip(RoundedCornerShape(12.dp))
+                                                        .background(if (isDarkTheme) Color(0x280F172A) else Color(0xFFF1F5F9))
                                                         .border(
                                                             1.dp,
-                                                            if (isRowEditing) accentCyan else accentEmerald.copy(alpha = 0.4f),
-                                                            RoundedCornerShape(10.dp)
+                                                            if (isRowEditing) accentCyan.copy(alpha = 0.8f) else accentEmerald.copy(alpha = 0.42f),
+                                                            RoundedCornerShape(12.dp)
                                                         )
-                                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
+                                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                                 ) {
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Text(
-                                                            text = if (isAr) "سنة $yr : " else "Year $yr : ",
-                                                            fontWeight = FontWeight.Bold,
-                                                            fontSize = 13.sp,
-                                                            color = accentCyan
-                                                        )
-                                                        Text(
-                                                            text = if (isAr) "$cnt ضربة" else "$cnt strikes",
-                                                            fontWeight = FontWeight.ExtraBold,
-                                                            fontSize = 13.sp,
-                                                            color = accentEmerald
-                                                        )
-                                                    }
-
                                                     Row(
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
                                                     ) {
-                                                        IconButton(
-                                                            onClick = {
-                                                                editingHistOriginalYear = yr
-                                                                inputYear = yr.toString()
-                                                                inputStrikeCount = cnt.toString()
-                                                            },
-                                                            modifier = Modifier
-                                                                .size(28.dp)
-                                                                .testTag("edit_historical_entry_btn_$yr")
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            modifier = Modifier.weight(1f)
                                                         ) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.Edit,
-                                                                contentDescription = if (isAr) "تعديل" else "Edit",
-                                                                tint = accentCyan,
-                                                                modifier = Modifier.size(16.dp)
+                                                            Text(
+                                                                text = if (isAr) "سنة $yr : " else "Year $yr : ",
+                                                                fontWeight = FontWeight.Bold,
+                                                                fontSize = 13.sp,
+                                                                color = accentCyan
+                                                            )
+                                                            Text(
+                                                                text = if (isAr) "$cnt ضربة" else "$cnt strikes",
+                                                                fontWeight = FontWeight.ExtraBold,
+                                                                fontSize = 13.sp,
+                                                                color = accentEmerald
                                                             )
                                                         }
 
-                                                        IconButton(
-                                                            onClick = {
-                                                                if (editingHistOriginalYear == yr) {
-                                                                    editingHistOriginalYear = null
-                                                                }
-                                                                viewModel.removeHistoricalYearEntry(index)
-                                                            },
-                                                            modifier = Modifier.size(28.dp)
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                         ) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.Close,
-                                                                contentDescription = if (isAr) "حذف" else "Remove",
-                                                                tint = NeonRose,
-                                                                modifier = Modifier.size(16.dp)
+                                                            IconButton(
+                                                                onClick = {
+                                                                    if (cnt > 1) {
+                                                                        viewModel.setHistoricalYearEntry(yr, cnt - 1)
+                                                                    }
+                                                                },
+                                                                enabled = cnt > 1,
+                                                                modifier = Modifier
+                                                                    .size(30.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(if (isDarkTheme) Color(0x1EFFFFFF) else Color(0xFFE2E8F0))
+                                                                    .testTag("dec_historical_year_$yr")
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Remove,
+                                                                    contentDescription = if (isAr) "إنقاص" else "Decrease",
+                                                                    tint = if (cnt > 1) accentCyan else accentCyan.copy(alpha = 0.35f),
+                                                                    modifier = Modifier.size(15.dp)
+                                                                )
+                                                            }
+
+                                                            IconButton(
+                                                                onClick = {
+                                                                    viewModel.setHistoricalYearEntry(yr, (cnt + 1).coerceAtMost(100_000))
+                                                                },
+                                                                modifier = Modifier
+                                                                    .size(30.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(if (isDarkTheme) Color(0x1EFFFFFF) else Color(0xFFE2E8F0))
+                                                                    .testTag("inc_historical_year_$yr")
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Add,
+                                                                    contentDescription = if (isAr) "زيادة" else "Increase",
+                                                                    tint = accentEmerald,
+                                                                    modifier = Modifier.size(15.dp)
+                                                                )
+                                                            }
+
+                                                            IconButton(
+                                                                onClick = {
+                                                                    if (isRowEditing) {
+                                                                        inlineEditingYear = null
+                                                                    } else {
+                                                                        inlineEditingYear = yr
+                                                                        inlineEditYearText = yr.toString()
+                                                                        inlineEditCountText = cnt.toString()
+                                                                    }
+                                                                },
+                                                                modifier = Modifier
+                                                                    .size(30.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(if (isRowEditing) accentCyan.copy(alpha = 0.2f) else Color.Transparent)
+                                                                    .testTag("edit_historical_year_$yr")
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Edit,
+                                                                    contentDescription = if (isAr) "تعديل" else "Edit",
+                                                                    tint = accentCyan,
+                                                                    modifier = Modifier.size(15.dp)
+                                                                )
+                                                            }
+
+                                                            IconButton(
+                                                                onClick = {
+                                                                    if (isRowEditing) inlineEditingYear = null
+                                                                    viewModel.removeHistoricalYearEntry(index)
+                                                                },
+                                                                modifier = Modifier
+                                                                    .size(30.dp)
+                                                                    .testTag("remove_historical_year_$yr")
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Close,
+                                                                    contentDescription = if (isAr) "حذف" else "Remove",
+                                                                    tint = NeonRose,
+                                                                    modifier = Modifier.size(16.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
+                                                    if (isRowEditing) {
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            OutlinedTextField(
+                                                                value = inlineEditYearText,
+                                                                onValueChange = { inlineEditYearText = it },
+                                                                label = { Text(stringResource(R.string.year), fontSize = 11.sp) },
+                                                                singleLine = true,
+                                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                                shape = RoundedCornerShape(10.dp),
+                                                                modifier = Modifier
+                                                                    .weight(1f)
+                                                                    .testTag("inline_edit_year_input_$yr")
                                                             )
+                                                            OutlinedTextField(
+                                                                value = inlineEditCountText,
+                                                                onValueChange = { inlineEditCountText = it },
+                                                                label = { Text(stringResource(R.string.strikes_amount), fontSize = 11.sp) },
+                                                                singleLine = true,
+                                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                                shape = RoundedCornerShape(10.dp),
+                                                                modifier = Modifier
+                                                                    .weight(1f)
+                                                                    .testTag("inline_edit_count_input_$yr")
+                                                            )
+                                                            IconButton(
+                                                                onClick = {
+                                                                    val parsedYear = IndividualViewModel.parseLocalizedInt(inlineEditYearText)
+                                                                    val parsedCount = IndividualViewModel.parseLocalizedInt(inlineEditCountText)
+                                                                    if (parsedYear != null && parsedYear in 2000..2050 && parsedCount != null && parsedCount in 1..100_000) {
+                                                                        viewModel.updateHistoricalYearEntry(yr, parsedYear, parsedCount)
+                                                                        inlineEditingYear = null
+                                                                    }
+                                                                },
+                                                                modifier = Modifier
+                                                                    .size(40.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(accentEmerald.copy(alpha = 0.22f))
+                                                                    .border(1.dp, accentEmerald, CircleShape)
+                                                                    .testTag("inline_edit_apply_btn_$yr")
+                                                            ) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.Check,
+                                                                    contentDescription = if (isAr) "تأكيد" else "Apply",
+                                                                    tint = accentEmerald,
+                                                                    modifier = Modifier.size(18.dp)
+                                                                )
+                                                            }
                                                         }
                                                     }
                                                 }

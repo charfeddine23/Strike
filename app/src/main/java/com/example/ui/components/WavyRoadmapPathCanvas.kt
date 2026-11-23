@@ -47,16 +47,13 @@ fun GlowingWavyRoadmapSegmentCanvas(
     glowPulse: Float = 0.85f,
     darkTheme: Boolean = LocalAppDarkTheme.current
 ) {
-    val biomeState = androidx.compose.runtime.remember(stationId) { roadmapBiomeStateForStation(stationId.toFloat()) }
+    val biomeState = roadmapBiomeStateForStation(stationId.toFloat())
     val prominence = maxOf(
         biomeState.iceSubmersion,
         biomeState.rockIntensity * 0.72f,
         biomeState.forestIntensity * 0.78f,
         biomeState.lavaSubmersion
     ).coerceIn(0.25f, 1f)
-    val trackPath = androidx.compose.runtime.remember { Path() }
-    val tailPath = androidx.compose.runtime.remember { Path() }
-    val samplePoints = androidx.compose.runtime.remember { ArrayList<Offset>(26) }
 
     Canvas(modifier = modifier.fillMaxSize()) {
         val stepsPerHalf = 22
@@ -106,106 +103,102 @@ fun GlowingWavyRoadmapSegmentCanvas(
         )
 
         fun drawTrackHalf(startStep: Int, endStep: Int, isGlowing: Boolean, isTailFade: Boolean) {
-            trackPath.reset()
-            samplePoints.clear()
+            val path = Path()
+            val samplePoints = mutableListOf<Offset>()
             for (s in startStep..endStep) {
                 val yFrac = s.toFloat() / totalSteps.toFloat()
                 val pt = pointAtFrac(yFrac)
                 samplePoints.add(pt)
-                if (s == startStep) trackPath.moveTo(pt.x, pt.y) else trackPath.lineTo(pt.x, pt.y)
+                if (s == startStep) path.moveTo(pt.x, pt.y) else path.lineTo(pt.x, pt.y)
             }
 
             if (isGlowing) {
-                // Pass 1: Wide outer breathing optical bloom
+                // Pass 1: Wide outer cyan-to-mint breathing neon bloom
                 drawPath(
-                    path = trackPath,
+                    path = path,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            activeStartTone.copy(alpha = (if (darkTheme) 0.22f else 0.15f) * glowPulse),
-                            activeEndTone.copy(alpha = (if (darkTheme) 0.24f else 0.17f) * glowPulse)
+                            activeStartTone.copy(alpha = (if (darkTheme) 0.24f else 0.16f) * glowPulse),
+                            activeEndTone.copy(alpha = (if (darkTheme) 0.26f else 0.18f) * glowPulse)
                         ),
                         startY = 0f,
                         endY = size.height
                     ),
                     style = Stroke(width = 18.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                 )
-                // Pass 2: Mid optical glow halo
+                // Pass 2: Mid neon glow halo
                 drawPath(
-                    path = trackPath,
+                    path = path,
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            activeStartTone.copy(alpha = 0.54f * glowPulse),
-                            activeEndTone.copy(alpha = 0.54f * glowPulse)
+                            activeStartTone.copy(alpha = 0.56f * glowPulse),
+                            activeEndTone.copy(alpha = 0.56f * glowPulse)
                         ),
                         startY = 0f,
                         endY = size.height
                     ),
-                    style = Stroke(width = 8.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    style = Stroke(width = 8.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                 )
                 // Pass 3: Luminous core filament
                 drawPath(
-                    path = trackPath,
+                    path = path,
                     brush = Brush.verticalGradient(
                         colors = listOf(coreTone, activeStartTone, activeEndTone),
                         startY = 0f,
                         endY = size.height
                     ),
-                    style = Stroke(width = 3.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    style = Stroke(width = 3.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                 )
 
-                // Continuous traveling optical energy orbs flowing downward (zero shader allocations)
+                // Continuous traveling neon energy orbs flowing downward across row boundaries
                 val minFrac = startStep.toFloat() / totalSteps.toFloat()
                 val maxFrac = endStep.toFloat() / totalSteps.toFloat()
-                val pulseCenters = floatArrayOf(flowPhase, (flowPhase + 0.5f) % 1f)
-                val trailOffsets = floatArrayOf(0f, -0.045f, -0.09f)
-                val trailStrengths = floatArrayOf(1.0f, 0.58f, 0.26f)
+                val pulseCenters = listOf(flowPhase, (flowPhase + 0.5f) % 1f)
+                val trailSteps = listOf(0f to 1.0f, -0.045f to 0.58f, -0.09f to 0.26f)
 
-                for (pIdx in pulseCenters.indices) {
-                    val baseFrac = pulseCenters[pIdx]
-                    for (tIdx in trailOffsets.indices) {
-                        val strength = trailStrengths[tIdx]
-                        val f = ((baseFrac + trailOffsets[tIdx]) % 1f + 1f) % 1f
+                pulseCenters.forEach { baseFrac ->
+                    trailSteps.forEach { (delta, strength) ->
+                        val f = ((baseFrac + delta) % 1f + 1f) % 1f
                         if (f in minFrac..maxFrac) {
                             val pt = pointAtFrac(f)
-                            val outerR = (10.5f * strength + 2.8f).dp.toPx()
                             drawCircle(
                                 color = activeStartTone.copy(alpha = 0.22f * strength),
-                                radius = outerR,
+                                radius = (9.5f * strength + 2.5f).dp.toPx(),
                                 center = pt
                             )
                             drawCircle(
-                                color = orbHaloTone.copy(alpha = 0.44f * strength),
-                                radius = outerR * 0.56f,
+                                color = orbHaloTone.copy(alpha = 0.36f * strength),
+                                radius = (5.4f * strength + 1.4f).dp.toPx(),
                                 center = pt
                             )
                             drawCircle(
-                                color = orbCenterTone.copy(alpha = strength),
-                                radius = (3.2f * strength + 0.6f).dp.toPx(),
+                                color = orbCenterTone.copy(alpha = 0.94f * strength),
+                                radius = (3.0f * strength + 0.6f).dp.toPx(),
                                 center = pt
                             )
                         }
                     }
                 }
             } else {
-                // Underlying frosted conduit + animated streaming dashed line
+                // Underlying shadow conduit + animated streaming dashed line + biome atmospheric sheen
                 val rimSubmersion = maxOf(biomeState.iceSubmersion, biomeState.lavaSubmersion)
                 if (rimSubmersion > 0.05f) {
                     drawPath(
-                        path = trackPath,
-                        color = biomePrimaryAccent(biomeState, darkTheme).copy(alpha = (0.12f + 0.14f * rimSubmersion) * glowPulse),
-                        style = Stroke(width = (7.2f + 3.6f * rimSubmersion).dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        path = path,
+                        color = biomePrimaryAccent(biomeState, darkTheme).copy(alpha = (0.14f + 0.16f * rimSubmersion) * glowPulse),
+                        style = Stroke(width = (7.5f + 4f * rimSubmersion).dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                     )
                 }
                 drawPath(
-                    path = trackPath,
+                    path = path,
                     color = lockedConduitBg,
-                    style = Stroke(width = 4.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                 )
                 drawPath(
-                    path = trackPath,
+                    path = path,
                     color = lockedDashColor,
                     style = Stroke(
-                        width = 2.3.dp.toPx(),
+                        width = 2.4.dp.toPx(),
                         cap = StrokeCap.Round,
                         pathEffect = animatedDashEffect
                     )
@@ -214,40 +207,40 @@ fun GlowingWavyRoadmapSegmentCanvas(
                 // Warm fire-orange / golden glowing tail fading smoothly below the frontier orb
                 if (isTailFade && samplePoints.size >= 10) {
                     val dynamicCount = (7 + (glowPulse * 3f).roundToInt()).coerceIn(6, samplePoints.lastIndex)
-                    tailPath.reset()
+                    val tailPath = Path()
                     tailPath.moveTo(samplePoints[0].x, samplePoints[0].y)
                     for (k in 1..dynamicCount) {
                         tailPath.lineTo(samplePoints[k].x, samplePoints[k].y)
                     }
                     val tailTip = samplePoints[dynamicCount]
 
-                    // Outer soft bloom on the frontier tail
+                    // Outer soft orange/gold bloom on the frontier tail
                     drawPath(
                         path = tailPath,
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                frontierOuterTone.copy(alpha = 0.34f * glowPulse),
-                                frontierInnerTone.copy(alpha = 0.16f * glowPulse),
+                                frontierOuterTone.copy(alpha = 0.35f * glowPulse),
+                                frontierInnerTone.copy(alpha = 0.18f * glowPulse),
                                 Color.Transparent
                             ),
                             startY = midY,
                             endY = tailTip.y
                         ),
-                        style = Stroke(width = 13.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        style = Stroke(width = 14.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                     )
                     // Inner fiery energy core tail
                     drawPath(
                         path = tailPath,
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                frontierInnerTone.copy(alpha = 0.94f),
-                                frontierOuterTone.copy(alpha = 0.76f),
+                                frontierInnerTone.copy(alpha = 0.95f),
+                                frontierOuterTone.copy(alpha = 0.78f),
                                 Color.Transparent
                             ),
                             startY = midY,
                             endY = tailTip.y
                         ),
-                        style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                        style = Stroke(width = 5.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
                     )
                 }
             }

@@ -21,12 +21,15 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -71,13 +74,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -115,6 +118,8 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
+import com.example.data.model.StrikeEvent
+import com.example.data.repository.IndividualRepository
 import com.example.util.HapticHelper
 import com.example.ui.components.GlassTypeBadge
 import com.example.ui.components.LiquidGlassCard
@@ -159,7 +164,8 @@ fun DashboardScreen(
     val filterType by viewModel.filterType.collectAsStateWithLifecycle()
     val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
-    val historicalStrikesMap by viewModel.historicalStrikesByIndividual.collectAsStateWithLifecycle()
+    val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
+    val eventsByIndividual = remember(allStrikeEvents) { allStrikeEvents.groupBy { it.individualId } }
     val isDataEntryOpen by viewModel.isDataEntryOpen.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
@@ -170,7 +176,7 @@ fun DashboardScreen(
     val accentRose = if (isDarkTheme) NeonRose else DayRose
 
     var individualToDelete by remember { mutableStateOf<Individual?>(null) }
-    var historicalEditTargetId by remember { mutableStateOf<Long?>(null) }
+    var personForHistoricalEdit by remember { mutableStateOf<Individual?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
     var expandedCardIds by remember { mutableStateOf(setOf<Long>()) }
 
@@ -540,7 +546,6 @@ fun DashboardScreen(
                     IndividualRecordCard(
                         individual = item,
                         status = status,
-                        historicalYears = historicalStrikesMap[item.id].orEmpty(),
                         isExpanded = isExpanded,
                         onToggleExpand = {
                             expandedCardIds = if (isExpanded) {
@@ -554,10 +559,9 @@ fun DashboardScreen(
                         onEdit = {
                             viewModel.openDataEntryForEdit(item)
                         },
-                        onEditHistoricalStrikes = {
-                            historicalEditTargetId = item.id
-                        },
                         onDelete = { individualToDelete = item },
+                        personStrikeEvents = eventsByIndividual[item.id].orEmpty(),
+                        onEditYearlyStrikes = { personForHistoricalEdit = item },
                         darkTheme = isDarkTheme,
                         isHapticFeedbackEnabled = isHapticFeedbackEnabled,
                         isAr = isAr
@@ -628,39 +632,39 @@ fun DashboardScreen(
             }
         )
     }
-    // Direct Historical Strikes by Year Edit Dialog from Individual's Profile Card
-    val historicalEditTarget = historicalEditTargetId?.let { targetId ->
-        allList.find { it.id == targetId }
-    }
-    if (historicalEditTarget != null) {
-        EditIndividualHistoricalStrikesDialog(
-            individual = historicalEditTarget,
-            initialEntries = historicalStrikesMap[historicalEditTarget.id].orEmpty(),
+    // Person Historical Strikes by Year Editor Dialog
+    if (personForHistoricalEdit != null) {
+        val target = personForHistoricalEdit!!
+        PersonHistoricalStrikesEditorDialog(
+            individual = target,
+            personStrikeEvents = eventsByIndividual[target.id].orEmpty(),
             currentLang = currentLang,
-            darkTheme = isDarkTheme,
-            onSave = { updatedEntries ->
-                viewModel.saveIndividualHistoricalStrikes(historicalEditTarget.id, updatedEntries) {
-                    historicalEditTargetId = null
+            isDarkTheme = isDarkTheme,
+            isHapticEnabled = isHapticFeedbackEnabled,
+            onDismiss = { personForHistoricalEdit = null },
+            onSave = { editedEntries ->
+                viewModel.saveHistoricalStrikesForPerson(target.id, editedEntries) {
+                    personForHistoricalEdit = null
                 }
-            },
-            onDismiss = { historicalEditTargetId = null }
+            }
         )
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun IndividualRecordCard(
     individual: Individual,
     status: StrikerStatus,
-    historicalYears: List<Pair<Int, Int>> = emptyList(),
     isExpanded: Boolean,
     onToggleExpand: () -> Unit,
     onGoToStrike: () -> Unit,
     onCompare: () -> Unit,
     onEdit: () -> Unit,
-    onEditHistoricalStrikes: () -> Unit = {},
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    personStrikeEvents: List<StrikeEvent> = emptyList(),
+    onEditYearlyStrikes: (() -> Unit)? = null,
     darkTheme: Boolean = LocalAppDarkTheme.current,
     isHapticFeedbackEnabled: Boolean = true,
     isAr: Boolean = true
@@ -1013,81 +1017,134 @@ fun IndividualRecordCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Compact Historical Strikes by Year Summary + Direct Edit Trigger
-            val histAccent = if (darkTheme) NeonAmber else DayOrange
-            val histSummaryText = if (historicalYears.isEmpty()) {
-                if (isAr) "الضربات السابقة حسب السنة: غير مسجلة" else "Historical by Year: None"
-            } else {
-                val preview = historicalYears.take(3).joinToString(" · ") { (yr, cnt) -> "$yr: $cnt" }
-                if (historicalYears.size > 3) "$preview (+${historicalYears.size - 3})" else preview
+            // Historical Strikes by Year Section inside Person Card
+            val historicalByYear = remember(personStrikeEvents) {
+                personStrikeEvents
+                    .filter { IndividualRepository.isHistoricalStrikeType(it.strikeType) && it.count > 0 }
+                    .groupBy { it.year }
+                    .mapValues { (_, list) -> list.sumOf { it.count } }
+                    .toList()
+                    .sortedByDescending { it.first }
             }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (darkTheme) Color(0x160F172A) else Color(0x66FFFFFF))
-                    .border(1.dp, histAccent.copy(alpha = 0.36f), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 10.dp, vertical = 5.dp)
-                    .testTag("record_historical_strikes_${individual.id}"),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.History,
-                        contentDescription = null,
-                        tint = histAccent,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = histSummaryText,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (historicalYears.isEmpty()) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                Row(
+            if (onEditYearlyStrikes != null || historicalByYear.isNotEmpty()) {
+                val histCyan = if (darkTheme) NeonCyan else DayCyan
+                val histEmerald = if (darkTheme) NeonEmerald else DayEmerald
+                Spacer(modifier = Modifier.height(10.dp))
+                LiquidGlassInnerPanel(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(histAccent.copy(alpha = if (darkTheme) 0.18f else 0.14f))
-                        .border(1.dp, histAccent.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
-                        .clickable(onClick = onEditHistoricalStrikes)
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                        .testTag("record_edit_historical_btn_${individual.id}"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        .fillMaxWidth()
+                        .testTag("person_yearly_strikes_panel_${individual.id}"),
+                    darkTheme = darkTheme
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = if (isAr) "تعديل الضربات السابقة حسب السنة" else "Edit Historical Strikes by Year",
-                        tint = histAccent,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Text(
-                        text = if (isAr) "السنوات" else "Years",
-                        fontSize = 10.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = histAccent
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.History,
+                                    contentDescription = null,
+                                    tint = histCyan,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = if (isAr) "الضربات التاريخية حسب السنة" else "Historical Strikes by Year",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = PlusJakartaSans,
+                                    color = histCyan,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            if (onEditYearlyStrikes != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(histCyan.copy(alpha = if (darkTheme) 0.18f else 0.12f))
+                                        .border(1.dp, histCyan.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                                            onEditYearlyStrikes()
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                        .testTag("btn_edit_person_yearly_strikes_${individual.id}"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = if (isAr) "تعديل الضربات السنوية" else "Edit Yearly Strikes",
+                                            tint = histCyan,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                        Text(
+                                            text = if (isAr) "تعديل" else "Edit",
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = histCyan
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (historicalByYear.isEmpty()) {
+                            Text(
+                                text = if (isAr) "لا توجد ضربات تاريخية مسجلة حسب السنة بعد" else "No historical yearly strikes logged yet",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                historicalByYear.forEach { (yr, cnt) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(9.dp))
+                                            .background(histEmerald.copy(alpha = if (darkTheme) 0.14f else 0.11f))
+                                            .border(0.9.dp, histEmerald.copy(alpha = 0.45f), RoundedCornerShape(9.dp))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(
+                                            text = "$yr:",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = histCyan
+                                        )
+                                        Text(
+                                            text = "$cnt",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = histEmerald
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Bottom Actions: Read-only Strike Count + Navigation / Compare & Delete
             Row(
@@ -1612,54 +1669,80 @@ private fun LuxurySortButtonPopup(
 }
 
 @Composable
-fun EditIndividualHistoricalStrikesDialog(
+private fun PersonHistoricalStrikesEditorDialog(
     individual: Individual,
-    initialEntries: List<Pair<Int, Int>>,
+    personStrikeEvents: List<StrikeEvent>,
     currentLang: String,
-    darkTheme: Boolean,
-    onSave: (List<Pair<Int, Int>>) -> Unit,
-    onDismiss: () -> Unit
+    isDarkTheme: Boolean,
+    isHapticEnabled: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (List<Pair<Int, Int>>) -> Unit
 ) {
+    val context = LocalContext.current
     val isAr = currentLang == "ar"
     val isFr = currentLang == "fr"
-    val accentCyan = if (darkTheme) NeonCyan else DayCyan
-    val accentEmerald = if (darkTheme) NeonEmerald else DayEmerald
-    val accentAmber = if (darkTheme) NeonAmber else DayOrange
-    val accentRose = if (darkTheme) NeonRose else DayRose
-    val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+    val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val accentEmerald = if (isDarkTheme) NeonEmerald else DayEmerald
+    val accentAmber = if (isDarkTheme) NeonAmber else DayOrange
+    val accentRose = if (isDarkTheme) NeonRose else DayRose
 
-    val editableEntries = remember(individual.id, initialEntries) {
-        mutableStateListOf<Pair<Int, Int>>().apply {
-            addAll(initialEntries.sortedByDescending { it.first })
-        }
+    val currentYear = remember { java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) }
+    val initialHistorical = remember(individual.id, personStrikeEvents) {
+        personStrikeEvents
+            .filter { IndividualRepository.isHistoricalStrikeType(it.strikeType) && it.count > 0 }
+            .groupBy { it.year }
+            .mapValues { (_, list) -> list.sumOf { it.count } }
+            .toList()
+            .sortedByDescending { it.first }
     }
-    var inputYear by remember(individual.id) { mutableStateOf((currentYear - 1).toString()) }
-    var inputCount by remember(individual.id) { mutableStateOf("10") }
-    var editingOriginalYear by remember(individual.id) { mutableStateOf<Int?>(null) }
-    var errorText by remember(individual.id) { mutableStateOf<String?>(null) }
+    val nonHistoricalBaseline = remember(individual.id, individual.strikeCount, initialHistorical) {
+        val histSum = initialHistorical.sumOf { it.second }
+        (individual.strikeCount - histSum).coerceAtLeast(0)
+    }
 
-    val totalHistorical = editableEntries.sumOf { it.second }
+    var entries by remember(individual.id) { mutableStateOf(initialHistorical) }
+    var newYearInput by remember { mutableStateOf((currentYear - 1).toString()) }
+    var newCountInput by remember { mutableStateOf("5") }
+    var inlineEditingYear by remember { mutableStateOf<Int?>(null) }
+    var inlineYearText by remember { mutableStateOf("") }
+    var inlineCountText by remember { mutableStateOf("") }
+    var validationError by remember { mutableStateOf<String?>(null) }
+
+    val historicalSum = entries.sumOf { it.second }
+    val projectedTotal = nonHistoricalBaseline + historicalSum
+
+    val sheetGradient = if (isDarkTheme) {
+        Brush.verticalGradient(listOf(Color(0xF60F172A), Color(0xFA060A13)))
+    } else {
+        Brush.verticalGradient(listOf(Color.White, Color(0xFFF1F5F9)))
+    }
+    val borderBrush = Brush.verticalGradient(
+        listOf(
+            Color.White.copy(alpha = if (isDarkTheme) 0.45f else 0.9f),
+            accentCyan.copy(alpha = 0.6f),
+            accentEmerald.copy(alpha = 0.5f)
+        )
+    )
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Box(
+        Surface(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0x9E000000))
-                .clickable(onClick = onDismiss)
-                .padding(horizontal = 16.dp, vertical = 24.dp),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .testTag("person_historical_strikes_dialog"),
+            shape = RoundedCornerShape(24.dp),
+            color = Color.Transparent
         ) {
-            LiquidGlassCard(
+            Box(
                 modifier = Modifier
-                    .widthIn(max = 520.dp)
                     .fillMaxWidth()
-                    .clickable(enabled = false, onClick = {})
-                    .testTag("profile_historical_strikes_dialog"),
-                shape = RoundedCornerShape(24.dp),
-                darkTheme = darkTheme
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(sheetGradient)
+                    .border(1.1.dp, borderBrush, RoundedCornerShape(24.dp))
+                    .padding(16.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -1670,38 +1753,40 @@ fun EditIndividualHistoricalStrikesDialog(
                     // Header
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.weight(1f)
                         ) {
                             Box(
                                 modifier = Modifier
                                     .size(38.dp)
-                                    .clip(RoundedCornerShape(11.dp))
-                                    .background(accentAmber.copy(alpha = 0.16f))
-                                    .border(1.dp, accentAmber.copy(alpha = 0.55f), RoundedCornerShape(11.dp)),
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(accentCyan.copy(alpha = 0.18f))
+                                    .border(1.dp, accentCyan.copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.History,
                                     contentDescription = null,
-                                    tint = accentAmber,
+                                    tint = accentCyan,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column {
                                 Text(
-                                    text = stringResource(R.string.historical_strikes_title),
+                                    text = when {
+                                        isAr -> "الضربات التاريخية حسب السنة"
+                                        isFr -> "Strikes historiques par année"
+                                        else -> "Historical Strikes by Year"
+                                    },
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Black,
                                     fontFamily = PlusJakartaSans,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = individual.fullName,
@@ -1714,190 +1799,394 @@ fun EditIndividualHistoricalStrikesDialog(
                             }
                         }
 
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(accentAmber.copy(alpha = 0.16f))
-                                    .border(1.dp, accentAmber.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .size(40.dp)
+                                .testTag("btn_close_person_hist_dialog")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.cancel),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Summary Row: Preserved Live/Base vs Historical vs New Total
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(accentCyan.copy(alpha = 0.12f))
+                                .border(1.dp, accentCyan.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) {
+                            Column {
                                 Text(
-                                    text = if (isAr) "الإجمالي: $totalHistorical" else "Total: $totalHistorical",
-                                    fontSize = 11.sp,
+                                    text = when {
+                                        isAr -> "التاريخية"
+                                        isFr -> "Historique"
+                                        else -> "Historical"
+                                    },
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "$historicalSum",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = accentCyan
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(accentAmber.copy(alpha = 0.12f))
+                                .border(1.dp, accentAmber.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) {
+                            Column {
+                                Text(
+                                    text = when {
+                                        isAr -> "المباشرة"
+                                        isFr -> "Directs"
+                                        else -> "Live/Base"
+                                    },
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "$nonHistoricalBaseline",
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Black,
                                     color = accentAmber
                                 )
                             }
-
-                            IconButton(
-                                onClick = onDismiss,
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(if (darkTheme) Color(0x18FFFFFF) else Color(0xFFE2E8F0))
-                                    .testTag("profile_hist_close_btn")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = stringResource(R.string.cancel),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(accentEmerald.copy(alpha = 0.14f))
+                                .border(1.dp, accentEmerald.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) {
+                            Column {
+                                Text(
+                                    text = when {
+                                        isAr -> "الإجمالي"
+                                        isFr -> "Total"
+                                        else -> "New Total"
+                                    },
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "$projectedTotal",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = accentEmerald
                                 )
                             }
                         }
                     }
 
-                    // Add / Update Year Entry Form
+                    // Existing Yearly Entries List
+                    if (entries.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isDarkTheme) Color(0x18FFFFFF) else Color(0xFFF1F5F9))
+                                .padding(14.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = when {
+                                    isAr -> "لا توجد سنوات مضافة بعد. أضف سنة وعدد ضرباتها أدناه."
+                                    isFr -> "Aucune année enregistrée. Ajoutez une année ci-dessous."
+                                    else -> "No historical years yet. Add a year and strike count below."
+                                },
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 230.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            entries.forEach { (yr, cnt) ->
+                                val isRowEditing = inlineEditingYear == yr
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isDarkTheme) Color(0x281E293B) else Color(0xFFF1F5F9))
+                                        .border(
+                                            1.dp,
+                                            if (isRowEditing) accentCyan else accentEmerald.copy(alpha = 0.4f),
+                                            RoundedCornerShape(12.dp)
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text(
+                                                text = if (isAr) "سنة $yr : " else "Year $yr : ",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = accentCyan
+                                            )
+                                            Text(
+                                                text = if (isAr) "$cnt ضربة" else "$cnt strikes",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = accentEmerald
+                                            )
+                                        }
+
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            IconButton(
+                                                onClick = {
+                                                    if (cnt > 1) {
+                                                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                                        entries = entries.map { (y, c) -> if (y == yr) y to (c - 1) else y to c }
+                                                    }
+                                                },
+                                                enabled = cnt > 1,
+                                                modifier = Modifier
+                                                    .size(30.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isDarkTheme) Color(0x1EFFFFFF) else Color(0xFFE2E8F0))
+                                                    .testTag("dec_person_hist_year_$yr")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Remove,
+                                                    contentDescription = if (isAr) "إنقاص" else "Decrease",
+                                                    tint = if (cnt > 1) accentCyan else accentCyan.copy(alpha = 0.35f),
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = {
+                                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                                    entries = entries.map { (y, c) -> if (y == yr) y to (c + 1).coerceAtMost(100_000) else y to c }
+                                                },
+                                                modifier = Modifier
+                                                    .size(30.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isDarkTheme) Color(0x1EFFFFFF) else Color(0xFFE2E8F0))
+                                                    .testTag("inc_person_hist_year_$yr")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Add,
+                                                    contentDescription = if (isAr) "زيادة" else "Increase",
+                                                    tint = accentEmerald,
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = {
+                                                    if (isRowEditing) {
+                                                        inlineEditingYear = null
+                                                    } else {
+                                                        inlineEditingYear = yr
+                                                        inlineYearText = yr.toString()
+                                                        inlineCountText = cnt.toString()
+                                                    }
+                                                },
+                                                modifier = Modifier
+                                                    .size(30.dp)
+                                                    .clip(CircleShape)
+                                                    .background(if (isRowEditing) accentCyan.copy(alpha = 0.2f) else Color.Transparent)
+                                                    .testTag("edit_person_hist_year_$yr")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Edit,
+                                                    contentDescription = if (isAr) "تعديل" else "Edit",
+                                                    tint = accentCyan,
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = {
+                                                    if (isRowEditing) inlineEditingYear = null
+                                                    entries = entries.filterNot { it.first == yr }
+                                                },
+                                                modifier = Modifier
+                                                    .size(30.dp)
+                                                    .testTag("remove_person_hist_year_$yr")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = if (isAr) "حذف" else "Remove",
+                                                    tint = accentRose,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (isRowEditing) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            OutlinedTextField(
+                                                value = inlineYearText,
+                                                onValueChange = { inlineYearText = it },
+                                                label = { Text(stringResource(R.string.year), fontSize = 11.sp) },
+                                                singleLine = true,
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                shape = RoundedCornerShape(10.dp),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .testTag("person_hist_edit_year_$yr")
+                                            )
+                                            OutlinedTextField(
+                                                value = inlineCountText,
+                                                onValueChange = { inlineCountText = it },
+                                                label = { Text(stringResource(R.string.strikes_amount), fontSize = 11.sp) },
+                                                singleLine = true,
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                shape = RoundedCornerShape(10.dp),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .testTag("person_hist_edit_count_$yr")
+                                            )
+                                            IconButton(
+                                                onClick = {
+                                                    val py = IndividualViewModel.parseLocalizedInt(inlineYearText)
+                                                    val pc = IndividualViewModel.parseLocalizedInt(inlineCountText)
+                                                    if (py != null && py in 2000..2050 && pc != null && pc in 1..100_000) {
+                                                        val updated = entries.filterNot { it.first == yr }.toMutableList()
+                                                        val existingIdx = updated.indexOfFirst { it.first == py }
+                                                        if (existingIdx >= 0) {
+                                                            updated[existingIdx] = py to (updated[existingIdx].second + pc)
+                                                        } else {
+                                                            updated.add(py to pc)
+                                                        }
+                                                        entries = updated.sortedByDescending { it.first }
+                                                        inlineEditingYear = null
+                                                        validationError = null
+                                                    } else {
+                                                        validationError = if (isAr) {
+                                                            "يرجى إدخال سنة (2000-2050) وعدد ضربات صالح"
+                                                        } else {
+                                                            "Enter a valid year (2000-2050) and positive count"
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .clip(CircleShape)
+                                                    .background(accentEmerald.copy(alpha = 0.22f))
+                                                    .border(1.dp, accentEmerald, CircleShape)
+                                                    .testTag("person_hist_edit_apply_$yr")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = if (isAr) "تأكيد" else "Apply",
+                                                    tint = accentEmerald,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Add New Year Section
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         OutlinedTextField(
-                            value = inputYear,
-                            onValueChange = {
-                                inputYear = it
-                                errorText = null
-                            },
+                            value = newYearInput,
+                            onValueChange = { newYearInput = it },
                             label = { Text(stringResource(R.string.year)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("profile_hist_year_input"),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = accentCyan,
-                                unfocusedBorderColor = accentCyan.copy(alpha = 0.35f)
-                            )
+                                .testTag("person_hist_add_year_input")
                         )
-
                         OutlinedTextField(
-                            value = inputCount,
-                            onValueChange = {
-                                inputCount = it
-                                errorText = null
-                            },
+                            value = newCountInput,
+                            onValueChange = { newCountInput = it },
                             label = { Text(stringResource(R.string.strikes_amount)) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("profile_hist_count_input"),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = accentEmerald,
-                                unfocusedBorderColor = accentEmerald.copy(alpha = 0.35f)
-                            )
+                                .testTag("person_hist_add_count_input")
                         )
-
                         Button(
                             onClick = {
-                                val y = IndividualViewModel.parseLocalizedInt(inputYear)
-                                val c = IndividualViewModel.parseLocalizedInt(inputCount)
-                                if (y == null || y !in 2000..2050 || c == null || c !in 1..100_000) {
-                                    errorText = when (currentLang) {
-                                        "ar" -> "يرجى إدخال سنة صحيحة (2000-2050) وعدد ضربات صالح"
-                                        "fr" -> "Veuillez saisir une année valide (2000-2050) et un nombre positif"
-                                        else -> "Please enter a valid year (2000-2050) and strike count"
-                                    }
-                                } else {
-                                    val origYr = editingOriginalYear
-                                    if (origYr != null) {
-                                        val remaining = editableEntries.filterNot { it.first == origYr }.toMutableList()
-                                        val existingIdx = remaining.indexOfFirst { it.first == y }
-                                        if (existingIdx >= 0) {
-                                            remaining[existingIdx] = y to (remaining[existingIdx].second + c)
-                                        } else {
-                                            remaining.add(y to c)
-                                        }
-                                        editableEntries.clear()
-                                        editableEntries.addAll(remaining.sortedByDescending { it.first })
-                                        editingOriginalYear = null
+                                val y = IndividualViewModel.parseLocalizedInt(newYearInput)
+                                val c = IndividualViewModel.parseLocalizedInt(newCountInput)
+                                if (y != null && y in 2000..2050 && c != null && c in 1..100_000) {
+                                    val updated = entries.toMutableList()
+                                    val idx = updated.indexOfFirst { it.first == y }
+                                    if (idx >= 0) {
+                                        updated[idx] = y to (updated[idx].second + c)
                                     } else {
-                                        val idx = editableEntries.indexOfFirst { it.first == y }
-                                        if (idx >= 0) {
-                                            editableEntries[idx] = y to (editableEntries[idx].second + c)
-                                        } else {
-                                            editableEntries.add(y to c)
-                                            editableEntries.sortByDescending { it.first }
-                                        }
+                                        updated.add(y to c)
                                     }
-                                    errorText = null
-                                    inputYear = (y - 1).toString()
-                                    inputCount = "10"
+                                    entries = updated.sortedByDescending { it.first }
+                                    newYearInput = (y - 1).coerceIn(2000, 2050).toString()
+                                    newCountInput = "5"
+                                    validationError = null
+                                } else {
+                                    validationError = if (isAr) {
+                                        "يرجى إدخال سنة (2000-2050) وعدد ضربات صالح"
+                                    } else {
+                                        "Enter a valid year (2000-2050) and positive count"
+                                    }
                                 }
                             },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = accentCyan,
+                                contentColor = Color(0xFF021B26)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .height(54.dp)
-                                .testTag("profile_hist_add_or_update_btn"),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (editingOriginalYear != null) accentEmerald else accentCyan,
-                                contentColor = if (darkTheme) Color(0xFF021B26) else Color.White
-                            )
+                                .testTag("person_hist_add_btn")
                         ) {
-                            Icon(
-                                imageVector = if (editingOriginalYear != null) Icons.Default.Check else Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (editingOriginalYear != null) {
-                                    when (currentLang) {
-                                        "ar" -> "تحديث"
-                                        "fr" -> "MàJ"
-                                        else -> "Update"
-                                    }
-                                } else {
-                                    stringResource(R.string.add_year_entry)
-                                },
-                                fontWeight = FontWeight.Bold
-                            )
+                            Icon(imageVector = Icons.Default.Add, contentDescription = null)
                         }
                     }
 
-                    if (editingOriginalYear != null) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(accentCyan.copy(alpha = 0.14f))
-                                .border(1.dp, accentCyan.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = when (currentLang) {
-                                    "ar" -> "جاري تعديل سنة $editingOriginalYear"
-                                    "fr" -> "Modification de l'année $editingOriginalYear"
-                                    else -> "Editing year $editingOriginalYear"
-                                },
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = accentCyan
-                            )
-                            Text(
-                                text = stringResource(R.string.cancel),
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = accentRose,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .clickable {
-                                        editingOriginalYear = null
-                                        inputYear = (currentYear - 1).toString()
-                                        inputCount = "10"
-                                    }
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-
-                    // Quick Year Pills
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1906,164 +2195,35 @@ fun EditIndividualHistoricalStrikesDialog(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(if (darkTheme) Color(0x18FFFFFF) else Color(0xFFE2E8F0))
+                                    .background(if (isDarkTheme) Color(0x18FFFFFF) else Color(0xFFE2E8F0))
                                     .border(
                                         1.dp,
-                                        if (darkTheme) Color(0x28FFFFFF) else Color(0xFFCBD5E1),
+                                        if (isDarkTheme) Color(0x28FFFFFF) else Color(0xFFCBD5E1),
                                         RoundedCornerShape(8.dp)
                                     )
-                                    .clickable { inputYear = yr.toString() }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                    .clickable { newYearInput = yr.toString() }
+                                    .padding(horizontal = 8.dp, vertical = 5.dp)
                             ) {
                                 Text(
                                     text = "$yr",
                                     fontSize = 11.sp,
                                     color = accentCyan,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Medium
                                 )
                             }
                         }
                     }
 
-                    if (errorText != null) {
+                    if (validationError != null) {
                         Text(
-                            text = errorText!!,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = accentRose
+                            text = validationError ?: "",
+                            color = accentRose,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
 
-                    // Existing Year Rows
-                    if (editableEntries.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (darkTheme) Color(0x180F172A) else Color(0xFFF1F5F9))
-                                .padding(vertical = 18.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = when {
-                                    isAr -> "لا توجد ضربات تاريخية مسجلة بعد"
-                                    isFr -> "Aucun strike historique enregistré"
-                                    else -> "No historical strikes recorded yet"
-                                },
-                                fontSize = 12.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            editableEntries.forEachIndexed { idx, (yr, cnt) ->
-                                val isRowEditing = editingOriginalYear == yr
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (darkTheme) Color(0x250F172A) else Color(0xFFF1F5F9))
-                                        .border(
-                                            1.dp,
-                                            if (isRowEditing) accentCyan else accentEmerald.copy(alpha = 0.45f),
-                                            RoundedCornerShape(12.dp)
-                                        )
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = if (isAr) "سنة $yr : " else "Year $yr : ",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 13.5.sp,
-                                            color = accentCyan
-                                        )
-                                        Text(
-                                            text = if (isAr) "$cnt ضربة" else "$cnt strikes",
-                                            fontWeight = FontWeight.Black,
-                                            fontSize = 13.5.sp,
-                                            color = accentEmerald
-                                        )
-                                    }
-
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        IconButton(
-                                            onClick = {
-                                                if (cnt > 1) {
-                                                    editableEntries[idx] = yr to (cnt - 1)
-                                                }
-                                            },
-                                            modifier = Modifier.size(30.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Remove,
-                                                contentDescription = if (isAr) "إنقاص" else "Decrease",
-                                                tint = accentAmber,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                        IconButton(
-                                            onClick = {
-                                                editableEntries[idx] = yr to (cnt + 1)
-                                            },
-                                            modifier = Modifier.size(30.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Add,
-                                                contentDescription = if (isAr) "زيادة" else "Increase",
-                                                tint = accentEmerald,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                        IconButton(
-                                            onClick = {
-                                                editingOriginalYear = yr
-                                                inputYear = yr.toString()
-                                                inputCount = cnt.toString()
-                                            },
-                                            modifier = Modifier
-                                                .size(30.dp)
-                                                .testTag("profile_hist_edit_year_$yr")
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Edit,
-                                                contentDescription = if (isAr) "تعديل" else "Edit",
-                                                tint = accentCyan,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                        IconButton(
-                                            onClick = {
-                                                if (editingOriginalYear == yr) {
-                                                    editingOriginalYear = null
-                                                }
-                                                editableEntries.removeAt(idx)
-                                            },
-                                            modifier = Modifier
-                                                .size(30.dp)
-                                                .testTag("profile_hist_delete_year_$yr")
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = stringResource(R.string.delete),
-                                                tint = accentRose,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Bottom Action Buttons
+                    // Cancel / Save Action Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -2073,36 +2233,34 @@ fun EditIndividualHistoricalStrikesDialog(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp),
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(14.dp)
                         ) {
                             Text(stringResource(R.string.cancel))
                         }
-
                         Button(
-                            onClick = { onSave(editableEntries.toList()) },
-                            modifier = Modifier
-                                .weight(1.6f)
-                                .height(48.dp)
-                                .testTag("profile_hist_save_btn"),
-                            shape = RoundedCornerShape(12.dp),
+                            onClick = {
+                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                onSave(entries)
+                            },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = accentCyan,
-                                contentColor = if (darkTheme) Color(0xFF021B26) else Color.White
-                            )
+                                containerColor = accentEmerald,
+                                contentColor = Color(0xFF022015)
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .weight(1.5f)
+                                .height(48.dp)
+                                .testTag("btn_save_person_yearly_strikes")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = when {
-                                    isAr -> "حفظ التعديلات"
+                                    isAr -> "حفظ الضربات السنوية"
                                     isFr -> "Enregistrer"
                                     else -> "Save Changes"
                                 },
-                                fontWeight = FontWeight.Black
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
@@ -2111,4 +2269,3 @@ fun EditIndividualHistoricalStrikesDialog(
         }
     }
 }
-
