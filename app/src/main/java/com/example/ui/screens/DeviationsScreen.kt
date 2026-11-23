@@ -103,6 +103,7 @@ import com.example.ui.theme.DayRose
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -227,12 +228,18 @@ fun DeviationsScreen(
     val cyanAccent = if (isDarkTheme) NeonCyan else DayCyan
     val roseAccent = if (isDarkTheme) NeonRose else DayRose
     val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
+    val scaffoldPadding = LocalScaffoldContentPadding.current
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .testTag("deviations_screen"),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = scaffoldPadding.calculateTopPadding() + 8.dp,
+            bottom = scaffoldPadding.calculateBottomPadding() + 24.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 1. CENTRAL 3D VOLUMETRIC DNA CANVAS & MENACING CYBER-SHADOW / ANGEL HERO CARD

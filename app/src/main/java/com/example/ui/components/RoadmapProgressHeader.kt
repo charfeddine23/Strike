@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -10,11 +11,9 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -31,9 +30,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Female
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Landscape
@@ -45,14 +47,18 @@ import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -62,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -70,6 +77,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -106,10 +114,11 @@ enum class RoadmapHubDestination {
 }
 
 /**
- * Cohesive Obsidian Liquid Glass 3-way capsule switcher shared across:
- * - Tasks Ledger (Left)
- * - Cyber Roadmap / LVL X/700 (Center)
- * - XP Logs (Right)
+ * Streamlined Obsidian Split Command Header + Liquid Glass Portal Switcher:
+ * Replaces stacked 3-tab pill bars with:
+ * 1) Living Level Status Capsule (`LVL X/700` + percentage badge + inline XP progress meter)
+ * 2) Expanding Obsidian Hub Portal Menu (`roadmap_hub_menu_btn`) switching cleanly between
+ *    Cyber Roadmap / Level, Tasks Ledger (with live task counter), and XP Logs (with live XP total).
  */
 @Composable
 fun ObsidianRoadmapHubSwitcher(
@@ -126,229 +135,421 @@ fun ObsidianRoadmapHubSwitcher(
     modifier: Modifier = Modifier
 ) {
     val isAr = currentLang == "ar"
+    val isFr = currentLang == "fr"
     val appDir = if (isAr) LayoutDirection.Rtl else LayoutDirection.Ltr
     val safeStation = unlockedStationId.coerceIn(0, TaskPools.TOTAL_STATIONS_COUNT)
-    val clampedProgress = progressFraction.coerceIn(0.03f, 1f)
+    val clampedProgress = progressFraction.coerceIn(0.02f, 1f)
+    val progressPercent = (progressFraction.coerceIn(0f, 1f) * 100f).toInt()
 
     val ledgerAccent = if (isDarkTheme) ElectricMint else DayEmerald
     val xpLogsAccent = if (isDarkTheme) NeonViolet else DayPurple
 
-    val shellBg = if (isDarkTheme) {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xDA0A0E17),
-                Color(0xE205080E)
-            )
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xF5FFFFFF),
-                Color(0xF0F1F5F9)
-            )
-        )
-    }
-    val shellBorder = if (isDarkTheme) {
-        Brush.verticalGradient(
-            listOf(
-                Color.White.copy(alpha = 0.24f),
-                roadmapAccent.copy(alpha = 0.20f),
-                Color.White.copy(alpha = 0.08f)
-            )
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFCBD5E1),
-                roadmapAccent.copy(alpha = 0.35f)
-            )
-        )
-    }
-    val dividerColor = if (isDarkTheme) Color.White.copy(alpha = 0.09f) else Color(0xFFE2E8F0)
+    val totalXp by RoadmapManager.totalXp.collectAsStateWithLifecycle()
+    val xpHistory by RoadmapManager.xpHistory.collectAsStateWithLifecycle()
+    val completedIds by RoadmapManager.completedTaskIds.collectAsStateWithLifecycle()
+    val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
 
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (menuExpanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+        label = "portal_chevron_rotation"
+    )
+
+    val activeAccent = when (activeDestination) {
+        RoadmapHubDestination.ROADMAP -> roadmapAccent
+        RoadmapHubDestination.TASKS_LEDGER -> ledgerAccent
+        RoadmapHubDestination.XP_LOGS -> xpLogsAccent
+    }
+    val activeIcon = when (activeDestination) {
+        RoadmapHubDestination.ROADMAP -> Icons.Default.Explore
+        RoadmapHubDestination.TASKS_LEDGER -> Icons.Default.MenuBook
+        RoadmapHubDestination.XP_LOGS -> Icons.Default.History
+    }
+    val activeModeLabel = when (activeDestination) {
+        RoadmapHubDestination.ROADMAP -> when {
+            isAr -> "السجلات"
+            isFr -> "Portail"
+            else -> "Switch View"
+        }
+        RoadmapHubDestination.TASKS_LEDGER -> when {
+            isAr -> "دفتر المهام"
+            isFr -> "Registre"
+            else -> "Tasks Ledger"
+        }
+        RoadmapHubDestination.XP_LOGS -> "Xp Logs"
+    }
+
+    val capsuleBg = if (isDarkTheme) {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xD40B111E),
+                Color(0xDC060A13)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xF6FFFFFF),
+                Color(0xEEF1F6FC)
+            )
+        )
+    }
+
+    val progressBorder = Brush.linearGradient(
+        colors = listOf(
+            roadmapAccent.copy(alpha = if (isDarkTheme) 0.58f else 0.65f),
+            if (isDarkTheme) Color.White.copy(alpha = 0.16f) else Color(0xFFCBD5E1)
+        )
+    )
+    val portalBorder = Brush.linearGradient(
+        colors = listOf(
+            activeAccent.copy(alpha = if (isDarkTheme) 0.68f else 0.72f),
+            xpLogsAccent.copy(alpha = if (isDarkTheme) 0.34f else 0.32f)
+        )
+    )
+
+    CompositionLocalProvider(LocalLayoutDirection provides appDir) {
         Row(
             modifier = modifier
                 .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-                .clip(RoundedCornerShape(24.dp))
-                .background(shellBg)
-                .border(1.dp, shellBorder, RoundedCornerShape(24.dp))
-                .padding(4.dp)
                 .testTag("obsidian_roadmap_hub_switcher"),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // LEFT: Tasks Ledger
-            HubSwitcherSegment(
-                selected = activeDestination == RoadmapHubDestination.TASKS_LEDGER,
-                label = when (currentLang) {
-                    "ar" -> "دفتر المهام"
-                    "fr" -> "Registre"
-                    else -> "Tasks Ledger"
-                },
-                icon = Icons.Default.MenuBook,
-                contentDescription = if (isAr) "دفتر المهام" else "Tasks Ledger",
-                accentColor = ledgerAccent,
-                isDarkTheme = isDarkTheme,
-                layoutDirection = appDir,
-                onClick = onTasksLedgerClick,
+            // 1. Living Level Capsule (`LVL X/700` + progress meter)
+            Column(
                 modifier = Modifier
                     .weight(1f)
-                    .testTag("roadmap_header_ledger_btn")
-            )
+                    .minimumInteractiveComponentSize()
+                    .defaultMinSize(minHeight = 48.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(capsuleBg)
+                    .border(1.05.dp, progressBorder, RoundedCornerShape(18.dp))
+                    .clickable(onClick = onProgressClick)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .testTag("roadmap_header_progress_btn"),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(roadmapAccent.copy(alpha = if (isDarkTheme) 0.18f else 0.14f))
+                                .border(0.9.dp, roadmapAccent.copy(alpha = 0.72f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = roadmapIcon,
+                                contentDescription = when {
+                                    isAr -> "تقدم المستوى"
+                                    isFr -> "Progression niveau"
+                                    else -> "Level Progress"
+                                },
+                                tint = roadmapAccent,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
 
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .fillMaxHeight(0.52f)
-                    .background(dividerColor)
-            )
+                        Text(
+                            text = when {
+                                isFr -> "Niv $safeStation/${TaskPools.TOTAL_STATIONS_COUNT}"
+                                else -> "LVL $safeStation/${TaskPools.TOTAL_STATIONS_COUNT}"
+                            },
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = PlusJakartaSans,
+                            color = if (isDarkTheme) Color.White else DayTextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
 
-            // CENTER: LVL X/700
-            HubSwitcherSegment(
-                selected = activeDestination == RoadmapHubDestination.ROADMAP,
-                label = when (currentLang) {
-                    "fr" -> "Niv $safeStation/${TaskPools.TOTAL_STATIONS_COUNT}"
-                    else -> "LVL $safeStation/${TaskPools.TOTAL_STATIONS_COUNT}"
-                },
-                icon = roadmapIcon,
-                contentDescription = when (currentLang) {
-                    "ar" -> "تقدم المسار"
-                    "fr" -> "Progression"
-                    else -> "Roadmap Progress"
-                },
-                accentColor = roadmapAccent,
-                isDarkTheme = isDarkTheme,
-                layoutDirection = appDir,
-                progressFraction = clampedProgress,
-                onClick = onProgressClick,
-                modifier = Modifier
-                    .weight(1.08f)
-                    .testTag("roadmap_header_progress_btn")
-            )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(roadmapAccent.copy(alpha = if (isDarkTheme) 0.15f else 0.12f))
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "$progressPercent%",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = PlusJakartaSans,
+                            color = roadmapAccent
+                        )
+                    }
+                }
 
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .fillMaxHeight(0.52f)
-                    .background(dividerColor)
-            )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(if (isDarkTheme) Color.White.copy(alpha = 0.10f) else Color(0xFFE2E8F0))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(clampedProgress)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(roadmapAccent, ElectricMint.copy(alpha = 0.9f))
+                                )
+                            )
+                    )
+                }
+            }
 
-            // RIGHT: XP Logs
-            HubSwitcherSegment(
-                selected = activeDestination == RoadmapHubDestination.XP_LOGS,
-                label = "Xp Logs",
-                icon = Icons.Default.History,
-                contentDescription = if (isAr) "سجل XP" else "Xp Logs",
-                accentColor = xpLogsAccent,
-                isDarkTheme = isDarkTheme,
-                layoutDirection = appDir,
-                onClick = onXpLogsClick,
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag("roadmap_header_xp_logs_btn")
-            )
+            // 2. Obsidian Portal Mode Switcher + Expanding Liquid Glass Navigation Sheet
+            Box {
+                Row(
+                    modifier = Modifier
+                        .minimumInteractiveComponentSize()
+                        .defaultMinSize(minHeight = 48.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(capsuleBg)
+                        .border(1.1.dp, portalBorder, RoundedCornerShape(18.dp))
+                        .clickable { menuExpanded = true }
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .testTag("roadmap_hub_menu_btn"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .background(activeAccent.copy(alpha = if (isDarkTheme) 0.18f else 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = activeIcon,
+                            contentDescription = when {
+                                isAr -> "تبديل عرض المسار والسجلات"
+                                isFr -> "Changer de vue"
+                                else -> "Switch Roadmap & Logs View"
+                            },
+                            tint = activeAccent,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+
+                    Text(
+                        text = activeModeLabel,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = PlusJakartaSans,
+                        color = if (isDarkTheme) Color(0xFFF1F5F9) else DayTextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Icon(
+                        imageVector = Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        tint = activeAccent,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .rotate(chevronRotation)
+                    )
+                }
+
+                val menuBg = if (isDarkTheme) Color(0xF60A101E) else Color(0xFAFFFFFF)
+                val menuBorder = if (isDarkTheme) Color(0x4D38BDF8) else Color(0xFFCBD5E1)
+                val dividerTone = if (isDarkTheme) Color(0x20FFFFFF) else Color(0xFFE2E8F0)
+
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    offset = DpOffset(x = 0.dp, y = 8.dp),
+                    modifier = Modifier
+                        .width(268.dp)
+                        .background(menuBg)
+                        .border(1.15.dp, menuBorder, RoundedCornerShape(16.dp))
+                        .testTag("roadmap_hub_menu")
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
+                    ) {
+                        Text(
+                            text = when {
+                                isAr -> "التنقل السريع للمسار"
+                                isFr -> "Navigation du Portail"
+                                else -> "Obsidian Hub Navigation"
+                            },
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+
+                        HorizontalDivider(color = dividerTone)
+
+                        PortalMenuOptionRow(
+                            title = when {
+                                isAr -> "المسار والمستوى (LVL $safeStation/${TaskPools.TOTAL_STATIONS_COUNT})"
+                                isFr -> "Parcours & Niv $safeStation/${TaskPools.TOTAL_STATIONS_COUNT}"
+                                else -> "Roadmap & LVL $safeStation/${TaskPools.TOTAL_STATIONS_COUNT}"
+                            },
+                            subtitle = when {
+                                isAr -> if (activeDestination == RoadmapHubDestination.ROADMAP) "عرض تفاصيل المستوى والقفز السريع" else "العودة إلى المسار والمهام"
+                                isFr -> if (activeDestination == RoadmapHubDestination.ROADMAP) "Voir détails & saut rapide" else "Ouvrir la Feuille de route"
+                                else -> if (activeDestination == RoadmapHubDestination.ROADMAP) "View level details & quick-jump" else "Open 700-station roadmap & tasks"
+                            },
+                            icon = Icons.Default.Timeline,
+                            accentColor = roadmapAccent,
+                            selected = activeDestination == RoadmapHubDestination.ROADMAP,
+                            isDarkTheme = isDarkTheme,
+                            testTag = "roadmap_menu_item_roadmap",
+                            onClick = {
+                                menuExpanded = false
+                                onProgressClick()
+                            }
+                        )
+
+                        PortalMenuOptionRow(
+                            title = when {
+                                isAr -> "دفتر المهام (Tasks Ledger)"
+                                isFr -> "Registre des missions"
+                                else -> "Tasks Ledger"
+                            },
+                            subtitle = when {
+                                isAr -> "${completedIds.size} / ${TaskPools.TOTAL_TASKS_COUNT} مهمة مسجلة"
+                                isFr -> "${completedIds.size} / ${TaskPools.TOTAL_TASKS_COUNT} missions"
+                                else -> "${completedIds.size} / ${TaskPools.TOTAL_TASKS_COUNT} missions logged"
+                            },
+                            icon = Icons.Default.MenuBook,
+                            accentColor = ledgerAccent,
+                            selected = activeDestination == RoadmapHubDestination.TASKS_LEDGER,
+                            isDarkTheme = isDarkTheme,
+                            testTag = "roadmap_menu_item_ledger",
+                            onClick = {
+                                menuExpanded = false
+                                onTasksLedgerClick()
+                            }
+                        )
+
+                        PortalMenuOptionRow(
+                            title = when {
+                                isAr -> "سجل نقاط الخبرة (Xp Logs)"
+                                isFr -> "Journaux XP"
+                                else -> "Xp Logs"
+                            },
+                            subtitle = when {
+                                isAr -> "${xpHistory.size} عملية • ${nf.format(totalXp.coerceAtLeast(0L))} XP"
+                                isFr -> "${xpHistory.size} entrées • ${nf.format(totalXp.coerceAtLeast(0L))} XP"
+                                else -> "${xpHistory.size} entries • ${nf.format(totalXp.coerceAtLeast(0L))} XP"
+                            },
+                            icon = Icons.Default.History,
+                            accentColor = xpLogsAccent,
+                            selected = activeDestination == RoadmapHubDestination.XP_LOGS,
+                            isDarkTheme = isDarkTheme,
+                            testTag = "roadmap_menu_item_xp_logs",
+                            onClick = {
+                                menuExpanded = false
+                                onXpLogsClick()
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun HubSwitcherSegment(
-    selected: Boolean,
-    label: String,
+private fun PortalMenuOptionRow(
+    title: String,
+    subtitle: String,
     icon: ImageVector,
-    contentDescription: String,
     accentColor: Color,
+    selected: Boolean,
     isDarkTheme: Boolean,
-    layoutDirection: LayoutDirection,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    progressFraction: Float? = null
+    testTag: String,
+    onClick: () -> Unit
 ) {
-    val bgColor by animateColorAsState(
-        targetValue = when {
-            selected -> accentColor.copy(alpha = if (isDarkTheme) 0.18f else 0.14f)
-            else -> Color.Transparent
-        },
-        animationSpec = tween(220, easing = FastOutSlowInEasing),
-        label = "hub_segment_bg"
-    )
-    val borderColor by animateColorAsState(
-        targetValue = when {
-            selected -> accentColor.copy(alpha = if (isDarkTheme) 0.85f else 0.78f)
-            else -> Color.Transparent
-        },
-        animationSpec = tween(220, easing = FastOutSlowInEasing),
-        label = "hub_segment_border"
-    )
-    val contentColor by animateColorAsState(
-        targetValue = when {
-            selected -> accentColor
-            isDarkTheme -> Color(0xFFB8C4D6)
-            else -> DayTextSecondary
-        },
-        animationSpec = tween(200, easing = FastOutSlowInEasing),
-        label = "hub_segment_content"
-    )
+    val bgColor = when {
+        selected -> accentColor.copy(alpha = if (isDarkTheme) 0.19f else 0.14f)
+        isDarkTheme -> Color(0x16FFFFFF)
+        else -> Color(0xFFF8FAFC)
+    }
+    val borderColor = when {
+        selected -> accentColor.copy(alpha = 0.85f)
+        isDarkTheme -> Color(0x1EFFFFFF)
+        else -> Color(0xFFE2E8F0)
+    }
 
-    Box(
-        modifier = modifier
-            .defaultMinSize(minWidth = 48.dp, minHeight = 46.dp)
-            .clip(RoundedCornerShape(20.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .minimumInteractiveComponentSize()
+            .clip(RoundedCornerShape(14.dp))
             .background(bgColor)
-            .border(1.1.dp, borderColor, RoundedCornerShape(20.dp))
+            .border(if (selected) 1.25.dp else 0.9.dp, borderColor, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 10.dp, vertical = 9.dp)
+            .testTag(testTag),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = contentDescription,
-                        tint = if (selected) accentColor else accentColor.copy(alpha = 0.78f),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = label,
-                        fontSize = 11.sp,
-                        fontWeight = if (selected) FontWeight.Black else FontWeight.Bold,
-                        fontFamily = PlusJakartaSans,
-                        color = contentColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(accentColor.copy(alpha = if (isDarkTheme) 0.18f else 0.14f))
+                .border(0.9.dp, accentColor.copy(alpha = 0.52f), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = accentColor,
+                modifier = Modifier.size(18.dp)
+            )
+        }
 
-                if (progressFraction != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.72f)
-                            .height(2.5.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(
-                                if (isDarkTheme) Color.White.copy(alpha = 0.12f)
-                                else Color(0xFFE2E8F0)
-                            )
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(progressFraction)
-                                .height(2.5.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(accentColor)
-                        )
-                    }
-                }
-            }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(
+                text = title,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold,
+                fontFamily = PlusJakartaSans,
+                color = if (selected) accentColor else if (isDarkTheme) Color.White else DayTextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        if (selected) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = accentColor,
+                modifier = Modifier.size(16.dp)
+            )
         }
     }
 }
@@ -371,6 +572,7 @@ fun RoadmapProgressHeader(
     biomeState: RoadmapBiomeState = roadmapBiomeStateForStation(currentStationId.toFloat().coerceAtLeast(1f)),
     currentLang: String = if (isAr) "ar" else "en",
     isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    onOpenTasksLedger: (() -> Unit)? = null,
     onOpenXpLogs: (() -> Unit)? = null
 ) {
     var showXpGuideDialog by remember { mutableStateOf(false) }
@@ -704,40 +906,87 @@ fun RoadmapProgressHeader(
                     )
                 }
 
-                if (onOpenXpLogs != null) {
+                if (onOpenTasksLedger != null || onOpenXpLogs != null) {
                     Spacer(modifier = Modifier.height(10.dp))
+                    val emeraldAccent = if (isDarkTheme) ElectricMint else DayEmerald
                     val violetAccent = if (isDarkTheme) NeonViolet else DayPurple
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .defaultMinSize(minHeight = 42.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(violetAccent.copy(alpha = if (isDarkTheme) 0.14f else 0.10f))
-                            .border(1.dp, violetAccent.copy(alpha = 0.52f), RoundedCornerShape(14.dp))
-                            .clickable(onClick = onOpenXpLogs)
-                            .padding(horizontal = 12.dp, vertical = 9.dp)
-                            .testTag("btn_popup_switch_xp_logs"),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.History,
-                            contentDescription = null,
-                            tint = violetAccent,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = when (currentLang) {
-                                "ar" -> "الانتقال إلى سجل نقاط XP (Xp Logs)"
-                                "fr" -> "Ouvrir les journaux XP"
-                                else -> "Switch to Xp Logs"
-                            },
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = PlusJakartaSans,
-                            color = violetAccent
-                        )
+                        if (onOpenTasksLedger != null) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .defaultMinSize(minHeight = 44.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(emeraldAccent.copy(alpha = if (isDarkTheme) 0.14f else 0.10f))
+                                    .border(1.dp, emeraldAccent.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                                    .clickable(onClick = onOpenTasksLedger)
+                                    .padding(horizontal = 10.dp, vertical = 9.dp)
+                                    .testTag("btn_popup_switch_tasks_ledger"),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MenuBook,
+                                    contentDescription = null,
+                                    tint = emeraldAccent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = when (currentLang) {
+                                        "ar" -> "دفتر المهام"
+                                        "fr" -> "Registre"
+                                        else -> "Tasks Ledger"
+                                    },
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = PlusJakartaSans,
+                                    color = emeraldAccent,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        if (onOpenXpLogs != null) {
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .defaultMinSize(minHeight = 44.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(violetAccent.copy(alpha = if (isDarkTheme) 0.14f else 0.10f))
+                                    .border(1.dp, violetAccent.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                                    .clickable(onClick = onOpenXpLogs)
+                                    .padding(horizontal = 10.dp, vertical = 9.dp)
+                                    .testTag("btn_popup_switch_xp_logs"),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.History,
+                                    contentDescription = null,
+                                    tint = violetAccent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = when (currentLang) {
+                                        "ar" -> "سجل XP"
+                                        "fr" -> "Journaux XP"
+                                        else -> "Xp Logs"
+                                    },
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = PlusJakartaSans,
+                                    color = violetAccent,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -85,6 +85,7 @@ import com.example.ui.theme.DayPurple
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -419,11 +420,17 @@ private fun InventoryHubContent(
     onSelectCategory: (InventoryCategory) -> Unit,
     onShowTooltip: (InventoryTooltipSpec) -> Unit
 ) {
+    val scaffoldPadding = LocalScaffoldContentPadding.current
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .testTag("inventory_hub"),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = scaffoldPadding.calculateTopPadding() + 12.dp,
+            bottom = scaffoldPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Subtle 1-second long-press hint row
@@ -739,6 +746,6 @@ private fun InventoryHubContent(
             )
         }
 
-        item { Spacer(modifier = Modifier.height(72.dp)) }
+        item { Spacer(modifier = Modifier.height(12.dp)) }
     }
 }

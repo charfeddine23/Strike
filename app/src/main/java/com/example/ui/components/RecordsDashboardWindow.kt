@@ -78,6 +78,7 @@ import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
 import com.example.ui.theme.DayPurple
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -156,7 +157,8 @@ fun RecordsDashboardExpandablePanel(
             )
         }
 
-        // Panel expanding downwards directly below the Dashboard button
+        // Panel expanding downwards directly below the transparent TopBar
+        val topBarClearance = LocalScaffoldContentPadding.current.calculateTopPadding()
         AnimatedVisibility(
             visible = visible,
             enter = fadeIn(animationSpec = tween(180)) + expandVertically(
@@ -167,7 +169,9 @@ fun RecordsDashboardExpandablePanel(
                 shrinkTowards = Alignment.Top,
                 animationSpec = tween(durationMillis = 210, easing = FastOutSlowInEasing)
             ),
-            modifier = Modifier.align(Alignment.TopCenter),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = topBarClearance),
             label = "dashboard_dropdown_expand"
         ) {
             Box(

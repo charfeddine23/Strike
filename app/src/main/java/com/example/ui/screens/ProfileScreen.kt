@@ -110,6 +110,7 @@ import com.example.ui.theme.DayPurple
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -196,10 +197,13 @@ fun ProfileScreen(
         label = "glow_pulse"
     )
 
+    val scaffoldPadding = LocalScaffoldContentPadding.current
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp)
+            .padding(top = scaffoldPadding.calculateTopPadding())
     ) {
         // Top Bar
         Row(
@@ -247,7 +251,7 @@ fun ProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("profile_lazy_list"),
-            contentPadding = PaddingValues(bottom = 80.dp),
+            contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // 1. PROFILE HEADER COMPONENT

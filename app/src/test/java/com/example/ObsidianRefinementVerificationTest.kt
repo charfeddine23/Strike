@@ -228,33 +228,80 @@ class ObsidianRefinementVerificationTest {
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 
-        // Unified Obsidian hub switcher must preserve exact LTR order: Tasks Ledger | LVL X/700 | Xp Logs
+        // Redesigned Split Command Strip: Living LVL X/700 Capsule + Expanding Obsidian Portal Menu Trigger
         composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed()
-        val ledgerBounds = composeRule.onNodeWithTag("roadmap_header_ledger_btn").assertIsDisplayed().getBoundsInRoot()
         val progressBounds = composeRule.onNodeWithTag("roadmap_header_progress_btn").assertIsDisplayed().getBoundsInRoot()
-        val xpLogsBounds = composeRule.onNodeWithTag("roadmap_header_xp_logs_btn").assertIsDisplayed().getBoundsInRoot()
-        assertTrue(ledgerBounds.right <= progressBounds.left && progressBounds.right <= xpLogsBounds.left)
+        val menuBtnBounds = composeRule.onNodeWithTag("roadmap_hub_menu_btn").assertIsDisplayed().getBoundsInRoot()
+        assertTrue(progressBounds.right <= menuBtnBounds.left || menuBtnBounds.right <= progressBounds.left)
         composeRule.onNodeWithTag("roadmap_header_progress_btn")
             .assertTextContains("LVL", substring = true)
 
-        // Tap LVL X/700 -> popup appears -> tap Switch to Xp Logs -> opens Xp Logs directly
+        // Tap LVL X/700 -> popup appears with both Tasks Ledger & Xp Logs quick actions -> tap Xp Logs -> opens Xp Logs
         composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("roadmap_progress_popup").assertIsDisplayed()
-        composeRule.onNodeWithTag("btn_popup_switch_xp_logs").performClick()
+        composeRule.onNodeWithTag("btn_popup_switch_tasks_ledger").assertIsDisplayed()
+        composeRule.onNodeWithTag("btn_popup_switch_xp_logs").assertIsDisplayed().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("xp_logs_screen").assertIsDisplayed()
 
-        // From Xp Logs, unified switcher stays active -> switch to Tasks Ledger cleanly
+        // From Xp Logs, open Portal Menu -> shows all 3 destinations -> switch to Tasks Ledger cleanly
         composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed()
-        composeRule.onNodeWithTag("roadmap_header_ledger_btn").performClick()
+        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("roadmap_hub_menu").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_menu_item_roadmap").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_menu_item_xp_logs").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_menu_item_ledger").assertIsDisplayed().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()
 
-        // From Tasks Ledger, tap center LVL X/700 segment -> returns straight back to RoadmapScreen
+        // From Tasks Ledger, tap LVL X/700 capsule -> returns straight back to RoadmapScreen
         composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed()
         composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
+    }
+
+    @Test
+    fun topAndBottomBars_maintainTransparentOuterContainerAndFullBleedClearanceAcrossAllPages() {
+        composeRule.waitForIdle()
+
+        // Dashboard
+        val dashTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        val dashBottomBarBounds = composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        val searchBounds = composeRule.onNodeWithTag("search_input").assertIsDisplayed().getBoundsInRoot()
+        val fabBounds = composeRule.onNodeWithTag("add_record_fab").assertIsDisplayed().getBoundsInRoot()
+        assertTrue("Dashboard top controls must start clear of TopBar", searchBounds.top >= dashTopBarBounds.bottom)
+        assertTrue("Dashboard FAB must sit cleanly above BottomBar", fabBounds.bottom <= dashBottomBarBounds.top)
+
+        // Inventory
+        composeRule.onNodeWithTag("nav_tab_inventory").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
+        composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
+        composeRule.onNodeWithTag("inventory_screen").assertIsDisplayed()
+
+        // Strike
+        composeRule.onNodeWithTag("nav_tab_strike").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
+        composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
+
+        // Comparison
+        composeRule.onNodeWithTag("nav_tab_compare").performClick()
+        composeRule.waitForIdle()
+        val cmpTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
+        val selectorABounds = composeRule.onNodeWithTag("selector_person_a").assertIsDisplayed().getBoundsInRoot()
+        assertTrue("Comparison top selectors must start clear of TopBar", selectorABounds.top >= cmpTopBarBounds.bottom)
+
+        // Roadmap / Tasks
+        composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
+        composeRule.waitForIdle()
+        val rmTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
+        val hubSwitcherBounds = composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed().getBoundsInRoot()
+        assertTrue("Roadmap command bar must start clear of TopBar", hubSwitcherBounds.top >= rmTopBarBounds.bottom)
     }
 }

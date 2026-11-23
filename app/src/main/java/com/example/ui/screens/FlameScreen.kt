@@ -133,6 +133,7 @@ import com.example.ui.theme.DayRose
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -333,11 +334,18 @@ fun FlameScreen(
         )
     }
 
+    val scaffoldPadding = LocalScaffoldContentPadding.current
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .testTag("flame_lazy_column"),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = scaffoldPadding.calculateTopPadding() + 16.dp,
+            bottom = scaffoldPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 1. Hero Flame Stage Card (Placed at the very top of the Flame Screen!)

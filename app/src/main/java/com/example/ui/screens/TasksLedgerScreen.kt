@@ -72,6 +72,7 @@ import com.example.ui.theme.DayPurple
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -184,6 +185,8 @@ fun TasksLedgerScreen(
     val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
     val mutedColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
 
+    val scaffoldPadding = LocalScaffoldContentPadding.current
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -197,7 +200,11 @@ fun TasksLedgerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 6.dp)
+                .padding(
+                    start = 14.dp,
+                    end = 14.dp,
+                    top = scaffoldPadding.calculateTopPadding() + 6.dp
+                )
         ) {
             // 1. TOP TITLE BAR: Back Button + "دفتر المهام" + Count Pill
             Row(
@@ -533,7 +540,10 @@ fun TasksLedgerScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .testTag("tasks_ledger_list"),
-                        contentPadding = PaddingValues(top = 2.dp, bottom = 20.dp),
+                        contentPadding = PaddingValues(
+                            top = 2.dp,
+                            bottom = scaffoldPadding.calculateBottomPadding() + 20.dp
+                        ),
                         verticalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
                         items(filteredEntries, key = { it.task.id }) { entry ->

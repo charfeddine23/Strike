@@ -135,6 +135,7 @@ import com.example.ui.theme.DayPurple
 import com.example.ui.theme.DayRose
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -180,10 +181,17 @@ fun DashboardScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var expandedCardIds by remember { mutableStateOf(setOf<Long>()) }
 
+    val scaffoldPadding = LocalScaffoldContentPadding.current
+
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = scaffoldPadding.calculateTopPadding() + 10.dp,
+                bottom = scaffoldPadding.calculateBottomPadding() + 12.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
 
@@ -581,7 +589,12 @@ fun DashboardScreen(
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(20.dp)
+                .padding(
+                    start = 20.dp,
+                    top = 20.dp,
+                    end = 20.dp,
+                    bottom = scaffoldPadding.calculateBottomPadding() + 16.dp
+                )
                 .testTag("add_record_fab"),
             containerColor = accentCyan,
             contentColor = if (isDarkTheme) Color(0xFF03141F) else Color.White,

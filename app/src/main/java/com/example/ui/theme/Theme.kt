@@ -1,13 +1,16 @@
 package com.example.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 enum class AppThemeMode(val prefValue: String) {
     SYSTEM("system"),
@@ -22,6 +25,7 @@ enum class AppThemeMode(val prefValue: String) {
 }
 
 val LocalAppDarkTheme = staticCompositionLocalOf { true }
+val LocalScaffoldContentPadding = compositionLocalOf { PaddingValues(0.dp) }
 
 private val DarkColorScheme = darkColorScheme(
     primary = NeonCyan,

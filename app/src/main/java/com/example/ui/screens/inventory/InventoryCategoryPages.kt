@@ -78,6 +78,7 @@ import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
 import com.example.ui.theme.DayPurple
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -204,11 +205,17 @@ fun ShieldsSubPage(
         )
     }
 
+    val scaffoldPadding = LocalScaffoldContentPadding.current
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .testTag("inv_subpage_shields"),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = scaffoldPadding.calculateTopPadding() + 12.dp,
+            bottom = scaffoldPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
@@ -317,12 +324,18 @@ fun KeysSubPage(
         }
     }
     val totalKeys = woodenKeys + bronzeKeys + silverKeys
+    val scaffoldPadding = LocalScaffoldContentPadding.current
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .testTag("inv_subpage_keys"),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = scaffoldPadding.calculateTopPadding() + 12.dp,
+            bottom = scaffoldPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
@@ -463,12 +476,18 @@ fun PotionsSubPage(
         }
     }
     val ownedTotal = pulseElixirCount + shadowSerumCount + gabrielDropletCount + cryoInfusionCount + eternalRebirthCount
+    val scaffoldPadding = LocalScaffoldContentPadding.current
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .testTag("inv_subpage_potions"),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = scaffoldPadding.calculateTopPadding() + 12.dp,
+            bottom = scaffoldPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
@@ -698,11 +717,18 @@ fun TitlesSubPage(
         ProfileMasterInventory.MASTER_TITLES + ProfileMasterInventory.MILESTONE_PEAK_TITLE
     }
 
+    val scaffoldPadding = LocalScaffoldContentPadding.current
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .testTag("inv_subpage_titles"),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = scaffoldPadding.calculateTopPadding() + 12.dp,
+            bottom = scaffoldPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
@@ -1920,12 +1946,18 @@ fun AvatarsSubPage(
     val context = LocalContext.current
     val view = LocalView.current
     val allGameAvatars = ProfileMasterInventory.MASTER_AVATARS
+    val scaffoldPadding = LocalScaffoldContentPadding.current
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .testTag("inv_subpage_avatars"),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = scaffoldPadding.calculateTopPadding() + 12.dp,
+            bottom = scaffoldPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {

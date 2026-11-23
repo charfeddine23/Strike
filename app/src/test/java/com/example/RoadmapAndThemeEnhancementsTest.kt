@@ -169,13 +169,12 @@ class RoadmapAndThemeEnhancementsTest {
         assertEquals(0, composeRule.onAllNodesWithText("500 Stations, XP Progression & Egg Rewards", substring = true).fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("roadmap_back_btn").fetchSemanticsNodes().size)
 
-        // 2. Tasks Ledger (left), Progress trigger (center), Xp Logs (right)
-        val ledgerBounds = composeRule.onNodeWithTag("roadmap_header_ledger_btn").assertIsDisplayed().getBoundsInRoot()
+        // 2. Living Level pill + Obsidian Portal Menu trigger
         val progressBtnBounds = composeRule.onNodeWithTag("roadmap_header_progress_btn").assertIsDisplayed().getBoundsInRoot()
-        val xpLogsBounds = composeRule.onNodeWithTag("roadmap_header_xp_logs_btn").assertIsDisplayed().getBoundsInRoot()
+        val portalMenuBtnBounds = composeRule.onNodeWithTag("roadmap_hub_menu_btn").assertIsDisplayed().getBoundsInRoot()
         assertTrue(
-            "Expected Tasks Ledger -> Progress Button -> Xp Logs left-to-right",
-            ledgerBounds.right <= progressBtnBounds.left && progressBtnBounds.right <= xpLogsBounds.left
+            "Expected Level Pill and Portal Switcher Trigger without overlap",
+            progressBtnBounds.right <= portalMenuBtnBounds.left || portalMenuBtnBounds.right <= progressBtnBounds.left
         )
         // Progress card is NOT inline before opening the floating popup
         assertEquals(0, composeRule.onAllNodesWithTag("roadmap_progress_popup").fetchSemanticsNodes().size)
@@ -213,8 +212,11 @@ class RoadmapAndThemeEnhancementsTest {
         assertEquals(0, composeRule.onAllNodesWithText("Cannot be skipped with keys", substring = true).fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithText("غير قابلة للتجاوز بالمفاتيح", substring = true).fetchSemanticsNodes().size)
 
-        // 4. Open Xp Logs screen from right header button & verify earned XP events + reasons
-        composeRule.onNodeWithTag("roadmap_header_xp_logs_btn").performClick()
+        // 4. Open Xp Logs screen via Obsidian Portal Menu & verify earned XP events + reasons
+        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("roadmap_hub_menu").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_menu_item_xp_logs").assertIsDisplayed().performClick()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("top_bar_settings_btn").assertIsDisplayed()
@@ -233,8 +235,10 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
 
-        // 5. Open Tasks Ledger from left header button -> topBar also stays visible
-        composeRule.onNodeWithTag("roadmap_header_ledger_btn").performClick()
+        // 5. Open Tasks Ledger via Obsidian Portal Menu -> topBar also stays visible
+        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("roadmap_menu_item_ledger").assertIsDisplayed().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("top_bar_settings_btn").assertIsDisplayed()
         composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()

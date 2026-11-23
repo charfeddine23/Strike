@@ -105,6 +105,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -143,6 +144,7 @@ import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
 import com.example.ui.theme.DayTextTertiary
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -294,6 +296,8 @@ fun RoadmapScreen(
     val tabAquaAccent = if (isDarkTheme) NeonAqua else DayCyan
     val tabEliteAccent = if (isDarkTheme) NeonAmber else DayOrange
 
+    val scaffoldPadding = LocalScaffoldContentPadding.current
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -314,7 +318,11 @@ fun RoadmapScreen(
             )
         }
 
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = scaffoldPadding.calculateTopPadding())
+        ) {
             // TOP QUICK-ACTION ROW & NAVIGATION PILLS
             Column(
                 modifier = Modifier
@@ -450,6 +458,7 @@ fun RoadmapScreen(
                             currentStationId = currentStationId,
                             currentLang = currentLang,
                             isDarkTheme = isDarkTheme,
+                            bottomInset = scaffoldPadding.calculateBottomPadding(),
                             onClaimStation = { stationId ->
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                 view.playSoundEffect(SoundEffectConstants.CLICK)
@@ -731,7 +740,7 @@ fun RoadmapScreen(
                                     .fillMaxSize()
                                     .nestedScroll(eternalHeaderNestedScroll)
                                     .testTag("tasks_lazy_list"),
-                                contentPadding = PaddingValues(bottom = 48.dp),
+                                contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 24.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 items(currentTasks, key = { it.id }) { task ->
@@ -801,6 +810,11 @@ fun RoadmapScreen(
                         currentLang = currentLang,
                         biomeState = viewportBiomeState,
                         isDarkTheme = isDarkTheme,
+                        onOpenTasksLedger = {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            showRoadmapProgressDialog = false
+                            onOpenTasksLedger()
+                        },
                         onOpenXpLogs = {
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                             showRoadmapProgressDialog = false
@@ -871,6 +885,7 @@ private fun RoadmapStationsTabContent(
     currentStationId: Int,
     currentLang: String,
     isDarkTheme: Boolean,
+    bottomInset: Dp = 0.dp,
     onClaimStation: (Int) -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "roadmap_pulse")
@@ -935,7 +950,7 @@ private fun RoadmapStationsTabContent(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(top = 8.dp, bottom = 72.dp),
+            contentPadding = PaddingValues(top = 8.dp, bottom = bottomInset + 24.dp),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             itemsIndexed(stations, key = { _, station -> station.id }) { index, station ->

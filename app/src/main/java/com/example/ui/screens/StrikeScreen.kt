@@ -80,6 +80,7 @@ import com.example.ui.theme.DayOrange
 import com.example.ui.theme.DayPurple
 import com.example.ui.theme.DayRose
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -125,10 +126,17 @@ fun StrikeScreen(
     var showStrikeTargetPicker by remember { mutableStateOf(false) }
     var pendingDeleteEvent by remember { mutableStateOf<StrikeEvent?>(null) }
 
+    val scaffoldPadding = LocalScaffoldContentPadding.current
+
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                top = scaffoldPadding.calculateTopPadding() + 16.dp,
+                bottom = scaffoldPadding.calculateBottomPadding() + 16.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // ==========================================

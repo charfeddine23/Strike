@@ -75,6 +75,7 @@ import com.example.ui.theme.DayPurple
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -103,10 +104,16 @@ fun ComparisonScreen(
 
     // 0 = Person A picker, 1 = Person B picker
     var activePickerSlot by remember { mutableStateOf<Int?>(null) }
+    val scaffoldPadding = LocalScaffoldContentPadding.current
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = scaffoldPadding.calculateTopPadding() + 16.dp,
+            bottom = scaffoldPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Person Selectors & Matchup Header

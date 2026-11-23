@@ -133,6 +133,7 @@ import com.example.ui.theme.DayTextSecondary
 import com.example.ui.theme.LightNavBg
 import com.example.ui.theme.LightNavBorder
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
@@ -414,12 +415,12 @@ fun LiquidGlassApp(
                 )
             }
         ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .clipToBounds()
-            ) {
+            CompositionLocalProvider(LocalScaffoldContentPadding provides innerPadding) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clipToBounds()
+                ) {
             AnimatedContent(
                 targetState = currentScreen,
                 modifier = Modifier
@@ -544,7 +545,8 @@ fun LiquidGlassApp(
                 onDismiss = { showRecordsDashboardDialog = false },
                 isDarkTheme = isDarkTheme
             )
-        }
+                }
+            }
         }
 
         // Right-Side Partial Slide-Out Settings Drawer (overlays Scaffold edge-to-edge)
@@ -669,39 +671,19 @@ fun LiquidGlassTopBar(
     val equippedAvatar by com.example.data.profile.ProfileManager.equippedAvatar.collectAsStateWithLifecycle()
     val equippedTitle by com.example.data.profile.ProfileManager.equippedTitle.collectAsStateWithLifecycle()
 
-    val topScrimBrush = if (isDarkTheme) {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color(0xF0000000),
-                Color(0xA8020408),
-                Color(0x4204070D),
-                Color.Transparent
-            )
-        )
-    } else {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color(0xEAF6FAFF),
-                Color(0x9CEEF4FA),
-                Color(0x36EEF4FA),
-                Color.Transparent
-            )
-        )
-    }
-
     val topGlassFill = if (isDarkTheme) {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0x28FFFFFF),
-                Color(0x140A101E),
-                Color(0x1C050810)
+                Color(0xAE0D1424),
+                Color(0x9C070C17),
+                Color(0xAD040811)
             )
         )
     } else {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0xDCFFFFFF),
-                Color(0xB4F1F6FC)
+                Color(0xE8FFFFFF),
+                Color(0xD2F1F6FC)
             )
         )
     }
@@ -709,9 +691,9 @@ fun LiquidGlassTopBar(
     val topGlassBorder = if (isDarkTheme) {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0x58FFFFFF),
-                Color(0x1EFFFFFF),
-                Color(0x2C38BDF8)
+                Color(0x62FFFFFF),
+                Color(0x22FFFFFF),
+                Color(0x3238BDF8)
             )
         )
     } else {
@@ -727,15 +709,15 @@ fun LiquidGlassTopBar(
     val telemetryPillFill = if (isDarkTheme) {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0x26FFFFFF),
-                Color(0x1A091222)
+                Color(0x2EFFFFFF),
+                Color(0x1E0A1426)
             )
         )
     } else {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0xD8FFFFFF),
-                Color(0xA6E6F2FA)
+                Color(0xDCFFFFFF),
+                Color(0xACE6F2FA)
             )
         )
     }
@@ -743,8 +725,8 @@ fun LiquidGlassTopBar(
     val telemetryPillBorder = if (isDarkTheme) {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0x4DFFFFFF),
-                Color(0x2438BDF8)
+                Color(0x52FFFFFF),
+                Color(0x2838BDF8)
             )
         )
     } else {
@@ -759,9 +741,10 @@ fun LiquidGlassTopBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(topScrimBrush)
+            .background(Color.Transparent)
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(horizontal = 12.dp, vertical = 6.dp)
+            .testTag("top_bar_outer_container")
     ) {
         Row(
             modifier = Modifier
@@ -1035,39 +1018,19 @@ fun LiquidGlassBottomBar(
     val compareColor = if (isDarkTheme) NeonViolet else DayPurple
     val roadmapColor = if (isDarkTheme) NeonAmber else DayOrange
 
-    val bottomScrimBrush = if (isDarkTheme) {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color.Transparent,
-                Color(0x4D020408),
-                Color(0xC4010306),
-                Color(0xF5000000)
-            )
-        )
-    } else {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color.Transparent,
-                Color(0x45EEF4FA),
-                Color(0xB8EEF4FA),
-                Color(0xF0F6FAFF)
-            )
-        )
-    }
-
     val navGlassFill = if (isDarkTheme) {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0x2BFFFFFF),
-                Color(0x160C1424),
-                Color(0x2204070E)
+                Color(0xB20D1526),
+                Color(0xA6080E1B),
+                Color(0xBC040811)
             )
         )
     } else {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0xDCFFFFFF),
-                Color(0xB8F1F6FC)
+                Color(0xEBFFFFFF),
+                Color(0xD6F1F6FC)
             )
         )
     }
@@ -1075,9 +1038,9 @@ fun LiquidGlassBottomBar(
     val navGlassBorder = if (isDarkTheme) {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0x62FFFFFF),
-                Color(0x20FFFFFF),
-                Color(0x3638BDF8)
+                Color(0x68FFFFFF),
+                Color(0x22FFFFFF),
+                Color(0x3C38BDF8)
             )
         )
     } else {
@@ -1093,9 +1056,10 @@ fun LiquidGlassBottomBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(bottomScrimBrush)
+            .background(Color.Transparent)
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 16.dp, vertical = 8.dp)
+            .testTag("bottom_bar_outer_container")
     ) {
         Row(
             modifier = Modifier

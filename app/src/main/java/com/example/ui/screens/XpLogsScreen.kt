@@ -75,6 +75,7 @@ import com.example.ui.theme.DayRose
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
 import com.example.ui.theme.LocalAppDarkTheme
+import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonViolet
@@ -126,6 +127,8 @@ fun XpLogsScreen(
     val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
     val descColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
 
+    val scaffoldPadding = LocalScaffoldContentPadding.current
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -139,7 +142,11 @@ fun XpLogsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 8.dp)
+                .padding(
+                    start = 14.dp,
+                    end = 14.dp,
+                    top = scaffoldPadding.calculateTopPadding() + 8.dp
+                )
         ) {
             // 1. TOP BAR
             Row(
@@ -386,7 +393,10 @@ fun XpLogsScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .testTag("xp_logs_list"),
-                        contentPadding = PaddingValues(top = 2.dp, bottom = 24.dp),
+                        contentPadding = PaddingValues(
+                            top = 2.dp,
+                            bottom = scaffoldPadding.calculateBottomPadding() + 24.dp
+                        ),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(filteredLogs, key = { it.id }) { entry ->
