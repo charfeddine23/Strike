@@ -212,16 +212,19 @@ class RoadmapAndThemeEnhancementsTest {
         assertEquals(0, composeRule.onAllNodesWithText("Cannot be skipped with keys", substring = true).fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithText("غير قابلة للتجاوز بالمفاتيح", substring = true).fetchSemanticsNodes().size)
 
-        // 4. Open Xp Logs screen via Obsidian Portal Menu & verify earned XP events + reasons
+        // 4. Tap-to-Change cycles cleanly: Roadmap -> Tasks Ledger -> Xp Logs -> Roadmap
         composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("roadmap_hub_menu").assertIsDisplayed()
-        composeRule.onNodeWithTag("roadmap_menu_item_xp_logs").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("top_bar_settings_btn").assertIsDisplayed()
+        composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("top_bar_settings_btn").assertIsDisplayed()
         composeRule.onNodeWithTag("xp_logs_screen").assertIsDisplayed()
-        composeRule.onNodeWithTag("xp_logs_title").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("xp_logs_title").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("xp_logs_back_btn").fetchSemanticsNodes().size)
         composeRule.onNode(
             hasTestTag("xp_logs_stat_total") and hasAnyChild(hasText("120", substring = true)),
             useUnmergedTree = true
@@ -230,15 +233,13 @@ class RoadmapAndThemeEnhancementsTest {
         assertTrue(composeRule.onAllNodesWithText("السبب:", substring = true).fetchSemanticsNodes().isNotEmpty())
         composeRule.onAllNodesWithText("السبب:", substring = true)[0].assertIsDisplayed()
 
-        // Back button returns to RoadmapScreen
-        composeRule.onNodeWithTag("xp_logs_back_btn").performClick()
+        // Tap Switch View from Xp Logs -> returns straight to RoadmapScreen
+        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
 
-        // 5. Open Tasks Ledger via Obsidian Portal Menu -> topBar also stays visible
+        // 5. Open Tasks Ledger via Tap-to-Change -> topBar also stays visible
         composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("roadmap_menu_item_ledger").assertIsDisplayed().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("top_bar_settings_btn").assertIsDisplayed()
         composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()

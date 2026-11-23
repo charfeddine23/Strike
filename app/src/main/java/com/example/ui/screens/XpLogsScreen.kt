@@ -20,10 +20,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
@@ -33,7 +31,6 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -124,7 +121,6 @@ fun XpLogsScreen(
     val violetTone = if (isDarkTheme) NeonViolet else DayPurple
     val emeraldTone = if (isDarkTheme) ElectricMint else DayEmerald
     val orangeTone = if (isDarkTheme) WarmFireOrange else DayOrange
-    val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
     val descColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
 
     val scaffoldPadding = LocalScaffoldContentPadding.current
@@ -145,91 +141,9 @@ fun XpLogsScreen(
                 .padding(
                     start = 14.dp,
                     end = 14.dp,
-                    top = scaffoldPadding.calculateTopPadding() + 8.dp
+                    top = scaffoldPadding.calculateTopPadding() + 6.dp
                 )
         ) {
-            // 1. TOP BAR
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    IconButton(
-                        onClick = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            onNavigateBack()
-                        },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(if (isDarkTheme) Color(0xBB161E31) else DayGlassSurface)
-                            .border(
-                                1.dp,
-                                if (isDarkTheme) Color(0x40FFFFFF) else Color(0xFFCBD5E1),
-                                CircleShape
-                            )
-                            .testTag("xp_logs_back_btn")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = if (isAr) "رجوع" else if (isFr) "Retour" else "Back",
-                            tint = titleColor,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.History,
-                            contentDescription = null,
-                            tint = violetTone,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Text(
-                            text = when {
-                                isAr -> "سجل نقاط XP (Xp Logs)"
-                                isFr -> "Journaux XP"
-                                else -> "Xp Logs"
-                            },
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = PlusJakartaSans,
-                            color = titleColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag("xp_logs_title")
-                        )
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(emeraldTone.copy(alpha = 0.14f))
-                        .border(1.dp, emeraldTone.copy(alpha = 0.65f), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                ) {
-                    Text(
-                        text = "${nf.format(totalXp.coerceAtLeast(0L))} XP",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = PlusJakartaSans,
-                        color = emeraldTone
-                    )
-                }
-            }
-
             // Unified Hub Switcher (Tasks Ledger <-> LVL X/700 <-> Xp Logs)
             ObsidianRoadmapHubSwitcher(
                 activeDestination = RoadmapHubDestination.XP_LOGS,

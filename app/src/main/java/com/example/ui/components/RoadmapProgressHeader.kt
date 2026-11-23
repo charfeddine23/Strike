@@ -1,13 +1,24 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,33 +38,30 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Female
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.MilitaryTech
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -68,7 +76,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -77,7 +84,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -144,18 +150,6 @@ fun ObsidianRoadmapHubSwitcher(
     val ledgerAccent = if (isDarkTheme) ElectricMint else DayEmerald
     val xpLogsAccent = if (isDarkTheme) NeonViolet else DayPurple
 
-    val totalXp by RoadmapManager.totalXp.collectAsStateWithLifecycle()
-    val xpHistory by RoadmapManager.xpHistory.collectAsStateWithLifecycle()
-    val completedIds by RoadmapManager.completedTaskIds.collectAsStateWithLifecycle()
-    val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
-
-    var menuExpanded by remember { mutableStateOf(false) }
-    val chevronRotation by animateFloatAsState(
-        targetValue = if (menuExpanded) 180f else 0f,
-        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
-        label = "portal_chevron_rotation"
-    )
-
     val activeAccent = when (activeDestination) {
         RoadmapHubDestination.ROADMAP -> roadmapAccent
         RoadmapHubDestination.TASKS_LEDGER -> ledgerAccent
@@ -163,13 +157,13 @@ fun ObsidianRoadmapHubSwitcher(
     }
     val activeIcon = when (activeDestination) {
         RoadmapHubDestination.ROADMAP -> Icons.Default.Explore
-        RoadmapHubDestination.TASKS_LEDGER -> Icons.Default.MenuBook
+        RoadmapHubDestination.TASKS_LEDGER -> Icons.AutoMirrored.Filled.MenuBook
         RoadmapHubDestination.XP_LOGS -> Icons.Default.History
     }
     val activeModeLabel = when (activeDestination) {
         RoadmapHubDestination.ROADMAP -> when {
-            isAr -> "السجلات"
-            isFr -> "Portail"
+            isAr -> "Switch View"
+            isFr -> "Changer vue"
             else -> "Switch View"
         }
         RoadmapHubDestination.TASKS_LEDGER -> when {
@@ -179,33 +173,50 @@ fun ObsidianRoadmapHubSwitcher(
         }
         RoadmapHubDestination.XP_LOGS -> "Xp Logs"
     }
+    val nextModeHint = when (activeDestination) {
+        RoadmapHubDestination.ROADMAP -> when {
+            isAr -> "اضغط ← دفتر المهام"
+            isFr -> "Appuyer → Registre"
+            else -> "Tap → Tasks Ledger"
+        }
+        RoadmapHubDestination.TASKS_LEDGER -> when {
+            isAr -> "اضغط ← Xp Logs"
+            isFr -> "Appuyer → Xp Logs"
+            else -> "Tap → Xp Logs"
+        }
+        RoadmapHubDestination.XP_LOGS -> when {
+            isAr -> "اضغط ← المسار"
+            isFr -> "Appuyer → Parcours"
+            else -> "Tap → Roadmap"
+        }
+    }
 
     val capsuleBg = if (isDarkTheme) {
         Brush.verticalGradient(
             listOf(
-                Color(0xD40B111E),
-                Color(0xDC060A13)
+                Color(0x3E111C33),
+                Color(0x28091122)
             )
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                Color(0xF6FFFFFF),
-                Color(0xEEF1F6FC)
+                Color(0x66FFFFFF),
+                Color(0x4AF1F6FC)
             )
         )
     }
 
     val progressBorder = Brush.linearGradient(
         colors = listOf(
-            roadmapAccent.copy(alpha = if (isDarkTheme) 0.58f else 0.65f),
-            if (isDarkTheme) Color.White.copy(alpha = 0.16f) else Color(0xFFCBD5E1)
+            roadmapAccent.copy(alpha = if (isDarkTheme) 0.65f else 0.68f),
+            if (isDarkTheme) Color.White.copy(alpha = 0.24f) else Color(0x99FFFFFF)
         )
     )
     val portalBorder = Brush.linearGradient(
         colors = listOf(
-            activeAccent.copy(alpha = if (isDarkTheme) 0.68f else 0.72f),
-            xpLogsAccent.copy(alpha = if (isDarkTheme) 0.34f else 0.32f)
+            activeAccent.copy(alpha = if (isDarkTheme) 0.72f else 0.74f),
+            xpLogsAccent.copy(alpha = if (isDarkTheme) 0.40f else 0.36f)
         )
     )
 
@@ -312,244 +323,121 @@ fun ObsidianRoadmapHubSwitcher(
                 }
             }
 
-            // 2. Obsidian Portal Mode Switcher + Expanding Liquid Glass Navigation Sheet
-            Box {
-                Row(
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .defaultMinSize(minHeight = 48.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(capsuleBg)
-                        .border(1.1.dp, portalBorder, RoundedCornerShape(18.dp))
-                        .clickable { menuExpanded = true }
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                        .testTag("roadmap_hub_menu_btn"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(26.dp)
-                            .clip(CircleShape)
-                            .background(activeAccent.copy(alpha = if (isDarkTheme) 0.18f else 0.14f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = activeIcon,
-                            contentDescription = when {
-                                isAr -> "تبديل عرض المسار والسجلات"
-                                isFr -> "Changer de vue"
-                                else -> "Switch Roadmap & Logs View"
-                            },
-                            tint = activeAccent,
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
+            // 2. Tap-to-Change Switch View Capsule (cycles Roadmap -> Tasks Ledger -> Xp Logs -> Roadmap)
+            val switchInteraction = remember { MutableInteractionSource() }
+            val isSwitchPressed by switchInteraction.collectIsPressedAsState()
+            val switchScale by animateFloatAsState(
+                targetValue = if (isSwitchPressed) 0.95f else 1f,
+                animationSpec = spring(dampingRatio = 0.65f, stiffness = 550f),
+                label = "tap_to_change_scale"
+            )
+            val cycleNextView = {
+                when (activeDestination) {
+                    RoadmapHubDestination.ROADMAP -> onTasksLedgerClick()
+                    RoadmapHubDestination.TASKS_LEDGER -> onXpLogsClick()
+                    RoadmapHubDestination.XP_LOGS -> onProgressClick()
+                }
+            }
 
-                    Text(
-                        text = activeModeLabel,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = PlusJakartaSans,
-                        color = if (isDarkTheme) Color(0xFFF1F5F9) else DayTextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+            Row(
+                modifier = Modifier
+                    .scale(switchScale)
+                    .minimumInteractiveComponentSize()
+                    .defaultMinSize(minHeight = 48.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(capsuleBg)
+                    .border(1.1.dp, portalBorder, RoundedCornerShape(18.dp))
+                    .clickable(
+                        interactionSource = switchInteraction,
+                        indication = LocalIndication.current,
+                        onClick = cycleNextView
                     )
-
+                    .padding(horizontal = 11.dp, vertical = 7.dp)
+                    .testTag("roadmap_hub_menu_btn"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(activeAccent.copy(alpha = if (isDarkTheme) 0.18f else 0.14f))
+                        .border(0.9.dp, activeAccent.copy(alpha = 0.55f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
-                        imageVector = Icons.Default.ExpandMore,
-                        contentDescription = null,
+                        imageVector = activeIcon,
+                        contentDescription = when {
+                            isAr -> "اضغط لتبديل العرض"
+                            isFr -> "Appuyer pour changer de vue"
+                            else -> "Tap to switch view"
+                        },
                         tint = activeAccent,
-                        modifier = Modifier
-                            .size(16.dp)
-                            .rotate(chevronRotation)
+                        modifier = Modifier.size(15.dp)
                     )
                 }
 
-                val menuBg = if (isDarkTheme) Color(0xF60A101E) else Color(0xFAFFFFFF)
-                val menuBorder = if (isDarkTheme) Color(0x4D38BDF8) else Color(0xFFCBD5E1)
-                val dividerTone = if (isDarkTheme) Color(0x20FFFFFF) else Color(0xFFE2E8F0)
-
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                    offset = DpOffset(x = 0.dp, y = 8.dp),
-                    modifier = Modifier
-                        .width(268.dp)
-                        .background(menuBg)
-                        .border(1.15.dp, menuBorder, RoundedCornerShape(16.dp))
-                        .testTag("roadmap_hub_menu")
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(7.dp)
-                    ) {
+                AnimatedContent(
+                    targetState = activeDestination,
+                    transitionSpec = {
+                        (fadeIn(tween(150)) + slideInVertically { it / 3 })
+                            .togetherWith(fadeOut(tween(110)) + slideOutVertically { -it / 3 })
+                    },
+                    label = "tap_to_change_label"
+                ) { _ ->
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                         Text(
-                            text = when {
-                                isAr -> "التنقل السريع للمسار"
-                                isFr -> "Navigation du Portail"
-                                else -> "Obsidian Hub Navigation"
-                            },
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            text = activeModeLabel,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = PlusJakartaSans,
+                            color = if (isDarkTheme) Color(0xFFF8FAFC) else DayTextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-
-                        HorizontalDivider(color = dividerTone)
-
-                        PortalMenuOptionRow(
-                            title = when {
-                                isAr -> "المسار والمستوى (LVL $safeStation/${TaskPools.TOTAL_STATIONS_COUNT})"
-                                isFr -> "Parcours & Niv $safeStation/${TaskPools.TOTAL_STATIONS_COUNT}"
-                                else -> "Roadmap & LVL $safeStation/${TaskPools.TOTAL_STATIONS_COUNT}"
-                            },
-                            subtitle = when {
-                                isAr -> if (activeDestination == RoadmapHubDestination.ROADMAP) "عرض تفاصيل المستوى والقفز السريع" else "العودة إلى المسار والمهام"
-                                isFr -> if (activeDestination == RoadmapHubDestination.ROADMAP) "Voir détails & saut rapide" else "Ouvrir la Feuille de route"
-                                else -> if (activeDestination == RoadmapHubDestination.ROADMAP) "View level details & quick-jump" else "Open 700-station roadmap & tasks"
-                            },
-                            icon = Icons.Default.Timeline,
-                            accentColor = roadmapAccent,
-                            selected = activeDestination == RoadmapHubDestination.ROADMAP,
-                            isDarkTheme = isDarkTheme,
-                            testTag = "roadmap_menu_item_roadmap",
-                            onClick = {
-                                menuExpanded = false
-                                onProgressClick()
-                            }
+                        Text(
+                            text = nextModeHint,
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = activeAccent,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                    }
+                }
 
-                        PortalMenuOptionRow(
-                            title = when {
-                                isAr -> "دفتر المهام (Tasks Ledger)"
-                                isFr -> "Registre des missions"
-                                else -> "Tasks Ledger"
-                            },
-                            subtitle = when {
-                                isAr -> "${completedIds.size} / ${TaskPools.TOTAL_TASKS_COUNT} مهمة مسجلة"
-                                isFr -> "${completedIds.size} / ${TaskPools.TOTAL_TASKS_COUNT} missions"
-                                else -> "${completedIds.size} / ${TaskPools.TOTAL_TASKS_COUNT} missions logged"
-                            },
-                            icon = Icons.Default.MenuBook,
-                            accentColor = ledgerAccent,
-                            selected = activeDestination == RoadmapHubDestination.TASKS_LEDGER,
-                            isDarkTheme = isDarkTheme,
-                            testTag = "roadmap_menu_item_ledger",
-                            onClick = {
-                                menuExpanded = false
-                                onTasksLedgerClick()
-                            }
-                        )
-
-                        PortalMenuOptionRow(
-                            title = when {
-                                isAr -> "سجل نقاط الخبرة (Xp Logs)"
-                                isFr -> "Journaux XP"
-                                else -> "Xp Logs"
-                            },
-                            subtitle = when {
-                                isAr -> "${xpHistory.size} عملية • ${nf.format(totalXp.coerceAtLeast(0L))} XP"
-                                isFr -> "${xpHistory.size} entrées • ${nf.format(totalXp.coerceAtLeast(0L))} XP"
-                                else -> "${xpHistory.size} entries • ${nf.format(totalXp.coerceAtLeast(0L))} XP"
-                            },
-                            icon = Icons.Default.History,
-                            accentColor = xpLogsAccent,
-                            selected = activeDestination == RoadmapHubDestination.XP_LOGS,
-                            isDarkTheme = isDarkTheme,
-                            testTag = "roadmap_menu_item_xp_logs",
-                            onClick = {
-                                menuExpanded = false
-                                onXpLogsClick()
-                            }
-                        )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SwapHoriz,
+                        contentDescription = null,
+                        tint = activeAccent,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.5.dp)) {
+                        RoadmapHubDestination.entries.forEach { dest ->
+                            val isDotActive = dest == activeDestination
+                            val dotWidth by animateDpAsState(
+                                targetValue = if (isDotActive) 10.dp else 4.dp,
+                                animationSpec = tween(180),
+                                label = "hub_dot_width"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(dotWidth)
+                                    .height(3.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(
+                                        if (isDotActive) activeAccent
+                                        else if (isDarkTheme) Color.White.copy(alpha = 0.28f) else Color(0xFF94A3B8)
+                                    )
+                            )
+                        }
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun PortalMenuOptionRow(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    accentColor: Color,
-    selected: Boolean,
-    isDarkTheme: Boolean,
-    testTag: String,
-    onClick: () -> Unit
-) {
-    val bgColor = when {
-        selected -> accentColor.copy(alpha = if (isDarkTheme) 0.19f else 0.14f)
-        isDarkTheme -> Color(0x16FFFFFF)
-        else -> Color(0xFFF8FAFC)
-    }
-    val borderColor = when {
-        selected -> accentColor.copy(alpha = 0.85f)
-        isDarkTheme -> Color(0x1EFFFFFF)
-        else -> Color(0xFFE2E8F0)
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .minimumInteractiveComponentSize()
-            .clip(RoundedCornerShape(14.dp))
-            .background(bgColor)
-            .border(if (selected) 1.25.dp else 0.9.dp, borderColor, RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 9.dp)
-            .testTag(testTag),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(accentColor.copy(alpha = if (isDarkTheme) 0.18f else 0.14f))
-                .border(0.9.dp, accentColor.copy(alpha = 0.52f), RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = accentColor,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                text = title,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.ExtraBold,
-                fontFamily = PlusJakartaSans,
-                color = if (selected) accentColor else if (isDarkTheme) Color.White else DayTextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = subtitle,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        if (selected) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(16.dp)
-            )
         }
     }
 }
@@ -929,7 +817,7 @@ fun RoadmapProgressHeader(
                                 horizontalArrangement = Arrangement.Center
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.MenuBook,
+                                    imageVector = Icons.AutoMirrored.Filled.MenuBook,
                                     contentDescription = null,
                                     tint = emeraldAccent,
                                     modifier = Modifier.size(16.dp)

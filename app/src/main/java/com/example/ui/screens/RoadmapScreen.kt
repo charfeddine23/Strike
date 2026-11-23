@@ -75,6 +75,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -97,7 +98,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -297,6 +300,13 @@ fun RoadmapScreen(
     val tabEliteAccent = if (isDarkTheme) NeonAmber else DayOrange
 
     val scaffoldPadding = LocalScaffoldContentPadding.current
+    val density = LocalDensity.current
+    var topHeaderHeightPx by remember { mutableIntStateOf(0) }
+    val topHeaderClearanceDp = if (topHeaderHeightPx > 0) {
+        with(density) { topHeaderHeightPx.toDp() }
+    } else {
+        scaffoldPadding.calculateTopPadding() + 114.dp
+    }
 
     Box(
         modifier = modifier
@@ -318,168 +328,58 @@ fun RoadmapScreen(
             )
         }
 
-        Column(
+        // FULL-SCREEN CONTENT SECTION: TAB 0 (ROADMAP) / TAB 1 (TASKS) / TAB 2 (ELITE MISSIONS)
+        // Extends top-to-bottom across the full screen so scrolled cards pass visibly behind the transparent top chrome.
+        AnimatedContent(
+            targetState = selectedMainTab,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = scaffoldPadding.calculateTopPadding())
-        ) {
-            // TOP QUICK-ACTION ROW & NAVIGATION PILLS
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                val progressBtnAccent = if (selectedMainTab == 0) {
-                    biomePrimaryAccent(viewportBiomeState, isDarkTheme)
-                } else {
-                    tabAquaAccent
-                }
-                val progressBtnIcon = when {
-                    selectedMainTab != 0 -> Icons.Default.MilitaryTech
-                    viewportBiomeState.dominantBiome == RoadmapBiome.GLACIAL -> Icons.Default.AcUnit
-                    viewportBiomeState.dominantBiome == RoadmapBiome.ROCKY -> Icons.Default.Landscape
-                    viewportBiomeState.dominantBiome == RoadmapBiome.FOREST -> Icons.Default.Park
-                    else -> Icons.Default.LocalFireDepartment
-                }
-                val hubProgressFraction = remember(totalXp) {
-                    RoadmapManager.getStageProgress(totalXp).progressFraction
-                }
-
-                ObsidianRoadmapHubSwitcher(
-                    activeDestination = RoadmapHubDestination.ROADMAP,
-                    unlockedStationId = currentStationId,
-                    progressFraction = hubProgressFraction,
-                    currentLang = currentLang,
-                    isDarkTheme = isDarkTheme,
-                    roadmapAccent = progressBtnAccent,
-                    roadmapIcon = progressBtnIcon,
-                    onTasksLedgerClick = {
-                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        onOpenTasksLedger()
-                    },
-                    onProgressClick = {
-                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        showRoadmapProgressDialog = true
-                    },
-                    onXpLogsClick = {
-                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        onOpenXpLogs()
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // MAIN SEGMENTED GLASS PILL TABS: Roadmap vs Tasks vs Elite Missions
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    RoadmapPillTabButton(
-                        label = stringResource(R.string.roadmap_tab_stations),
-                        icon = Icons.Default.Timeline,
-                        selected = selectedMainTab == 0,
-                        accentColor = tabAquaAccent,
+                .clipToBounds(),
+            transitionSpec = {
+                val dir = (if (targetState > initialState) 1 else -1) * rtlSign
+                val enter = fadeIn(
+                    animationSpec = tween(durationMillis = 155, delayMillis = 65, easing = FastOutSlowInEasing)
+                ) + slideInHorizontally(
+                    animationSpec = tween(durationMillis = 170, delayMillis = 65, easing = FastOutSlowInEasing)
+                ) { fullWidth -> dir * (fullWidth / 14) }
+                val exit = fadeOut(
+                    animationSpec = tween(durationMillis = 65, easing = FastOutLinearInEasing)
+                ) + slideOutHorizontally(
+                    animationSpec = tween(durationMillis = 70, easing = FastOutLinearInEasing)
+                ) { fullWidth -> -dir * (fullWidth / 18) }
+                enter.togetherWith(exit).using(SizeTransform(clip = true))
+            },
+            label = "roadmap_tab_transition"
+        ) { activeTab ->
+            when (activeTab) {
+                0 -> {
+                    RoadmapStationsTabContent(
+                        stations = stations,
+                        roadmapListState = roadmapListState,
+                        nextStationId = stageProgress.nextStationId,
+                        currentStageXp = stageProgress.currentStageXp,
+                        currentStationId = currentStationId,
+                        currentLang = currentLang,
                         isDarkTheme = isDarkTheme,
-                        onClick = {
+                        topInset = topHeaderClearanceDp,
+                        bottomInset = scaffoldPadding.calculateBottomPadding(),
+                        onClaimStation = { stationId ->
                             HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            selectedMainTab = 0
-                            onMainTabChanged(0)
-                        },
-                        modifier = Modifier
-                            .weight(0.95f)
-                            .testTag("roadmap_tab_stations")
-                    )
-                    RoadmapPillTabButton(
-                        label = stringResource(R.string.roadmap_tab_tasks),
-                        icon = Icons.Default.Bolt,
-                        selected = selectedMainTab == 1,
-                        accentColor = tabAquaAccent,
-                        isDarkTheme = isDarkTheme,
-                        onClick = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            selectedMainTab = 1
-                            onMainTabChanged(1)
-                        },
-                        modifier = Modifier
-                            .weight(0.8f)
-                            .testTag("roadmap_tab_tasks")
-                    )
-                    RoadmapPillTabButton(
-                        label = stringResource(R.string.roadmap_tab_elite_missions),
-                        icon = Icons.Default.MilitaryTech,
-                        selected = selectedMainTab == 2,
-                        accentColor = tabEliteAccent,
-                        isDarkTheme = isDarkTheme,
-                        onClick = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            selectedMainTab = 2
-                            onMainTabChanged(2)
-                        },
-                        modifier = Modifier
-                            .weight(1.25f)
-                            .testTag("roadmap_tab_elite_missions")
+                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                            viewModel.claimStation(stationId)
+                        }
                     )
                 }
-            }
 
-            // CONTENT SECTION: TAB 0 (ROADMAP) / TAB 1 (TASKS) / TAB 2 (ELITE MISSIONS)
-            AnimatedContent(
-                targetState = selectedMainTab,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .clipToBounds(),
-                transitionSpec = {
-                    val dir = (if (targetState > initialState) 1 else -1) * rtlSign
-                    val enter = fadeIn(
-                        animationSpec = tween(durationMillis = 155, delayMillis = 65, easing = FastOutSlowInEasing)
-                    ) + slideInHorizontally(
-                        animationSpec = tween(durationMillis = 170, delayMillis = 65, easing = FastOutSlowInEasing)
-                    ) { fullWidth -> dir * (fullWidth / 14) }
-                    val exit = fadeOut(
-                        animationSpec = tween(durationMillis = 65, easing = FastOutLinearInEasing)
-                    ) + slideOutHorizontally(
-                        animationSpec = tween(durationMillis = 70, easing = FastOutLinearInEasing)
-                    ) { fullWidth -> -dir * (fullWidth / 18) }
-                    enter.togetherWith(exit).using(SizeTransform(clip = true))
-                },
-                label = "roadmap_tab_transition"
-            ) { activeTab ->
-                when (activeTab) {
-                    0 -> {
-                        RoadmapStationsTabContent(
-                            stations = stations,
-                            roadmapListState = roadmapListState,
-                            nextStationId = stageProgress.nextStationId,
-                            currentStageXp = stageProgress.currentStageXp,
-                            currentStationId = currentStationId,
-                            currentLang = currentLang,
-                            isDarkTheme = isDarkTheme,
-                            bottomInset = scaffoldPadding.calculateBottomPadding(),
-                            onClaimStation = { stationId ->
-                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                view.playSoundEffect(SoundEffectConstants.CLICK)
-                                viewModel.claimStation(stationId)
-                            }
-                        )
-                    }
+                1 -> {
+                    // ==========================================
+                    // TAB 1: DYNAMIC TASK ENGINE (FULL-BLEED SCROLL)
+                    // ==========================================
+                    val cyanAccent = if (isDarkTheme) NeonCyan else DayCyan
+                    val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
+                    val descColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
 
-                    1 -> {
-                        // ==========================================
-                        // TAB 1: DYNAMIC TASK ENGINE
-                        // ==========================================
-                        val cyanAccent = if (isDarkTheme) NeonCyan else DayCyan
-                        val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
-                        val descColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
-
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 16.dp)
-                        ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                             var everlastingFilter by remember { mutableStateOf(0) } // 0: All active, 1: Collect, 2: Pending
                             var showEternalGoalsHeader by remember { mutableStateOf(true) }
                             val tasksListState = rememberLazyListState()
@@ -579,12 +479,67 @@ fun RoadmapScreen(
                                 }
                             }
 
+                        var tab1SubHeaderHeightPx by remember { mutableIntStateOf(0) }
+                        val tab1SubHeaderDp = if (tab1SubHeaderHeightPx > 0) {
+                            with(density) { tab1SubHeaderHeightPx.toDp() }
+                        } else {
+                            52.dp
+                        }
+
+                        // Full-screen Tasks LazyColumn (top-to-bottom behind transparent top containers)
+                        LazyColumn(
+                            state = tasksListState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .nestedScroll(eternalHeaderNestedScroll)
+                                .testTag("tasks_lazy_list"),
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = topHeaderClearanceDp + tab1SubHeaderDp,
+                                bottom = scaffoldPadding.calculateBottomPadding() + 24.dp
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(currentTasks, key = { it.id }) { task ->
+                                TaskItemCard(
+                                    task = task,
+                                    nowMillis = nowMillis,
+                                    currentLang = currentLang,
+                                    isDarkTheme = isDarkTheme,
+                                    availableKeysForType = when (task.requiredSkipKey) {
+                                        SkipKeyType.WOODEN -> woodenKeys
+                                        SkipKeyType.BRONZE -> bronzeKeys
+                                        SkipKeyType.SILVER -> silverKeys
+                                    },
+                                    onClaimReward = {
+                                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        viewModel.claimTaskReward(task.id)
+                                    },
+                                    onSkipWithKey = {
+                                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                                        viewModel.useSkipKeyForTask(task.id)
+                                    }
+                                )
+                            }
+                        }
+
+                        // Floating Transparent Period Chips + Collapsible Eternal Banner over the Tasks list
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .padding(top = topHeaderClearanceDp, start = 16.dp, end = 16.dp)
+                                .onSizeChanged { tab1SubHeaderHeightPx = it.height }
+                        ) {
                             // Period Selector Chips
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .horizontalScroll(rememberScrollState())
-                                    .padding(vertical = 10.dp),
+                                    .padding(top = 4.dp, bottom = 10.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 PeriodFilterChip(
@@ -733,52 +688,21 @@ fun RoadmapScreen(
                                     }
                                 }
                             }
-
-                            LazyColumn(
-                                state = tasksListState,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .nestedScroll(eternalHeaderNestedScroll)
-                                    .testTag("tasks_lazy_list"),
-                                contentPadding = PaddingValues(bottom = scaffoldPadding.calculateBottomPadding() + 24.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(currentTasks, key = { it.id }) { task ->
-                                    TaskItemCard(
-                                        task = task,
-                                        nowMillis = nowMillis,
-                                        currentLang = currentLang,
-                                        isDarkTheme = isDarkTheme,
-                                        availableKeysForType = when (task.requiredSkipKey) {
-                                            SkipKeyType.WOODEN -> woodenKeys
-                                            SkipKeyType.BRONZE -> bronzeKeys
-                                            SkipKeyType.SILVER -> silverKeys
-                                        },
-                                        onClaimReward = {
-                                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                                            viewModel.claimTaskReward(task.id)
-                                        },
-                                        onSkipWithKey = {
-                                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                                            viewModel.useSkipKeyForTask(task.id)
-                                        }
-                                    )
-                                }
-                            }
                         }
                     }
+                }
 
-                    else -> {
-                        EliteMissionsSoonPage(
-                            currentLang = currentLang,
-                            isDarkTheme = isDarkTheme
-                        )
-                    }
+                else -> {
+                    EliteMissionsSoonPage(
+                        currentLang = currentLang,
+                        isDarkTheme = isDarkTheme,
+                        topInset = topHeaderClearanceDp,
+                        bottomInset = scaffoldPadding.calculateBottomPadding()
+                    )
                 }
             }
         }
+
         // Non-blocking foreground 4-stage biome rim overlay (deep ice at 1 -> magma abyss at 700)
         if (selectedMainTab == 0) {
             RoadmapBiomeSubmersionOverlay(
@@ -787,6 +711,115 @@ fun RoadmapScreen(
                 isDarkTheme = isDarkTheme,
                 modifier = Modifier.fillMaxSize()
             )
+        }
+
+        // FLOATING TRANSPARENT TOP CHROME (Obsidian Switcher + Segmented Pill Tabs)
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .onSizeChanged { topHeaderHeightPx = it.height }
+                .padding(
+                    top = scaffoldPadding.calculateTopPadding() + 6.dp,
+                    start = 16.dp,
+                    end = 16.dp,
+                    bottom = 6.dp
+                )
+        ) {
+            val progressBtnAccent = if (selectedMainTab == 0) {
+                biomePrimaryAccent(viewportBiomeState, isDarkTheme)
+            } else {
+                tabAquaAccent
+            }
+            val progressBtnIcon = when {
+                selectedMainTab != 0 -> Icons.Default.MilitaryTech
+                viewportBiomeState.dominantBiome == RoadmapBiome.GLACIAL -> Icons.Default.AcUnit
+                viewportBiomeState.dominantBiome == RoadmapBiome.ROCKY -> Icons.Default.Landscape
+                viewportBiomeState.dominantBiome == RoadmapBiome.FOREST -> Icons.Default.Park
+                else -> Icons.Default.LocalFireDepartment
+            }
+            val hubProgressFraction = remember(totalXp) {
+                RoadmapManager.getStageProgress(totalXp).progressFraction
+            }
+
+            ObsidianRoadmapHubSwitcher(
+                activeDestination = RoadmapHubDestination.ROADMAP,
+                unlockedStationId = currentStationId,
+                progressFraction = hubProgressFraction,
+                currentLang = currentLang,
+                isDarkTheme = isDarkTheme,
+                roadmapAccent = progressBtnAccent,
+                roadmapIcon = progressBtnIcon,
+                onTasksLedgerClick = {
+                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    onOpenTasksLedger()
+                },
+                onProgressClick = {
+                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    showRoadmapProgressDialog = true
+                },
+                onXpLogsClick = {
+                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                    onOpenXpLogs()
+                }
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // MAIN SEGMENTED TRANSPARENT GLASS PILL TABS: Roadmap vs Tasks vs Elite Missions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                RoadmapPillTabButton(
+                    label = stringResource(R.string.roadmap_tab_stations),
+                    icon = Icons.Default.Timeline,
+                    selected = selectedMainTab == 0,
+                    accentColor = tabAquaAccent,
+                    isDarkTheme = isDarkTheme,
+                    onClick = {
+                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                        selectedMainTab = 0
+                        onMainTabChanged(0)
+                    },
+                    modifier = Modifier
+                        .weight(0.95f)
+                        .testTag("roadmap_tab_stations")
+                )
+                RoadmapPillTabButton(
+                    label = stringResource(R.string.roadmap_tab_tasks),
+                    icon = Icons.Default.Bolt,
+                    selected = selectedMainTab == 1,
+                    accentColor = tabAquaAccent,
+                    isDarkTheme = isDarkTheme,
+                    onClick = {
+                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                        selectedMainTab = 1
+                        onMainTabChanged(1)
+                    },
+                    modifier = Modifier
+                        .weight(0.8f)
+                        .testTag("roadmap_tab_tasks")
+                )
+                RoadmapPillTabButton(
+                    label = stringResource(R.string.roadmap_tab_elite_missions),
+                    icon = Icons.Default.MilitaryTech,
+                    selected = selectedMainTab == 2,
+                    accentColor = tabEliteAccent,
+                    isDarkTheme = isDarkTheme,
+                    onClick = {
+                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                        selectedMainTab = 2
+                        onMainTabChanged(2)
+                    },
+                    modifier = Modifier
+                        .weight(1.25f)
+                        .testTag("roadmap_tab_elite_missions")
+                )
+            }
         }
 
         // Floating Roadmap Progress Popup triggered from the top-center pill button
@@ -885,6 +918,7 @@ private fun RoadmapStationsTabContent(
     currentStationId: Int,
     currentLang: String,
     isDarkTheme: Boolean,
+    topInset: Dp = 0.dp,
     bottomInset: Dp = 0.dp,
     onClaimStation: (Int) -> Unit
 ) {
@@ -944,38 +978,34 @@ private fun RoadmapStationsTabContent(
         label = "orbit_rotation"
     )
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            state = roadmapListState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-            contentPadding = PaddingValues(top = 8.dp, bottom = bottomInset + 24.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            itemsIndexed(stations, key = { _, station -> station.id }) { index, station ->
-                val prevState = stations.getOrNull(index - 1)?.state
-                val nextState = stations.getOrNull(index + 1)?.state
-                val isFrontierStation = station.id == currentStationId.coerceAtLeast(1)
+    LazyColumn(
+        state = roadmapListState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = topInset + 6.dp, bottom = bottomInset + 24.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
+    ) {
+        itemsIndexed(stations, key = { _, station -> station.id }) { index, station ->
+            val prevState = stations.getOrNull(index - 1)?.state
+            val nextState = stations.getOrNull(index + 1)?.state
+            val isFrontierStation = station.id == currentStationId.coerceAtLeast(1)
 
-                WavySnakeStationRow(
-                    station = station,
-                    prevStationState = prevState,
-                    nextStationState = nextState,
-                    isCurrentMilestone = isFrontierStation,
-                    currentLang = currentLang,
-                    pulseScale = pulseScale,
-                    orbitRotation = orbitRotation,
-                    flowPhase = flowPhase,
-                    glowPulse = glowPulse,
-                    rippleProgress = rippleProgress,
-                    badgeBobDp = badgeBobDp,
-                    nextStationId = nextStationId,
-                    currentStageXp = currentStageXp,
-                    isDarkTheme = isDarkTheme,
-                    onClaim = { onClaimStation(station.id) }
-                )
-            }
+            WavySnakeStationRow(
+                station = station,
+                prevStationState = prevState,
+                nextStationState = nextState,
+                isCurrentMilestone = isFrontierStation,
+                currentLang = currentLang,
+                pulseScale = pulseScale,
+                orbitRotation = orbitRotation,
+                flowPhase = flowPhase,
+                glowPulse = glowPulse,
+                rippleProgress = rippleProgress,
+                badgeBobDp = badgeBobDp,
+                nextStationId = nextStationId,
+                currentStageXp = currentStageXp,
+                isDarkTheme = isDarkTheme,
+                onClaim = { onClaimStation(station.id) }
+            )
         }
     }
 }
@@ -983,7 +1013,9 @@ private fun RoadmapStationsTabContent(
 @Composable
 private fun EliteMissionsSoonPage(
     currentLang: String,
-    isDarkTheme: Boolean = LocalAppDarkTheme.current
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    topInset: Dp = 0.dp,
+    bottomInset: Dp = 0.dp
 ) {
     val goldAccent = if (isDarkTheme) NeonAmber else DayOrange
     val violetAccent = if (isDarkTheme) NeonViolet else DayPurple
@@ -998,7 +1030,12 @@ private fun EliteMissionsSoonPage(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 24.dp)
+            .padding(
+                top = topInset + 12.dp,
+                bottom = bottomInset + 16.dp,
+                start = 24.dp,
+                end = 24.dp
+            )
             .testTag("elite_missions_page"),
         contentAlignment = Alignment.Center
     ) {
@@ -1093,17 +1130,17 @@ private fun RoadmapPillTabButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val unselectedBg = if (isDarkTheme) Color(0xAA131A29) else DayGlassSurface
-    val unselectedBorder = if (isDarkTheme) Color(0x26FFFFFF) else Color(0xFFCBD5E1)
-    val unselectedText = if (isDarkTheme) Color(0xFFCBD5E1) else DayTextSecondary
+    val unselectedBg = if (isDarkTheme) Color(0x28131E33) else Color(0x46FFFFFF)
+    val unselectedBorder = if (isDarkTheme) Color(0x36FFFFFF) else Color(0x99FFFFFF)
+    val unselectedText = if (isDarkTheme) Color(0xFFE2E8F0) else DayTextSecondary
 
     val bgColor by animateColorAsState(
-        targetValue = if (selected) accentColor.copy(alpha = if (isDarkTheme) 0.16f else 0.14f) else unselectedBg,
+        targetValue = if (selected) accentColor.copy(alpha = if (isDarkTheme) 0.22f else 0.16f) else unselectedBg,
         animationSpec = tween(150),
         label = "pill_bg"
     )
     val borderColor by animateColorAsState(
-        targetValue = if (selected) accentColor.copy(alpha = 0.85f) else unselectedBorder,
+        targetValue = if (selected) accentColor.copy(alpha = 0.88f) else unselectedBorder,
         animationSpec = tween(150),
         label = "pill_border"
     )
@@ -1774,18 +1811,18 @@ fun PeriodFilterChip(
     onClick: () -> Unit
 ) {
     val bgColor = when {
-        isSelected -> accentColor.copy(alpha = if (isDarkTheme) 0.2f else 0.14f)
-        isDarkTheme -> Color(0x221E293B)
-        else -> DayGlassSurface
+        isSelected -> accentColor.copy(alpha = if (isDarkTheme) 0.22f else 0.16f)
+        isDarkTheme -> Color(0x26152238)
+        else -> Color(0x46FFFFFF)
     }
     val borderColor = when {
         isSelected -> accentColor
-        isDarkTheme -> Color(0x20FFFFFF)
-        else -> Color(0xFFCBD5E1)
+        isDarkTheme -> Color(0x30FFFFFF)
+        else -> Color(0x99FFFFFF)
     }
     val textColor = when {
         isSelected -> accentColor
-        isDarkTheme -> Color(0xFF94A3B8)
+        isDarkTheme -> Color(0xFFCBD5E1)
         else -> DayTextSecondary
     }
 
@@ -1815,14 +1852,14 @@ fun FilterChipTiny(
 ) {
     val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
     val bgColor = when {
-        selected -> amberAccent.copy(alpha = if (isDarkTheme) 0.2f else 0.14f)
-        isDarkTheme -> Color(0x221E293B)
-        else -> DayGlassSurface
+        selected -> amberAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.16f)
+        isDarkTheme -> Color(0x26152238)
+        else -> Color(0x46FFFFFF)
     }
     val borderColor = when {
         selected -> amberAccent
-        isDarkTheme -> Color(0x20FFFFFF)
-        else -> Color(0xFFCBD5E1)
+        isDarkTheme -> Color(0x30FFFFFF)
+        else -> Color(0x99FFFFFF)
     }
     val textColor = when {
         selected -> amberAccent
