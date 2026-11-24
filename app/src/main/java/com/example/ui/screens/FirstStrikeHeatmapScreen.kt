@@ -4,6 +4,9 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -12,6 +15,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
@@ -59,8 +64,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,7 +75,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -97,8 +107,7 @@ import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import org.maplibre.android.camera.CameraPosition
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
 
@@ -119,7 +128,10 @@ fun FirstStrikeHeatmapScreen(
 
     val allIndividuals by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val hotspots = remember(allIndividuals) { MapStyleHelper.groupHotspots(allIndividuals) }
+    val hottestRegion = remember(allIndividuals) { MapStyleHelper.findHottestRegion(allIndividuals) }
     val geoCount = remember(allIndividuals) { allIndividuals.count { it.hasFirstStrikeLocation } }
+    val latestIndividuals by rememberUpdatedState(allIndividuals)
+    val latestHottestRegion by rememberUpdatedState(hottestRegion)
 
     // Default to Obsidian Dark Mode on MapLibre
     var mapVisualTheme by remember { mutableStateOf(MapVisualTheme.OBSIDIAN_DARK) }
@@ -185,30 +197,19 @@ fun FirstStrikeHeatmapScreen(
         )
     }
 
-    // Frame existing first-strike locations smoothly once on launch if present
-    LaunchedEffect(mapLibreRef, hotspots) {
+    // Center the camera on the hottest region once when launching the heatmap screen
+    LaunchedEffect(mapLibreRef, hottestRegion) {
         val map = mapLibreRef ?: return@LaunchedEffect
-        if (!hasAutoFramed && hotspots.isNotEmpty()) {
+        val target = hottestRegion ?: return@LaunchedEffect
+        if (!hasAutoFramed) {
             hasAutoFramed = true
-            if (hotspots.size == 1) {
-                MapStyleHelper.animateCameraTo(
-                    map,
-                    hotspots.first().lat,
-                    hotspots.first().lng,
-                    zoom = 11.5,
-                    durationMs = 800
-                )
-            } else {
-                val builder = LatLngBounds.Builder()
-                hotspots.forEach {
-                    builder.include(org.maplibre.android.geometry.LatLng(it.lat, it.lng))
-                }
-                try {
-                    map.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 140), 800)
-                } catch (_: Throwable) {
-                    // Bounds degenerate if all points identical
-                }
-            }
+            MapStyleHelper.animateCameraTo(
+                mapLibreMap = map,
+                lat = target.lat,
+                lng = target.lng,
+                zoom = target.recommendedZoom,
+                durationMs = 800
+            )
         }
     }
 
@@ -232,9 +233,17 @@ fun FirstStrikeHeatmapScreen(
                     getMapAsync { map ->
                         mapLibreRef = map
                         MapStyleHelper.configureHighPrecisionMap(map, context)
+                        val initialHot = latestHottestRegion
+                        val startLatLng = if (initialHot != null) {
+                            hasAutoFramed = true
+                            LatLng(initialHot.lat, initialHot.lng)
+                        } else {
+                            MapStyleHelper.DEFAULT_CENTER
+                        }
+                        val startZoom = initialHot?.recommendedZoom ?: MapStyleHelper.DEFAULT_ZOOM
                         map.cameraPosition = CameraPosition.Builder()
-                            .target(MapStyleHelper.DEFAULT_CENTER)
-                            .zoom(MapStyleHelper.DEFAULT_ZOOM)
+                            .target(startLatLng)
+                            .zoom(startZoom)
                             .build()
                         map.setStyle(Style.Builder().fromUri(MapStyleHelper.OPEN_FREE_MAP_LIBERTY_STYLE_URI)) { style ->
                             loadedStyleRef = style
@@ -243,7 +252,7 @@ fun FirstStrikeHeatmapScreen(
                                 theme = mapVisualTheme,
                                 show3dBuildings = show3dBuildings,
                                 displayMode = displayMode,
-                                individuals = allIndividuals,
+                                individuals = latestIndividuals,
                                 userLat = userLat,
                                 userLng = userLng
                             )
@@ -410,15 +419,24 @@ fun FirstStrikeHeatmapScreen(
                         maxLines = 1
                     )
                     Text(
-                        text = when {
-                            isAr -> "$geoCount موقع مسجل • ${hotspots.size} بؤرة"
-                            isFr -> "$geoCount lieux • ${hotspots.size} foyers"
-                            else -> "$geoCount pinned • ${hotspots.size} hotspot(s)"
+                        text = if (hottestRegion != null) {
+                            when {
+                                isAr -> "الأكثر سخونة: ${hottestRegion.placeName}"
+                                isFr -> "Zone max: ${hottestRegion.placeName}"
+                                else -> "Hottest: ${hottestRegion.placeName}"
+                            }
+                        } else {
+                            when {
+                                isAr -> "$geoCount موقع مسجل • ${hotspots.size} بؤرة"
+                                isFr -> "$geoCount lieux • ${hotspots.size} foyers"
+                                else -> "$geoCount pinned • ${hotspots.size} hotspot(s)"
+                            }
                         },
                         fontSize = 10.sp,
                         color = accentCyan,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -624,7 +642,20 @@ fun FirstStrikeHeatmapScreen(
             }
         }
 
-        // 4. Bottom Dual-Action Liquid Glass Bar + Fade-in Black Scrim ("Know My Location" + "Enter")
+        // 4. Bottom Liquid Glass Dock ("Swipe up to hide map" handle button + "Know My Location" + "Enter")
+        val density = LocalDensity.current
+        val dismissThresholdPx = remember(density) { with(density) { 44.dp.toPx() } }
+        var swipeUpOffsetPx by remember { mutableFloatStateOf(0f) }
+        var didTriggerSwipeDismiss by remember { mutableStateOf(false) }
+        val animatedSwipeTranslation by animateFloatAsState(
+            targetValue = swipeUpOffsetPx,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            ),
+            label = "heatmap_swipe_up_offset"
+        )
+
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -640,35 +671,126 @@ fun FirstStrikeHeatmapScreen(
                 )
                 .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(horizontal = 16.dp, vertical = 14.dp)
+                .graphicsLayer { translationY = animatedSwipeTranslation }
                 .testTag("heatmap_bottom_bar")
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(26.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            if (isMapDark) {
-                                listOf(Color(0xD80E1729), Color(0xEC060B15))
-                            } else {
-                                listOf(Color(0xEBFFFFFF), Color(0xDCF1F5F9))
-                            }
-                        )
-                    )
-                    .border(
-                        1.dp,
-                        Brush.verticalGradient(
-                            listOf(
-                                Color(0x55FFFFFF),
-                                accentCyan.copy(alpha = 0.42f)
-                            )
-                        ),
-                        RoundedCornerShape(26.dp)
-                    )
-                    .padding(10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // Pull / Swipe-Up Handle Button directly above Know My Location & Enter
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            Brush.verticalGradient(
+                                if (isMapDark) {
+                                    listOf(Color(0xE0111D33), Color(0xEC08101E))
+                                } else {
+                                    listOf(Color(0xF2FFFFFF), Color(0xE8EAF2FB))
+                                }
+                            )
+                        )
+                        .border(
+                            1.dp,
+                            Brush.horizontalGradient(
+                                listOf(
+                                    accentCyan.copy(alpha = 0.25f),
+                                    accentCyan.copy(alpha = 0.65f),
+                                    accentCyan.copy(alpha = 0.25f)
+                                )
+                            ),
+                            RoundedCornerShape(50)
+                        )
+                        .pointerInput(dismissThresholdPx) {
+                            detectVerticalDragGestures(
+                                onDragStart = {
+                                    didTriggerSwipeDismiss = false
+                                    swipeUpOffsetPx = 0f
+                                },
+                                onDragEnd = {
+                                    if (!didTriggerSwipeDismiss && swipeUpOffsetPx <= -dismissThresholdPx) {
+                                        didTriggerSwipeDismiss = true
+                                        onEnterApp()
+                                    }
+                                    swipeUpOffsetPx = 0f
+                                },
+                                onDragCancel = {
+                                    swipeUpOffsetPx = 0f
+                                },
+                                onVerticalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    swipeUpOffsetPx = (swipeUpOffsetPx + dragAmount).coerceIn(-dismissThresholdPx * 1.8f, 0f)
+                                    if (!didTriggerSwipeDismiss && swipeUpOffsetPx <= -dismissThresholdPx) {
+                                        didTriggerSwipeDismiss = true
+                                        swipeUpOffsetPx = 0f
+                                        onEnterApp()
+                                    }
+                                }
+                            )
+                        }
+                        .clickable { onEnterApp() }
+                        .minimumInteractiveComponentSize()
+                        .padding(horizontal = 18.dp, vertical = 9.dp)
+                        .testTag("heatmap_swipe_up_hide_btn"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = null,
+                        tint = accentCyan,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = when {
+                            isAr -> "اسحب لأعلى لإخفاء الخريطة"
+                            isFr -> "Glisser vers le haut pour masquer"
+                            else -> "Swipe up to hide map"
+                        },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = PlusJakartaSans,
+                        color = textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = null,
+                        tint = accentCyan,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                if (isMapDark) {
+                                    listOf(Color(0xD80E1729), Color(0xEC060B15))
+                                } else {
+                                    listOf(Color(0xEBFFFFFF), Color(0xDCF1F5F9))
+                                }
+                            )
+                        )
+                        .border(
+                            1.dp,
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color(0x55FFFFFF),
+                                    accentCyan.copy(alpha = 0.42f)
+                                )
+                            ),
+                            RoundedCornerShape(26.dp)
+                        )
+                        .padding(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                 // Know My Location Button
                 OutlinedButton(
                     onClick = {
@@ -751,6 +873,7 @@ fun FirstStrikeHeatmapScreen(
                     )
                 }
             }
+        }
         }
     }
 

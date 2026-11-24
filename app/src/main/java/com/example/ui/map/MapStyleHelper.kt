@@ -44,7 +44,17 @@ data class FirstStrikeHotspot(
     val lat: Double,
     val lng: Double,
     val placeName: String,
-    val individuals: List<Individual>
+    val individuals: List<Individual>,
+    val heatScore: Double = 0.0
+)
+
+data class HottestRegionTarget(
+    val lat: Double,
+    val lng: Double,
+    val placeName: String,
+    val heatScore: Double,
+    val recommendedZoom: Double,
+    val peopleCount: Int
 )
 
 fun isRobolectricRuntime(): Boolean {
@@ -71,7 +81,7 @@ object MapStyleHelper {
 
     const val BUILDINGS_3D_LAYER_ID = "obsidian-3d-buildings"
 
-    // Default camera overview (Mediterranean / North Africa / Europe view so global & regional points frame nicely)
+    // Default camera overview (used only when no first-strike locations exist yet)
     val DEFAULT_CENTER = LatLng(32.5, 4.0)
     const val DEFAULT_ZOOM = 4.2
 
@@ -100,6 +110,10 @@ object MapStyleHelper {
     private val LIGHT_BUILDING_3D = AndroidColor.parseColor("#CBD5E1")
     private val LIGHT_LABEL_TEXT = AndroidColor.parseColor("#1E293B")
     private val LIGHT_LABEL_HALO = AndroidColor.parseColor("#FFFFFF")
+
+    fun pointHeatWeight(person: Individual): Double {
+        return (1.0 + (person.strikeCount.coerceAtLeast(1) * 0.15)).coerceAtMost(4.0)
+    }
 
     fun ensureMapLibreInitialized(context: Context): Boolean {
         if (isRobolectricRuntime()) return false
@@ -159,7 +173,7 @@ object MapStyleHelper {
                     put(lat)
                 })
             }
-            val weight = (1.0 + (person.strikeCount.coerceAtLeast(1) * 0.15)).coerceAtMost(4.0)
+            val weight = pointHeatWeight(person)
             val properties = JSONObject().apply {
                 put("id", person.id)
                 put("name", person.fullName)
@@ -233,14 +247,112 @@ object MapStyleHelper {
             val avgLng = group.mapNotNull { it.firstStrikeLng }.average()
             val place = group.firstOrNull { it.firstStrikePlaceName.isNotBlank() }?.firstStrikePlaceName
                 ?: String.format(java.util.Locale.US, "%.4f, %.4f", avgLat, avgLng)
+            val totalHeat = group.sumOf { pointHeatWeight(it) }
             FirstStrikeHotspot(
                 id = "hotspot_${idx}_${group.first().id}",
                 lat = avgLat,
                 lng = avgLng,
                 placeName = place,
-                individuals = group.sortedByDescending { it.boost }
+                individuals = group.sortedByDescending { it.boost },
+                heatScore = totalHeat
             )
-        }.sortedByDescending { it.individuals.size }
+        }.sortedWith(
+            compareByDescending<FirstStrikeHotspot> { it.heatScore }
+                .thenByDescending { it.individuals.size }
+                .thenByDescending { it.individuals.sumOf { person -> person.strikeCount } }
+                .thenByDescending { it.individuals.sumOf { person -> person.boost } }
+        )
+    }
+
+    /**
+     * Finds the hottest heatmap region (highest cumulative thermal weight within a city-scale
+     * neighborhood radius) so launching the map centers directly on the hottest area.
+     */
+    fun findHottestRegion(
+        individuals: List<Individual>,
+        regionRadiusDegrees: Double = 0.08
+    ): HottestRegionTarget? {
+        val geoPeople = individuals.filter {
+            val lat = it.firstStrikeLat
+            val lng = it.firstStrikeLng
+            lat != null && lng != null &&
+                lat.isFinite() && lng.isFinite() &&
+                lat in -90.0..90.0 && lng in -180.0..180.0
+        }
+        if (geoPeople.isEmpty()) return null
+
+        val radiusSq = regionRadiusDegrees * regionRadiusDegrees
+        var bestCluster: List<Individual> = emptyList()
+        var bestHeat = -1.0
+        var bestStrikes = -1
+        var bestBoost = -1.0
+
+        for (anchor in geoPeople) {
+            val aLat = anchor.firstStrikeLat ?: continue
+            val aLng = anchor.firstStrikeLng ?: continue
+            val neighbors = geoPeople.filter { candidate ->
+                val cLat = candidate.firstStrikeLat ?: return@filter false
+                val cLng = candidate.firstStrikeLng ?: return@filter false
+                val dLat = cLat - aLat
+                val dLng = cLng - aLng
+                (dLat * dLat + dLng * dLng) <= radiusSq
+            }
+            val heat = neighbors.sumOf { pointHeatWeight(it) }
+            val strikes = neighbors.sumOf { it.strikeCount }
+            val boost = neighbors.sumOf { it.boost }
+            val isBetter = heat > bestHeat + 1e-6 ||
+                (abs(heat - bestHeat) <= 1e-6 && neighbors.size > bestCluster.size) ||
+                (abs(heat - bestHeat) <= 1e-6 && neighbors.size == bestCluster.size && strikes > bestStrikes) ||
+                (abs(heat - bestHeat) <= 1e-6 && neighbors.size == bestCluster.size && strikes == bestStrikes && boost > bestBoost)
+            if (isBetter) {
+                bestCluster = neighbors
+                bestHeat = heat
+                bestStrikes = strikes
+                bestBoost = boost
+            }
+        }
+
+        if (bestCluster.isEmpty()) return null
+
+        var weightedLatSum = 0.0
+        var weightedLngSum = 0.0
+        var weightTotal = 0.0
+        for (p in bestCluster) {
+            val lat = p.firstStrikeLat ?: continue
+            val lng = p.firstStrikeLng ?: continue
+            val w = pointHeatWeight(p)
+            weightedLatSum += lat * w
+            weightedLngSum += lng * w
+            weightTotal += w
+        }
+        val centerLat = weightedLatSum / weightTotal.coerceAtLeast(1e-6)
+        val centerLng = weightedLngSum / weightTotal.coerceAtLeast(1e-6)
+
+        val maxSpreadDeg = bestCluster.maxOf { p ->
+            val dLat = (p.firstStrikeLat ?: centerLat) - centerLat
+            val dLng = (p.firstStrikeLng ?: centerLng) - centerLng
+            kotlin.math.hypot(dLat, dLng)
+        }
+        val recommendedZoom = when {
+            maxSpreadDeg <= 0.015 -> 13.0
+            maxSpreadDeg <= 0.045 -> 12.2
+            else -> 11.4
+        }
+
+        val namedLeader = bestCluster
+            .filter { it.firstStrikePlaceName.isNotBlank() }
+            .maxByOrNull { pointHeatWeight(it) }
+        val placeLabel = namedLeader?.firstStrikePlaceName
+            ?: String.format(java.util.Locale.US, "%.4f, %.4f", centerLat, centerLng)
+
+        return HottestRegionTarget(
+            lat = centerLat,
+            lng = centerLng,
+            placeName = placeLabel,
+            heatScore = bestHeat,
+            recommendedZoom = recommendedZoom,
+            peopleCount = bestCluster.size
+        )
     }
 
     fun findNearestHotspot(

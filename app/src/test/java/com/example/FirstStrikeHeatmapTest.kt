@@ -3,6 +3,7 @@ package com.example
 import android.content.Context
 import android.os.Looper
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -12,6 +13,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
@@ -392,5 +395,137 @@ class FirstStrikeHeatmapTest {
         assertEquals(36.7538, saved.firstStrikeLat!!, 0.001)
         assertEquals(3.0588, saved.firstStrikeLng!!, 0.001)
         assertTrue(saved.firstStrikePlaceName.isNotBlank())
+    }
+
+    @Test
+    fun swipeUpHideMapButton_sitsAboveActionButtonsAndHidesMapOnSwipeAndTap() {
+        composeRule.waitForIdle()
+
+        val swipeBtn = composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").assertIsDisplayed()
+        val knowLocBtn = composeRule.onNodeWithTag("heatmap_know_location_btn").assertIsDisplayed()
+        val enterBtn = composeRule.onNodeWithTag("heatmap_enter_btn").assertIsDisplayed()
+
+        val swipeBounds = swipeBtn.getBoundsInRoot()
+        val knowLocBounds = knowLocBtn.getBoundsInRoot()
+        val enterBounds = enterBtn.getBoundsInRoot()
+
+        assertTrue(
+            "Swipe-up button (${swipeBounds.bottom}) must sit cleanly above Know My Location (${knowLocBounds.top})",
+            swipeBounds.bottom <= knowLocBounds.top
+        )
+        assertTrue(
+            "Swipe-up button (${swipeBounds.bottom}) must sit cleanly above Enter (${enterBounds.top})",
+            swipeBounds.bottom <= enterBounds.top
+        )
+
+        // 1. Swipe up gesture on the handle hides the map & reveals TopBar/BottomBar
+        swipeBtn.performTouchInput { swipeUp(startY = centerY, endY = centerY - 220f) }
+        composeRule.waitForIdle()
+        assertEquals(0, composeRule.onAllNodesWithTag("first_strike_heatmap_screen").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
+        composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
+
+        // 2. Re-open map from Settings drawer and tap the button -> also hides map cleanly
+        composeRule.onNodeWithTag("top_bar_settings_btn").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("settings_open_heatmap_btn").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("settings_open_heatmap_btn").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").assertIsDisplayed().performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(0, composeRule.onAllNodesWithTag("first_strike_heatmap_screen").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
+    }
+
+    @Test
+    fun findHottestRegion_picksHighestHeatClusterAndDisplaysItAsDefaultLaunchFocus() {
+        // Cooler spot: Algiers (1 person, 1 strike -> heat 1.15)
+        val cooler = Individual(
+            id = 101L,
+            fullName = "أمين",
+            type = "M",
+            length = 20.0,
+            width = 10.0,
+            size = 200.0,
+            sScore = 60.0,
+            fScore = 60.0,
+            cScore = 60.0,
+            boost = 180.0,
+            strikeCount = 1,
+            firstStrikeLat = 36.7538,
+            firstStrikeLng = 3.0588,
+            firstStrikePlaceName = "Algiers"
+        )
+        // Hottest region: Oran (2 nearby high-strike people -> cumulative heat ~5.80)
+        val hot1 = Individual(
+            id = 102L,
+            fullName = "خالد",
+            type = "TS",
+            length = 22.0,
+            width = 10.0,
+            size = 220.0,
+            sScore = 80.0,
+            fScore = 80.0,
+            cScore = 80.0,
+            boost = 240.0,
+            strikeCount = 15,
+            firstStrikeLat = 35.6971,
+            firstStrikeLng = -0.6308,
+            firstStrikePlaceName = "Oran Center"
+        )
+        val hot2 = Individual(
+            id = 103L,
+            fullName = "مراد",
+            type = "FG",
+            length = 21.0,
+            width = 10.0,
+            size = 210.0,
+            sScore = 75.0,
+            fScore = 75.0,
+            cScore = 75.0,
+            boost = 225.0,
+            strikeCount = 10,
+            firstStrikeLat = 35.7020,
+            firstStrikeLng = -0.6250,
+            firstStrikePlaceName = "Oran East"
+        )
+
+        assertEquals(null, MapStyleHelper.findHottestRegion(emptyList()))
+
+        val hottest = MapStyleHelper.findHottestRegion(listOf(cooler, hot1, hot2))
+        assertNotNull(hottest)
+        assertEquals(2, hottest!!.peopleCount)
+        assertTrue(hottest.lat in 35.69..35.71)
+        assertTrue(hottest.lng in -0.64..-0.62)
+        assertEquals("Oran Center", hottest.placeName)
+
+        // Seed Room and verify FirstStrikeHeatmapScreen highlights the hottest region on launch
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val db = AppDatabase.getDatabase(ctx)
+        val repo = IndividualRepository(db.individualDao(), db.strikeEventDao())
+        runBlocking(Dispatchers.IO) {
+            repo.save(cooler.copy(id = 0))
+            repo.save(hot1.copy(id = 0))
+            repo.save(hot2.copy(id = 0))
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodes(
+                hasTestTag("heatmap_stats_pill") and hasAnyDescendant(hasText("Oran Center", substring = true)),
+                useUnmergedTree = true
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeRule.onNodeWithTag("heatmap_stats_pill").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("heatmap_hotspot_sheet").assertIsDisplayed()
+        composeRule.onNode(
+            hasTestTag("heatmap_hotspot_sheet") and hasAnyDescendant(hasText("Oran Center", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
     }
 }
