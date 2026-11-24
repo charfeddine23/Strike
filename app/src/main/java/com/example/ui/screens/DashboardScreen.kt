@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -57,6 +58,7 @@ import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Remove
@@ -178,13 +180,27 @@ fun DashboardScreen(
 
     var individualToDelete by remember { mutableStateOf<Individual?>(null) }
     var personForHistoricalEdit by remember { mutableStateOf<Individual?>(null) }
+    var personForLocationEdit by remember { mutableStateOf<Individual?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
     var expandedCardIds by remember { mutableStateOf(setOf<Long>()) }
+    val focusedIndividualId by viewModel.focusedIndividualId.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(focusedIndividualId, individuals) {
+        val targetId = focusedIndividualId ?: return@LaunchedEffect
+        val idx = individuals.indexOfFirst { it.id == targetId }
+        if (idx >= 0) {
+            expandedCardIds = expandedCardIds + targetId
+            listState.animateScrollToItem((idx + 2).coerceAtLeast(0))
+            viewModel.clearFocusedIndividualProfile()
+        }
+    }
 
     val scaffoldPadding = LocalScaffoldContentPadding.current
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = 16.dp,
@@ -570,6 +586,7 @@ fun DashboardScreen(
                         onDelete = { individualToDelete = item },
                         personStrikeEvents = eventsByIndividual[item.id].orEmpty(),
                         onEditYearlyStrikes = { personForHistoricalEdit = item },
+                        onEditFirstStrikeLocation = { personForLocationEdit = item },
                         darkTheme = isDarkTheme,
                         isHapticFeedbackEnabled = isHapticFeedbackEnabled,
                         isAr = isAr
@@ -662,6 +679,33 @@ fun DashboardScreen(
             }
         )
     }
+    if (personForLocationEdit != null) {
+        val target = personForLocationEdit!!
+        Dialog(
+            onDismissRequest = { personForLocationEdit = null },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            com.example.ui.components.FirstStrikeLocationPickerDialog(
+                initialLat = target.firstStrikeLat,
+                initialLng = target.firstStrikeLng,
+                initialPlaceName = target.firstStrikePlaceName,
+                currentLang = currentLang,
+                isDarkTheme = isDarkTheme,
+                onConfirm = { lat, lng, place ->
+                    viewModel.updatePersonFirstStrikeLocation(target.id, lat, lng, place)
+                    personForLocationEdit = null
+                },
+                onClear = {
+                    viewModel.updatePersonFirstStrikeLocation(target.id, null, null, "")
+                    personForLocationEdit = null
+                },
+                onDismiss = { personForLocationEdit = null }
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -678,6 +722,7 @@ fun IndividualRecordCard(
     modifier: Modifier = Modifier,
     personStrikeEvents: List<StrikeEvent> = emptyList(),
     onEditYearlyStrikes: (() -> Unit)? = null,
+    onEditFirstStrikeLocation: (() -> Unit)? = null,
     darkTheme: Boolean = LocalAppDarkTheme.current,
     isHapticFeedbackEnabled: Boolean = true,
     isAr: Boolean = true
@@ -1151,6 +1196,90 @@ fun IndividualRecordCard(
                                         )
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (onEditFirstStrikeLocation != null || individual.hasFirstStrikeLocation) {
+                val locCyan = if (darkTheme) NeonCyan else DayCyan
+                Spacer(modifier = Modifier.height(10.dp))
+                LiquidGlassInnerPanel(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("person_first_strike_location_panel_${individual.id}"),
+                    darkTheme = darkTheme
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = if (individual.hasFirstStrikeLocation) NeonAmber else locCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isAr) "موقع الضربة الأولى" else "First-Strike Location",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = PlusJakartaSans,
+                                    color = locCyan
+                                )
+                                Text(
+                                    text = if (individual.hasFirstStrikeLocation) {
+                                        val coords = String.format(
+                                            java.util.Locale.US,
+                                            "%.4f, %.4f",
+                                            individual.firstStrikeLat,
+                                            individual.firstStrikeLng
+                                        )
+                                        individual.firstStrikePlaceName.ifBlank { coords }
+                                    } else {
+                                        if (isAr) "لم يتم تحديد موقع بعد" else "No location pinned yet"
+                                    },
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        if (onEditFirstStrikeLocation != null) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(locCyan.copy(alpha = if (darkTheme) 0.18f else 0.12f))
+                                    .border(1.dp, locCyan.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                                        onEditFirstStrikeLocation()
+                                    }
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    .testTag("btn_edit_person_location_${individual.id}"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = when {
+                                        individual.hasFirstStrikeLocation && isAr -> "تعديل"
+                                        individual.hasFirstStrikeLocation -> "Edit"
+                                        isAr -> "تحديد"
+                                        else -> "Pin"
+                                    },
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = locCyan
+                                )
                             }
                         }
                     }

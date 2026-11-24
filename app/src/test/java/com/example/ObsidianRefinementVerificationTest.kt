@@ -63,6 +63,14 @@ class ObsidianRefinementVerificationTest {
         }
     }).around(composeRule)
 
+    private fun enterMainAppFromHeatmap() {
+        composeRule.waitForIdle()
+        if (composeRule.onAllNodesWithTag("heatmap_enter_btn").fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithTag("heatmap_enter_btn").performClick()
+            composeRule.waitForIdle()
+        }
+    }
+
     @Test
     fun personProfile_editHistoricalStrikesByYear_persistsChangesToDatabase() {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
@@ -89,6 +97,7 @@ class ObsidianRefinementVerificationTest {
             id
         }
 
+        enterMainAppFromHeatmap()
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
             composeRule.onAllNodesWithTag("record_expand_btn_$personId").fetchSemanticsNodes().isNotEmpty()
@@ -189,7 +198,7 @@ class ObsidianRefinementVerificationTest {
             Triple(a, b, c)
         }
 
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("nav_tab_compare").performClick()
         composeRule.waitForIdle()
 
@@ -224,7 +233,7 @@ class ObsidianRefinementVerificationTest {
         XpCalculationEngine.onDeflameAction(ctx, bonusNote = "Obsidian Calibration")
         XpCalculationEngine.onStrikeRecorded(ctx, strikeCount = 1, personName = "طارق")
 
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 
@@ -266,7 +275,7 @@ class ObsidianRefinementVerificationTest {
 
     @Test
     fun topAndBottomBars_maintainTransparentOuterContainerAndFadeInBlurAcrossAllPages() {
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
 
         // Dashboard
         val dashTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()

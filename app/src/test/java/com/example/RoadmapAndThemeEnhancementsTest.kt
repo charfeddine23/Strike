@@ -124,13 +124,21 @@ class RoadmapAndThemeEnhancementsTest {
         assertTrue(codes.all { pattern.matches(it) })
     }
 
+    private fun enterMainAppFromHeatmap() {
+        composeRule.waitForIdle()
+        if (composeRule.onAllNodesWithTag("heatmap_enter_btn").fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithTag("heatmap_enter_btn").performClick()
+            composeRule.waitForIdle()
+        }
+    }
+
     @Test
     fun settingsDrawer_controlsDayNightAndSystemThemeModesWithPersistence() {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         val prefs = SecurityPreferences(ctx)
         assertEquals(AppThemeMode.SYSTEM, prefs.themeMode)
 
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("top_bar_settings_btn").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
@@ -160,7 +168,7 @@ class RoadmapAndThemeEnhancementsTest {
         XpCalculationEngine.onDeflameAction(ctx, bonusNote = "تحكم يدوي بالشعلة")
         XpCalculationEngine.onStrikeRecorded(ctx, strikeCount = 1, personName = "طارق")
 
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 
@@ -273,7 +281,7 @@ class RoadmapAndThemeEnhancementsTest {
         assertEquals(1.0f, s700.lavaSubmersion, 0.01f)
 
         // 2. UI verification across all 4 stages on RoadmapScreen
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 

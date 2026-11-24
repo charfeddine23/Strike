@@ -96,6 +96,10 @@ class StrikeScreenFlowTest {
 
         // Navigate to Strike screen via bottom bar
         composeRule.waitForIdle()
+        if (composeRule.onAllNodesWithTag("heatmap_enter_btn").fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithTag("heatmap_enter_btn").performClick()
+            composeRule.waitForIdle()
+        }
         composeRule.onNodeWithTag("nav_tab_strike").performClick()
         composeRule.waitForIdle()
 

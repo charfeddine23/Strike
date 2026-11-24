@@ -70,6 +70,10 @@ class FlameControlsAndHeaderTest {
 
     private fun openFlameScreen() {
         composeRule.waitForIdle()
+        if (composeRule.onAllNodesWithTag("heatmap_enter_btn").fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithTag("heatmap_enter_btn").performClick()
+            composeRule.waitForIdle()
+        }
         composeRule.onNodeWithTag("header_flame_btn").performTouchInput { click() }
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()

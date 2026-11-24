@@ -300,6 +300,20 @@ class IndividualViewModel(
     val formFScore = MutableStateFlow("80.0")
     val formCScore = MutableStateFlow("90.0")
     val formError = MutableStateFlow<String?>(null)
+    val formFirstStrikeLat = MutableStateFlow<Double?>(null)
+    val formFirstStrikeLng = MutableStateFlow<Double?>(null)
+    val formFirstStrikePlaceName = MutableStateFlow("")
+
+    private val _focusedIndividualId = MutableStateFlow<Long?>(null)
+    val focusedIndividualId: StateFlow<Long?> = _focusedIndividualId.asStateFlow()
+
+    fun focusIndividualProfile(id: Long) {
+        _focusedIndividualId.value = id
+    }
+
+    fun clearFocusedIndividualProfile() {
+        _focusedIndividualId.value = null
+    }
 
     // Historical strikes per year entries for the individual: (Year, StrikesCount)
     val formHistoricalEntries = MutableStateFlow<List<Pair<Int, Int>>>(emptyList())
@@ -1243,6 +1257,9 @@ class IndividualViewModel(
         formFScore.value = "80.0"
         formCScore.value = "90.0"
         formError.value = null
+        formFirstStrikeLat.value = null
+        formFirstStrikeLng.value = null
+        formFirstStrikePlaceName.value = ""
         formHistoricalBaselineForEdit = emptyList()
         formHistoricalEntries.value = emptyList()
     }
@@ -1257,6 +1274,9 @@ class IndividualViewModel(
         formSScore.value = individual.sScore.toString()
         formFScore.value = individual.fScore.toString()
         formCScore.value = individual.cScore.toString()
+        formFirstStrikeLat.value = individual.firstStrikeLat
+        formFirstStrikeLng.value = individual.firstStrikeLng
+        formFirstStrikePlaceName.value = individual.firstStrikePlaceName
         formError.value = null
 
         val quickSnapshot = allStrikeEvents.value
@@ -1344,6 +1364,10 @@ class IndividualViewModel(
             historicalStrikesTotal
         }
 
+        val locLat = formFirstStrikeLat.value?.takeIf { it.isFinite() && it in -90.0..90.0 }
+        val locLng = formFirstStrikeLng.value?.takeIf { it.isFinite() && it in -180.0..180.0 }
+        val cleanPlace = com.example.data.map.NominatimGeocoder.stripTifinagh(formFirstStrikePlaceName.value)
+
         val individualToSave = Individual(
             id = currentEditingId ?: 0L,
             fullName = name,
@@ -1356,7 +1380,10 @@ class IndividualViewModel(
             fScore = f,
             cScore = c,
             boost = calculatedBoost,
-            strikeCount = effectiveStrikeCount
+            strikeCount = effectiveStrikeCount,
+            firstStrikeLat = if (locLat != null && locLng != null) locLat else null,
+            firstStrikeLng = if (locLat != null && locLng != null) locLng else null,
+            firstStrikePlaceName = cleanPlace
         )
 
         viewModelScope.launch {
@@ -1443,6 +1470,41 @@ class IndividualViewModel(
                 "ar" -> "تم حذف السجل وكافة الضربات المرتبطة به (${individual.fullName})"
                 "fr" -> "Enregistrement et tous les strikes associés supprimés (${individual.fullName})"
                 else -> "Record and all associated strikes deleted (${individual.fullName})"
+            }
+            emitMessage(msg)
+        }
+    }
+
+    fun updatePersonFirstStrikeLocation(
+        individualId: Long,
+        lat: Double?,
+        lng: Double?,
+        placeName: String
+    ) {
+        val lang = currentLanguage.value
+        val validCoords = lat != null && lng != null && lat.isFinite() && lng.isFinite()
+        val cleanPlace = com.example.data.map.NominatimGeocoder.stripTifinagh(placeName)
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                repository.updateFirstStrikeLocation(
+                    individualId = individualId,
+                    lat = if (validCoords) lat else null,
+                    lng = if (validCoords) lng else null,
+                    placeName = if (validCoords) cleanPlace else ""
+                )
+            }
+            val msg = if (validCoords) {
+                when (lang) {
+                    "ar" -> "تم حفظ موقع الضربة الأولى: ${cleanPlace.ifBlank { "%.4f, %.4f".format(Locale.US, lat, lng) }}"
+                    "fr" -> "Lieu du premier strike enregistré : ${cleanPlace.ifBlank { "%.4f, %.4f".format(Locale.US, lat, lng) }}"
+                    else -> "First-strike location saved: ${cleanPlace.ifBlank { "%.4f, %.4f".format(Locale.US, lat, lng) }}"
+                }
+            } else {
+                when (lang) {
+                    "ar" -> "تم مسح موقع الضربة الأولى"
+                    "fr" -> "Lieu du premier strike effacé"
+                    else -> "First-strike location cleared"
+                }
             }
             emitMessage(msg)
         }

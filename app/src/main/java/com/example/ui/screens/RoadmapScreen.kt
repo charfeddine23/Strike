@@ -94,6 +94,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -1130,12 +1131,14 @@ private fun RoadmapPillTabButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val unselectedBg = if (isDarkTheme) Color(0x28131E33) else Color(0x46FFFFFF)
-    val unselectedBorder = if (isDarkTheme) Color(0x36FFFFFF) else Color(0x99FFFFFF)
+    val baseSurface = if (isDarkTheme) Color(0xF20D1628) else Color(0xF2FFFFFF)
+    val unselectedBg = baseSurface
+    val selectedBg = accentColor.copy(alpha = if (isDarkTheme) 0.24f else 0.16f).compositeOver(baseSurface)
+    val unselectedBorder = if (isDarkTheme) Color(0x44FFFFFF) else Color(0xCCFFFFFF)
     val unselectedText = if (isDarkTheme) Color(0xFFE2E8F0) else DayTextSecondary
 
     val bgColor by animateColorAsState(
-        targetValue = if (selected) accentColor.copy(alpha = if (isDarkTheme) 0.22f else 0.16f) else unselectedBg,
+        targetValue = if (selected) selectedBg else unselectedBg,
         animationSpec = tween(150),
         label = "pill_bg"
     )
@@ -1810,15 +1813,16 @@ fun PeriodFilterChip(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val bgColor = when {
-        isSelected -> accentColor.copy(alpha = if (isDarkTheme) 0.22f else 0.16f)
-        isDarkTheme -> Color(0x26152238)
-        else -> Color(0x46FFFFFF)
+    val baseSurface = if (isDarkTheme) Color(0xF20D1628) else Color(0xF2FFFFFF)
+    val bgColor = if (isSelected) {
+        accentColor.copy(alpha = if (isDarkTheme) 0.24f else 0.16f).compositeOver(baseSurface)
+    } else {
+        baseSurface
     }
     val borderColor = when {
         isSelected -> accentColor
-        isDarkTheme -> Color(0x30FFFFFF)
-        else -> Color(0x99FFFFFF)
+        isDarkTheme -> Color(0x3EFFFFFF)
+        else -> Color(0xCCFFFFFF)
     }
     val textColor = when {
         isSelected -> accentColor
@@ -1851,15 +1855,16 @@ fun FilterChipTiny(
     onClick: () -> Unit
 ) {
     val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
-    val bgColor = when {
-        selected -> amberAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.16f)
-        isDarkTheme -> Color(0x26152238)
-        else -> Color(0x46FFFFFF)
+    val baseSurface = if (isDarkTheme) Color(0xF20D1628) else Color(0xF2FFFFFF)
+    val bgColor = if (selected) {
+        amberAccent.copy(alpha = if (isDarkTheme) 0.24f else 0.16f).compositeOver(baseSurface)
+    } else {
+        baseSurface
     }
     val borderColor = when {
         selected -> amberAccent
-        isDarkTheme -> Color(0x30FFFFFF)
-        else -> Color(0x99FFFFFF)
+        isDarkTheme -> Color(0x3EFFFFFF)
+        else -> Color(0xCCFFFFFF)
     }
     val textColor = when {
         selected -> amberAccent

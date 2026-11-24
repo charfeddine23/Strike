@@ -88,6 +88,13 @@ class BackupManager(private val repository: IndividualRepository) {
                         put("strikeCount", item.strikeCount)
                         put("phoneNumber", item.phoneNumber)
                         put("updatedAt", item.updatedAt)
+                        if (item.firstStrikeLat != null && item.firstStrikeLat.isFinite()) {
+                            put("firstStrikeLat", item.firstStrikeLat)
+                        }
+                        if (item.firstStrikeLng != null && item.firstStrikeLng.isFinite()) {
+                            put("firstStrikeLng", item.firstStrikeLng)
+                        }
+                        put("firstStrikePlaceName", item.firstStrikePlaceName)
                     }
                     individualsArray.put(obj)
                 }
@@ -228,6 +235,16 @@ class BackupManager(private val repository: IndividualRepository) {
                 val rawSize = if (obj.has("size")) finiteNonNegative(obj.optDouble("size", 0.0)) else Individual.calculateSize(length, width)
                 val rawBoost = if (obj.has("boost")) finiteNonNegative(obj.optDouble("boost", 0.0)) else Individual.calculateBoost(sScore, fScore, cScore, rawSize)
 
+                val parsedLat = if (obj.has("firstStrikeLat") && !obj.isNull("firstStrikeLat")) {
+                    obj.optDouble("firstStrikeLat", Double.NaN).takeIf { it.isFinite() && it in -90.0..90.0 }
+                } else null
+                val parsedLng = if (obj.has("firstStrikeLng") && !obj.isNull("firstStrikeLng")) {
+                    obj.optDouble("firstStrikeLng", Double.NaN).takeIf { it.isFinite() && it in -180.0..180.0 }
+                } else null
+                val parsedPlace = com.example.data.map.NominatimGeocoder.stripTifinagh(
+                    obj.optString("firstStrikePlaceName", "").take(250)
+                )
+
                 individualsList.add(
                     Individual(
                         id = obj.optLong("id", 0L).coerceAtLeast(0L),
@@ -242,7 +259,10 @@ class BackupManager(private val repository: IndividualRepository) {
                         boost = rawBoost,
                         strikeCount = obj.optInt("strikeCount", 0).coerceAtLeast(0),
                         phoneNumber = obj.optString("phoneNumber", "").take(64),
-                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
+                        firstStrikeLat = if (parsedLat != null && parsedLng != null) parsedLat else null,
+                        firstStrikeLng = if (parsedLat != null && parsedLng != null) parsedLng else null,
+                        firstStrikePlaceName = parsedPlace
                     )
                 )
             }

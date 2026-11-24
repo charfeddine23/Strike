@@ -43,9 +43,11 @@ import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Contacts
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Speed
@@ -126,6 +128,9 @@ fun DataEntryDialog(
     val cScore by viewModel.formCScore.collectAsStateWithLifecycle()
     val error by viewModel.formError.collectAsStateWithLifecycle()
     val historicalEntries by viewModel.formHistoricalEntries.collectAsStateWithLifecycle()
+    val firstStrikeLat by viewModel.formFirstStrikeLat.collectAsStateWithLifecycle()
+    val firstStrikeLng by viewModel.formFirstStrikeLng.collectAsStateWithLifecycle()
+    val firstStrikePlaceName by viewModel.formFirstStrikePlaceName.collectAsStateWithLifecycle()
 
     val calculatedSize by viewModel.liveCalculatedSize.collectAsStateWithLifecycle()
     val calculatedBoost by viewModel.liveCalculatedBoost.collectAsStateWithLifecycle()
@@ -140,6 +145,7 @@ fun DataEntryDialog(
     var showInAppContactsPicker by remember { mutableStateOf(false) }
     var inAppContactsList by remember { mutableStateOf<List<ImportedContact>>(emptyList()) }
     var showContactsPermissionDialog by remember { mutableStateOf(false) }
+    var showLocationPicker by remember { mutableStateOf(false) }
 
     fun applyImportedContact(imported: ImportedContact) {
         if (imported.name.isNotBlank()) {
@@ -262,7 +268,7 @@ fun DataEntryDialog(
         }
     }
 
-    BackHandler(enabled = !showInAppContactsPicker && !showContactsPermissionDialog) {
+    BackHandler(enabled = !showInAppContactsPicker && !showContactsPermissionDialog && !showLocationPicker) {
         onDismiss()
     }
 
@@ -858,6 +864,114 @@ fun DataEntryDialog(
                                 }
                         }
 
+                        // Section 3.5: First-Strike Location (Geospatial Pin for Heatmap)
+                        LiquidGlassCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("data_entry_location_card"),
+                            shape = RoundedCornerShape(20.dp),
+                            darkTheme = isDarkTheme
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocationOn,
+                                            contentDescription = null,
+                                            tint = accentCyan,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = when (currentLang) {
+                                                "ar" -> "موقع الضربة الأولى"
+                                                "fr" -> "Lieu du premier strike"
+                                                else -> "First-Strike Location"
+                                            },
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    if (firstStrikeLat != null && firstStrikeLng != null) {
+                                        IconButton(
+                                            onClick = {
+                                                viewModel.formFirstStrikeLat.value = null
+                                                viewModel.formFirstStrikeLng.value = null
+                                                viewModel.formFirstStrikePlaceName.value = ""
+                                            },
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .testTag("btn_clear_first_strike_location")
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.DeleteOutline,
+                                                contentDescription = if (isAr) "مسح الموقع" else "Clear Location",
+                                                tint = NeonRose,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                val hasCoords = firstStrikeLat != null && firstStrikeLng != null
+                                Text(
+                                    text = if (hasCoords) {
+                                        val coords = String.format(java.util.Locale.US, "%.4f, %.4f", firstStrikeLat, firstStrikeLng)
+                                        if (firstStrikePlaceName.isNotBlank()) "$firstStrikePlaceName ($coords)" else coords
+                                    } else {
+                                        when (currentLang) {
+                                            "ar" -> "اختياري — حدّد الموقع على الخريطة الحرارية"
+                                            "fr" -> "Optionnel — choisissez un point sur la carte"
+                                            else -> "Optional — pin coordinates on the heatmap"
+                                        }
+                                    },
+                                    fontSize = 12.sp,
+                                    color = if (hasCoords) accentCyan else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                OutlinedButton(
+                                    onClick = { showLocationPicker = true },
+                                    shape = RoundedCornerShape(14.dp),
+                                    border = BorderStroke(1.1.dp, accentCyan.copy(alpha = 0.65f)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(44.dp)
+                                        .testTag("btn_pick_first_strike_location")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.LocationOn,
+                                        contentDescription = null,
+                                        tint = accentCyan,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = when {
+                                            hasCoords && isAr -> "تغيير الموقع على الخريطة"
+                                            hasCoords && currentLang == "fr" -> "Modifier sur la carte"
+                                            hasCoords -> "Change Location on Map"
+                                            isAr -> "تحديد على الخريطة"
+                                            currentLang == "fr" -> "Choisir sur la carte"
+                                            else -> "Pick on Map"
+                                        },
+                                        fontWeight = FontWeight.Bold,
+                                        color = accentCyan,
+                                        fontSize = 12.5.sp
+                                    )
+                                }
+                            }
+                        }
+
                         // Section 4: Historical Strikes Entry per Year
                         LiquidGlassCard(
                                 modifier = Modifier
@@ -1326,6 +1440,29 @@ fun DataEntryDialog(
                 onDismiss = { showContactsPermissionDialog = false },
                 isDarkTheme = isDarkTheme,
                 useDialogWindow = false
+            )
+        }
+
+        if (showLocationPicker) {
+            FirstStrikeLocationPickerDialog(
+                initialLat = firstStrikeLat,
+                initialLng = firstStrikeLng,
+                initialPlaceName = firstStrikePlaceName,
+                currentLang = currentLang,
+                isDarkTheme = isDarkTheme,
+                onConfirm = { lat, lng, place ->
+                    viewModel.formFirstStrikeLat.value = lat
+                    viewModel.formFirstStrikeLng.value = lng
+                    viewModel.formFirstStrikePlaceName.value = place
+                    showLocationPicker = false
+                },
+                onClear = {
+                    viewModel.formFirstStrikeLat.value = null
+                    viewModel.formFirstStrikeLng.value = null
+                    viewModel.formFirstStrikePlaceName.value = ""
+                    showLocationPicker = false
+                },
+                onDismiss = { showLocationPicker = false }
             )
         }
     }

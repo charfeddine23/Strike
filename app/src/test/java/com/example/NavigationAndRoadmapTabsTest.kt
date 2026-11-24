@@ -56,9 +56,17 @@ class NavigationAndRoadmapTabsTest {
         }
     }).around(composeRule)
 
+    private fun enterMainAppFromHeatmap() {
+        composeRule.waitForIdle()
+        if (composeRule.onAllNodesWithTag("heatmap_enter_btn").fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithTag("heatmap_enter_btn").performClick()
+            composeRule.waitForIdle()
+        }
+    }
+
     @Test
     fun mainNavigationSwitchesCleanlyWithoutOverlappingScreensOrStuckBanners() {
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         assertEquals(0, composeRule.onAllNodesWithTag("records_dashboard_banner").fetchSemanticsNodes().size)
         composeRule.onNodeWithTag("sort_button").assertIsDisplayed()
         composeRule.onNodeWithTag("records_dashboard_btn").assertIsDisplayed()
@@ -102,7 +110,7 @@ class NavigationAndRoadmapTabsTest {
 
     @Test
     fun roadmapTabsRenamedAndEliteMissionsShowsSoonPage() {
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 
@@ -133,7 +141,7 @@ class NavigationAndRoadmapTabsTest {
 
     @Test
     fun dataEntryDialogHistoricalStrikesScrollsAndAcceptsEntryCleanly() {
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("add_record_fab").performClick()
         composeRule.waitForIdle()
 
@@ -150,7 +158,7 @@ class NavigationAndRoadmapTabsTest {
 
     @Test
     fun deviationsScreen_hidesHeaderTitleAndBackArrow_andPlacesTrackBadgeBelowDna() {
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("dna_header_icon").performClick()
         composeRule.waitForIdle()
 
@@ -185,7 +193,7 @@ class NavigationAndRoadmapTabsTest {
 
     @Test
     fun eternalGoalsHeader_hidesOnUpwardSwipe_andReappearsOnDownwardPullAtFirstTask() {
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 
@@ -215,7 +223,7 @@ class NavigationAndRoadmapTabsTest {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         SecurityPreferences(ctx).isScreenshotBlockingEnabled = true
 
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         assertTrue(
             "Expected FLAG_SECURE enabled by default",
             (composeRule.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE) != 0
@@ -246,7 +254,7 @@ class NavigationAndRoadmapTabsTest {
 
     @Test
     fun bottomNavBar_showsIconsOnlyAndKeepsFixedTabBoundsAcrossSwitches() {
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         val navTags = listOf(
             "nav_tab_dashboard",
             "nav_tab_inventory",

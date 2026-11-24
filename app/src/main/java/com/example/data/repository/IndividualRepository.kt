@@ -403,4 +403,18 @@ class IndividualRepository(
     }
 
     suspend fun getIndividualsWithPhone(): List<Individual> = dao.getIndividualsWithPhone()
+
+    suspend fun updateFirstStrikeLocation(
+        individualId: Long,
+        lat: Double?,
+        lng: Double?,
+        placeName: String
+    ) {
+        dao.updateFirstStrikeLocation(
+            id = individualId,
+            lat = lat,
+            lng = lng,
+            placeName = com.example.data.map.NominatimGeocoder.stripTifinagh(placeName)
+        )
+    }
 }

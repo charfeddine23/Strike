@@ -53,9 +53,17 @@ class AddIndividualCrashTest {
         }
     }).around(composeRule)
 
+    private fun enterMainAppFromHeatmap() {
+        composeRule.waitForIdle()
+        if (composeRule.onAllNodesWithTag("heatmap_enter_btn").fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithTag("heatmap_enter_btn").performClick()
+            composeRule.waitForIdle()
+        }
+    }
+
     @Test
     fun freshAppStartsEmptyAndAddingNewIndividualWorksWithoutCrash() {
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
 
         // 1. Verify no default individuals or sample-seed button appear on startup
         composeRule.waitUntil(timeoutMillis = 5_000L) {
@@ -164,7 +172,7 @@ class AddIndividualCrashTest {
 
     @Test
     fun dataEntryDialog_validatesEmptyNameAndEditsExistingRecordCleanly() {
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("add_record_fab").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("data_entry_overlay").assertIsDisplayed()

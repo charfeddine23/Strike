@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Whatshot
 import com.example.BuildConfig
 import com.example.data.update.AppUpdateManager
 import com.example.data.update.AppUpdateState
@@ -140,7 +141,8 @@ fun SettingsSideDrawer(
     visible: Boolean,
     viewModel: IndividualViewModel,
     onDismiss: () -> Unit,
-    onLockAppNow: () -> Unit
+    onLockAppNow: () -> Unit,
+    onOpenHeatmap: (() -> Unit)? = null
 ) {
     val appLayoutDirection = LocalLayoutDirection.current
 
@@ -258,6 +260,7 @@ fun SettingsSideDrawer(
                                     viewModel = viewModel,
                                     onDismiss = onDismiss,
                                     onLockAppNow = onLockAppNow,
+                                    onOpenHeatmap = onOpenHeatmap,
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .statusBarsPadding()
@@ -278,6 +281,7 @@ private fun SettingsPanelBody(
     viewModel: IndividualViewModel,
     onDismiss: () -> Unit,
     onLockAppNow: () -> Unit,
+    onOpenHeatmap: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -423,6 +427,58 @@ private fun SettingsPanelBody(
                 )
             }
         }
+
+                if (onOpenHeatmap != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(cardBg)
+                            .border(1.dp, activeCyan.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                            .clickable {
+                                onDismiss()
+                                onOpenHeatmap()
+                            }
+                            .padding(14.dp)
+                            .testTag("settings_open_heatmap_btn"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Whatshot,
+                                contentDescription = null,
+                                tint = NeonAmber,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = when (currentLang) {
+                                        "ar" -> "الخريطة الحرارية للضربة الأولى"
+                                        "fr" -> "Carte Thermique Premier Strike"
+                                        else -> "First-Strike Heatmap"
+                                    },
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = titleColor
+                                )
+                                Text(
+                                    text = when (currentLang) {
+                                        "ar" -> "عرض الخريطة الكاملة ومواقع الضربات"
+                                        "fr" -> "Ouvrir la vue carte plein écran"
+                                        else -> "Open full-screen geospatial heatmap"
+                                    },
+                                    fontSize = 11.sp,
+                                    color = descColor
+                                )
+                            }
+                        }
+                    }
+                }
 
                 // 1. Fingerprint Authentication Section (قفل التطبيق ببصمة الإصبع)
                 Column(

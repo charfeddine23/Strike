@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 
-@Database(entities = [Individual::class, StrikeEvent::class], version = 5, exportSchema = false)
+@Database(entities = [Individual::class, StrikeEvent::class], version = 6, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun individualDao(): IndividualDao
     abstract fun strikeEventDao(): StrikeEventDao
@@ -24,6 +24,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE individuals ADD COLUMN firstStrikeLat REAL")
+                db.execSQL("ALTER TABLE individuals ADD COLUMN firstStrikeLng REAL")
+                db.execSQL("ALTER TABLE individuals ADD COLUMN firstStrikePlaceName TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -31,7 +39,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "strikepulse_database"
                 )
-                    .addMigrations(MIGRATION_4_5)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
                     .fallbackToDestructiveMigration()
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onOpen(db: SupportSQLiteDatabase) {

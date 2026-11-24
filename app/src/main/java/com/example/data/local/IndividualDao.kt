@@ -57,6 +57,15 @@ interface IndividualDao {
     @Query("SELECT * FROM individuals WHERE phoneNumber IS NOT NULL AND phoneNumber != ''")
     suspend fun getIndividualsWithPhone(): List<Individual>
 
+    @Query("UPDATE individuals SET firstStrikeLat = :lat, firstStrikeLng = :lng, firstStrikePlaceName = :placeName, updatedAt = :timestamp WHERE id = :id")
+    suspend fun updateFirstStrikeLocation(
+        id: Long,
+        lat: Double?,
+        lng: Double?,
+        placeName: String,
+        timestamp: Long = System.currentTimeMillis()
+    )
+
     @Query("DELETE FROM individuals")
     suspend fun clearAll()
 }

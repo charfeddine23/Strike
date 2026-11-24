@@ -116,6 +116,7 @@ import com.example.ui.components.SettingsSideDrawer
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.DeviationsScreen
+import com.example.ui.screens.FirstStrikeHeatmapScreen
 import com.example.ui.screens.FlameScreen
 import com.example.ui.screens.InventoryScreen
 import com.example.ui.screens.RoadmapScreen
@@ -259,6 +260,7 @@ fun LiquidGlassApp(
     currentLang: String,
     onSelectLanguage: (String) -> Unit
 ) {
+    var showHeatmapEntry by remember { mutableStateOf(true) }
     var currentScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
     var roadmapMainTab by remember { mutableIntStateOf(0) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -354,7 +356,7 @@ fun LiquidGlassApp(
     }
 
     // Hardware/gesture BackHandler: return from TASKS_LEDGER or XP_LOGS to ROADMAP, otherwise return to DASHBOARD
-    BackHandler(enabled = currentScreen != AppScreen.DASHBOARD) {
+    BackHandler(enabled = !showHeatmapEntry && currentScreen != AppScreen.DASHBOARD) {
         currentScreen = if (currentScreen == AppScreen.TASKS_LEDGER || currentScreen == AppScreen.XP_LOGS) {
             AppScreen.ROADMAP
         } else {
@@ -363,6 +365,27 @@ fun LiquidGlassApp(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        if (showHeatmapEntry) {
+            FirstStrikeHeatmapScreen(
+                viewModel = viewModel,
+                currentLang = currentLang,
+                isAppDarkTheme = isDarkTheme,
+                onEnterApp = { showHeatmapEntry = false },
+                onNavigateToPersonProfile = { personId ->
+                    viewModel.resetFilters()
+                    viewModel.focusIndividualProfile(personId)
+                    currentScreen = AppScreen.DASHBOARD
+                    showHeatmapEntry = false
+                }
+            )
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(bottom = 92.dp)
+            )
+        } else {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
@@ -574,7 +597,11 @@ fun LiquidGlassApp(
             visible = showSettingsDialog,
             viewModel = viewModel,
             onDismiss = { showSettingsDialog = false },
-            onLockAppNow = { viewModel.lockApp() }
+            onLockAppNow = { viewModel.lockApp() },
+            onOpenHeatmap = {
+                showSettingsDialog = false
+                showHeatmapEntry = true
+            }
         )
 
         // Full-Screen In-Tree Data Entry Overlay (overlays Scaffold & bars cleanly without Dialog window leaks)
@@ -584,6 +611,7 @@ fun LiquidGlassApp(
                 onDismiss = { viewModel.closeDataEntry() },
                 isDarkTheme = isDarkTheme
             )
+        }
         }
     }
 

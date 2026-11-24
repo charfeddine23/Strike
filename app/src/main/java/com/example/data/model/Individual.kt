@@ -20,11 +20,20 @@ data class Individual(
     val boost: Double, // (sScore + fScore + cScore) + (size / 100.0)
     val strikeCount: Int = 0,
     val phoneNumber: String = "",
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val firstStrikeLat: Double? = null,
+    val firstStrikeLng: Double? = null,
+    val firstStrikePlaceName: String = ""
 ) {
     // Score = boost * strikeCount (النتيجة = ضرب boost في strike)
     val totalScore: Double
         get() = calculateTotalScore(boost, strikeCount)
+
+    val hasFirstStrikeLocation: Boolean
+        get() = firstStrikeLat != null &&
+            firstStrikeLng != null &&
+            firstStrikeLat.isFinite() &&
+            firstStrikeLng.isFinite()
 
     companion object {
         val VALID_TYPES = listOf("M", "G", "TS", "FG")

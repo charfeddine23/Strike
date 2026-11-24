@@ -117,9 +117,17 @@ class ProfileTitleResetRegrindTest {
         assertTrue(ProfileManager.unlockedTitleIds.value.contains(ProfileMasterInventory.MILESTONE_PEAK_TITLE.id))
     }
 
+    private fun enterMainAppFromHeatmap() {
+        composeRule.waitForIdle()
+        if (composeRule.onAllNodesWithTag("heatmap_enter_btn").fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithTag("heatmap_enter_btn").performClick()
+            composeRule.waitForIdle()
+        }
+    }
+
     @Test
     fun inventoryTitles_hold10sDoesNotResetTitle() {
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("nav_tab_inventory").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("inv_cat_titles").performClick()
@@ -147,7 +155,7 @@ class ProfileTitleResetRegrindTest {
     fun profileScreen_hold10sResetsTitleAndReunlocksAfterEarningXp() {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
 
-        composeRule.waitForIdle()
+        enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("profile_avatar_header_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("profile_tab_titles").performClick()
