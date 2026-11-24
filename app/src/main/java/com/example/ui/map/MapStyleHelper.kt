@@ -130,6 +130,7 @@ object MapStyleHelper {
         val density = context.resources.displayMetrics.density.coerceAtLeast(1f)
         val options = MapLibreMapOptions.createFromAttributes(context)
             .pixelRatio(density)
+            .textureMode(true)
         return MapView(context, options)
     }
 

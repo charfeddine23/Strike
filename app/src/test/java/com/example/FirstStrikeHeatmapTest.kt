@@ -620,4 +620,86 @@ class FirstStrikeHeatmapTest {
         composeRule.onNodeWithTag("first_strike_heatmap_screen").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("top_bar_outer_container").fetchSemanticsNodes().size)
     }
+
+    @Test
+    fun returningFromMainPagesToHeatmap_preservesAllHotspotsAndInteractiveMarkers() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val db = AppDatabase.getDatabase(ctx)
+        val repo = IndividualRepository(db.individualDao(), db.strikeEventDao())
+
+        val person1Id = runBlocking(Dispatchers.IO) {
+            repo.save(
+                Individual(
+                    fullName = "سفيان القسنطيني",
+                    type = "TS",
+                    length = 23.0,
+                    width = 10.0,
+                    size = 230.0,
+                    sScore = 84.0,
+                    fScore = 79.0,
+                    cScore = 86.0,
+                    boost = 249.0,
+                    strikeCount = 6,
+                    firstStrikeLat = 36.3650,
+                    firstStrikeLng = 6.6147,
+                    firstStrikePlaceName = "Constantine"
+                )
+            )
+        }
+        val person2Id = runBlocking(Dispatchers.IO) {
+            repo.save(
+                Individual(
+                    fullName = "ياسين الوهراني",
+                    type = "FG",
+                    length = 20.0,
+                    width = 9.0,
+                    size = 180.0,
+                    sScore = 72.0,
+                    fScore = 70.0,
+                    cScore = 74.0,
+                    boost = 216.0,
+                    strikeCount = 2,
+                    firstStrikeLat = 35.6971,
+                    firstStrikeLng = -0.6308,
+                    firstStrikePlaceName = "Oran Bay"
+                )
+            )
+        }
+
+        // Wait for both hotspots to be active on initial heatmap launch
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("heatmap_hotspot_marker_hotspot_0_$person1Id").fetchSemanticsNodes().isNotEmpty() &&
+                composeRule.onAllNodesWithTag("heatmap_hotspot_marker_hotspot_1_$person2Id").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // Enter main pages via Swipe Up
+        composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 260f)
+        }
+        composeRule.waitForIdle()
+        assertEquals(0, composeRule.onAllNodesWithTag("first_strike_heatmap_screen").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
+
+        // Navigate across tabs inside main pages
+        composeRule.onNodeWithTag("nav_tab_inventory").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("nav_tab_dashboard").performClick()
+        composeRule.waitForIdle()
+
+        // Return to Heatmap by pulling down Top Bar -> hotspots MUST remain intact & clickable
+        composeRule.onNodeWithTag("top_bar_outer_container").performTouchInput {
+            swipeDown(startY = centerY, endY = centerY + 340f)
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("first_strike_heatmap_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_hotspot_marker_hotspot_0_$person1Id").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_hotspot_marker_hotspot_1_$person2Id").assertIsDisplayed()
+
+        // Tapping preserved hotspot still opens inspection sheet cleanly
+        composeRule.onNodeWithTag("heatmap_hotspot_marker_hotspot_1_$person2Id").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("heatmap_hotspot_sheet").assertIsDisplayed()
+        composeRule.onNodeWithTag("hotspot_person_item_$person2Id").assertIsDisplayed()
+    }
 }

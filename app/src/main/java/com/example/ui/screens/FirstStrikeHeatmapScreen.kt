@@ -1,6 +1,8 @@
 package com.example.ui.screens
 
 import android.Manifest
+import android.content.Context
+import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -74,6 +76,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -114,6 +117,7 @@ import com.example.ui.components.hasLocationPermission
 import com.example.ui.components.resolveBestLocation
 import com.example.ui.map.FirstStrikeHotspot
 import com.example.ui.map.HeatmapDisplayMode
+import com.example.ui.map.HottestRegionTarget
 import com.example.ui.map.MapStyleHelper
 import com.example.ui.map.MapVisualTheme
 import com.example.ui.map.isRobolectricRuntime
@@ -129,7 +133,182 @@ import kotlin.math.abs
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+
+@Stable
+class HeatmapMapController(context: Context) {
+    private val appContext: Context = context.applicationContext
+
+    var mapVisualTheme by mutableStateOf(MapVisualTheme.OBSIDIAN_DARK)
+    var show3dBuildings by mutableStateOf(true)
+    var displayMode by mutableStateOf(HeatmapDisplayMode.HYBRID)
+    var userLat by mutableStateOf<Double?>(null)
+    var userLng by mutableStateOf<Double?>(null)
+    var focusedStrikePerson by mutableStateOf<Individual?>(null)
+
+    var mapLibreMap by mutableStateOf<MapLibreMap?>(null)
+    var loadedStyle by mutableStateOf<Style?>(null)
+    var hasAutoFramed by mutableStateOf(false)
+
+    var latestIndividuals: List<Individual> = emptyList()
+    var latestHotspots: List<FirstStrikeHotspot> = emptyList()
+    var latestHottestRegion: HottestRegionTarget? = null
+    var onHotspotTapped: ((FirstStrikeHotspot) -> Unit)? = null
+
+    private var cachedMapView: MapView? = null
+    private var isStarted = false
+    private var isResumed = false
+
+    fun getOrCreateMapView(): MapView {
+        cachedMapView?.let { existing ->
+            (existing.parent as? ViewGroup)?.removeView(existing)
+            existing.getMapAsync { map ->
+                mapLibreMap = map
+                map.getStyle { style ->
+                    loadedStyle = style
+                    MapStyleHelper.applyGoogleGradeStyling(
+                        style = style,
+                        theme = mapVisualTheme,
+                        show3dBuildings = show3dBuildings,
+                        displayMode = displayMode,
+                        individuals = latestIndividuals,
+                        userLat = userLat,
+                        userLng = userLng
+                    )
+                }
+            }
+            return existing
+        }
+
+        val created = MapStyleHelper.createHighPrecisionMapView(appContext).apply {
+            onCreate(null)
+            getMapAsync { map ->
+                mapLibreMap = map
+                MapStyleHelper.configureHighPrecisionMap(map, appContext)
+                val initialHot = latestHottestRegion
+                val startLatLng = if (initialHot != null) {
+                    hasAutoFramed = true
+                    LatLng(initialHot.lat, initialHot.lng)
+                } else {
+                    MapStyleHelper.DEFAULT_CENTER
+                }
+                val startZoom = initialHot?.recommendedZoom ?: MapStyleHelper.DEFAULT_ZOOM
+                map.cameraPosition = CameraPosition.Builder()
+                    .target(startLatLng)
+                    .zoom(startZoom)
+                    .build()
+
+                val applyCurrentStyle: (Style) -> Unit = { style ->
+                    loadedStyle = style
+                    MapStyleHelper.applyGoogleGradeStyling(
+                        style = style,
+                        theme = mapVisualTheme,
+                        show3dBuildings = show3dBuildings,
+                        displayMode = displayMode,
+                        individuals = latestIndividuals,
+                        userLat = userLat,
+                        userLng = userLng
+                    )
+                }
+
+                this@apply.addOnDidFinishLoadingStyleListener {
+                    map.getStyle { style ->
+                        applyCurrentStyle(style)
+                    }
+                }
+
+                map.setStyle(Style.Builder().fromUri(MapStyleHelper.OPEN_FREE_MAP_LIBERTY_STYLE_URI)) { style ->
+                    applyCurrentStyle(style)
+                }
+
+                map.addOnMapClickListener { point ->
+                    val currentHotspots = latestHotspots
+                    val screenPt = map.projection.toScreenLocation(point)
+                    val rendered = map.queryRenderedFeatures(
+                        screenPt,
+                        MapStyleHelper.CIRCLE_LAYER_ID,
+                        MapStyleHelper.HEATMAP_LAYER_ID
+                    )
+                    val clickedId = rendered.firstOrNull()?.getNumberProperty("id")?.toLong()
+                    val hitHotspot = if (clickedId != null) {
+                        currentHotspots.firstOrNull { hs -> hs.individuals.any { it.id == clickedId } }
+                    } else {
+                        MapStyleHelper.findNearestHotspot(
+                            tapLat = point.latitude,
+                            tapLng = point.longitude,
+                            hotspots = currentHotspots,
+                            zoomLevel = map.cameraPosition.zoom
+                        )
+                    }
+                    if (hitHotspot != null) {
+                        onHotspotTapped?.invoke(hitHotspot)
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
+        }
+        cachedMapView = created
+        return created
+    }
+
+    fun onStart() {
+        val view = cachedMapView ?: return
+        if (!isStarted) {
+            isStarted = true
+            view.onStart()
+        }
+    }
+
+    fun onResume() {
+        val view = cachedMapView ?: return
+        onStart()
+        if (!isResumed) {
+            isResumed = true
+            view.onResume()
+        }
+        mapLibreMap?.getStyle { style ->
+            loadedStyle = style
+            MapStyleHelper.applyGoogleGradeStyling(
+                style = style,
+                theme = mapVisualTheme,
+                show3dBuildings = show3dBuildings,
+                displayMode = displayMode,
+                individuals = latestIndividuals,
+                userLat = userLat,
+                userLng = userLng
+            )
+        }
+    }
+
+    fun onPause() {
+        val view = cachedMapView ?: return
+        if (isResumed) {
+            isResumed = false
+            view.onPause()
+        }
+    }
+
+    fun onStop() {
+        val view = cachedMapView ?: return
+        onPause()
+        if (isStarted) {
+            isStarted = false
+            view.onStop()
+        }
+    }
+
+    fun destroy() {
+        val view = cachedMapView ?: return
+        onStop()
+        view.onDestroy()
+        cachedMapView = null
+        mapLibreMap = null
+        loadedStyle = null
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -141,12 +320,16 @@ fun FirstStrikeHeatmapScreen(
     onNavigateToPersonProfile: (Long) -> Unit,
     onCurtainDragDelta: ((Float) -> Unit)? = null,
     onCurtainDragEnd: ((Float) -> Unit)? = null,
+    mapController: HeatmapMapController? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val isAr = currentLang == "ar"
     val isFr = currentLang == "fr"
+
+    val activeController = mapController ?: remember { HeatmapMapController(context) }
+    val ownsController = mapController == null
 
     val allIndividuals by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val hotspots = remember(allIndividuals) { MapStyleHelper.groupHotspots(allIndividuals) }
@@ -160,17 +343,21 @@ fun FirstStrikeHeatmapScreen(
             )
     }
     val geoCount = mappedIndividuals.size
-    val latestIndividuals by rememberUpdatedState(allIndividuals)
-    val latestHottestRegion by rememberUpdatedState(hottestRegion)
 
-    // Default to Obsidian Dark Mode on MapLibre
-    var mapVisualTheme by remember { mutableStateOf(MapVisualTheme.OBSIDIAN_DARK) }
-    var show3dBuildings by remember { mutableStateOf(true) }
-    var displayMode by remember { mutableStateOf(HeatmapDisplayMode.HYBRID) }
+    activeController.latestIndividuals = allIndividuals
+    activeController.latestHotspots = hotspots
+    activeController.latestHottestRegion = hottestRegion
+
+    val mapVisualTheme = activeController.mapVisualTheme
+    val show3dBuildings = activeController.show3dBuildings
+    val displayMode = activeController.displayMode
+    val userLat = activeController.userLat
+    val userLng = activeController.userLng
+    val focusedStrikePerson = activeController.focusedStrikePerson
+
     var showLayersMenu by remember { mutableStateOf(false) }
     var showAllStrikesMenu by remember { mutableStateOf(false) }
     var strikeSearchQuery by remember { mutableStateOf("") }
-    var focusedStrikePerson by remember { mutableStateOf<Individual?>(null) }
 
     val filteredMappedIndividuals = remember(mappedIndividuals, strikeSearchQuery) {
         val q = strikeSearchQuery.trim()
@@ -185,20 +372,17 @@ fun FirstStrikeHeatmapScreen(
         }
     }
 
-    var userLat by remember { mutableStateOf<Double?>(null) }
-    var userLng by remember { mutableStateOf<Double?>(null) }
     var selectedHotspot by remember { mutableStateOf<FirstStrikeHotspot?>(null) }
 
-    var mapLibreRef by remember { mutableStateOf<MapLibreMap?>(null) }
-    var loadedStyleRef by remember { mutableStateOf<Style?>(null) }
-    var hasAutoFramed by remember { mutableStateOf(false) }
+    val mapLibreRef = activeController.mapLibreMap
+    val loadedStyleRef = activeController.loadedStyle
 
     val requestLocationAndAnimate = {
         if (hasLocationPermission(context)) {
             resolveBestLocation(context) { lat, lng ->
-                userLat = lat
-                userLng = lng
-                mapLibreRef?.let { map ->
+                activeController.userLat = lat
+                activeController.userLng = lng
+                activeController.mapLibreMap?.let { map ->
                     MapStyleHelper.animateCameraTo(map, lat, lng, zoom = 14.5, durationMs = 800)
                 }
             }
@@ -229,26 +413,41 @@ fun FirstStrikeHeatmapScreen(
         }
     }
 
-    // Keep MapLibre style synced with layer toggles & Room geospatial data
-    LaunchedEffect(loadedStyleRef, mapVisualTheme, show3dBuildings, displayMode, allIndividuals, userLat, userLng) {
-        val style = loadedStyleRef ?: return@LaunchedEffect
-        MapStyleHelper.applyGoogleGradeStyling(
-            style = style,
-            theme = mapVisualTheme,
-            show3dBuildings = show3dBuildings,
-            displayMode = displayMode,
-            individuals = allIndividuals,
-            userLat = userLat,
-            userLng = userLng
-        )
+    // Keep MapLibre style synced with layer toggles & Room geospatial data (including on every re-mount)
+    LaunchedEffect(mapLibreRef, loadedStyleRef, mapVisualTheme, show3dBuildings, displayMode, allIndividuals, userLat, userLng) {
+        val map = mapLibreRef
+        if (map != null) {
+            map.getStyle { style ->
+                activeController.loadedStyle = style
+                MapStyleHelper.applyGoogleGradeStyling(
+                    style = style,
+                    theme = mapVisualTheme,
+                    show3dBuildings = show3dBuildings,
+                    displayMode = displayMode,
+                    individuals = allIndividuals,
+                    userLat = userLat,
+                    userLng = userLng
+                )
+            }
+        } else if (loadedStyleRef != null) {
+            MapStyleHelper.applyGoogleGradeStyling(
+                style = loadedStyleRef,
+                theme = mapVisualTheme,
+                show3dBuildings = show3dBuildings,
+                displayMode = displayMode,
+                individuals = allIndividuals,
+                userLat = userLat,
+                userLng = userLng
+            )
+        }
     }
 
-    // Center the camera on the hottest region once when launching the heatmap screen
+    // Center the camera on the hottest region once on initial launch (preserved across page switches)
     LaunchedEffect(mapLibreRef, hottestRegion) {
         val map = mapLibreRef ?: return@LaunchedEffect
         val target = hottestRegion ?: return@LaunchedEffect
-        if (!hasAutoFramed) {
-            hasAutoFramed = true
+        if (!activeController.hasAutoFramed) {
+            activeController.hasAutoFramed = true
             MapStyleHelper.animateCameraTo(
                 mapLibreMap = map,
                 lat = target.lat,
@@ -273,92 +472,43 @@ fun FirstStrikeHeatmapScreen(
     ) {
         // 1. Full-Viewport MapLibre Native Canvas (Robolectric-safe fallback on JVM tests)
         if (!isRobolectricRuntime()) {
-            val mapView = remember {
-                MapStyleHelper.createHighPrecisionMapView(context).apply {
-                    onCreate(null)
-                    getMapAsync { map ->
-                        mapLibreRef = map
-                        MapStyleHelper.configureHighPrecisionMap(map, context)
-                        val initialHot = latestHottestRegion
-                        val startLatLng = if (initialHot != null) {
-                            hasAutoFramed = true
-                            LatLng(initialHot.lat, initialHot.lng)
-                        } else {
-                            MapStyleHelper.DEFAULT_CENTER
-                        }
-                        val startZoom = initialHot?.recommendedZoom ?: MapStyleHelper.DEFAULT_ZOOM
-                        map.cameraPosition = CameraPosition.Builder()
-                            .target(startLatLng)
-                            .zoom(startZoom)
-                            .build()
-                        map.setStyle(Style.Builder().fromUri(MapStyleHelper.OPEN_FREE_MAP_LIBERTY_STYLE_URI)) { style ->
-                            loadedStyleRef = style
-                            MapStyleHelper.applyGoogleGradeStyling(
-                                style = style,
-                                theme = mapVisualTheme,
-                                show3dBuildings = show3dBuildings,
-                                displayMode = displayMode,
-                                individuals = latestIndividuals,
-                                userLat = userLat,
-                                userLng = userLng
-                            )
-                        }
-                        map.addOnMapClickListener { point ->
-                            val screenPt = map.projection.toScreenLocation(point)
-                            val rendered = map.queryRenderedFeatures(
-                                screenPt,
-                                MapStyleHelper.CIRCLE_LAYER_ID,
-                                MapStyleHelper.HEATMAP_LAYER_ID
-                            )
-                            val clickedId = rendered.firstOrNull()?.getNumberProperty("id")?.toLong()
-                            val hitHotspot = if (clickedId != null) {
-                                hotspots.firstOrNull { hs -> hs.individuals.any { it.id == clickedId } }
-                            } else {
-                                MapStyleHelper.findNearestHotspot(
-                                    tapLat = point.latitude,
-                                    tapLng = point.longitude,
-                                    hotspots = hotspots,
-                                    zoomLevel = map.cameraPosition.zoom
-                                )
-                            }
-                            if (hitHotspot != null) {
-                                selectedHotspot = hitHotspot
-                                true
-                            } else {
-                                false
-                            }
-                        }
-                    }
-                }
-            }
+            val mapView = remember(activeController) { activeController.getOrCreateMapView() }
 
-            DisposableEffect(lifecycleOwner, mapView) {
+            DisposableEffect(lifecycleOwner, activeController, mapView) {
+                activeController.onHotspotTapped = { hotspot -> selectedHotspot = hotspot }
                 val observer = LifecycleEventObserver { _, event ->
                     when (event) {
-                        Lifecycle.Event.ON_START -> mapView.onStart()
-                        Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                        Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                        Lifecycle.Event.ON_STOP -> mapView.onStop()
+                        Lifecycle.Event.ON_START -> activeController.onStart()
+                        Lifecycle.Event.ON_RESUME -> activeController.onResume()
+                        Lifecycle.Event.ON_PAUSE -> activeController.onPause()
+                        Lifecycle.Event.ON_STOP -> activeController.onStop()
                         else -> Unit
                     }
                 }
                 if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                    mapView.onStart()
+                    activeController.onStart()
                 }
                 if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                    mapView.onResume()
+                    activeController.onResume()
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose {
                     lifecycleOwner.lifecycle.removeObserver(observer)
-                    mapView.onPause()
-                    mapView.onStop()
-                    mapView.onDestroy()
+                    activeController.onHotspotTapped = null
+                    if (ownsController) {
+                        activeController.destroy()
+                    } else {
+                        // Keep GL context, loaded OpenFreeMap style, camera & hotspots intact when entering pages
+                        activeController.onPause()
+                    }
                 }
             }
 
             AndroidView(
-                factory = { mapView },
+                factory = {
+                    (mapView.parent as? ViewGroup)?.removeView(mapView)
+                    mapView
+                },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -712,8 +862,8 @@ fun FirstStrikeHeatmapScreen(
                                     .background(itemBg)
                                     .border(1.dp, itemBorder, RoundedCornerShape(14.dp))
                                     .clickable {
-                                        hasAutoFramed = true
-                                        focusedStrikePerson = person
+                                        activeController.hasAutoFramed = true
+                                        activeController.focusedStrikePerson = person
                                         showAllStrikesMenu = false
                                         if (lat != null && lng != null) {
                                             mapLibreRef?.let { map ->
@@ -867,7 +1017,7 @@ fun FirstStrikeHeatmapScreen(
                             selected = mapVisualTheme == MapVisualTheme.OBSIDIAN_DARK,
                             accent = accentCyan,
                             isDark = isMapDark,
-                            onClick = { mapVisualTheme = MapVisualTheme.OBSIDIAN_DARK },
+                            onClick = { activeController.mapVisualTheme = MapVisualTheme.OBSIDIAN_DARK },
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("heatmap_theme_dark_btn")
@@ -881,7 +1031,7 @@ fun FirstStrikeHeatmapScreen(
                             selected = mapVisualTheme == MapVisualTheme.CLASSIC_LIGHT,
                             accent = NeonAmber,
                             isDark = isMapDark,
-                            onClick = { mapVisualTheme = MapVisualTheme.CLASSIC_LIGHT },
+                            onClick = { activeController.mapVisualTheme = MapVisualTheme.CLASSIC_LIGHT },
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("heatmap_theme_light_btn")
@@ -921,7 +1071,7 @@ fun FirstStrikeHeatmapScreen(
                         }
                         Switch(
                             checked = show3dBuildings,
-                            onCheckedChange = { show3dBuildings = it },
+                            onCheckedChange = { activeController.show3dBuildings = it },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = accentCyan,
                                 checkedTrackColor = accentCyan.copy(alpha = 0.3f)
@@ -951,7 +1101,7 @@ fun FirstStrikeHeatmapScreen(
                                 selected = displayMode == HeatmapDisplayMode.HYBRID,
                                 accent = accentCyan,
                                 isDark = isMapDark,
-                                onClick = { displayMode = HeatmapDisplayMode.HYBRID },
+                                onClick = { activeController.displayMode = HeatmapDisplayMode.HYBRID },
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag("heatmap_mode_hybrid_btn")
@@ -961,7 +1111,7 @@ fun FirstStrikeHeatmapScreen(
                                 selected = displayMode == HeatmapDisplayMode.HEATMAP_GLOW,
                                 accent = NeonAmber,
                                 isDark = isMapDark,
-                                onClick = { displayMode = HeatmapDisplayMode.HEATMAP_GLOW },
+                                onClick = { activeController.displayMode = HeatmapDisplayMode.HEATMAP_GLOW },
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag("heatmap_mode_heat_btn")
@@ -971,7 +1121,7 @@ fun FirstStrikeHeatmapScreen(
                                 selected = displayMode == HeatmapDisplayMode.CLUSTER_PINS,
                                 accent = NeonEmerald,
                                 isDark = isMapDark,
-                                onClick = { displayMode = HeatmapDisplayMode.CLUSTER_PINS },
+                                onClick = { activeController.displayMode = HeatmapDisplayMode.CLUSTER_PINS },
                                 modifier = Modifier
                                     .weight(1f)
                                     .testTag("heatmap_mode_pins_btn")

@@ -5,6 +5,9 @@ import android.content.ContextWrapper
 import android.content.res.AssetManager
 import android.content.res.Configuration
 import android.content.res.Resources
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.fragment.app.FragmentActivity
@@ -90,8 +93,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -110,7 +115,9 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.sin
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -130,11 +137,13 @@ import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.LuxurySettingsMenuButton
 import com.example.ui.components.RecordsDashboardExpandablePanel
 import com.example.ui.components.SettingsSideDrawer
+import com.example.ui.map.isRobolectricRuntime
 import com.example.ui.screens.ComparisonScreen
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.DeviationsScreen
 import com.example.ui.screens.FirstStrikeHeatmapScreen
 import com.example.ui.screens.FlameScreen
+import com.example.ui.screens.HeatmapMapController
 import com.example.ui.screens.InventoryScreen
 import com.example.ui.screens.RoadmapScreen
 import com.example.ui.screens.StrikeScreen
@@ -277,8 +286,18 @@ fun LiquidGlassApp(
     currentLang: String,
     onSelectLanguage: (String) -> Unit
 ) {
+    val appContext = LocalContext.current.applicationContext
+    val heatmapMapController = remember {
+        if (isRobolectricRuntime()) null else HeatmapMapController(appContext)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            heatmapMapController?.destroy()
+        }
+    }
+
     val curtainScope = rememberCoroutineScope()
-    // 0f = Full-screen First-Strike Heatmap, 1f = Main Application Pages revealed
+    // 0f = Full-screen First-Strike Heatmap (sharp focus), 1f = Main Application Pages (blurred-in focus)
     val heatmapCurtainProgress = remember { Animatable(0f) }
     val showHeatmapEntry = heatmapCurtainProgress.value < 0.5f
     fun animateCurtainTo(target: Float, initialVelocityProgress: Float = 0f) {
@@ -287,7 +306,7 @@ fun LiquidGlassApp(
                 targetValue = target.coerceIn(0f, 1f),
                 initialVelocity = initialVelocityProgress,
                 animationSpec = spring(
-                    dampingRatio = 0.86f,
+                    dampingRatio = 0.88f,
                     stiffness = Spring.StiffnessMediumLow
                 )
             )
@@ -397,21 +416,36 @@ fun LiquidGlassApp(
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val fullHeightPx = with(LocalDensity.current) { maxHeight.toPx().coerceAtLeast(1f) }
+        val density = LocalDensity.current
+        val fullHeightPx = with(density) { maxHeight.toPx().coerceAtLeast(1f) }
+        val dragSpanPx = (fullHeightPx * 0.62f).coerceAtLeast(1f)
+        val maxHeatmapBlurPx = with(density) { 26.dp.toPx() }
+        val maxPagesBlurPx = with(density) { 24.dp.toPx() }
         val curtainProgress = heatmapCurtainProgress.value.coerceIn(0f, 1f)
         val showMainPages = curtainProgress > 0.001f
         val showHeatmapOverlay = curtainProgress < 0.999f
+        val isTransitioning = curtainProgress in 0.001f..0.999f
+        val transitionArc = sin(curtainProgress * PI).toFloat().coerceIn(0f, 1f)
+        val canUseRenderBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !isRobolectricRuntime()
 
         if (showMainPages) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .zIndex(1f)
                 .graphicsLayer {
-                    val scale = 0.96f + (0.04f * curtainProgress)
+                    // Blur In: soft optical bokeh (24dp) sharpens into razor focus (0dp) as pages arrive
+                    val blurPx = (1f - curtainProgress) * maxPagesBlurPx
+                    renderEffect = if (canUseRenderBlur && blurPx > 0.5f) {
+                        RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP).asComposeRenderEffect()
+                    } else {
+                        null
+                    }
+                    val scale = 0.92f + (0.08f * curtainProgress)
                     scaleX = scale
                     scaleY = scale
-                    translationY = (1f - curtainProgress) * fullHeightPx * 0.10f
-                    alpha = (0.35f + 0.65f * curtainProgress).coerceIn(0f, 1f)
+                    translationY = (1f - curtainProgress) * fullHeightPx * 0.08f
+                    alpha = (curtainProgress / 0.72f).coerceIn(0f, 1f)
                 }
         ) {
         Scaffold(
@@ -439,13 +473,13 @@ fun LiquidGlassApp(
                     onPullDownHeatmapDelta = { deltaRootY ->
                         curtainScope.launch {
                             heatmapCurtainProgress.snapTo(
-                                (heatmapCurtainProgress.value - (deltaRootY / fullHeightPx)).coerceIn(0f, 1f)
+                                (heatmapCurtainProgress.value - (deltaRootY / dragSpanPx)).coerceIn(0f, 1f)
                             )
                         }
                     },
                     onPullDownHeatmapEnd = { velRootY ->
-                        val velProgress = -velRootY / fullHeightPx
-                        if (heatmapCurtainProgress.value <= 0.82f || velRootY >= 420f) {
+                        val velProgress = -velRootY / dragSpanPx
+                        if (heatmapCurtainProgress.value <= 0.78f || velRootY >= 420f) {
                             animateCurtainTo(0f, velProgress)
                         } else {
                             animateCurtainTo(1f, velProgress)
@@ -663,18 +697,52 @@ fun LiquidGlassApp(
         }
         }
 
+        if (isTransitioning) {
+            // Atmospheric spatial mist veil between blurred-out map and blurred-in pages
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(0.5f)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                (if (isDarkTheme) Color(0xFF040914) else Color(0xFFEFF6FF))
+                                    .copy(alpha = 0.42f * transitionArc),
+                                (if (isDarkTheme) NeonCyan else DayCyan)
+                                    .copy(alpha = 0.14f * transitionArc),
+                                (if (isDarkTheme) Color(0xFF020611) else Color(0xFFF8FAFC))
+                                    .copy(alpha = 0.48f * transitionArc)
+                            )
+                        )
+                    )
+            )
+        }
+
         if (showHeatmapOverlay) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .zIndex(0f)
                     .graphicsLayer {
-                        translationY = -curtainProgress * fullHeightPx
+                        // Blur Out: map recedes softly backward into deep bokeh (0dp -> 26dp)
+                        val blurPx = curtainProgress * maxHeatmapBlurPx
+                        renderEffect = if (canUseRenderBlur && blurPx > 0.5f) {
+                            RenderEffect.createBlurEffect(blurPx, blurPx, Shader.TileMode.CLAMP).asComposeRenderEffect()
+                        } else {
+                            null
+                        }
+                        val scale = 1.0f - (0.09f * curtainProgress)
+                        scaleX = scale
+                        scaleY = scale
+                        translationY = -curtainProgress * fullHeightPx * 0.12f
+                        alpha = (1f - ((curtainProgress - 0.22f).coerceAtLeast(0f) / 0.78f)).coerceIn(0f, 1f)
                     }
             ) {
                 FirstStrikeHeatmapScreen(
                     viewModel = viewModel,
                     currentLang = currentLang,
                     isAppDarkTheme = isDarkTheme,
+                    mapController = heatmapMapController,
                     onEnterApp = { animateCurtainTo(1f) },
                     onNavigateToPersonProfile = { personId ->
                         viewModel.resetFilters()
@@ -685,13 +753,13 @@ fun LiquidGlassApp(
                     onCurtainDragDelta = { deltaRootY ->
                         curtainScope.launch {
                             heatmapCurtainProgress.snapTo(
-                                (heatmapCurtainProgress.value - (deltaRootY / fullHeightPx)).coerceIn(0f, 1f)
+                                (heatmapCurtainProgress.value - (deltaRootY / dragSpanPx)).coerceIn(0f, 1f)
                             )
                         }
                     },
                     onCurtainDragEnd = { velRootY ->
-                        val velProgress = -velRootY / fullHeightPx
-                        if (heatmapCurtainProgress.value >= 0.18f || velRootY <= -420f) {
+                        val velProgress = -velRootY / dragSpanPx
+                        if (heatmapCurtainProgress.value >= 0.22f || velRootY <= -420f) {
                             animateCurtainTo(1f, velProgress)
                         } else {
                             animateCurtainTo(0f, velProgress)
@@ -699,13 +767,16 @@ fun LiquidGlassApp(
                     }
                 )
 
-                // Crisp luminous cyan bottom edge highlight while sliding as a curtain
-                if (curtainProgress in 0.001f..0.999f) {
+                // Subtle luminous cyan optical edge sweeping across mid-transition
+                if (isTransitioning) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
                             .height(2.dp)
+                            .graphicsLayer {
+                                alpha = transitionArc
+                            }
                             .background(
                                 Brush.horizontalGradient(
                                     listOf(
