@@ -4,13 +4,22 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -49,13 +58,10 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.filled.Whatshot
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -75,6 +81,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -470,184 +481,239 @@ fun FirstStrikeHeatmapScreen(
             }
         }
 
-        // 3. Floating Liquid Glass Layers Switcher Popover (Dark / Light / 3D Buildings / Heatmap vs Pins)
-        AnimatedVisibility(
-            visible = showLayersMenu,
-            enter = fadeIn() + scaleIn(initialScale = 0.9f),
-            exit = fadeOut() + scaleOut(targetScale = 0.9f),
+        // 3. Top-Right Floating Stack: Map Style & Layers Popover + Know My Location Button directly below it
+        Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(top = 68.dp, end = 14.dp)
+                .animateContentSize(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .width(260.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(glassBg)
-                    .border(1.1.dp, glassBorder, RoundedCornerShape(22.dp))
-                    .padding(14.dp)
-                    .testTag("heatmap_layers_panel"),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            AnimatedVisibility(
+                visible = showLayersMenu,
+                enter = fadeIn(tween(180)) + expandVertically(expandFrom = Alignment.Top) + scaleIn(initialScale = 0.94f),
+                exit = fadeOut(tween(140)) + shrinkVertically(shrinkTowards = Alignment.Top) + scaleOut(targetScale = 0.94f)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = when {
-                            isAr -> "طبقات ومظهر الخريطة"
-                            isFr -> "Style & Couches"
-                            else -> "Map Style & Layers"
-                        },
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = PlusJakartaSans,
-                        color = textPrimary
-                    )
-                    IconButton(
-                        onClick = { showLayersMenu = false },
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close layers",
-                            tint = textSecondary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                // Theme Switcher: Obsidian Dark vs Classic Light
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    LayerChipButton(
-                        label = when {
-                            isAr -> "داكن فاخر"
-                            isFr -> "Sombre"
-                            else -> "Obsidian Dark"
-                        },
-                        selected = mapVisualTheme == MapVisualTheme.OBSIDIAN_DARK,
-                        accent = accentCyan,
-                        isDark = isMapDark,
-                        onClick = { mapVisualTheme = MapVisualTheme.OBSIDIAN_DARK },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("heatmap_theme_dark_btn")
-                    )
-                    LayerChipButton(
-                        label = when {
-                            isAr -> "نهاري كلاسيك"
-                            isFr -> "Clair"
-                            else -> "Classic Light"
-                        },
-                        selected = mapVisualTheme == MapVisualTheme.CLASSIC_LIGHT,
-                        accent = NeonAmber,
-                        isDark = isMapDark,
-                        onClick = { mapVisualTheme = MapVisualTheme.CLASSIC_LIGHT },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("heatmap_theme_light_btn")
-                    )
-                }
-
-                // 3D Extruded Buildings Toggle (minZoom = 15f)
-                Row(
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(if (isMapDark) Color(0x1E1E293B) else Color(0xFFF1F5F9))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .width(260.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(glassBg)
+                        .border(1.1.dp, glassBorder, RoundedCornerShape(22.dp))
+                        .padding(14.dp)
+                        .testTag("heatmap_layers_panel"),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ViewInAr,
-                            contentDescription = null,
-                            tint = accentCyan,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Text(
-                            text = when {
-                                isAr -> "مباني ثلاثية الأبعاد"
-                                isFr -> "Bâtiments 3D"
-                                else -> "3D Buildings"
-                            },
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = textPrimary
-                        )
-                    }
-                    Switch(
-                        checked = show3dBuildings,
-                        onCheckedChange = { show3dBuildings = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = accentCyan,
-                            checkedTrackColor = accentCyan.copy(alpha = 0.3f)
-                        ),
-                        modifier = Modifier.testTag("heatmap_3d_buildings_toggle")
-                    )
-                }
-
-                // Display Mode: Hybrid / Heatmap Glow / Cluster Pins
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = when {
-                            isAr -> "نمط العرض الحراري"
-                            isFr -> "Mode d'affichage"
-                            else -> "Visualization Mode"
-                        },
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textSecondary
-                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = when {
+                                isAr -> "طبقات ومظهر الخريطة"
+                                isFr -> "Style & Couches"
+                                else -> "Map Style & Layers"
+                            },
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = PlusJakartaSans,
+                            color = textPrimary
+                        )
+                        IconButton(
+                            onClick = { showLayersMenu = false },
+                            modifier = Modifier.size(30.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close layers",
+                                tint = textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    // Theme Switcher: Obsidian Dark vs Classic Light
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         LayerChipButton(
-                            label = if (isAr) "مختلط" else if (isFr) "Hybride" else "Hybrid",
-                            selected = displayMode == HeatmapDisplayMode.HYBRID,
+                            label = when {
+                                isAr -> "داكن فاخر"
+                                isFr -> "Sombre"
+                                else -> "Obsidian Dark"
+                            },
+                            selected = mapVisualTheme == MapVisualTheme.OBSIDIAN_DARK,
                             accent = accentCyan,
                             isDark = isMapDark,
-                            onClick = { displayMode = HeatmapDisplayMode.HYBRID },
+                            onClick = { mapVisualTheme = MapVisualTheme.OBSIDIAN_DARK },
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("heatmap_mode_hybrid_btn")
+                                .testTag("heatmap_theme_dark_btn")
                         )
                         LayerChipButton(
-                            label = if (isAr) "حراري" else if (isFr) "Chaleur" else "Heat",
-                            selected = displayMode == HeatmapDisplayMode.HEATMAP_GLOW,
+                            label = when {
+                                isAr -> "نهاري كلاسيك"
+                                isFr -> "Clair"
+                                else -> "Classic Light"
+                            },
+                            selected = mapVisualTheme == MapVisualTheme.CLASSIC_LIGHT,
                             accent = NeonAmber,
                             isDark = isMapDark,
-                            onClick = { displayMode = HeatmapDisplayMode.HEATMAP_GLOW },
+                            onClick = { mapVisualTheme = MapVisualTheme.CLASSIC_LIGHT },
                             modifier = Modifier
                                 .weight(1f)
-                                .testTag("heatmap_mode_heat_btn")
+                                .testTag("heatmap_theme_light_btn")
                         )
-                        LayerChipButton(
-                            label = if (isAr) "دبابيس" else if (isFr) "Points" else "Pins",
-                            selected = displayMode == HeatmapDisplayMode.CLUSTER_PINS,
-                            accent = NeonEmerald,
-                            isDark = isMapDark,
-                            onClick = { displayMode = HeatmapDisplayMode.CLUSTER_PINS },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("heatmap_mode_pins_btn")
+                    }
+
+                    // 3D Extruded Buildings Toggle (minZoom = 15f)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isMapDark) Color(0x1E1E293B) else Color(0xFFF1F5F9))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ViewInAr,
+                                contentDescription = null,
+                                tint = accentCyan,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = when {
+                                    isAr -> "مباني ثلاثية الأبعاد"
+                                    isFr -> "Bâtiments 3D"
+                                    else -> "3D Buildings"
+                                },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textPrimary
+                            )
+                        }
+                        Switch(
+                            checked = show3dBuildings,
+                            onCheckedChange = { show3dBuildings = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = accentCyan,
+                                checkedTrackColor = accentCyan.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier.testTag("heatmap_3d_buildings_toggle")
                         )
+                    }
+
+                    // Display Mode: Hybrid / Heatmap Glow / Cluster Pins
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = when {
+                                isAr -> "نمط العرض الحراري"
+                                isFr -> "Mode d'affichage"
+                                else -> "Visualization Mode"
+                            },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = textSecondary
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            LayerChipButton(
+                                label = if (isAr) "مختلط" else if (isFr) "Hybride" else "Hybrid",
+                                selected = displayMode == HeatmapDisplayMode.HYBRID,
+                                accent = accentCyan,
+                                isDark = isMapDark,
+                                onClick = { displayMode = HeatmapDisplayMode.HYBRID },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("heatmap_mode_hybrid_btn")
+                            )
+                            LayerChipButton(
+                                label = if (isAr) "حراري" else if (isFr) "Chaleur" else "Heat",
+                                selected = displayMode == HeatmapDisplayMode.HEATMAP_GLOW,
+                                accent = NeonAmber,
+                                isDark = isMapDark,
+                                onClick = { displayMode = HeatmapDisplayMode.HEATMAP_GLOW },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("heatmap_mode_heat_btn")
+                            )
+                            LayerChipButton(
+                                label = if (isAr) "دبابيس" else if (isFr) "Points" else "Pins",
+                                selected = displayMode == HeatmapDisplayMode.CLUSTER_PINS,
+                                accent = NeonEmerald,
+                                isDark = isMapDark,
+                                onClick = { displayMode = HeatmapDisplayMode.CLUSTER_PINS },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("heatmap_mode_pins_btn")
+                            )
+                        }
                     }
                 }
             }
+
+            // Know My Location Button placed directly below Map Style & Layers
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(glassBg)
+                    .border(1.1.dp, accentCyan.copy(alpha = 0.65f), RoundedCornerShape(50))
+                    .clickable {
+                        if (hasLocationPermission(context)) {
+                            requestLocationAndAnimate()
+                        } else {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                                    Manifest.permission.ACCESS_FINE_LOCATION
+                                )
+                            )
+                        }
+                    }
+                    .minimumInteractiveComponentSize()
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    .testTag("heatmap_know_location_btn"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MyLocation,
+                    contentDescription = when {
+                        isAr -> "موقعي الآن"
+                        isFr -> "Ma position"
+                        else -> "Know My Location"
+                    },
+                    tint = accentCyan,
+                    modifier = Modifier.size(17.dp)
+                )
+                Text(
+                    text = when {
+                        isAr -> "موقعي الآن"
+                        isFr -> "Ma position"
+                        else -> "Know My Location"
+                    },
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = PlusJakartaSans,
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
-        // 4. Bottom Liquid Glass Dock ("Swipe up to hide map" handle button + "Know My Location" + "Enter")
+        // 4. Bottom Luxury Swipe-Up Beacon (Only Swipe Up — animated upward chevron waves, beam, particles & 1:1 curtain drag)
         var bottomDockCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
         val latestOnDragDelta by rememberUpdatedState(onCurtainDragDelta)
         val latestOnDragEnd by rememberUpdatedState(onCurtainDragEnd)
@@ -712,188 +778,27 @@ fun FirstStrikeHeatmapScreen(
                     Brush.verticalGradient(
                         listOf(
                             Color.Transparent,
-                            Color(0x9902050B),
-                            Color(0xF5020408)
+                            Color(0x8802050B),
+                            Color(0xF0020408)
                         )
                     )
                 )
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-                .testTag("heatmap_bottom_bar")
+                .padding(horizontal = 20.dp, vertical = 14.dp)
+                .testTag("heatmap_bottom_bar"),
+            contentAlignment = Alignment.BottomCenter
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Pull / Swipe-Up Handle Button directly above Know My Location & Enter
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            Brush.verticalGradient(
-                                if (isMapDark) {
-                                    listOf(Color(0xE0111D33), Color(0xEC08101E))
-                                } else {
-                                    listOf(Color(0xF2FFFFFF), Color(0xE8EAF2FB))
-                                }
-                            )
-                        )
-                        .border(
-                            1.dp,
-                            Brush.horizontalGradient(
-                                listOf(
-                                    accentCyan.copy(alpha = 0.25f),
-                                    accentCyan.copy(alpha = 0.65f),
-                                    accentCyan.copy(alpha = 0.25f)
-                                )
-                            ),
-                            RoundedCornerShape(50)
-                        )
-                        .clickable { onEnterApp() }
-                        .minimumInteractiveComponentSize()
-                        .padding(horizontal = 18.dp, vertical = 9.dp)
-                        .testTag("heatmap_swipe_up_hide_btn"),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
-                        contentDescription = null,
-                        tint = accentCyan,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = when {
-                            isAr -> "اسحب لأعلى لإخفاء الخريطة"
-                            isFr -> "Glisser vers le haut pour masquer"
-                            else -> "Swipe up to hide map"
-                        },
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = PlusJakartaSans,
-                        color = textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
-                        contentDescription = null,
-                        tint = accentCyan,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(26.dp))
-                        .background(
-                            Brush.verticalGradient(
-                                if (isMapDark) {
-                                    listOf(Color(0xD80E1729), Color(0xEC060B15))
-                                } else {
-                                    listOf(Color(0xEBFFFFFF), Color(0xDCF1F5F9))
-                                }
-                            )
-                        )
-                        .border(
-                            1.dp,
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color(0x55FFFFFF),
-                                    accentCyan.copy(alpha = 0.42f)
-                                )
-                            ),
-                            RoundedCornerShape(26.dp)
-                        )
-                        .padding(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                // Know My Location Button
-                OutlinedButton(
-                    onClick = {
-                        if (hasLocationPermission(context)) {
-                            requestLocationAndAnimate()
-                        } else {
-                            locationPermissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                                    Manifest.permission.ACCESS_FINE_LOCATION
-                                )
-                            )
-                        }
-                    },
-                    shape = RoundedCornerShape(18.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.1.dp,
-                        accentCyan.copy(alpha = 0.65f)
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp)
-                        .minimumInteractiveComponentSize()
-                        .testTag("heatmap_know_location_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MyLocation,
-                        contentDescription = null,
-                        tint = accentCyan,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = when {
-                            isAr -> "موقعي الآن"
-                            isFr -> "Ma position"
-                            else -> "Know My Location"
-                        },
-                        fontSize = 12.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = PlusJakartaSans,
-                        color = textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                // Enter Main App Button
-                Button(
-                    onClick = onEnterApp,
-                    shape = RoundedCornerShape(18.dp),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = accentCyan,
-                        contentColor = Color(0xFF021622)
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp)
-                        .minimumInteractiveComponentSize()
-                        .testTag("heatmap_enter_btn")
-                ) {
-                    Text(
-                        text = when {
-                            isAr -> "دخول"
-                            isFr -> "Entrer"
-                            else -> "Enter"
-                        },
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = PlusJakartaSans,
-                        maxLines = 1
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
+            LuxurySwipeUpBeacon(
+                label = when {
+                    isAr -> "اسحب لأعلى لإخفاء الخريطة"
+                    isFr -> "Glisser vers le haut"
+                    else -> "Swipe up to hide map"
+                },
+                accentCyan = accentCyan,
+                textPrimary = textPrimary,
+                isMapDark = isMapDark,
+                onClick = onEnterApp
+            )
         }
     }
 
@@ -1120,5 +1025,228 @@ private fun LayerChipButton(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@Composable
+private fun LuxurySwipeUpBeacon(
+    label: String,
+    accentCyan: Color,
+    textPrimary: Color,
+    isMapDark: Boolean,
+    onClick: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "luxury_swipe_up_beacon")
+    val waveProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1650, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "swipe_wave_progress"
+    )
+    val floatProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "swipe_float_progress"
+    )
+    val shimmerSweep by infiniteTransition.animateFloat(
+        initialValue = -0.3f,
+        targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "swipe_shimmer_sweep"
+    )
+
+    val path = remember { Path() }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        // Ascending light beam, floating sparks, and triple cascading upward chevrons
+        Canvas(
+            modifier = Modifier
+                .width(156.dp)
+                .height(38.dp)
+                .testTag("heatmap_swipe_up_graphics")
+        ) {
+            val centerX = size.width / 2f
+            val h = size.height
+
+            // Soft holographic upward glow cone
+            drawRect(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        accentCyan.copy(alpha = 0.06f + 0.05f * floatProgress),
+                        accentCyan.copy(alpha = 0.16f + 0.08f * floatProgress)
+                    )
+                ),
+                topLeft = Offset(centerX - 42.dp.toPx(), 0f),
+                size = androidx.compose.ui.geometry.Size(84.dp.toPx(), h)
+            )
+
+            // 4 ascending luminous micro-particles rising along the beam
+            val particleXOffsets = listOf(-22f, 18f, -10f, 26f)
+            val particleRadii = listOf(1.6f, 1.3f, 1.9f, 1.4f)
+            for (i in 0 until 4) {
+                val t = (waveProgress + i * 0.25f) % 1f
+                val py = h * (1f - t)
+                val px = centerX + particleXOffsets[i].dp.toPx()
+                val pAlpha = kotlin.math.sin(t * Math.PI).toFloat().coerceIn(0f, 1f) * 0.72f
+                drawCircle(
+                    color = accentCyan.copy(alpha = pAlpha),
+                    radius = particleRadii[i].dp.toPx(),
+                    center = Offset(px, py)
+                )
+            }
+
+            // Triple cascading upward chevron waves
+            val chevronHalfWidth = 11.dp.toPx()
+            val chevronTipDepth = 5.5.dp.toPx()
+            for (index in 0 until 3) {
+                val phase = (waveProgress + index * 0.333f) % 1f
+                val y = h * (0.90f - phase * 0.78f)
+                val envelope = kotlin.math.sin(phase * Math.PI).toFloat().coerceIn(0f, 1f)
+                val scale = 0.85f + 0.22f * (1f - phase)
+                val hw = chevronHalfWidth * scale
+                val td = chevronTipDepth * scale
+
+                path.reset()
+                path.moveTo(centerX - hw, y + td)
+                path.lineTo(centerX, y)
+                path.lineTo(centerX + hw, y + td)
+
+                // Soft outer neon halo stroke
+                drawPath(
+                    path = path,
+                    color = accentCyan.copy(alpha = envelope * 0.32f),
+                    style = Stroke(
+                        width = 5.5.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round
+                    )
+                )
+                // Crisp luminous inner chevron stroke
+                drawPath(
+                    path = path,
+                    color = Color.White.copy(alpha = envelope * 0.92f),
+                    style = Stroke(
+                        width = 2.1.dp.toPx(),
+                        cap = StrokeCap.Round,
+                        join = StrokeJoin.Round
+                    )
+                )
+            }
+        }
+
+        // Levitating Liquid Glass Pill with shimmering metallic-cyan rim & kinetic double arrows
+        val pillBg = if (isMapDark) {
+            Brush.verticalGradient(
+                listOf(
+                    Color(0xEE111E36),
+                    Color(0xF6070E1C)
+                )
+            )
+        } else {
+            Brush.verticalGradient(
+                listOf(
+                    Color(0xF8FFFFFF),
+                    Color(0xEEEDF3FC)
+                )
+            )
+        }
+
+        val borderSweep = Brush.horizontalGradient(
+            colorStops = arrayOf(
+                0.0f to accentCyan.copy(alpha = 0.28f),
+                (shimmerSweep - 0.15f).coerceIn(0f, 1f) to accentCyan.copy(alpha = 0.45f),
+                shimmerSweep.coerceIn(0f, 1f) to Color.White.copy(alpha = if (isMapDark) 0.92f else 0.95f),
+                (shimmerSweep + 0.15f).coerceIn(0f, 1f) to NeonEmerald.copy(alpha = 0.65f),
+                1.0f to accentCyan.copy(alpha = 0.28f)
+            )
+        )
+
+        val orbArrowShift = (waveProgress * 2f).let { p ->
+            if (p <= 1f) -p * 3.5f else -(2f - p) * 3.5f
+        }
+
+        Box(
+            modifier = Modifier
+                .graphicsLayer {
+                    translationY = ((floatProgress - 0.5f) * -5.dp.toPx())
+                }
+                .clip(RoundedCornerShape(50))
+                .background(pillBg)
+                .border(1.35.dp, borderSweep, RoundedCornerShape(50))
+                .clickable(onClick = onClick)
+                .minimumInteractiveComponentSize()
+                .padding(horizontal = 20.dp, vertical = 10.dp)
+                .testTag("heatmap_swipe_up_hide_btn"),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Luminous kinetic orb on start side
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                listOf(
+                                    accentCyan.copy(alpha = 0.34f + 0.18f * floatProgress),
+                                    accentCyan.copy(alpha = 0.10f)
+                                )
+                            )
+                        )
+                        .border(1.dp, accentCyan.copy(alpha = 0.72f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = null,
+                        tint = accentCyan,
+                        modifier = Modifier
+                            .size(19.dp)
+                            .graphicsLayer {
+                                translationY = orbArrowShift.dp.toPx()
+                            }
+                    )
+                }
+
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = PlusJakartaSans,
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                // Symmetrical kinetic trailing arrow
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowUp,
+                    contentDescription = null,
+                    tint = accentCyan.copy(alpha = 0.7f + 0.3f * floatProgress),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .graphicsLayer {
+                            translationY = orbArrowShift.dp.toPx()
+                        }
+                )
+            }
+        }
     }
 }

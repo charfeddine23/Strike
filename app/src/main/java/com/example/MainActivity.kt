@@ -723,7 +723,7 @@ fun LiquidGlassApp(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(bottom = 148.dp)
+                        .padding(bottom = 124.dp)
                 )
             }
         }

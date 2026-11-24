@@ -55,8 +55,8 @@ class AddIndividualCrashTest {
 
     private fun enterMainAppFromHeatmap() {
         composeRule.waitForIdle()
-        if (composeRule.onAllNodesWithTag("heatmap_enter_btn").fetchSemanticsNodes().isNotEmpty()) {
-            composeRule.onNodeWithTag("heatmap_enter_btn").performClick()
+        if (composeRule.onAllNodesWithTag("heatmap_swipe_up_hide_btn").fetchSemanticsNodes().isNotEmpty()) {
+            composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performClick()
             composeRule.waitForIdle()
         }
     }
