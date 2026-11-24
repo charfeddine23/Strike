@@ -17,8 +17,11 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -30,9 +33,12 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -75,6 +81,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,8 +90,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -94,6 +109,8 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -260,7 +277,22 @@ fun LiquidGlassApp(
     currentLang: String,
     onSelectLanguage: (String) -> Unit
 ) {
-    var showHeatmapEntry by remember { mutableStateOf(true) }
+    val curtainScope = rememberCoroutineScope()
+    // 0f = Full-screen First-Strike Heatmap, 1f = Main Application Pages revealed
+    val heatmapCurtainProgress = remember { Animatable(0f) }
+    val showHeatmapEntry = heatmapCurtainProgress.value < 0.5f
+    fun animateCurtainTo(target: Float, initialVelocityProgress: Float = 0f) {
+        curtainScope.launch {
+            heatmapCurtainProgress.animateTo(
+                targetValue = target.coerceIn(0f, 1f),
+                initialVelocity = initialVelocityProgress,
+                animationSpec = spring(
+                    dampingRatio = 0.86f,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            )
+        }
+    }
     var currentScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
     var roadmapMainTab by remember { mutableIntStateOf(0) }
     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -364,28 +396,24 @@ fun LiquidGlassApp(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (showHeatmapEntry) {
-            FirstStrikeHeatmapScreen(
-                viewModel = viewModel,
-                currentLang = currentLang,
-                isAppDarkTheme = isDarkTheme,
-                onEnterApp = { showHeatmapEntry = false },
-                onNavigateToPersonProfile = { personId ->
-                    viewModel.resetFilters()
-                    viewModel.focusIndividualProfile(personId)
-                    currentScreen = AppScreen.DASHBOARD
-                    showHeatmapEntry = false
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val fullHeightPx = with(LocalDensity.current) { maxHeight.toPx().coerceAtLeast(1f) }
+        val curtainProgress = heatmapCurtainProgress.value.coerceIn(0f, 1f)
+        val showMainPages = curtainProgress > 0.001f
+        val showHeatmapOverlay = curtainProgress < 0.999f
+
+        if (showMainPages) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val scale = 0.96f + (0.04f * curtainProgress)
+                    scaleX = scale
+                    scaleY = scale
+                    translationY = (1f - curtainProgress) * fullHeightPx * 0.10f
+                    alpha = (0.35f + 0.65f * curtainProgress).coerceIn(0f, 1f)
                 }
-            )
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(bottom = 148.dp)
-            )
-        } else {
+        ) {
         Scaffold(
             containerColor = Color.Transparent,
             topBar = {
@@ -408,6 +436,21 @@ fun LiquidGlassApp(
                     onOpenFlame = { currentScreen = AppScreen.FLAME },
                     onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
                     onLongPressFlame = { showStartDateDialog = true },
+                    onPullDownHeatmapDelta = { deltaRootY ->
+                        curtainScope.launch {
+                            heatmapCurtainProgress.snapTo(
+                                (heatmapCurtainProgress.value - (deltaRootY / fullHeightPx)).coerceIn(0f, 1f)
+                            )
+                        }
+                    },
+                    onPullDownHeatmapEnd = { velRootY ->
+                        val velProgress = -velRootY / fullHeightPx
+                        if (heatmapCurtainProgress.value <= 0.82f || velRootY >= 420f) {
+                            animateCurtainTo(0f, velProgress)
+                        } else {
+                            animateCurtainTo(1f, velProgress)
+                        }
+                    },
                     currentLang = currentLang,
                     isDarkTheme = isDarkTheme,
                     isHapticEnabled = isHapticEnabled
@@ -432,11 +475,16 @@ fun LiquidGlassApp(
                 }
             },
             snackbarHost = {
+                val bottomBarHidden = currentScreen == AppScreen.TASKS_LEDGER || currentScreen == AppScreen.XP_LOGS
                 SnackbarHost(
                     hostState = snackbarHostState,
-                    modifier = Modifier
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(bottom = 68.dp)
+                    modifier = if (bottomBarHidden) {
+                        Modifier
+                            .windowInsetsPadding(WindowInsets.navigationBars)
+                            .padding(bottom = 12.dp)
+                    } else {
+                        Modifier.padding(bottom = 8.dp)
+                    }
                 )
             }
         ) { innerPadding ->
@@ -600,7 +648,7 @@ fun LiquidGlassApp(
             onLockAppNow = { viewModel.lockApp() },
             onOpenHeatmap = {
                 showSettingsDialog = false
-                showHeatmapEntry = true
+                animateCurtainTo(0f)
             }
         )
 
@@ -612,6 +660,72 @@ fun LiquidGlassApp(
                 isDarkTheme = isDarkTheme
             )
         }
+        }
+        }
+
+        if (showHeatmapOverlay) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        translationY = -curtainProgress * fullHeightPx
+                    }
+            ) {
+                FirstStrikeHeatmapScreen(
+                    viewModel = viewModel,
+                    currentLang = currentLang,
+                    isAppDarkTheme = isDarkTheme,
+                    onEnterApp = { animateCurtainTo(1f) },
+                    onNavigateToPersonProfile = { personId ->
+                        viewModel.resetFilters()
+                        viewModel.focusIndividualProfile(personId)
+                        currentScreen = AppScreen.DASHBOARD
+                        animateCurtainTo(1f)
+                    },
+                    onCurtainDragDelta = { deltaRootY ->
+                        curtainScope.launch {
+                            heatmapCurtainProgress.snapTo(
+                                (heatmapCurtainProgress.value - (deltaRootY / fullHeightPx)).coerceIn(0f, 1f)
+                            )
+                        }
+                    },
+                    onCurtainDragEnd = { velRootY ->
+                        val velProgress = -velRootY / fullHeightPx
+                        if (heatmapCurtainProgress.value >= 0.18f || velRootY <= -420f) {
+                            animateCurtainTo(1f, velProgress)
+                        } else {
+                            animateCurtainTo(0f, velProgress)
+                        }
+                    }
+                )
+
+                // Crisp luminous cyan bottom edge highlight while sliding as a curtain
+                if (curtainProgress in 0.001f..0.999f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        Color.Transparent,
+                                        NeonCyan.copy(alpha = 0.85f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                    )
+                }
+
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = 148.dp)
+                )
+            }
         }
     }
 
@@ -685,6 +799,8 @@ fun LiquidGlassTopBar(
     onOpenFlame: () -> Unit,
     onOpenDeviations: () -> Unit,
     onLongPressFlame: () -> Unit = {},
+    onPullDownHeatmapDelta: ((Float) -> Unit)? = null,
+    onPullDownHeatmapEnd: ((Float) -> Unit)? = null,
     currentLang: String = "ar",
     isDarkTheme: Boolean = LocalAppDarkTheme.current,
     isHapticEnabled: Boolean = true
@@ -786,6 +902,10 @@ fun LiquidGlassTopBar(
         )
     }
 
+    var topBarCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val latestPullDelta by rememberUpdatedState(onPullDownHeatmapDelta)
+    val latestPullEnd by rememberUpdatedState(onPullDownHeatmapEnd)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -794,12 +914,61 @@ fun LiquidGlassTopBar(
             .padding(horizontal = 12.dp, vertical = 6.dp)
             .testTag("top_bar_outer_container")
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .onGloballyPositioned { topBarCoords = it }
                 .clip(RoundedCornerShape(24.dp))
                 .background(topGlassFill)
                 .border(0.9.dp, topGlassBorder, RoundedCornerShape(24.dp))
+                .pointerInput(Unit) {
+                    val slop = viewConfiguration.touchSlop
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        val rootDown = topBarCoords?.localToRoot(down.position) ?: down.position
+                        val tracker = VelocityTracker()
+                        tracker.addPosition(down.uptimeMillis, rootDown)
+                        var draggingDown = false
+                        var lastRootY = rootDown.y
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) {
+                                if (draggingDown) {
+                                    latestPullEnd?.invoke(tracker.calculateVelocity().y)
+                                }
+                                break
+                            }
+                            val rootPos = topBarCoords?.localToRoot(change.position) ?: change.position
+                            tracker.addPosition(change.uptimeMillis, rootPos)
+                            val totalDy = rootPos.y - rootDown.y
+                            val totalDx = rootPos.x - rootDown.x
+                            if (!draggingDown) {
+                                if (totalDy > slop && totalDy > abs(totalDx) * 1.1f) {
+                                    draggingDown = true
+                                    val deltaY = rootPos.y - lastRootY
+                                    if (deltaY != 0f) {
+                                        latestPullDelta?.invoke(deltaY)
+                                    }
+                                    change.consume()
+                                } else if (abs(totalDx) > slop && abs(totalDx) > abs(totalDy)) {
+                                    break
+                                }
+                            } else {
+                                val deltaY = rootPos.y - lastRootY
+                                if (deltaY != 0f) {
+                                    latestPullDelta?.invoke(deltaY)
+                                }
+                                change.consume()
+                            }
+                            lastRootY = rootPos.y
+                        }
+                    }
+                }
+        ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -1023,6 +1192,24 @@ fun LiquidGlassTopBar(
                     isHapticEnabled = isHapticEnabled
                 )
             }
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 2.dp)
+                .width(28.dp)
+                .height(2.5.dp)
+                .clip(RoundedCornerShape(50))
+                .background(
+                    if (isDarkTheme) {
+                        cyanColor.copy(alpha = 0.45f)
+                    } else {
+                        cyanColor.copy(alpha = 0.55f)
+                    }
+                )
+                .testTag("top_bar_pull_heatmap_handle")
+        )
         }
     }
 }

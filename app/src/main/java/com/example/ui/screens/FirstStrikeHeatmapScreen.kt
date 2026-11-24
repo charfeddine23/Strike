@@ -15,7 +15,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,7 +65,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -75,10 +75,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -106,6 +108,7 @@ import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
+import kotlin.math.abs
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
@@ -119,6 +122,8 @@ fun FirstStrikeHeatmapScreen(
     isAppDarkTheme: Boolean = LocalAppDarkTheme.current,
     onEnterApp: () -> Unit,
     onNavigateToPersonProfile: (Long) -> Unit,
+    onCurtainDragDelta: ((Float) -> Unit)? = null,
+    onCurtainDragEnd: ((Float) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -643,23 +648,66 @@ fun FirstStrikeHeatmapScreen(
         }
 
         // 4. Bottom Liquid Glass Dock ("Swipe up to hide map" handle button + "Know My Location" + "Enter")
-        val density = LocalDensity.current
-        val dismissThresholdPx = remember(density) { with(density) { 44.dp.toPx() } }
-        var swipeUpOffsetPx by remember { mutableFloatStateOf(0f) }
-        var didTriggerSwipeDismiss by remember { mutableStateOf(false) }
-        val animatedSwipeTranslation by animateFloatAsState(
-            targetValue = swipeUpOffsetPx,
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMedium
-            ),
-            label = "heatmap_swipe_up_offset"
-        )
+        var bottomDockCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+        val latestOnDragDelta by rememberUpdatedState(onCurtainDragDelta)
+        val latestOnDragEnd by rememberUpdatedState(onCurtainDragEnd)
+        val latestOnEnterApp by rememberUpdatedState(onEnterApp)
 
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .onGloballyPositioned { bottomDockCoords = it }
+                .pointerInput(Unit) {
+                    val slop = viewConfiguration.touchSlop
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        val rootDown = bottomDockCoords?.localToRoot(down.position) ?: down.position
+                        val tracker = VelocityTracker()
+                        tracker.addPosition(down.uptimeMillis, rootDown)
+                        var draggingUp = false
+                        var lastRootY = rootDown.y
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) {
+                                if (draggingUp) {
+                                    val velY = tracker.calculateVelocity().y
+                                    val endCb = latestOnDragEnd
+                                    if (endCb != null) {
+                                        endCb(velY)
+                                    } else {
+                                        latestOnEnterApp()
+                                    }
+                                }
+                                break
+                            }
+                            val rootPos = bottomDockCoords?.localToRoot(change.position) ?: change.position
+                            tracker.addPosition(change.uptimeMillis, rootPos)
+                            val totalDy = rootPos.y - rootDown.y
+                            val totalDx = rootPos.x - rootDown.x
+                            if (!draggingUp) {
+                                if (totalDy < -slop && abs(totalDy) > abs(totalDx) * 1.05f) {
+                                    draggingUp = true
+                                    val deltaY = rootPos.y - lastRootY
+                                    if (deltaY != 0f) {
+                                        latestOnDragDelta?.invoke(deltaY)
+                                    }
+                                    change.consume()
+                                } else if (abs(totalDx) > slop && abs(totalDx) > abs(totalDy)) {
+                                    break
+                                }
+                            } else {
+                                val deltaY = rootPos.y - lastRootY
+                                if (deltaY != 0f) {
+                                    latestOnDragDelta?.invoke(deltaY)
+                                }
+                                change.consume()
+                            }
+                            lastRootY = rootPos.y
+                        }
+                    }
+                }
                 .background(
                     Brush.verticalGradient(
                         listOf(
@@ -671,7 +719,6 @@ fun FirstStrikeHeatmapScreen(
                 )
                 .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(horizontal = 16.dp, vertical = 14.dp)
-                .graphicsLayer { translationY = animatedSwipeTranslation }
                 .testTag("heatmap_bottom_bar")
         ) {
             Column(
@@ -703,33 +750,6 @@ fun FirstStrikeHeatmapScreen(
                             ),
                             RoundedCornerShape(50)
                         )
-                        .pointerInput(dismissThresholdPx) {
-                            detectVerticalDragGestures(
-                                onDragStart = {
-                                    didTriggerSwipeDismiss = false
-                                    swipeUpOffsetPx = 0f
-                                },
-                                onDragEnd = {
-                                    if (!didTriggerSwipeDismiss && swipeUpOffsetPx <= -dismissThresholdPx) {
-                                        didTriggerSwipeDismiss = true
-                                        onEnterApp()
-                                    }
-                                    swipeUpOffsetPx = 0f
-                                },
-                                onDragCancel = {
-                                    swipeUpOffsetPx = 0f
-                                },
-                                onVerticalDrag = { change, dragAmount ->
-                                    change.consume()
-                                    swipeUpOffsetPx = (swipeUpOffsetPx + dragAmount).coerceIn(-dismissThresholdPx * 1.8f, 0f)
-                                    if (!didTriggerSwipeDismiss && swipeUpOffsetPx <= -dismissThresholdPx) {
-                                        didTriggerSwipeDismiss = true
-                                        swipeUpOffsetPx = 0f
-                                        onEnterApp()
-                                    }
-                                }
-                            )
-                        }
                         .clickable { onEnterApp() }
                         .minimumInteractiveComponentSize()
                         .padding(horizontal = 18.dp, vertical = 9.dp)

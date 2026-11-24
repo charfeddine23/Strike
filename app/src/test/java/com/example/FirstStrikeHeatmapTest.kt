@@ -2,6 +2,7 @@ package com.example
 
 import android.content.Context
 import android.os.Looper
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasAnyDescendant
@@ -14,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
@@ -527,5 +529,64 @@ class FirstStrikeHeatmapTest {
             hasTestTag("heatmap_hotspot_sheet") and hasAnyDescendant(hasText("Oran Center", substring = true)),
             useUnmergedTree = true
         ).assertIsDisplayed()
+    }
+
+    @Test
+    fun curtainDragUpFromHeatmapAndPullDownFromTopBar_tracksFingerAndTransitionsSmoothly() {
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("first_strike_heatmap_screen").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("top_bar_outer_container").fetchSemanticsNodes().size)
+
+        // 1. Slow partial drag up (hold finger down) -> reveals underlying app pages in sync with finger
+        val bottomBar = composeRule.onNodeWithTag("heatmap_bottom_bar")
+        bottomBar.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -110f), delayMillis = 450L)
+        }
+        composeRule.waitForIdle()
+        assertTrue(
+            "Both heatmap and revealed TopBar must coexist mid-drag",
+            composeRule.onAllNodesWithTag("first_strike_heatmap_screen").fetchSemanticsNodes().isNotEmpty() &&
+                composeRule.onAllNodesWithTag("top_bar_outer_container").fetchSemanticsNodes().isNotEmpty()
+        )
+
+        // Gentle release below threshold snaps back cleanly to full-screen heatmap
+        bottomBar.performTouchInput { up() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("first_strike_heatmap_screen").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("top_bar_outer_container").fetchSemanticsNodes().size)
+
+        // 2. Full upward swipe reveals main pages + Top Bar pull handle
+        composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 260f)
+        }
+        composeRule.waitForIdle()
+        assertEquals(0, composeRule.onAllNodesWithTag("first_strike_heatmap_screen").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
+        composeRule.onNodeWithTag("top_bar_pull_heatmap_handle").assertIsDisplayed()
+
+        // 3. Partial pull down on Top Bar shows heatmap sliding down smoothly mid-gesture
+        val topBar = composeRule.onNodeWithTag("top_bar_outer_container")
+        topBar.performTouchInput {
+            down(center)
+            moveBy(Offset(0f, 110f), delayMillis = 450L)
+        }
+        composeRule.waitForIdle()
+        assertTrue(
+            "Pulling down TopBar must progressively bring Heatmap curtain back into view mid-drag",
+            composeRule.onAllNodesWithTag("first_strike_heatmap_screen").fetchSemanticsNodes().isNotEmpty() &&
+                composeRule.onAllNodesWithTag("top_bar_outer_container").fetchSemanticsNodes().isNotEmpty()
+        )
+        topBar.performTouchInput { up() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
+
+        // 4. Full downward swipe from Top Bar re-opens the full-screen Heatmap
+        topBar.performTouchInput {
+            swipeDown(startY = centerY, endY = centerY + 340f)
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("first_strike_heatmap_screen").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("top_bar_outer_container").fetchSemanticsNodes().size)
     }
 }
