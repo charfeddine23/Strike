@@ -29,12 +29,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -70,11 +71,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -201,6 +205,15 @@ fun FirstStrikeLocationPickerDialog(
         }
     }
 
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+
+    LaunchedEffect(Unit) {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
+
     BackHandler { onDismiss() }
 
     val bgColor = if (isDarkTheme) Color(0xFF060A13) else Color(0xFFF8FAFC)
@@ -214,442 +227,462 @@ fun FirstStrikeLocationPickerDialog(
         modifier = Modifier
             .fillMaxSize()
             .background(bgColor)
-            .testTag("first_strike_picker_dialog")
+            .clipToBounds()
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .testTag("first_strike_picker_dialog"),
+        contentAlignment = Alignment.Center
     ) {
-        // 1. Full-bleed Map Canvas (Native MapLibre on device, GPU-safe vector preview in Robolectric)
-        if (!isRobolectricRuntime()) {
-            val mapView = remember {
-                MapStyleHelper.createHighPrecisionMapView(context).apply {
-                    onCreate(null)
-                    getMapAsync { map ->
-                        mapLibreRef = map
-                        MapStyleHelper.configureHighPrecisionMap(map, context)
-                        val startZoom = if (initialLat != null && initialLng != null) 14.5 else 5.5
-                        map.cameraPosition = CameraPosition.Builder()
-                            .target(LatLng(defaultLat, defaultLng))
-                            .zoom(startZoom)
-                            .build()
-                        map.setStyle(Style.Builder().fromUri(MapStyleHelper.OPEN_FREE_MAP_LIBERTY_STYLE_URI)) { style ->
-                            MapStyleHelper.applyGoogleGradeStyling(
-                                style = style,
-                                theme = mapTheme,
-                                show3dBuildings = false,
-                                displayMode = HeatmapDisplayMode.CLUSTER_PINS,
-                                individuals = emptyList()
-                            )
-                        }
-                        map.addOnCameraMoveStartedListener { reason ->
-                            if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
-                                isCameraDragging = true
-                            }
-                        }
-                        map.addOnCameraIdleListener {
-                            isCameraDragging = false
-                            val target = map.cameraPosition.target ?: return@addOnCameraIdleListener
-                            selectedLat = target.latitude
-                            selectedLng = target.longitude
-                            triggerReverseGeocode(target.latitude, target.longitude)
-                        }
-                    }
-                }
-            }
-
-            DisposableEffect(lifecycleOwner, mapView) {
-                val observer = LifecycleEventObserver { _, event ->
-                    when (event) {
-                        Lifecycle.Event.ON_START -> mapView.onStart()
-                        Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                        Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                        Lifecycle.Event.ON_STOP -> mapView.onStop()
-                        else -> Unit
-                    }
-                }
-                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                    mapView.onStart()
-                }
-                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                    mapView.onResume()
-                }
-                lifecycleOwner.lifecycle.addObserver(observer)
-                onDispose {
-                    lifecycleOwner.lifecycle.removeObserver(observer)
-                    mapView.onPause()
-                    mapView.onStop()
-                    mapView.onDestroy()
-                }
-            }
-
-            AndroidView(
-                factory = { mapView },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            // Lightweight tactical grid canvas for Robolectric JVM environment
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                drawRect(if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF8F9FA))
-                val step = 44.dp.toPx()
-                val gridColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)
-                var x = 0f
-                while (x < size.width) {
-                    drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
-                    x += step
-                }
-                var y = 0f
-                while (y < size.height) {
-                    drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
-                    y += step
-                }
-            }
-        }
-
-        // 2. Center Pinpoint Overlay (Lifts on camera drag, bounces down on idle)
-        Box(
-            modifier = Modifier.align(Alignment.Center),
-            contentAlignment = Alignment.Center
-        ) {
-            // Pinpoint shadow dot underneath
-            Box(
-                modifier = Modifier
-                    .offset(y = 14.dp)
-                    .size(if (isCameraDragging) 12.dp else 8.dp)
-                    .alpha(shadowAlpha)
-                    .clip(CircleShape)
-                    .background(Color.Black)
-                    .testTag("location_picker_pin_shadow")
-            )
-            Icon(
-                imageVector = Icons.Default.LocationOn,
-                contentDescription = if (isAr) "موقع الضربة الأولى" else "First-Strike Pin",
-                tint = NeonAmber,
-                modifier = Modifier
-                    .offset(y = (-12).dp + pinTranslationY)
-                    .scale(pinScale)
-                    .size(44.dp)
-                    .testTag("location_picker_pin")
-            )
-        }
-
-        // 3. Top Search Bar & Close Row
         Column(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(panelBg)
-                        .border(1.dp, borderColor, CircleShape)
-                        .testTag("picker_close_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = if (isAr) "إغلاق" else "Close",
-                        tint = accentCyan
-                    )
-                }
-
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { q ->
-                        searchQuery = q
-                        searchJob?.cancel()
-                        if (q.trim().length >= 2) {
-                            searchJob = coroutineScope.launch {
-                                delay(350)
-                                isSearching = true
-                                searchResults = NominatimGeocoder.searchPlaces(q, currentLang)
-                                isSearching = false
-                            }
-                        } else {
-                            searchResults = emptyList()
-                        }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("picker_search_input"),
-                    placeholder = {
-                        Text(
-                            text = when {
-                                isAr -> "ابحث عن مدينة أو حي أو معلم..."
-                                isFr -> "Rechercher une ville ou un lieu..."
-                                else -> "Search city, district, or landmark..."
-                            },
-                            fontSize = 12.5.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    leadingIcon = {
-                        if (isSearching) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = accentCyan
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                tint = accentCyan
-                            )
-                        }
-                    },
-                    trailingIcon = {
-                        if (searchQuery.isNotEmpty()) {
-                            IconButton(
-                                onClick = {
-                                    searchQuery = ""
-                                    searchResults = emptyList()
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Clear",
-                                    tint = textSecondary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(18.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = accentCyan,
-                        unfocusedBorderColor = borderColor,
-                        focusedContainerColor = panelBg,
-                        unfocusedContainerColor = panelBg
-                    )
-                )
-
-                IconButton(
-                    onClick = {
-                        if (hasLocationPermission(context)) {
-                            fetchCurrentGps()
-                        } else {
-                            locationPermissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                                    Manifest.permission.ACCESS_FINE_LOCATION
-                                )
-                            )
-                        }
-                    },
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(panelBg)
-                        .border(1.dp, borderColor, CircleShape)
-                        .testTag("picker_gps_btn")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.MyLocation,
-                        contentDescription = when {
-                            isAr -> "موقعي الحالي"
-                            isFr -> "Ma position"
-                            else -> "My Location"
-                        },
-                        tint = NeonEmerald
-                    )
-                }
-            }
-
-            AnimatedVisibility(visible = searchResults.isNotEmpty()) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 220.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(panelBg)
-                        .border(1.dp, borderColor, RoundedCornerShape(18.dp))
-                        .testTag("picker_search_results"),
-                    contentPadding = PaddingValues(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(searchResults) { place ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    selectedLat = place.lat
-                                    selectedLng = place.lng
-                                    selectedPlaceName = place.shortLabel.ifBlank { place.displayName }
-                                    searchResults = emptyList()
-                                    mapLibreRef?.let { map ->
-                                        MapStyleHelper.animateCameraTo(map, place.lat, place.lng, zoom = 14.5, durationMs = 800)
-                                    }
-                                }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = null,
-                                tint = accentCyan,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = place.shortLabel,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = PlusJakartaSans,
-                                    color = textPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = place.displayName,
-                                    fontSize = 11.sp,
-                                    color = textSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 4. Bottom Address Preview & Confirm Card
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.Transparent,
-                            if (isDarkTheme) Color(0xCC04070E) else Color(0xCCFFFFFF),
-                            if (isDarkTheme) Color(0xFA04070E) else Color(0xFAFFFFFF)
-                        )
-                    )
-                )
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .fillMaxSize()
+                .widthIn(max = 620.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            // 1. Top Search Bar & Action Row (strictly inside safe frame)
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(panelBg)
-                    .border(1.dp, borderColor, RoundedCornerShape(18.dp))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = when {
-                            isAr -> "موقع الضربة الأولى المحدد"
-                            isFr -> "Lieu du premier strike sélectionné"
-                            else -> "Selected First-Strike Location"
-                        },
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = accentCyan
-                    )
-                    Text(
-                        text = String.format(Locale.US, "%.4f, %.4f", selectedLat, selectedLng),
-                        fontSize = 10.5.sp,
-                        fontFamily = PlusJakartaSans,
-                        color = textSecondary
-                    )
-                }
-                Text(
-                    text = if (isReverseGeocoding) {
-                        when {
-                            isAr -> "جاري تحديد اسم الموقع..."
-                            isFr -> "Résolution de l'adresse..."
-                            else -> "Resolving address..."
-                        }
-                    } else {
-                        selectedPlaceName
-                    },
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = PlusJakartaSans,
-                    color = textPrimary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.testTag("picker_resolved_place_name")
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (initialLat != null && initialLng != null) {
-                    OutlinedButton(
-                        onClick = onClear,
-                        shape = RoundedCornerShape(16.dp),
+                    IconButton(
+                        onClick = onDismiss,
                         modifier = Modifier
-                            .height(50.dp)
-                            .testTag("picker_clear_btn")
+                            .minimumInteractiveComponentSize()
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(panelBg)
+                            .border(1.dp, borderColor, CircleShape)
+                            .testTag("picker_close_btn")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.DeleteOutline,
-                            contentDescription = if (isAr) "مسح" else "Clear",
-                            tint = NeonRose,
-                            modifier = Modifier.size(18.dp)
+                            imageVector = Icons.Default.Close,
+                            contentDescription = if (isAr) "إغلاق" else "Close",
+                            tint = accentCyan
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { q ->
+                            searchQuery = q
+                            searchJob?.cancel()
+                            if (q.trim().length >= 2) {
+                                searchJob = coroutineScope.launch {
+                                    delay(350)
+                                    isSearching = true
+                                    searchResults = NominatimGeocoder.searchPlaces(q, currentLang)
+                                    isSearching = false
+                                }
+                            } else {
+                                searchResults = emptyList()
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .widthIn(min = 0.dp)
+                            .testTag("picker_search_input"),
+                        placeholder = {
+                            Text(
+                                text = when {
+                                    isAr -> "ابحث عن مدينة أو حي أو معلم..."
+                                    isFr -> "Rechercher une ville ou un lieu..."
+                                    else -> "Search city, district, or landmark..."
+                                },
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        leadingIcon = {
+                            if (isSearching) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = accentCyan
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = accentCyan
+                                )
+                            }
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(
+                                    onClick = {
+                                        searchQuery = ""
+                                        searchResults = emptyList()
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Clear",
+                                        tint = textSecondary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(18.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = accentCyan,
+                            unfocusedBorderColor = borderColor,
+                            focusedContainerColor = panelBg,
+                            unfocusedContainerColor = panelBg
+                        )
+                    )
+
+                    IconButton(
+                        onClick = {
+                            if (hasLocationPermission(context)) {
+                                fetchCurrentGps()
+                            } else {
+                                locationPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                                        Manifest.permission.ACCESS_FINE_LOCATION
+                                    )
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(panelBg)
+                            .border(1.dp, borderColor, CircleShape)
+                            .testTag("picker_gps_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MyLocation,
+                            contentDescription = when {
+                                isAr -> "موقعي الحالي"
+                                isFr -> "Ma position"
+                                else -> "My Location"
+                            },
+                            tint = NeonEmerald
                         )
                     }
                 }
 
-                Button(
-                    onClick = {
-                        onConfirm(
-                            selectedLat,
-                            selectedLng,
-                            NominatimGeocoder.stripTifinagh(selectedPlaceName)
-                        )
-                    },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = accentCyan,
-                        contentColor = Color(0xFF031521)
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp)
-                        .testTag("picker_confirm_btn")
+                AnimatedVisibility(visible = searchResults.isNotEmpty()) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = if (imeVisible) 120.dp else 180.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(panelBg)
+                            .border(1.dp, borderColor, RoundedCornerShape(18.dp))
+                            .testTag("picker_search_results"),
+                        contentPadding = PaddingValues(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(searchResults) { place ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        selectedLat = place.lat
+                                        selectedLng = place.lng
+                                        selectedPlaceName = place.shortLabel.ifBlank { place.displayName }
+                                        searchResults = emptyList()
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                        mapLibreRef?.let { map ->
+                                            MapStyleHelper.animateCameraTo(map, place.lat, place.lng, zoom = 14.5, durationMs = 800)
+                                        }
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = accentCyan,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = place.shortLabel,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = PlusJakartaSans,
+                                        color = textPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = place.displayName,
+                                        fontSize = 11.sp,
+                                        color = textSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Framed Map Viewport (weight(1f) keeps Top & Bottom controls strictly inside the screen bounds)
+            Box(
+                modifier = Modifier
+                    .weight(1f, fill = true)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .border(1.1.dp, borderColor, RoundedCornerShape(22.dp))
+                    .clipToBounds()
+                    .testTag("picker_map_frame")
+            ) {
+                if (!isRobolectricRuntime()) {
+                    val mapView = remember {
+                        MapStyleHelper.createHighPrecisionMapView(context).apply {
+                            onCreate(null)
+                            getMapAsync { map ->
+                                mapLibreRef = map
+                                MapStyleHelper.configureHighPrecisionMap(map, context)
+                                val startZoom = if (initialLat != null && initialLng != null) 14.5 else 5.5
+                                map.cameraPosition = CameraPosition.Builder()
+                                    .target(LatLng(defaultLat, defaultLng))
+                                    .zoom(startZoom)
+                                    .build()
+                                map.setStyle(Style.Builder().fromUri(MapStyleHelper.OPEN_FREE_MAP_LIBERTY_STYLE_URI)) { style ->
+                                    MapStyleHelper.applyGoogleGradeStyling(
+                                        style = style,
+                                        theme = mapTheme,
+                                        show3dBuildings = false,
+                                        displayMode = HeatmapDisplayMode.CLUSTER_PINS,
+                                        individuals = emptyList()
+                                    )
+                                }
+                                map.addOnCameraMoveStartedListener { reason ->
+                                    if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                                        isCameraDragging = true
+                                    }
+                                }
+                                map.addOnCameraIdleListener {
+                                    isCameraDragging = false
+                                    val target = map.cameraPosition.target ?: return@addOnCameraIdleListener
+                                    selectedLat = target.latitude
+                                    selectedLng = target.longitude
+                                    triggerReverseGeocode(target.latitude, target.longitude)
+                                }
+                            }
+                        }
+                    }
+
+                    DisposableEffect(lifecycleOwner, mapView) {
+                        val observer = LifecycleEventObserver { _, event ->
+                            when (event) {
+                                Lifecycle.Event.ON_START -> mapView.onStart()
+                                Lifecycle.Event.ON_RESUME -> mapView.onResume()
+                                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                                Lifecycle.Event.ON_STOP -> mapView.onStop()
+                                else -> Unit
+                            }
+                        }
+                        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                            mapView.onStart()
+                        }
+                        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            mapView.onResume()
+                        }
+                        lifecycleOwner.lifecycle.addObserver(observer)
+                        onDispose {
+                            lifecycleOwner.lifecycle.removeObserver(observer)
+                            mapView.onPause()
+                            mapView.onStop()
+                            mapView.onDestroy()
+                        }
+                    }
+
+                    AndroidView(
+                        factory = { mapView },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    // Lightweight tactical grid canvas for Robolectric JVM environment
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawRect(if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF8F9FA))
+                        val step = 44.dp.toPx()
+                        val gridColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                        var x = 0f
+                        while (x < size.width) {
+                            drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                            x += step
+                        }
+                        var y = 0f
+                        while (y < size.height) {
+                            drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+                            y += step
+                        }
+                    }
+                }
+
+                // Center Pinpoint Overlay (mathematically centered in visible map frame)
+                Box(
+                    modifier = Modifier.align(Alignment.Center),
+                    contentAlignment = Alignment.Center
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .offset(y = 14.dp)
+                            .size(if (isCameraDragging) 12.dp else 8.dp)
+                            .alpha(shadowAlpha)
+                            .clip(CircleShape)
+                            .background(Color.Black)
+                            .testTag("location_picker_pin_shadow")
+                    )
                     Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = if (isAr) "موقع الضربة الأولى" else "First-Strike Pin",
+                        tint = NeonAmber,
+                        modifier = Modifier
+                            .offset(y = (-12).dp + pinTranslationY)
+                            .scale(pinScale)
+                            .size(44.dp)
+                            .testTag("location_picker_pin")
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = when {
-                            isAr -> "تأكيد موقع الضربة الأولى"
-                            isFr -> "Confirmer le lieu"
-                            else -> "Confirm First-Strike Location"
+                }
+            }
+
+            // 3. Bottom Address Preview & Confirm Card (always strictly within screen frame)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(panelBg)
+                    .border(1.1.dp, borderColor, RoundedCornerShape(20.dp))
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (!imeVisible) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = when {
+                                    isAr -> "موقع الضربة الأولى المحدد"
+                                    isFr -> "Lieu du premier strike sélectionné"
+                                    else -> "Selected First-Strike Location"
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = accentCyan,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = String.format(Locale.US, "%.4f, %.4f", selectedLat, selectedLng),
+                                fontSize = 10.5.sp,
+                                fontFamily = PlusJakartaSans,
+                                color = textSecondary,
+                                maxLines = 1
+                            )
+                        }
+                        Text(
+                            text = if (isReverseGeocoding) {
+                                when {
+                                    isAr -> "جاري تحديد اسم الموقع..."
+                                    isFr -> "Résolution de l'adresse..."
+                                    else -> "Resolving address..."
+                                }
+                            } else {
+                                selectedPlaceName
+                            },
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = PlusJakartaSans,
+                            color = textPrimary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("picker_resolved_place_name")
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (initialLat != null && initialLng != null) {
+                        OutlinedButton(
+                            onClick = onClear,
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .heightIn(min = 48.dp)
+                                .testTag("picker_clear_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = if (isAr) "مسح" else "Clear",
+                                tint = NeonRose,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            onConfirm(
+                                selectedLat,
+                                selectedLng,
+                                NominatimGeocoder.stripTifinagh(selectedPlaceName)
+                            )
                         },
-                        fontWeight = FontWeight.Black,
-                        fontFamily = PlusJakartaSans,
-                        fontSize = 14.sp
-                    )
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = accentCyan,
+                            contentColor = Color(0xFF031521)
+                        ),
+                        modifier = Modifier
+                            .weight(1f)
+                            .minimumInteractiveComponentSize()
+                            .heightIn(min = 48.dp)
+                            .testTag("picker_confirm_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = when {
+                                isAr -> "تأكيد موقع الضربة الأولى"
+                                isFr -> "Confirmer le lieu"
+                                else -> "Confirm First-Strike Location"
+                            },
+                            fontWeight = FontWeight.Black,
+                            fontFamily = PlusJakartaSans,
+                            fontSize = 13.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }

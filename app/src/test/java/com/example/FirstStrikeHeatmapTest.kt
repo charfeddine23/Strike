@@ -385,6 +385,24 @@ class FirstStrikeHeatmapTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("first_strike_picker_dialog").assertIsDisplayed()
+        val dialogBounds = composeRule.onNodeWithTag("first_strike_picker_dialog").getBoundsInRoot()
+        listOf(
+            "picker_close_btn",
+            "picker_search_input",
+            "picker_gps_btn",
+            "picker_map_frame",
+            "picker_resolved_place_name",
+            "picker_confirm_btn"
+        ).forEach { tag ->
+            val bounds = composeRule.onNodeWithTag(tag).assertIsDisplayed().getBoundsInRoot()
+            assertTrue(
+                "$tag ($bounds) must stay strictly inside screen frame ($dialogBounds)",
+                bounds.left >= dialogBounds.left &&
+                    bounds.right <= dialogBounds.right &&
+                    bounds.top >= dialogBounds.top &&
+                    bounds.bottom <= dialogBounds.bottom
+            )
+        }
         composeRule.onNodeWithTag("location_picker_pin").assertIsDisplayed()
         composeRule.onNodeWithTag("location_picker_pin_shadow").assertIsDisplayed()
         composeRule.onNodeWithTag("picker_confirm_btn").performClick()
