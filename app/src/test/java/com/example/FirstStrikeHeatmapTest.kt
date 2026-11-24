@@ -274,7 +274,9 @@ class FirstStrikeHeatmapTest {
         composeRule.onNodeWithTag("heatmap_bottom_bar").assertIsDisplayed()
         composeRule.onNodeWithTag("heatmap_know_location_btn").assertIsDisplayed()
         composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").assertIsDisplayed()
-        composeRule.onNodeWithTag("heatmap_swipe_up_graphics").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("heatmap_swipe_up_graphics").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodes(hasText("Know My Location", substring = true)).fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodes(hasText("موقعي الآن", substring = true)).fetchSemanticsNodes().size)
         composeRule.onNodeWithTag("heatmap_layers_btn").assertIsDisplayed()
         // Enter button must be removed
         assertEquals(0, composeRule.onAllNodesWithTag("heatmap_enter_btn").fetchSemanticsNodes().size)
@@ -412,7 +414,7 @@ class FirstStrikeHeatmapTest {
         composeRule.waitForIdle()
 
         val swipeBtn = composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").assertIsDisplayed()
-        composeRule.onNodeWithTag("heatmap_swipe_up_graphics").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("heatmap_swipe_up_graphics").fetchSemanticsNodes().size)
         val layersBtn = composeRule.onNodeWithTag("heatmap_layers_btn").assertIsDisplayed()
         val knowLocBtn = composeRule.onNodeWithTag("heatmap_know_location_btn").assertIsDisplayed()
         val bottomBar = composeRule.onNodeWithTag("heatmap_bottom_bar").assertIsDisplayed()

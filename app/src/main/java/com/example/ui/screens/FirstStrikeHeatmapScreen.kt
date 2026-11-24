@@ -88,11 +88,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1131,29 +1127,27 @@ fun FirstStrikeHeatmapScreen(
                 }
             }
 
-            // Know My Location Button placed directly below Map Style & Layers
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(glassBg)
-                    .border(1.1.dp, accentCyan.copy(alpha = 0.65f), RoundedCornerShape(50))
-                    .clickable {
-                        if (hasLocationPermission(context)) {
-                            requestLocationAndAnimate()
-                        } else {
-                            locationPermissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                                    Manifest.permission.ACCESS_FINE_LOCATION
-                                )
+            // Know My Location Icon-Only Button placed directly below Map Style & Layers
+            IconButton(
+                onClick = {
+                    if (hasLocationPermission(context)) {
+                        requestLocationAndAnimate()
+                    } else {
+                        locationPermissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                                Manifest.permission.ACCESS_FINE_LOCATION
                             )
-                        }
+                        )
                     }
+                },
+                modifier = Modifier
                     .minimumInteractiveComponentSize()
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-                    .testTag("heatmap_know_location_btn"),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(glassBg)
+                    .border(1.1.dp, accentCyan.copy(alpha = 0.65f), CircleShape)
+                    .testTag("heatmap_know_location_btn")
             ) {
                 Icon(
                     imageVector = Icons.Default.MyLocation,
@@ -1163,20 +1157,7 @@ fun FirstStrikeHeatmapScreen(
                         else -> "Know My Location"
                     },
                     tint = accentCyan,
-                    modifier = Modifier.size(17.dp)
-                )
-                Text(
-                    text = when {
-                        isAr -> "موقعي الآن"
-                        isFr -> "Ma position"
-                        else -> "Know My Location"
-                    },
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = PlusJakartaSans,
-                    color = textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    modifier = Modifier.size(21.dp)
                 )
             }
         }
@@ -1533,89 +1514,9 @@ private fun LuxurySwipeUpBeacon(
         label = "swipe_shimmer_sweep"
     )
 
-    val path = remember { Path() }
-
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Ascending light beam, floating sparks, and triple cascading upward chevrons
-        Canvas(
-            modifier = Modifier
-                .width(156.dp)
-                .height(38.dp)
-                .testTag("heatmap_swipe_up_graphics")
-        ) {
-            val centerX = size.width / 2f
-            val h = size.height
-
-            // Soft holographic upward glow cone
-            drawRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        accentCyan.copy(alpha = 0.06f + 0.05f * floatProgress),
-                        accentCyan.copy(alpha = 0.16f + 0.08f * floatProgress)
-                    )
-                ),
-                topLeft = Offset(centerX - 42.dp.toPx(), 0f),
-                size = androidx.compose.ui.geometry.Size(84.dp.toPx(), h)
-            )
-
-            // 4 ascending luminous micro-particles rising along the beam
-            val particleXOffsets = listOf(-22f, 18f, -10f, 26f)
-            val particleRadii = listOf(1.6f, 1.3f, 1.9f, 1.4f)
-            for (i in 0 until 4) {
-                val t = (waveProgress + i * 0.25f) % 1f
-                val py = h * (1f - t)
-                val px = centerX + particleXOffsets[i].dp.toPx()
-                val pAlpha = kotlin.math.sin(t * Math.PI).toFloat().coerceIn(0f, 1f) * 0.72f
-                drawCircle(
-                    color = accentCyan.copy(alpha = pAlpha),
-                    radius = particleRadii[i].dp.toPx(),
-                    center = Offset(px, py)
-                )
-            }
-
-            // Triple cascading upward chevron waves
-            val chevronHalfWidth = 11.dp.toPx()
-            val chevronTipDepth = 5.5.dp.toPx()
-            for (index in 0 until 3) {
-                val phase = (waveProgress + index * 0.333f) % 1f
-                val y = h * (0.90f - phase * 0.78f)
-                val envelope = kotlin.math.sin(phase * Math.PI).toFloat().coerceIn(0f, 1f)
-                val scale = 0.85f + 0.22f * (1f - phase)
-                val hw = chevronHalfWidth * scale
-                val td = chevronTipDepth * scale
-
-                path.reset()
-                path.moveTo(centerX - hw, y + td)
-                path.lineTo(centerX, y)
-                path.lineTo(centerX + hw, y + td)
-
-                // Soft outer neon halo stroke
-                drawPath(
-                    path = path,
-                    color = accentCyan.copy(alpha = envelope * 0.32f),
-                    style = Stroke(
-                        width = 5.5.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round
-                    )
-                )
-                // Crisp luminous inner chevron stroke
-                drawPath(
-                    path = path,
-                    color = Color.White.copy(alpha = envelope * 0.92f),
-                    style = Stroke(
-                        width = 2.1.dp.toPx(),
-                        cap = StrokeCap.Round,
-                        join = StrokeJoin.Round
-                    )
-                )
-            }
-        }
-
         // Levitating Liquid Glass Pill with shimmering metallic-cyan rim & kinetic double arrows
         val pillBg = if (isMapDark) {
             Brush.verticalGradient(
