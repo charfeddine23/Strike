@@ -535,9 +535,29 @@ class FirstStrikeHeatmapTest {
 
         composeRule.onNodeWithTag("heatmap_stats_pill").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("heatmap_hotspot_sheet").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_all_strikes_panel").assertIsDisplayed()
+        // All 3 mapped individuals across different regions appear in the list (Oran + Algiers)
         composeRule.onNode(
-            hasTestTag("heatmap_hotspot_sheet") and hasAnyDescendant(hasText("Oran Center", substring = true)),
+            hasTestTag("heatmap_all_strikes_panel") and hasAnyDescendant(hasText("خالد", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+        composeRule.onNode(
+            hasTestTag("heatmap_all_strikes_panel") and hasAnyDescendant(hasText("أمين", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+
+        // Filter list to Algiers ("أمين"), tap it -> closes list & focuses map automatically on that strike
+        composeRule.onNodeWithTag("heatmap_strikes_search_input").performTextInput("أمين")
+        composeRule.waitForIdle()
+        val ameenId = runBlocking(Dispatchers.IO) {
+            AppDatabase.getDatabase(ctx).individualDao().getAllIndividualsList().first { it.fullName == "أمين" }.id
+        }
+        composeRule.onNodeWithTag("heatmap_strike_list_item_$ameenId").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(0, composeRule.onAllNodesWithTag("heatmap_all_strikes_panel").fetchSemanticsNodes().size)
+        composeRule.onNode(
+            hasTestTag("heatmap_stats_pill") and hasAnyDescendant(hasText("أمين", substring = true)),
             useUnmergedTree = true
         ).assertIsDisplayed()
     }

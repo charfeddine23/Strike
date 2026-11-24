@@ -47,15 +47,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -82,6 +86,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -93,6 +98,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -145,7 +151,15 @@ fun FirstStrikeHeatmapScreen(
     val allIndividuals by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val hotspots = remember(allIndividuals) { MapStyleHelper.groupHotspots(allIndividuals) }
     val hottestRegion = remember(allIndividuals) { MapStyleHelper.findHottestRegion(allIndividuals) }
-    val geoCount = remember(allIndividuals) { allIndividuals.count { it.hasFirstStrikeLocation } }
+    val mappedIndividuals = remember(allIndividuals) {
+        allIndividuals
+            .filter { it.hasFirstStrikeLocation }
+            .sortedWith(
+                compareByDescending<Individual> { it.strikeCount }
+                    .thenByDescending { it.boost }
+            )
+    }
+    val geoCount = mappedIndividuals.size
     val latestIndividuals by rememberUpdatedState(allIndividuals)
     val latestHottestRegion by rememberUpdatedState(hottestRegion)
 
@@ -154,6 +168,22 @@ fun FirstStrikeHeatmapScreen(
     var show3dBuildings by remember { mutableStateOf(true) }
     var displayMode by remember { mutableStateOf(HeatmapDisplayMode.HYBRID) }
     var showLayersMenu by remember { mutableStateOf(false) }
+    var showAllStrikesMenu by remember { mutableStateOf(false) }
+    var strikeSearchQuery by remember { mutableStateOf("") }
+    var focusedStrikePerson by remember { mutableStateOf<Individual?>(null) }
+
+    val filteredMappedIndividuals = remember(mappedIndividuals, strikeSearchQuery) {
+        val q = strikeSearchQuery.trim()
+        if (q.isEmpty()) {
+            mappedIndividuals
+        } else {
+            mappedIndividuals.filter { person ->
+                person.fullName.contains(q, ignoreCase = true) ||
+                    person.firstStrikePlaceName.contains(q, ignoreCase = true) ||
+                    person.type.contains(q, ignoreCase = true)
+            }
+        }
+    }
 
     var userLat by remember { mutableStateOf<Double?>(null) }
     var userLng by remember { mutableStateOf<Double?>(null) }
@@ -401,14 +431,21 @@ fun FirstStrikeHeatmapScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left: Sleek First-Strike Telemetry Pill (tapping opens first hotspot if available)
+            // Left: Interactive First-Strike Telemetry Pill (tapping expands full list of all mapped strikes)
             Row(
                 modifier = Modifier
+                    .weight(1f, fill = false)
+                    .padding(end = 10.dp)
                     .clip(RoundedCornerShape(50))
                     .background(glassBg)
-                    .border(1.dp, glassBorder, RoundedCornerShape(50))
-                    .clickable(enabled = hotspots.isNotEmpty()) {
-                        selectedHotspot = hotspots.firstOrNull()
+                    .border(
+                        width = if (showAllStrikesMenu) 1.3.dp else 1.dp,
+                        color = if (showAllStrikesMenu) accentCyan else glassBorder,
+                        shape = RoundedCornerShape(50)
+                    )
+                    .clickable {
+                        showAllStrikesMenu = !showAllStrikesMenu
+                        if (showAllStrikesMenu) showLayersMenu = false
                     }
                     .padding(horizontal = 14.dp, vertical = 9.dp)
                     .testTag("heatmap_stats_pill"),
@@ -421,7 +458,7 @@ fun FirstStrikeHeatmapScreen(
                     tint = NeonAmber,
                     modifier = Modifier.size(18.dp)
                 )
-                Column {
+                Column(modifier = Modifier.weight(1f, fill = false)) {
                     Text(
                         text = when {
                             isAr -> "خريطة الضربة الأولى"
@@ -432,17 +469,28 @@ fun FirstStrikeHeatmapScreen(
                         fontWeight = FontWeight.Black,
                         fontFamily = PlusJakartaSans,
                         color = textPrimary,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+                    val focused = focusedStrikePerson
                     Text(
-                        text = if (hottestRegion != null) {
-                            when {
+                        text = when {
+                            focused != null -> {
+                                val place = focused.firstStrikePlaceName.ifBlank {
+                                    "${String.format(java.util.Locale.US, "%.2f", focused.firstStrikeLat ?: 0.0)}, ${String.format(java.util.Locale.US, "%.2f", focused.firstStrikeLng ?: 0.0)}"
+                                }
+                                when {
+                                    isAr -> "${focused.fullName} • $place"
+                                    isFr -> "${focused.fullName} • $place"
+                                    else -> "${focused.fullName} • $place"
+                                }
+                            }
+                            hottestRegion != null -> when {
                                 isAr -> "الأكثر سخونة: ${hottestRegion.placeName}"
                                 isFr -> "Zone max: ${hottestRegion.placeName}"
                                 else -> "Hottest: ${hottestRegion.placeName}"
                             }
-                        } else {
-                            when {
+                            else -> when {
                                 isAr -> "$geoCount موقع مسجل • ${hotspots.size} بؤرة"
                                 isFr -> "$geoCount lieux • ${hotspots.size} foyers"
                                 else -> "$geoCount pinned • ${hotspots.size} hotspot(s)"
@@ -455,11 +503,20 @@ fun FirstStrikeHeatmapScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                Icon(
+                    imageVector = if (showAllStrikesMenu) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = accentCyan,
+                    modifier = Modifier.size(17.dp)
+                )
             }
 
             // Right: Floating Layers Switcher Trigger
             IconButton(
-                onClick = { showLayersMenu = !showLayersMenu },
+                onClick = {
+                    showLayersMenu = !showLayersMenu
+                    if (showLayersMenu) showAllStrikesMenu = false
+                },
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
                     .size(48.dp)
@@ -478,6 +535,267 @@ fun FirstStrikeHeatmapScreen(
                     tint = accentCyan,
                     modifier = Modifier.size(22.dp)
                 )
+            }
+        }
+
+        // 2b. Floating Liquid Glass Dropdown List of ALL Strikes on the Map (tapping any name flies camera to that strike)
+        AnimatedVisibility(
+            visible = showAllStrikesMenu,
+            enter = fadeIn(tween(180)) + expandVertically(expandFrom = Alignment.Top) + scaleIn(initialScale = 0.94f),
+            exit = fadeOut(tween(140)) + shrinkVertically(shrinkTowards = Alignment.Top) + scaleOut(targetScale = 0.94f),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(top = 68.dp, start = 14.dp, end = 14.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .width(305.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(glassBg)
+                    .border(1.1.dp, glassBorder, RoundedCornerShape(22.dp))
+                    .padding(12.dp)
+                    .testTag("heatmap_all_strikes_panel"),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Whatshot,
+                            contentDescription = null,
+                            tint = NeonAmber,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = when {
+                                isAr -> "كل الضربات على الخريطة (${mappedIndividuals.size})"
+                                isFr -> "Tous les strikes (${mappedIndividuals.size})"
+                                else -> "All Map Strikes (${mappedIndividuals.size})"
+                            },
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = PlusJakartaSans,
+                            color = textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    IconButton(
+                        onClick = { showAllStrikesMenu = false },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close strikes list",
+                            tint = textSecondary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+
+                if (mappedIndividuals.isNotEmpty()) {
+                    // Compact luxury search bar to jump to any name cleanly
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isMapDark) Color(0x281E293B) else Color(0xFFF1F5F9))
+                            .border(
+                                0.8.dp,
+                                if (isMapDark) Color(0x3338BDF8) else Color(0xFFCBD5E1),
+                                RoundedCornerShape(14.dp)
+                            )
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = accentCyan,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Box(modifier = Modifier.weight(1f)) {
+                            if (strikeSearchQuery.isEmpty()) {
+                                Text(
+                                    text = when {
+                                        isAr -> "ابحث بالاسم أو المنطقة..."
+                                        isFr -> "Rechercher nom ou lieu..."
+                                        else -> "Search name or place..."
+                                    },
+                                    fontSize = 11.sp,
+                                    color = textSecondary,
+                                    maxLines = 1
+                                )
+                            }
+                            BasicTextField(
+                                value = strikeSearchQuery,
+                                onValueChange = { strikeSearchQuery = it },
+                                singleLine = true,
+                                textStyle = TextStyle(
+                                    color = textPrimary,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                cursorBrush = SolidColor(accentCyan),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("heatmap_strikes_search_input")
+                            )
+                        }
+                        if (strikeSearchQuery.isNotEmpty()) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear search",
+                                tint = textSecondary,
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clickable { strikeSearchQuery = "" }
+                            )
+                        }
+                    }
+                }
+
+                if (filteredMappedIndividuals.isEmpty()) {
+                    Text(
+                        text = when {
+                            mappedIndividuals.isEmpty() -> when {
+                                isAr -> "لا توجد ضربات بموقع مسجل على الخريطة بعد"
+                                isFr -> "Aucun strike localisé sur la carte"
+                                else -> "No strikes pinned on the map yet"
+                            }
+                            else -> when {
+                                isAr -> "لا توجد نتائج مطابقة"
+                                isFr -> "Aucun résultat correspondant"
+                                else -> "No matching strikes"
+                            }
+                        },
+                        fontSize = 11.5.sp,
+                        color = textSecondary,
+                        modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 260.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(filteredMappedIndividuals, key = { it.id }) { person ->
+                            val isFocused = focusedStrikePerson?.id == person.id
+                            val itemBg = when {
+                                isFocused -> accentCyan.copy(alpha = if (isMapDark) 0.18f else 0.14f)
+                                isMapDark -> Color(0xFF131F36)
+                                else -> Color(0xFFF1F5F9)
+                            }
+                            val itemBorder = if (isFocused) accentCyan else accentCyan.copy(alpha = 0.28f)
+                            val lat = person.firstStrikeLat
+                            val lng = person.firstStrikeLng
+                            val placeLabel = person.firstStrikePlaceName.ifBlank {
+                                if (lat != null && lng != null) {
+                                    String.format(java.util.Locale.US, "%.4f, %.4f", lat, lng)
+                                } else ""
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(itemBg)
+                                    .border(1.dp, itemBorder, RoundedCornerShape(14.dp))
+                                    .clickable {
+                                        hasAutoFramed = true
+                                        focusedStrikePerson = person
+                                        showAllStrikesMenu = false
+                                        if (lat != null && lng != null) {
+                                            mapLibreRef?.let { map ->
+                                                MapStyleHelper.animateCameraTo(
+                                                    mapLibreMap = map,
+                                                    lat = lat,
+                                                    lng = lng,
+                                                    zoom = 16.0,
+                                                    durationMs = 850
+                                                )
+                                            }
+                                        }
+                                    }
+                                    .minimumInteractiveComponentSize()
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                                    .testTag("heatmap_strike_list_item_${person.id}"),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .clip(CircleShape)
+                                            .background(NeonAmber.copy(alpha = 0.18f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocationOn,
+                                            contentDescription = null,
+                                            tint = NeonAmber,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                        ) {
+                                            Text(
+                                                text = person.fullName,
+                                                fontSize = 12.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = PlusJakartaSans,
+                                                color = textPrimary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                            GlassTypeBadge(type = person.type, darkTheme = isMapDark)
+                                        }
+                                        Text(
+                                            text = if (isAr) {
+                                                "$placeLabel • ${person.strikeCount} ضربة"
+                                            } else {
+                                                "$placeLabel • ${person.strikeCount} strikes"
+                                            },
+                                            fontSize = 10.5.sp,
+                                            color = if (isFocused) accentCyan else textSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.NearMe,
+                                    contentDescription = when {
+                                        isAr -> "الانتقال إلى الموقع"
+                                        isFr -> "Aller à l'emplacement"
+                                        else -> "Go to strike location"
+                                    },
+                                    tint = accentCyan,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
