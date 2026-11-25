@@ -58,7 +58,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -96,6 +95,8 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -231,8 +232,9 @@ class HeatmapMapController(context: Context) {
                     val screenPt = map.projection.toScreenLocation(point)
                     val rendered = map.queryRenderedFeatures(
                         screenPt,
+                        MapStyleHelper.FIRST_STRIKE_CORE_SPARK_LAYER_ID,
                         MapStyleHelper.CIRCLE_LAYER_ID,
-                        MapStyleHelper.HEATMAP_LAYER_ID,
+                        MapStyleHelper.FIRST_STRIKE_AURA_LAYER_ID,
                         MapStyleHelper.ROUTINE_CIRCLE_LAYER_ID,
                         MapStyleHelper.ROUTINE_INNER_HALO_LAYER_ID,
                         MapStyleHelper.ROUTINE_HALO_LAYER_ID,
@@ -585,42 +587,42 @@ fun FirstStrikeHeatmapScreen(
                         topLeft = Offset(0f, 0f),
                         size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.25f)
                     )
-                    // Draw glowing First Strike (Cyan/Amber/Red) and Routine Strike (Violet/Magenta halo) blobs
+                    // Draw image-matched translucent Hot Zones (Blue -> Cyan -> Lime Green -> thin Yellow/Orange -> broad Coral-Red plateau)
+                    // and First Strikes strictly as a tight luxurious Obsidian-Gold point glow (no First-Strike heatmap blob)
                     hotspots.forEachIndexed { idx, hotspot ->
                         val cx = size.width * (0.28f + ((idx * 0.21f) % 0.48f))
                         val cy = size.height * (0.38f + ((idx * 0.14f) % 0.28f))
-                        if (hotspot.hasFirstStrikes) {
-                            drawCircle(
-                                brush = Brush.radialGradient(
-                                    listOf(
-                                        Color(0xFFEF4444),
-                                        Color(0xFFF59E0B).copy(alpha = 0.72f),
-                                        Color(0xFF22D3EE).copy(alpha = 0.35f),
-                                        Color.Transparent
-                                    ),
-                                    center = Offset(cx, cy),
-                                    radius = 72.dp.toPx()
-                                ),
-                                radius = 72.dp.toPx(),
-                                center = Offset(cx, cy)
-                            )
-                        }
-                        if (hotspot.hasRoutineStrikes) {
-                            // Exact Snapchat Snap Map multi-stop thermal glow
+                        if (hotspot.hasRoutineStrikes && displayMode != HeatmapDisplayMode.CLUSTER_PINS) {
                             val outerRadius = 78.dp.toPx() * haloPulse
                             drawCircle(
                                 brush = Brush.radialGradient(
-                                    0.00f to Color(0xFFEF4444).copy(alpha = 0.94f),
-                                    0.24f to Color(0xFFF97316).copy(alpha = 0.88f),
-                                    0.44f to Color(0xFFFACC15).copy(alpha = 0.82f),
-                                    0.64f to Color(0xFF22C55E).copy(alpha = 0.70f),
-                                    0.82f to Color(0xFF06B6D4).copy(alpha = 0.50f),
-                                    0.94f to Color(0xFF2563EB).copy(alpha = 0.28f),
+                                    0.00f to Color(0xFFEF3E38).copy(alpha = 0.78f),
+                                    0.42f to Color(0xFFF43A34).copy(alpha = 0.76f),
+                                    0.50f to Color(0xFFFF8A1E).copy(alpha = 0.76f),
+                                    0.56f to Color(0xFFFBE922).copy(alpha = 0.74f),
+                                    0.68f to Color(0xFF42F252).copy(alpha = 0.66f),
+                                    0.82f to Color(0xFF38DEF0).copy(alpha = 0.48f),
+                                    0.92f to Color(0xFF4080FF).copy(alpha = 0.26f),
                                     1.00f to Color.Transparent,
                                     center = Offset(cx, cy),
                                     radius = outerRadius
                                 ),
                                 radius = outerRadius,
+                                center = Offset(cx, cy)
+                            )
+                        }
+                        if (hotspot.hasFirstStrikes) {
+                            // Subtle, tight ambient gold shimmer around the luxurious First Strike point only
+                            val pointAuraRadius = 18.dp.toPx()
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    0.00f to Color(0xFFF59E0B).copy(alpha = 0.34f),
+                                    0.65f to Color(0xFFF59E0B).copy(alpha = 0.12f),
+                                    1.00f to Color.Transparent,
+                                    center = Offset(cx, cy),
+                                    radius = pointAuraRadius
+                                ),
+                                radius = pointAuraRadius,
                                 center = Offset(cx, cy)
                             )
                         }
@@ -630,17 +632,6 @@ fun FirstStrikeHeatmapScreen(
                 // Tappable hotspot indicators in Robolectric preview
                 hotspots.forEachIndexed { idx, hotspot ->
                     val isRoutineOnly = hotspot.hasRoutineStrikes && !hotspot.hasFirstStrikes
-                    val isMixed = hotspot.hasRoutineStrikes && hotspot.hasFirstStrikes
-                    val ringTint = when {
-                        isRoutineOnly -> Color(0xFF22C55E)
-                        isMixed -> Color(0xFFFACC15)
-                        else -> NeonCyan
-                    }
-                    val fillTint = when {
-                        isRoutineOnly -> Color(0x4406B6D4)
-                        isMixed -> Color(0x4422C55E)
-                        else -> Color(0x4422D3EE)
-                    }
                     Box(
                         modifier = Modifier
                             .align(Alignment.Center)
@@ -650,18 +641,38 @@ fun FirstStrikeHeatmapScreen(
                             )
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(fillTint)
-                            .border(1.8.dp, ringTint, CircleShape)
+                            .semantics { contentDescription = hotspot.placeName }
                             .clickable { selectedHotspot = hotspot }
                             .testTag("heatmap_hotspot_marker_${hotspot.id}"),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = if (isRoutineOnly) Icons.Default.Bolt else Icons.Default.Whatshot,
-                            contentDescription = hotspot.placeName,
-                            tint = if (isRoutineOnly) Color(0xFFFACC15) else NeonAmber,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        if (!isRoutineOnly) {
+                            // Luxurious multi-layered Obsidian-Gold jewel dot for First Strike
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF0B1221))
+                                    .border(2.4.dp, Color(0xFFFBBF24), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFFFBEB))
+                                )
+                            }
+                        } else {
+                            // Routine pin dot inside thermal cloud
+                            Box(
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFEF4444))
+                                    .border(1.8.dp, Color.White, CircleShape)
+                            )
+                        }
                     }
                 }
             }
@@ -1262,7 +1273,7 @@ fun FirstStrikeHeatmapScreen(
                         }
                     }
 
-                    // Compact Halo Color Legend: First Strike (Thermal) vs Routine Strike (Violet/Magenta Halo)
+                    // Compact Halo Color Legend: First Strike (Luxury Obsidian-Gold Point) vs Hot Zones (Translucent Spectral Heatmap)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1275,16 +1286,25 @@ fun FirstStrikeHeatmapScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(10.dp)
+                                    .size(13.dp)
                                     .clip(CircleShape)
-                                    .background(NeonAmber)
-                            )
+                                    .background(Color(0xFF0B1221))
+                                    .border(1.8.dp, Color(0xFFFBBF24), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(3.5.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFFFBEB))
+                                )
+                            }
                             Text(
-                                text = if (isAr) "First Strike" else "First Strike",
+                                text = "First Strike",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = textPrimary
@@ -1296,21 +1316,21 @@ fun FirstStrikeHeatmapScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(14.dp)
+                                    .size(15.dp)
                                     .clip(CircleShape)
                                     .background(
                                         Brush.radialGradient(
-                                            listOf(
-                                                Color(0xFFEF4444),
-                                                Color(0xFFFACC15),
-                                                Color(0xFF22C55E),
-                                                Color(0xFF2563EB)
-                                            )
+                                            0.00f to Color(0xFFEF3E38),
+                                            0.44f to Color(0xFFF43A34),
+                                            0.56f to Color(0xFFFBE922),
+                                            0.72f to Color(0xFF42F252),
+                                            0.88f to Color(0xFF38DEF0),
+                                            1.00f to Color(0xFF4080FF)
                                         )
                                     )
                             )
                             Text(
-                                text = if (isAr) "روتيني (سناب)" else "Snap Heat",
+                                text = if (isAr) "المناطق الساخنة" else if (isFr) "Zones chaudes" else "Hot Zones",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF4ADE80)
@@ -1318,29 +1338,6 @@ fun FirstStrikeHeatmapScreen(
                         }
                     }
                 }
-            }
-
-            // Top-Right Quick Location FAB directly below Map Style & Layers
-            IconButton(
-                onClick = triggerKnowMyLocation,
-                modifier = Modifier
-                    .minimumInteractiveComponentSize()
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(glassBg)
-                    .border(1.1.dp, accentCyan.copy(alpha = 0.65f), CircleShape)
-                    .testTag("heatmap_top_location_btn")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MyLocation,
-                    contentDescription = when {
-                        isAr -> "موقعي الآن"
-                        isFr -> "Ma position"
-                        else -> "Center on My Location"
-                    },
-                    tint = accentCyan,
-                    modifier = Modifier.size(21.dp)
-                )
             }
         }
 

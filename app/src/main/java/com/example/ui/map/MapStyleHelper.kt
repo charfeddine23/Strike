@@ -94,7 +94,9 @@ object MapStyleHelper {
 
     const val FIRST_STRIKE_SOURCE_ID = "obsidian-first-strike-source"
     const val HEATMAP_LAYER_ID = "obsidian-first-strike-heatmap"
+    const val FIRST_STRIKE_AURA_LAYER_ID = "obsidian-first-strike-aura"
     const val CIRCLE_LAYER_ID = "obsidian-first-strike-circles"
+    const val FIRST_STRIKE_CORE_SPARK_LAYER_ID = "obsidian-first-strike-spark"
     const val SYMBOL_LAYER_ID = "obsidian-first-strike-labels"
 
     const val ROUTINE_STRIKE_SOURCE_ID = "obsidian-routine-strike-source"
@@ -557,8 +559,8 @@ object MapStyleHelper {
     ) {
         restyleBaseLayers(style, theme)
         ensureOrUpdate3dBuildings(style, theme, show3dBuildings)
-        ensureOrUpdateFirstStrikeLayers(style, theme, displayMode, individuals, strikeEvents)
         ensureOrUpdateRoutineStrikeLayers(style, theme, displayMode, individuals, strikeEvents)
+        ensureOrUpdateFirstStrikeLayers(style, theme, displayMode, individuals, strikeEvents)
         ensureOrUpdateUserLocationLayers(style, userLat, userLng)
     }
 
@@ -571,8 +573,8 @@ object MapStyleHelper {
         userLng: Double?,
         strikeEvents: List<StrikeEvent> = emptyList()
     ) {
-        ensureOrUpdateFirstStrikeLayers(style, theme, displayMode, individuals, strikeEvents)
         ensureOrUpdateRoutineStrikeLayers(style, theme, displayMode, individuals, strikeEvents)
+        ensureOrUpdateFirstStrikeLayers(style, theme, displayMode, individuals, strikeEvents)
         ensureOrUpdateUserLocationLayers(style, userLat, userLng)
     }
 
@@ -719,116 +721,116 @@ object MapStyleHelper {
             style.addSource(GeoJsonSource(FIRST_STRIKE_SOURCE_ID, geoJson))
         }
 
-        val heatOpacityExpr = when (displayMode) {
-            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.literal(0.92f)
-            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
-            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
-                Expression.linear(),
-                Expression.zoom(),
-                Expression.stop(10, 0.92f),
-                Expression.stop(15, 0.42f)
-            )
-        }
-        val heatVisibility = if (displayMode == HeatmapDisplayMode.CLUSTER_PINS) Property.NONE else Property.VISIBLE
+        // First Strike renders strictly as a luxurious multi-layered Obsidian-Gold jewel dot (never a sprawling heatmap)
+        style.getLayerAs<HeatmapLayer>(HEATMAP_LAYER_ID)?.setProperties(
+            PropertyFactory.heatmapOpacity(0f),
+            PropertyFactory.visibility(Property.NONE)
+        )
 
-        val existingHeat = style.getLayerAs<HeatmapLayer>(HEATMAP_LAYER_ID)
-        if (existingHeat == null) {
-            val heatmapLayer = HeatmapLayer(HEATMAP_LAYER_ID, FIRST_STRIKE_SOURCE_ID).apply {
-                setProperties(
-                    PropertyFactory.heatmapWeight(Expression.get("weight")),
-                    PropertyFactory.heatmapIntensity(
-                        Expression.interpolate(
-                            Expression.linear(),
-                            Expression.zoom(),
-                            Expression.stop(0, 0.95f),
-                            Expression.stop(9, 1.85f),
-                            Expression.stop(15, 2.4f)
-                        )
-                    ),
-                    PropertyFactory.heatmapRadius(
-                        Expression.interpolate(
-                            Expression.linear(),
-                            Expression.zoom(),
-                            Expression.stop(0, 16f),
-                            Expression.stop(9, 30f),
-                            Expression.stop(15, 46f)
-                        )
-                    ),
-                    PropertyFactory.heatmapColor(
-                        Expression.interpolate(
-                            Expression.linear(),
-                            Expression.heatmapDensity(),
-                            Expression.stop(0.0, Expression.rgba(0, 0, 0, 0.0f)),
-                            Expression.stop(0.20, Expression.rgba(34, 211, 238, 0.65f)),
-                            Expression.stop(0.55, Expression.rgba(245, 158, 11, 0.85f)),
-                            Expression.stop(0.85, Expression.rgba(239, 68, 68, 0.95f)),
-                            Expression.stop(1.0, Expression.rgba(255, 244, 230, 1.0f))
-                        )
-                    ),
-                    PropertyFactory.heatmapOpacity(heatOpacityExpr),
-                    PropertyFactory.visibility(heatVisibility)
-                )
-            }
-            style.addLayer(heatmapLayer)
+        val isDark = theme == MapVisualTheme.OBSIDIAN_DARK
+        val auraColor = AndroidColor.parseColor("#F59E0B")
+        val coreFill = if (isDark) AndroidColor.parseColor("#0B1221") else AndroidColor.parseColor("#0F172A")
+        val luxuryGoldRim = if (isDark) AndroidColor.parseColor("#FBBF24") else AndroidColor.parseColor("#D97706")
+        val coreSparkColor = AndroidColor.parseColor("#FFFBEB")
+
+        val existingAura = style.getLayerAs<CircleLayer>(FIRST_STRIKE_AURA_LAYER_ID)
+        if (existingAura == null) {
+            style.addLayer(
+                CircleLayer(FIRST_STRIKE_AURA_LAYER_ID, FIRST_STRIKE_SOURCE_ID).apply {
+                    setProperties(
+                        PropertyFactory.circleRadius(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                Expression.stop(4, 9f),
+                                Expression.stop(10, 13f),
+                                Expression.stop(16, 17f)
+                            )
+                        ),
+                        PropertyFactory.circleColor(auraColor),
+                        PropertyFactory.circleBlur(0.95f),
+                        PropertyFactory.circleOpacity(0.28f),
+                        PropertyFactory.visibility(Property.VISIBLE)
+                    )
+                }
+            )
         } else {
-            existingHeat.setProperties(
-                PropertyFactory.heatmapOpacity(heatOpacityExpr),
-                PropertyFactory.visibility(heatVisibility)
+            existingAura.setProperties(
+                PropertyFactory.circleColor(auraColor),
+                PropertyFactory.circleOpacity(0.28f),
+                PropertyFactory.visibility(Property.VISIBLE)
             )
         }
-
-        val showPins = displayMode != HeatmapDisplayMode.HEATMAP_GLOW
-        val circleVisibility = if (showPins) Property.VISIBLE else Property.NONE
-        val circleOpacityExpr = when (displayMode) {
-            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.95f)
-            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
-                Expression.linear(),
-                Expression.zoom(),
-                Expression.stop(6, 0.0f),
-                Expression.stop(9, 0.78f),
-                Expression.stop(13, 0.98f)
-            )
-            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.literal(0.0f)
-        }
-        val strokeColor = if (theme == MapVisualTheme.OBSIDIAN_DARK) DARK_LABEL_TEXT else LIGHT_LABEL_TEXT
 
         val existingCircle = style.getLayerAs<CircleLayer>(CIRCLE_LAYER_ID)
         if (existingCircle == null) {
-            val circleLayer = CircleLayer(CIRCLE_LAYER_ID, FIRST_STRIKE_SOURCE_ID).apply {
-                setProperties(
-                    PropertyFactory.circleRadius(
-                        Expression.interpolate(
-                            Expression.linear(),
-                            Expression.zoom(),
-                            Expression.stop(4, 5f),
-                            Expression.stop(10, 8f),
-                            Expression.stop(16, 12f)
-                        )
-                    ),
-                    PropertyFactory.circleColor(AndroidColor.parseColor("#22D3EE")),
-                    PropertyFactory.circleStrokeWidth(2.0f),
-                    PropertyFactory.circleStrokeColor(strokeColor),
-                    PropertyFactory.circleOpacity(circleOpacityExpr),
-                    PropertyFactory.circleStrokeOpacity(circleOpacityExpr),
-                    PropertyFactory.visibility(circleVisibility)
-                )
-            }
-            style.addLayer(circleLayer)
+            style.addLayer(
+                CircleLayer(CIRCLE_LAYER_ID, FIRST_STRIKE_SOURCE_ID).apply {
+                    setProperties(
+                        PropertyFactory.circleRadius(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                Expression.stop(4, 5.2f),
+                                Expression.stop(10, 7.4f),
+                                Expression.stop(16, 10.2f)
+                            )
+                        ),
+                        PropertyFactory.circleColor(coreFill),
+                        PropertyFactory.circleStrokeWidth(2.6f),
+                        PropertyFactory.circleStrokeColor(luxuryGoldRim),
+                        PropertyFactory.circleOpacity(0.98f),
+                        PropertyFactory.circleStrokeOpacity(0.98f),
+                        PropertyFactory.visibility(Property.VISIBLE)
+                    )
+                }
+            )
         } else {
             existingCircle.setProperties(
-                PropertyFactory.circleStrokeColor(strokeColor),
-                PropertyFactory.circleOpacity(circleOpacityExpr),
-                PropertyFactory.circleStrokeOpacity(circleOpacityExpr),
-                PropertyFactory.visibility(circleVisibility)
+                PropertyFactory.circleColor(coreFill),
+                PropertyFactory.circleStrokeColor(luxuryGoldRim),
+                PropertyFactory.circleOpacity(0.98f),
+                PropertyFactory.circleStrokeOpacity(0.98f),
+                PropertyFactory.visibility(Property.VISIBLE)
             )
         }
 
-        val labelColor = if (theme == MapVisualTheme.OBSIDIAN_DARK) DARK_LABEL_TEXT else LIGHT_LABEL_TEXT
-        val labelHalo = if (theme == MapVisualTheme.OBSIDIAN_DARK) DARK_LABEL_HALO else LIGHT_LABEL_HALO
+        val existingSpark = style.getLayerAs<CircleLayer>(FIRST_STRIKE_CORE_SPARK_LAYER_ID)
+        if (existingSpark == null) {
+            style.addLayer(
+                CircleLayer(FIRST_STRIKE_CORE_SPARK_LAYER_ID, FIRST_STRIKE_SOURCE_ID).apply {
+                    setProperties(
+                        PropertyFactory.circleRadius(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                Expression.stop(4, 1.8f),
+                                Expression.stop(10, 2.5f),
+                                Expression.stop(16, 3.4f)
+                            )
+                        ),
+                        PropertyFactory.circleColor(coreSparkColor),
+                        PropertyFactory.circleOpacity(0.96f),
+                        PropertyFactory.visibility(Property.VISIBLE)
+                    )
+                }
+            )
+        } else {
+            existingSpark.setProperties(
+                PropertyFactory.circleColor(coreSparkColor),
+                PropertyFactory.circleOpacity(0.96f),
+                PropertyFactory.visibility(Property.VISIBLE)
+            )
+        }
+
+        val showLabels = displayMode != HeatmapDisplayMode.HEATMAP_GLOW
+        val labelVisibility = if (showLabels) Property.VISIBLE else Property.NONE
+        val labelColor = if (isDark) DARK_LABEL_TEXT else LIGHT_LABEL_TEXT
+        val labelHalo = if (isDark) DARK_LABEL_HALO else LIGHT_LABEL_HALO
         val existingSymbol = style.getLayerAs<SymbolLayer>(SYMBOL_LAYER_ID)
         if (existingSymbol == null) {
             val symbolLayer = SymbolLayer(SYMBOL_LAYER_ID, FIRST_STRIKE_SOURCE_ID).apply {
-                minZoom = 10f
+                minZoom = 11f
                 setProperties(
                     PropertyFactory.textField(Expression.get("name")),
                     PropertyFactory.textSize(12f),
@@ -837,7 +839,7 @@ object MapStyleHelper {
                     PropertyFactory.textColor(labelColor),
                     PropertyFactory.textHaloColor(labelHalo),
                     PropertyFactory.textHaloWidth(1.5f),
-                    PropertyFactory.visibility(circleVisibility)
+                    PropertyFactory.visibility(labelVisibility)
                 )
             }
             style.addLayer(symbolLayer)
@@ -845,7 +847,7 @@ object MapStyleHelper {
             existingSymbol.setProperties(
                 PropertyFactory.textColor(labelColor),
                 PropertyFactory.textHaloColor(labelHalo),
-                PropertyFactory.visibility(circleVisibility)
+                PropertyFactory.visibility(labelVisibility)
             )
         }
     }
@@ -865,64 +867,76 @@ object MapStyleHelper {
             style.addSource(GeoJsonSource(ROUTINE_STRIKE_SOURCE_ID, geoJson))
         }
 
-        // Snapchat Snap Map keeps the thermal heat cloud rich & luminous from world zoom down to street level
+        // Translucent Snap Map / Google Maps Heatmap: map labels remain legible right through hot red zones
         val heatOpacityExpr = when (displayMode) {
-            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.literal(0.95f)
+            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.literal(0.88f)
             HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
             HeatmapDisplayMode.HYBRID -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(0, 0.92f),
-                Expression.stop(11, 0.94f),
-                Expression.stop(16, 0.78f)
+                Expression.stop(0, 0.86f),
+                Expression.stop(11, 0.84f),
+                Expression.stop(16, 0.72f)
             )
         }
         val heatVisibility = if (displayMode == HeatmapDisplayMode.CLUSTER_PINS) Property.NONE else Property.VISIBLE
 
         val existingHeat = style.getLayerAs<HeatmapLayer>(ROUTINE_HEATMAP_LAYER_ID)
         if (existingHeat == null) {
-            style.addLayer(
-                HeatmapLayer(ROUTINE_HEATMAP_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
-                    setProperties(
-                        PropertyFactory.heatmapWeight(Expression.get("weight")),
-                        PropertyFactory.heatmapIntensity(
-                            Expression.interpolate(
-                                Expression.linear(),
-                                Expression.zoom(),
-                                Expression.stop(0, 0.90f),
-                                Expression.stop(9, 1.75f),
-                                Expression.stop(15, 2.35f)
-                            )
-                        ),
-                        // Wide Snap Map Gaussian spread so neighboring strikes blend organically
-                        PropertyFactory.heatmapRadius(
-                            Expression.interpolate(
-                                Expression.linear(),
-                                Expression.zoom(),
-                                Expression.stop(0, 22f),
-                                Expression.stop(9, 44f),
-                                Expression.stop(15, 74f)
-                            )
-                        ),
-                        // Exact Snapchat Snap Map Color Ramp: Transparent -> Blue -> Cyan -> Green -> Yellow -> Orange -> Red
-                        PropertyFactory.heatmapColor(
-                            Expression.interpolate(
-                                Expression.linear(),
-                                Expression.heatmapDensity(),
-                                Expression.stop(0.00, Expression.rgba(0, 0, 0, 0.0f)),
-                                Expression.stop(0.15, Expression.rgba(37, 99, 235, 0.58f)),
-                                Expression.stop(0.32, Expression.rgba(6, 182, 212, 0.78f)),
-                                Expression.stop(0.50, Expression.rgba(74, 222, 128, 0.88f)),
-                                Expression.stop(0.68, Expression.rgba(250, 204, 21, 0.94f)),
-                                Expression.stop(0.85, Expression.rgba(249, 115, 22, 0.98f)),
-                                Expression.stop(1.00, Expression.rgba(239, 68, 68, 1.0f))
-                            )
-                        ),
-                        PropertyFactory.heatmapOpacity(heatOpacityExpr),
-                        PropertyFactory.visibility(heatVisibility)
-                    )
-                }
-            )
+            val routineHeatmapLayer = HeatmapLayer(ROUTINE_HEATMAP_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
+                setProperties(
+                    PropertyFactory.heatmapWeight(Expression.get("weight")),
+                    PropertyFactory.heatmapIntensity(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(0, 0.88f),
+                            Expression.stop(6, 1.25f),
+                            Expression.stop(10, 1.65f),
+                            Expression.stop(15, 2.10f)
+                        )
+                    ),
+                    // Wide Gaussian kernel so neighboring points merge organically into smooth green bridges & red plateaus
+                    PropertyFactory.heatmapRadius(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(0, 20f),
+                            Expression.stop(6, 30f),
+                            Expression.stop(10, 44f),
+                            Expression.stop(14, 62f),
+                            Expression.stop(17, 82f)
+                        )
+                    ),
+                    // Classic translucent Spectral Heatmap matching reference image:
+                    // Faint Royal Blue -> Sky Cyan -> Lime Green -> Crisp thin Yellow/Orange rim -> Broad Coral-Red plateau
+                    PropertyFactory.heatmapColor(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.heatmapDensity(),
+                            Expression.stop(0.00, Expression.rgba(0, 0, 0, 0.0f)),
+                            Expression.stop(0.07, Expression.rgba(64, 128, 255, 0.16f)),
+                            Expression.stop(0.15, Expression.rgba(65, 130, 255, 0.50f)),
+                            Expression.stop(0.26, Expression.rgba(56, 222, 240, 0.68f)),
+                            Expression.stop(0.40, Expression.rgba(66, 242, 82, 0.78f)),
+                            Expression.stop(0.50, Expression.rgba(176, 255, 44, 0.82f)),
+                            Expression.stop(0.56, Expression.rgba(255, 224, 32, 0.85f)),
+                            Expression.stop(0.62, Expression.rgba(255, 138, 28, 0.87f)),
+                            Expression.stop(0.68, Expression.rgba(244, 58, 52, 0.88f)),
+                            Expression.stop(1.00, Expression.rgba(235, 46, 44, 0.90f))
+                        )
+                    ),
+                    PropertyFactory.heatmapOpacity(heatOpacityExpr),
+                    PropertyFactory.visibility(heatVisibility)
+                )
+            }
+            // Place below base map SymbolLayers so city/region/street labels render crisp on top just like the reference image
+            val firstBaseLabel = style.layers.firstOrNull { it is SymbolLayer && !it.id.startsWith("obsidian-") }
+            if (firstBaseLabel != null) {
+                style.addLayerBelow(routineHeatmapLayer, firstBaseLabel.id)
+            } else {
+                style.addLayer(routineHeatmapLayer)
+            }
         } else {
             existingHeat.setProperties(
                 PropertyFactory.heatmapOpacity(heatOpacityExpr),
@@ -934,13 +948,12 @@ object MapStyleHelper {
         val circleVisibility = if (showPins) Property.VISIBLE else Property.NONE
         val isPinsMode = displayMode == HeatmapDisplayMode.CLUSTER_PINS
         val auraOpacityExpr = when (displayMode) {
-            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.32f)
+            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.30f)
             HeatmapDisplayMode.HYBRID -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(10, 0.0f),
-                Expression.stop(13, 0.22f),
-                Expression.stop(16, 0.36f)
+                Expression.stop(13, 0.0f),
+                Expression.stop(15, 0.24f)
             )
             HeatmapDisplayMode.HEATMAP_GLOW -> Expression.literal(0.0f)
         }
@@ -949,9 +962,8 @@ object MapStyleHelper {
             HeatmapDisplayMode.HYBRID -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(12, 0.0f),
-                Expression.stop(14, 0.72f),
-                Expression.stop(16, 0.92f)
+                Expression.stop(13.5, 0.0f),
+                Expression.stop(15.0, 0.88f)
             )
             HeatmapDisplayMode.HEATMAP_GLOW -> Expression.literal(0.0f)
         }
@@ -966,12 +978,12 @@ object MapStyleHelper {
                             Expression.interpolate(
                                 Expression.linear(),
                                 Expression.zoom(),
-                                Expression.stop(4, 16f),
-                                Expression.stop(10, 24f),
-                                Expression.stop(16, 34f)
+                                Expression.stop(4, 14f),
+                                Expression.stop(10, 20f),
+                                Expression.stop(16, 28f)
                             )
                         ),
-                        PropertyFactory.circleColor(AndroidColor.parseColor("#2563EB")),
+                        PropertyFactory.circleColor(AndroidColor.parseColor("#38BDF8")),
                         PropertyFactory.circleBlur(1.0f),
                         PropertyFactory.circleOpacity(auraOpacityExpr),
                         PropertyFactory.visibility(circleVisibility)
@@ -994,12 +1006,12 @@ object MapStyleHelper {
                             Expression.interpolate(
                                 Expression.linear(),
                                 Expression.zoom(),
-                                Expression.stop(4, 10f),
-                                Expression.stop(10, 15f),
-                                Expression.stop(16, 20f)
+                                Expression.stop(4, 9f),
+                                Expression.stop(10, 13f),
+                                Expression.stop(16, 18f)
                             )
                         ),
-                        PropertyFactory.circleColor(AndroidColor.parseColor("#22C55E")),
+                        PropertyFactory.circleColor(AndroidColor.parseColor("#4ADE80")),
                         PropertyFactory.circleBlur(0.9f),
                         PropertyFactory.circleOpacity(auraOpacityExpr),
                         PropertyFactory.visibility(circleVisibility)
@@ -1027,8 +1039,8 @@ object MapStyleHelper {
                                 Expression.stop(16, 9.5f)
                             )
                         ),
-                        PropertyFactory.circleColor(AndroidColor.parseColor("#FACC15")),
-                        PropertyFactory.circleBlur(if (isPinsMode) 0.0f else 0.35f),
+                        PropertyFactory.circleColor(AndroidColor.parseColor("#EF4444")),
+                        PropertyFactory.circleBlur(if (isPinsMode) 0.0f else 0.25f),
                         PropertyFactory.circleStrokeWidth(if (isPinsMode) 1.8f else 0.0f),
                         PropertyFactory.circleStrokeColor(strokeColor),
                         PropertyFactory.circleOpacity(coreOpacityExpr),
@@ -1039,7 +1051,7 @@ object MapStyleHelper {
             )
         } else {
             existingCircle.setProperties(
-                PropertyFactory.circleBlur(if (isPinsMode) 0.0f else 0.35f),
+                PropertyFactory.circleBlur(if (isPinsMode) 0.0f else 0.25f),
                 PropertyFactory.circleStrokeWidth(if (isPinsMode) 1.8f else 0.0f),
                 PropertyFactory.circleStrokeColor(strokeColor),
                 PropertyFactory.circleOpacity(coreOpacityExpr),

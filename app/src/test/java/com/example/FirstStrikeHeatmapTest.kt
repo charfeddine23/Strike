@@ -282,7 +282,7 @@ class FirstStrikeHeatmapTest {
         composeRule.onNodeWithTag("heatmap_know_location_btn").assertIsDisplayed()
         composeRule.onNodeWithTag("heatmap_enter_btn").assertIsDisplayed()
         composeRule.onNodeWithTag("heatmap_layers_btn").assertIsDisplayed()
-        composeRule.onNodeWithTag("heatmap_top_location_btn").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("heatmap_top_location_btn").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("top_bar_outer_container").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("bottom_bar_outer_container").fetchSemanticsNodes().size)
 
@@ -295,15 +295,21 @@ class FirstStrikeHeatmapTest {
             ).fetchSemanticsNodes().size
         )
 
-        // Open floating Layers switcher and verify top-right Location FAB sits below Map Style & Layers
+        // Open floating Layers switcher and inspect halo legend
         composeRule.onNodeWithTag("heatmap_layers_btn").performClick()
         composeRule.waitForIdle()
-        val layersPanelBounds = composeRule.onNodeWithTag("heatmap_layers_panel").assertIsDisplayed().getBoundsInRoot()
-        val topLocBelowPanelBounds = composeRule.onNodeWithTag("heatmap_top_location_btn").assertIsDisplayed().getBoundsInRoot()
-        assertTrue(
-            "Top Location FAB (${topLocBelowPanelBounds.top}) must sit below Map Style & Layers (${layersPanelBounds.bottom})",
-            topLocBelowPanelBounds.top >= layersPanelBounds.bottom
-        )
+        composeRule.onNodeWithTag("heatmap_layers_panel").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_halo_legend").assertIsDisplayed()
+        composeRule.onNode(
+            hasTestTag("heatmap_halo_legend") and hasAnyDescendant(hasText("First Strike", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+        composeRule.onNode(
+            hasTestTag("heatmap_halo_legend") and hasAnyDescendant(
+                hasText("المناطق الساخنة", substring = true) or hasText("Hot Zones", substring = true)
+            ),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
         composeRule.onNodeWithTag("heatmap_theme_light_btn").performClick()
         composeRule.onNodeWithTag("heatmap_3d_buildings_toggle").performClick()
         composeRule.onNodeWithTag("heatmap_hud_mode_pins_btn").performClick()
@@ -491,24 +497,18 @@ class FirstStrikeHeatmapTest {
 
         val swipeBtn = composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").assertIsDisplayed()
         val summaryBar = composeRule.onNodeWithTag("heatmap_summary_toggle_bar").assertIsDisplayed()
-        val layersBtn = composeRule.onNodeWithTag("heatmap_layers_btn").assertIsDisplayed()
-        val topLocBtn = composeRule.onNodeWithTag("heatmap_top_location_btn").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_layers_btn").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("heatmap_top_location_btn").fetchSemanticsNodes().size)
         val bottomBar = composeRule.onNodeWithTag("heatmap_bottom_bar").assertIsDisplayed()
         val knowLocBtn = composeRule.onNodeWithTag("heatmap_know_location_btn").assertIsDisplayed()
         val enterBtn = composeRule.onNodeWithTag("heatmap_enter_btn").assertIsDisplayed()
 
-        val layersBounds = layersBtn.getBoundsInRoot()
-        val topLocBounds = topLocBtn.getBoundsInRoot()
         val swipeBounds = swipeBtn.getBoundsInRoot()
         val summaryBounds = summaryBar.getBoundsInRoot()
         val bottomBarBounds = bottomBar.getBoundsInRoot()
         val knowLocBounds = knowLocBtn.getBoundsInRoot()
         val enterBounds = enterBtn.getBoundsInRoot()
 
-        assertTrue(
-            "Top Location FAB (${topLocBounds.top}) must sit below Layers button (${layersBounds.bottom})",
-            topLocBounds.top >= layersBounds.bottom
-        )
         assertTrue(
             "Elevated Swipe Up pill (${swipeBounds.bottom}) must sit above Summary/Toggle bar (${summaryBounds.top})",
             swipeBounds.bottom <= summaryBounds.top

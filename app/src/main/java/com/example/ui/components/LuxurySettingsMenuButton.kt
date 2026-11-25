@@ -1,26 +1,16 @@
 package com.example.ui.components
 
 import android.view.SoundEffectConstants
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -38,16 +28,12 @@ import com.example.R
 import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
-import com.example.ui.theme.NeonViolet
 import com.example.util.HapticHelper
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
- * Luxurious 3-stacked-horizontal-lines Settings Menu Button for the Top Banner.
- * Renders three stepped metallic-neon bars inside a frosted Liquid Glass squircle
- * with animated aura glow, 48dp accessible interactive touch target, ripple & haptic feedback.
+ * Luxurious containerless 3-stacked-horizontal-lines Settings Menu Button for the Top Banner.
+ * Renders three stepped metallic-neon bars directly with a 48dp accessible interactive touch target,
+ * ripple & haptic feedback (zero enclosing container or shading).
  */
 @Composable
 fun LuxurySettingsMenuButton(
@@ -60,76 +46,11 @@ fun LuxurySettingsMenuButton(
     val view = LocalView.current
     val cdText = stringResource(R.string.settings)
 
-    val infiniteTransition = rememberInfiniteTransition(label = "luxury_menu_anim")
-    val angleDeg by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 5200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "luxury_menu_angle"
-    )
-    val glowPulse by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2f * PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2600, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "luxury_menu_pulse"
-    )
-
-    val rad = Math.toRadians(angleDeg.toDouble())
-    val dirX = cos(rad).toFloat()
-    val dirY = sin(rad).toFloat()
-    val pulseFactor = (sin(glowPulse) + 1f) * 0.5f
-
-    val borderBrush = Brush.linearGradient(
-        colors = if (isDarkTheme) {
-            listOf(
-                NeonCyan,
-                NeonViolet.copy(alpha = 0.85f),
-                NeonAmber.copy(alpha = 0.8f),
-                NeonCyan
-            )
-        } else {
-            listOf(
-                Color(0xFF0284C7),
-                Color(0xFF6366F1),
-                Color(0xFF0EA5E9),
-                Color(0xFF0284C7)
-            )
-        },
-        start = Offset(42f * (1f - dirX), 42f * (1f - dirY)),
-        end = Offset(42f * (1f + dirX), 42f * (1f + dirY))
-    )
-
-    val containerBg = if (isDarkTheme) Color(0x1CFFFFFF) else Color(0x4DFFFFFF)
-    val shape = RoundedCornerShape(13.dp)
-
     Box(
         modifier = modifier
             .minimumInteractiveComponentSize()
             .size(38.dp)
-            .drawBehind {
-                val radius = size.maxDimension * (0.68f + pulseFactor * 0.1f)
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            NeonCyan.copy(alpha = if (isDarkTheme) 0.24f + pulseFactor * 0.12f else 0.16f),
-                            NeonViolet.copy(alpha = if (isDarkTheme) 0.10f else 0.06f),
-                            Color.Transparent
-                        ),
-                        center = center,
-                        radius = radius
-                    ),
-                    radius = radius
-                )
-            }
-            .clip(shape)
-            .background(containerBg)
-            .border(1.3.dp, borderBrush, shape)
+            .clip(CircleShape)
             .semantics {
                 contentDescription = cdText
             }
