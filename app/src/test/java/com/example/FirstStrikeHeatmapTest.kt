@@ -685,7 +685,7 @@ class FirstStrikeHeatmapTest {
         composeRule.waitForIdle()
         assertEquals(0, composeRule.onAllNodesWithTag("first_strike_heatmap_screen").fetchSemanticsNodes().size)
         composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
-        composeRule.onNodeWithTag("top_bar_pull_heatmap_handle").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("top_bar_pull_heatmap_handle").fetchSemanticsNodes().size)
 
         // 3. Partial pull down on Top Bar shows heatmap sliding down smoothly mid-gesture
         val topBar = composeRule.onNodeWithTag("top_bar_outer_container")

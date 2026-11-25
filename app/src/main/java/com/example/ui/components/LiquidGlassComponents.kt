@@ -1042,14 +1042,18 @@ fun BoxScope.TopBottomEdgeFadeBlurOverlay(
     val topFrostBrush = remember(isDarkTheme) {
         if (isDarkTheme) {
             Brush.verticalGradient(
-                0.00f to Color(0x14050A14),
-                0.45f to Color(0x08070E1D),
+                0.00f to Color(0x88050A14),
+                0.32f to Color(0x62070E1D),
+                0.64f to Color(0x2E091326),
+                0.86f to Color(0x0E0B182E),
                 1.00f to Color.Transparent
             )
         } else {
             Brush.verticalGradient(
-                0.00f to Color(0x20F4F8FD),
-                0.45f to Color(0x0CEEF4FB),
+                0.00f to Color(0x9EF4F8FD),
+                0.35f to Color(0x6CEEF4FB),
+                0.68f to Color(0x30EAF1FA),
+                0.88f to Color(0x10E8F1FA),
                 1.00f to Color.Transparent
             )
         }

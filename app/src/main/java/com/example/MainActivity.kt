@@ -906,6 +906,41 @@ fun LiquidGlassTopBar(
     val equippedAvatar by com.example.data.profile.ProfileManager.equippedAvatar.collectAsStateWithLifecycle()
     val equippedTitle by com.example.data.profile.ProfileManager.equippedTitle.collectAsStateWithLifecycle()
 
+    val topGlassFill = if (isDarkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xAE0D1424),
+                Color(0x9C070C17),
+                Color(0xAD040811)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xE8FFFFFF),
+                Color(0xD2F1F6FC)
+            )
+        )
+    }
+
+    val topGlassBorder = if (isDarkTheme) {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0x62FFFFFF),
+                Color(0x22FFFFFF),
+                Color(0x3238BDF8)
+            )
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFFFFFFFF),
+                Color(0x520284C7),
+                Color(0x66CBD5E1)
+            )
+        )
+    }
+
     var topBarCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val latestPullDelta by rememberUpdatedState(onPullDownHeatmapDelta)
     val latestPullEnd by rememberUpdatedState(onPullDownHeatmapEnd)
@@ -922,6 +957,9 @@ fun LiquidGlassTopBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .onGloballyPositioned { topBarCoords = it }
+                .clip(RoundedCornerShape(24.dp))
+                .background(topGlassFill)
+                .border(0.9.dp, topGlassBorder, RoundedCornerShape(24.dp))
                 .pointerInput(Unit) {
                     val slop = viewConfiguration.touchSlop
                     awaitEachGesture {
@@ -970,7 +1008,7 @@ fun LiquidGlassTopBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1189,23 +1227,6 @@ fun LiquidGlassTopBar(
                 )
             }
         }
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 2.dp)
-                .width(28.dp)
-                .height(2.5.dp)
-                .clip(RoundedCornerShape(50))
-                .background(
-                    if (isDarkTheme) {
-                        cyanColor.copy(alpha = 0.45f)
-                    } else {
-                        cyanColor.copy(alpha = 0.55f)
-                    }
-                )
-                .testTag("top_bar_pull_heatmap_handle")
-        )
         }
     }
 }

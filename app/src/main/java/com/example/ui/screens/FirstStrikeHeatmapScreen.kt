@@ -238,6 +238,9 @@ class HeatmapMapController(context: Context) {
                         MapStyleHelper.ROUTINE_CIRCLE_LAYER_ID,
                         MapStyleHelper.ROUTINE_INNER_HALO_LAYER_ID,
                         MapStyleHelper.ROUTINE_HALO_LAYER_ID,
+                        MapStyleHelper.ROUTINE_HEAT_RED_LAYER_ID,
+                        MapStyleHelper.ROUTINE_HEAT_YELLOW_LAYER_ID,
+                        MapStyleHelper.ROUTINE_HEAT_GREEN_LAYER_ID,
                         MapStyleHelper.ROUTINE_HEATMAP_LAYER_ID
                     )
                     val clickedId = rendered.firstOrNull()?.getNumberProperty("id")?.toLong()
