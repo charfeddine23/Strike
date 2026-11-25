@@ -194,15 +194,15 @@ fun ObsidianRoadmapHubSwitcher(
     val capsuleBg = if (isDarkTheme) {
         Brush.verticalGradient(
             listOf(
-                Color(0xF20D1628),
-                Color(0xF2080E1C)
+                Color(0xC80D1628),
+                Color(0xBE080E1C)
             )
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                Color(0xF2FFFFFF),
-                Color(0xF2F1F6FC)
+                Color(0xD8FFFFFF),
+                Color(0xC6F1F6FC)
             )
         )
     }

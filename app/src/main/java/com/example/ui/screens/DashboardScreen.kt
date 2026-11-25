@@ -46,6 +46,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddLocationAlt
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -66,6 +67,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.SortByAlpha
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Whatshot
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -185,6 +187,8 @@ fun DashboardScreen(
     var individualToDelete by remember { mutableStateOf<Individual?>(null) }
     var personForHistoricalEdit by remember { mutableStateOf<Individual?>(null) }
     var personForLocationEdit by remember { mutableStateOf<Individual?>(null) }
+    var personForMultiStrike by remember { mutableStateOf<Individual?>(null) }
+    var strikeEventForLocationEdit by remember { mutableStateOf<StrikeEvent?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
     var expandedCardIds by remember { mutableStateOf(setOf<Long>()) }
     val focusedIndividualId by viewModel.focusedIndividualId.collectAsStateWithLifecycle()
@@ -591,6 +595,8 @@ fun DashboardScreen(
                         personStrikeEvents = eventsByIndividual[item.id].orEmpty(),
                         onEditYearlyStrikes = { personForHistoricalEdit = item },
                         onEditFirstStrikeLocation = { personForLocationEdit = item },
+                        onOpenMultiStrikeEditor = { personForMultiStrike = item },
+                        onEditStrikeEventLocation = { ev -> strikeEventForLocationEdit = ev },
                         darkTheme = isDarkTheme,
                         isHapticFeedbackEnabled = isHapticFeedbackEnabled,
                         isAr = isAr
@@ -718,6 +724,87 @@ fun DashboardScreen(
             )
         }
     }
+
+    if (personForMultiStrike != null) {
+        val target = personForMultiStrike!!
+        PersonMultiStrikeDialog(
+            individual = target,
+            currentLang = currentLang,
+            isDarkTheme = isDarkTheme,
+            isHapticEnabled = isHapticFeedbackEnabled,
+            onDismiss = { personForMultiStrike = null },
+            onConfirmAdd = { count, isFirstStrike, lat, lng, placeName ->
+                viewModel.recordStrikesWithLocation(
+                    id = target.id,
+                    delta = count,
+                    isFirstStrike = isFirstStrike,
+                    lat = lat,
+                    lng = lng,
+                    placeName = placeName
+                )
+                personForMultiStrike = null
+            }
+        )
+    }
+
+    if (strikeEventForLocationEdit != null) {
+        val targetEvent = strikeEventForLocationEdit!!
+        val ownerPerson = remember(targetEvent.individualId, allList) {
+            allList.firstOrNull { it.id == targetEvent.individualId }
+        }
+        Dialog(
+            onDismissRequest = { strikeEventForLocationEdit = null },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = true
+            )
+        ) {
+            val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+            SideEffect {
+                dialogWindow?.setLayout(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                dialogWindow?.setBackgroundDrawableResource(android.R.color.transparent)
+            }
+            com.example.ui.components.FirstStrikeLocationPickerDialog(
+                initialLat = targetEvent.lat ?: ownerPerson?.firstStrikeLat,
+                initialLng = targetEvent.lng ?: ownerPerson?.firstStrikeLng,
+                initialPlaceName = targetEvent.placeName.ifBlank { ownerPerson?.firstStrikePlaceName.orEmpty() },
+                currentLang = currentLang,
+                isDarkTheme = isDarkTheme,
+                titleOverride = if (isAr) {
+                    "موقع السترايك (${targetEvent.individualName})"
+                } else {
+                    "Strike Location (${targetEvent.individualName})"
+                },
+                allowCategorySelection = true,
+                initialIsFirstStrike = targetEvent.isFirstStrike,
+                onConfirmWithCategory = { lat, lng, place, isFirstStrike ->
+                    viewModel.updateStrikeEventLocation(
+                        eventId = targetEvent.id,
+                        lat = lat,
+                        lng = lng,
+                        placeName = place,
+                        isFirstStrike = isFirstStrike
+                    )
+                    strikeEventForLocationEdit = null
+                },
+                onConfirm = { _, _, _ -> Unit },
+                onClear = {
+                    viewModel.updateStrikeEventLocation(
+                        eventId = targetEvent.id,
+                        lat = null,
+                        lng = null,
+                        placeName = "",
+                        isFirstStrike = targetEvent.isFirstStrike
+                    )
+                    strikeEventForLocationEdit = null
+                },
+                onDismiss = { strikeEventForLocationEdit = null }
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -735,6 +822,8 @@ fun IndividualRecordCard(
     personStrikeEvents: List<StrikeEvent> = emptyList(),
     onEditYearlyStrikes: (() -> Unit)? = null,
     onEditFirstStrikeLocation: (() -> Unit)? = null,
+    onOpenMultiStrikeEditor: (() -> Unit)? = null,
+    onEditStrikeEventLocation: ((StrikeEvent) -> Unit)? = null,
     darkTheme: Boolean = LocalAppDarkTheme.current,
     isHapticFeedbackEnabled: Boolean = true,
     isAr: Boolean = true
@@ -1087,6 +1176,100 @@ fun IndividualRecordCard(
                 )
             }
 
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Primary Quick Actions Row: Read-only Strike Count + Navigation / Compare / Edit / Delete
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                val strikeBtnColor = if (darkTheme) NeonAmber else DayOrange
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (darkTheme) Color(0x20F59E0B) else Color(0x24F59E0B))
+                        .border(1.dp, strikeBtnColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .testTag("record_strike_count_${individual.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bolt,
+                        contentDescription = null,
+                        tint = strikeBtnColor,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "${individual.strikeCount}",
+                        fontWeight = FontWeight.Black,
+                        fontFamily = PlusJakartaSans,
+                        fontSize = 14.sp,
+                        color = strikeBtnColor
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onGoToStrike,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bolt,
+                            contentDescription = stringResource(R.string.nav_strike),
+                            tint = if (darkTheme) NeonCyan else DayCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onCompare,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.CompareArrows,
+                            contentDescription = stringResource(R.string.nav_compare),
+                            tint = if (darkTheme) NeonViolet else DayPurple,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(38.dp)
+                            .testTag("record_edit_btn_${individual.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = stringResource(R.string.update_record),
+                            tint = if (darkTheme) NeonEmerald else DayEmerald,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(38.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.delete),
+                            tint = if (darkTheme) NeonRose.copy(alpha = 0.8f) else DayRose,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
             // Historical Strikes by Year Section inside Person Card
             val historicalByYear = remember(personStrikeEvents) {
                 personStrikeEvents
@@ -1298,98 +1481,249 @@ fun IndividualRecordCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Bottom Actions: Read-only Strike Count + Navigation / Compare & Delete
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Read-only Strike Count badge
-                val strikeBtnColor = if (darkTheme) NeonAmber else DayOrange
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (darkTheme) Color(0x20F59E0B) else Color(0x24F59E0B))
-                        .border(1.dp, strikeBtnColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                        .testTag("record_strike_count_${individual.id}")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Bolt,
-                        contentDescription = null,
-                        tint = strikeBtnColor,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "${individual.strikeCount}",
-                        fontWeight = FontWeight.Black,
-                        fontFamily = PlusJakartaSans,
-                        fontSize = 14.sp,
-                        color = strikeBtnColor
-                    )
+            // Person Profile Multi-Strike Adder & All Strike Locations Editor
+            if (onOpenMultiStrikeEditor != null || personStrikeEvents.isNotEmpty()) {
+                val multiCyan = if (darkTheme) NeonCyan else DayCyan
+                val routineMagenta = Color(0xFFD946EF)
+                val firstCount = remember(personStrikeEvents) {
+                    personStrikeEvents.filter { it.isFirstStrike }.sumOf { it.count.coerceAtLeast(1) }
+                }
+                val routineCount = remember(personStrikeEvents) {
+                    personStrikeEvents.filter { !it.isFirstStrike && !IndividualRepository.isHistoricalStrikeType(it.strikeType) }
+                        .sumOf { it.count.coerceAtLeast(1) }
+                }
+                var showAllPersonEvents by remember(individual.id) { mutableStateOf(false) }
+                val nonHistoricalEvents = remember(personStrikeEvents) {
+                    personStrikeEvents.filterNot { IndividualRepository.isHistoricalStrikeType(it.strikeType) }
+                }
+                val displayedEvents = if (showAllPersonEvents) {
+                    nonHistoricalEvents
+                } else {
+                    nonHistoricalEvents.take(4)
                 }
 
-                // Action Icons
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onGoToStrike,
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .size(38.dp)
+                Spacer(modifier = Modifier.height(10.dp))
+                LiquidGlassInnerPanel(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("person_multi_strike_panel_${individual.id}"),
+                    darkTheme = darkTheme
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Bolt,
-                            contentDescription = stringResource(R.string.nav_strike),
-                            tint = if (darkTheme) NeonCyan else DayCyan,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Whatshot,
+                                    contentDescription = null,
+                                    tint = NeonAmber,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = if (isAr) "إدارة السترايكات والمواقع" else "Strikes & Map Locations",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = PlusJakartaSans,
+                                        color = multiCyan,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = if (isAr) {
+                                            "أولى: $firstCount • روتيني: $routineCount"
+                                        } else {
+                                            "First: $firstCount • Routine: $routineCount"
+                                        },
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
 
-                    IconButton(
-                        onClick = onCompare,
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.CompareArrows,
-                            contentDescription = stringResource(R.string.nav_compare),
-                            tint = if (darkTheme) NeonViolet else DayPurple,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                            if (onOpenMultiStrikeEditor != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(
+                                                    NeonAmber.copy(alpha = 0.24f),
+                                                    routineMagenta.copy(alpha = 0.22f)
+                                                )
+                                            )
+                                        )
+                                        .border(1.dp, NeonAmber.copy(alpha = 0.65f), RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                                            onOpenMultiStrikeEditor()
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        .testTag("btn_add_multi_strike_${individual.id}"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Add,
+                                            contentDescription = null,
+                                            tint = NeonAmber,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Text(
+                                            text = if (isAr) "إضافة سترايكات" else "Add Strikes",
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = if (darkTheme) Color.White else DayTextPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
-                    IconButton(
-                        onClick = onEdit,
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .size(38.dp)
-                            .testTag("record_edit_btn_${individual.id}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = stringResource(R.string.update_record),
-                            tint = if (darkTheme) NeonEmerald else DayEmerald,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                        if (displayedEvents.isEmpty()) {
+                            Text(
+                                text = if (isAr) {
+                                    "لا توجد سترايكات مسجلة بعد — اضغط «إضافة سترايكات» لإضافة ضربة أولى أو روتينية مع موقعها."
+                                } else {
+                                    "No strikes logged yet — tap Add Strikes to log First or Routine strikes with locations."
+                                },
+                                fontSize = 10.5.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                displayedEvents.forEach { ev ->
+                                    val catColor = if (ev.isFirstStrike) NeonAmber else routineMagenta
+                                    val catLabel = if (ev.isFirstStrike) {
+                                        if (isAr) "First Strike" else "First Strike"
+                                    } else {
+                                        if (isAr) "روتيني" else "Routine"
+                                    }
+                                    val locText = if (ev.hasLocation) {
+                                        ev.placeName.ifBlank {
+                                            String.format(java.util.Locale.US, "%.4f, %.4f", ev.lat, ev.lng)
+                                        }
+                                    } else if (isAr) {
+                                        "تحديد الموقع"
+                                    } else {
+                                        "Set Location"
+                                    }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(
+                                                if (darkTheme) Color(0x1A1E293B) else Color(0xFFF1F5F9)
+                                            )
+                                            .border(0.8.dp, catColor.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                                            .testTag("person_strike_event_row_${ev.id}"),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(5.dp))
+                                                        .background(catColor.copy(alpha = 0.18f))
+                                                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                                                ) {
+                                                    Text(
+                                                        text = catLabel,
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        color = catColor
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "+${ev.count} • ${ev.date}",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
 
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier
-                            .minimumInteractiveComponentSize()
-                            .size(38.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = stringResource(R.string.delete),
-                            tint = if (darkTheme) NeonRose.copy(alpha = 0.8f) else DayRose,
-                            modifier = Modifier.size(18.dp)
-                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(
+                                                    if (ev.hasLocation) catColor.copy(alpha = 0.14f) else multiCyan.copy(alpha = 0.12f)
+                                                )
+                                                .border(
+                                                    0.8.dp,
+                                                    (if (ev.hasLocation) catColor else multiCyan).copy(alpha = 0.45f),
+                                                    RoundedCornerShape(8.dp)
+                                                )
+                                                .then(
+                                                    if (onEditStrikeEventLocation != null) {
+                                                        Modifier.clickable { onEditStrikeEventLocation(ev) }
+                                                    } else {
+                                                        Modifier
+                                                    }
+                                                )
+                                                .padding(horizontal = 7.dp, vertical = 4.dp)
+                                                .testTag("btn_edit_person_strike_loc_${ev.id}")
+                                        ) {
+                                            Icon(
+                                                imageVector = if (ev.hasLocation) Icons.Default.LocationOn else Icons.Default.AddLocationAlt,
+                                                contentDescription = null,
+                                                tint = if (ev.hasLocation) catColor else multiCyan,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Text(
+                                                text = locText,
+                                                fontSize = 9.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (ev.hasLocation) MaterialTheme.colorScheme.onSurface else multiCyan,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.widthIn(max = 115.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            if (nonHistoricalEvents.size > 4) {
+                                TextButton(
+                                    onClick = { showAllPersonEvents = !showAllPersonEvents },
+                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text(
+                                        text = if (showAllPersonEvents) {
+                                            if (isAr) "عرض أقل" else "Show less"
+                                        } else {
+                                            if (isAr) "عرض الكل (${nonHistoricalEvents.size})" else "Show all (${nonHistoricalEvents.size})"
+                                        },
+                                        fontSize = 10.5.sp,
+                                        color = multiCyan,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -2420,6 +2754,434 @@ private fun PersonHistoricalStrikesEditorDialog(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PersonMultiStrikeDialog(
+    individual: Individual,
+    currentLang: String,
+    isDarkTheme: Boolean,
+    isHapticEnabled: Boolean,
+    onDismiss: () -> Unit,
+    onConfirmAdd: (
+        count: Int,
+        isFirstStrike: Boolean,
+        lat: Double?,
+        lng: Double?,
+        placeName: String
+    ) -> Unit
+) {
+    val context = LocalContext.current
+    val isAr = currentLang == "ar"
+    val isFr = currentLang == "fr"
+    val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
+    val routineMagenta = Color(0xFFD946EF)
+    val panelBg = if (isDarkTheme) Color(0xFA0B1324) else Color(0xFAFFFFFF)
+
+    var isFirstStrike by remember(individual.id) {
+        mutableStateOf(!individual.hasFirstStrikeLocation && individual.strikeCount == 0)
+    }
+    var countText by remember { mutableStateOf("2") }
+    var pickedLat by remember(individual.id) { mutableStateOf(individual.firstStrikeLat) }
+    var pickedLng by remember(individual.id) { mutableStateOf(individual.firstStrikeLng) }
+    var pickedPlace by remember(individual.id) { mutableStateOf(individual.firstStrikePlaceName) }
+    var showMapPicker by remember { mutableStateOf(false) }
+
+    val parsedCount = (IndividualViewModel.parseLocalizedInt(countText) ?: 1).coerceIn(1, 500)
+    val activeAccent = if (isFirstStrike) NeonAmber else routineMagenta
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.65f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = panelBg,
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .widthIn(max = 460.dp)
+                    .clickable(enabled = false, onClick = {})
+                    .border(
+                        1.3.dp,
+                        Brush.linearGradient(listOf(NeonAmber, routineMagenta)),
+                        RoundedCornerShape(24.dp)
+                    )
+                    .testTag("person_multi_strike_dialog")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = when {
+                                    isAr -> "إضافة عدة سترايكات"
+                                    isFr -> "Ajouter plusieurs strikes"
+                                    else -> "Add Multiple Strikes"
+                                },
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Black,
+                                fontFamily = PlusJakartaSans,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = individual.fullName,
+                                fontSize = 12.sp,
+                                color = accentCyan,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(imageVector = Icons.Default.Close, contentDescription = null)
+                        }
+                    }
+
+                    // Strike Category Selector: First Strike vs Routine Strike
+                    Text(
+                        text = when {
+                            isAr -> "نوع السترايك"
+                            isFr -> "Type de strike"
+                            else -> "Strike Category"
+                        },
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .minimumInteractiveComponentSize()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (isFirstStrike) NeonAmber.copy(alpha = 0.22f)
+                                    else if (isDarkTheme) Color(0x1E1E293B) else Color(0xFFF1F5F9)
+                                )
+                                .border(
+                                    if (isFirstStrike) 1.5.dp else 1.dp,
+                                    if (isFirstStrike) NeonAmber else accentCyan.copy(alpha = 0.25f),
+                                    RoundedCornerShape(14.dp)
+                                )
+                                .clickable { isFirstStrike = true }
+                                .padding(horizontal = 10.dp, vertical = 10.dp)
+                                .testTag("multi_strike_type_first"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "First Strike",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (isFirstStrike) NeonAmber else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (isAr) "ضربة أولى (هالة حرارية)" else "Thermal Aura",
+                                    fontSize = 9.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .minimumInteractiveComponentSize()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    if (!isFirstStrike) routineMagenta.copy(alpha = 0.22f)
+                                    else if (isDarkTheme) Color(0x1E1E293B) else Color(0xFFF1F5F9)
+                                )
+                                .border(
+                                    if (!isFirstStrike) 1.5.dp else 1.dp,
+                                    if (!isFirstStrike) routineMagenta else accentCyan.copy(alpha = 0.25f),
+                                    RoundedCornerShape(14.dp)
+                                )
+                                .clickable { isFirstStrike = false }
+                                .padding(horizontal = 10.dp, vertical = 10.dp)
+                                .testTag("multi_strike_type_routine"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = when {
+                                        isAr -> "سترايك روتيني"
+                                        isFr -> "Strike routinier"
+                                        else -> "Routine Strike"
+                                    },
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (!isFirstStrike) routineMagenta else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (isAr) "خريطة حرارية طيفية (سناب ماب)" else "Snap-Style Spectral Heat",
+                                    fontSize = 9.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    // Strike Count Stepper + Input + Presets
+                    Text(
+                        text = when {
+                            isAr -> "عدد السترايكات"
+                            isFr -> "Nombre de strikes"
+                            else -> "Number of Strikes"
+                        },
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        IconButton(
+                            onClick = {
+                                val next = (parsedCount - 1).coerceAtLeast(1)
+                                countText = next.toString()
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(if (isDarkTheme) Color(0x20FFFFFF) else Color(0xFFE2E8F0))
+                                .testTag("multi_strike_dec_btn")
+                        ) {
+                            Icon(imageVector = Icons.Default.Remove, contentDescription = "Decrease")
+                        }
+                        OutlinedTextField(
+                            value = countText,
+                            onValueChange = { raw ->
+                                if (raw.length <= 3) countText = raw.filter { it.isDigit() }
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("multi_strike_count_input")
+                        )
+                        IconButton(
+                            onClick = {
+                                val next = (parsedCount + 1).coerceAtMost(500)
+                                countText = next.toString()
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(activeAccent.copy(alpha = 0.2f))
+                                .testTag("multi_strike_inc_btn")
+                        ) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Increase", tint = activeAccent)
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(1, 2, 3, 5, 10).forEach { preset ->
+                            val selected = parsedCount == preset
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (selected) activeAccent.copy(alpha = 0.22f)
+                                        else if (isDarkTheme) Color(0x18FFFFFF) else Color(0xFFE2E8F0)
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (selected) activeAccent else Color.Transparent,
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { countText = preset.toString() }
+                                    .padding(vertical = 6.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "+$preset",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = if (selected) activeAccent else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    // Strike Map Location Selector
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isDarkTheme) Color(0x1E1E293B) else Color(0xFFF1F5F9))
+                            .border(1.dp, activeAccent.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+                            .clickable { showMapPicker = true }
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .testTag("btn_pick_multi_strike_location"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = activeAccent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = if (isAr) "موقع السترايك على الخريطة" else "Map Location",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = activeAccent
+                                )
+                                Text(
+                                    text = if (pickedLat != null && pickedLng != null) {
+                                        pickedPlace.ifBlank {
+                                            String.format(java.util.Locale.US, "%.4f, %.4f", pickedLat, pickedLng)
+                                        }
+                                    } else if (isAr) {
+                                        "اضغط لاختيار الموقع على الخريطة"
+                                    } else {
+                                        "Tap to pick map location"
+                                    },
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        Text(
+                            text = if (pickedLat != null) {
+                                if (isAr) "تغيير" else "Change"
+                            } else {
+                                if (isAr) "تحديد" else "Pick"
+                            },
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = activeAccent
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Text(stringResource(R.string.cancel))
+                        }
+                        Button(
+                            onClick = {
+                                HapticHelper.triggerStrikeHaptic(context, isHapticEnabled)
+                                onConfirmAdd(
+                                    parsedCount,
+                                    isFirstStrike,
+                                    pickedLat,
+                                    pickedLng,
+                                    pickedPlace
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = activeAccent,
+                                contentColor = if (isFirstStrike) Color(0xFF031521) else Color.White
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .weight(1.5f)
+                                .height(48.dp)
+                                .testTag("btn_confirm_multi_strike")
+                        ) {
+                            Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = when {
+                                    isAr -> "إضافة (+$parsedCount)"
+                                    isFr -> "Ajouter (+$parsedCount)"
+                                    else -> "Add (+$parsedCount)"
+                                },
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showMapPicker) {
+        Dialog(
+            onDismissRequest = { showMapPicker = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = true
+            )
+        ) {
+            val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+            SideEffect {
+                dialogWindow?.setLayout(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                dialogWindow?.setBackgroundDrawableResource(android.R.color.transparent)
+            }
+            com.example.ui.components.FirstStrikeLocationPickerDialog(
+                initialLat = pickedLat,
+                initialLng = pickedLng,
+                initialPlaceName = pickedPlace,
+                currentLang = currentLang,
+                isDarkTheme = isDarkTheme,
+                allowCategorySelection = true,
+                initialIsFirstStrike = isFirstStrike,
+                onConfirmWithCategory = { lat, lng, place, first ->
+                    pickedLat = lat
+                    pickedLng = lng
+                    pickedPlace = place
+                    isFirstStrike = first
+                    showMapPicker = false
+                },
+                onConfirm = { _, _, _ -> Unit },
+                onClear = {
+                    pickedLat = null
+                    pickedLng = null
+                    pickedPlace = ""
+                    showMapPicker = false
+                },
+                onDismiss = { showMapPicker = false }
+            )
         }
     }
 }

@@ -240,7 +240,7 @@ class FirstStrikeHeatmapTest {
         rawHelper.close()
 
         val roomDb = Room.databaseBuilder(ctx, AppDatabase::class.java, dbName)
-            .addMigrations(AppDatabase.MIGRATION_5_6)
+            .addMigrations(AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7)
             .allowMainThreadQueries()
             .build()
         try {
@@ -721,5 +721,253 @@ class FirstStrikeHeatmapTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("heatmap_hotspot_sheet").assertIsDisplayed()
         composeRule.onNodeWithTag("hotspot_person_item_$person2Id").assertIsDisplayed()
+    }
+
+    @Test
+    fun roomMigration6To7_addsStrikeEventLocationAndCategoryColumns() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val dbName = "migration_6_7_test.db"
+        ctx.deleteDatabase(dbName)
+
+        val helperConfig = SupportSQLiteOpenHelper.Configuration.builder(ctx)
+            .name(dbName)
+            .callback(object : SupportSQLiteOpenHelper.Callback(6) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `individuals` (
+                            `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            `fullName` TEXT NOT NULL,
+                            `type` TEXT NOT NULL,
+                            `length` REAL NOT NULL,
+                            `width` REAL NOT NULL,
+                            `size` REAL NOT NULL,
+                            `sScore` REAL NOT NULL,
+                            `fScore` REAL NOT NULL,
+                            `cScore` REAL NOT NULL,
+                            `boost` REAL NOT NULL,
+                            `strikeCount` INTEGER NOT NULL,
+                            `phoneNumber` TEXT NOT NULL,
+                            `firstStrikeLat` REAL,
+                            `firstStrikeLng` REAL,
+                            `firstStrikePlaceName` TEXT NOT NULL DEFAULT '',
+                            `updatedAt` INTEGER NOT NULL
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `strike_events` (
+                            `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            `individualId` INTEGER NOT NULL,
+                            `individualName` TEXT NOT NULL,
+                            `year` INTEGER NOT NULL,
+                            `date` TEXT NOT NULL,
+                            `time` TEXT NOT NULL,
+                            `count` INTEGER NOT NULL,
+                            `strikeType` TEXT NOT NULL,
+                            `performanceValue` REAL NOT NULL,
+                            `notes` TEXT NOT NULL,
+                            `timestamp` INTEGER NOT NULL,
+                            FOREIGN KEY(`individualId`) REFERENCES `individuals`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                        )
+                        """.trimIndent()
+                    )
+                    db.execSQL("CREATE INDEX IF NOT EXISTS `index_strike_events_individualId` ON `strike_events` (`individualId`)")
+                    db.execSQL(
+                        """
+                        INSERT INTO `individuals`
+                        (`id`, `fullName`, `type`, `length`, `width`, `size`, `sScore`, `fScore`, `cScore`, `boost`, `strikeCount`, `phoneNumber`, `firstStrikeLat`, `firstStrikeLng`, `firstStrikePlaceName`, `updatedAt`)
+                        VALUES (20, 'Migration V6 User', 'M', 21.0, 10.0, 210.0, 72.0, 72.0, 72.0, 216.0, 1, '', 36.75, 3.05, 'Algiers', 1000)
+                        """.trimIndent()
+                    )
+                    db.execSQL(
+                        """
+                        INSERT INTO `strike_events`
+                        (`id`, `individualId`, `individualName`, `year`, `date`, `time`, `count`, `strikeType`, `performanceValue`, `notes`, `timestamp`)
+                        VALUES (5, 20, 'Migration V6 User', 2026, '2026-11-25', '12:00:00', 1, 'Routine', 216.0, '', 2000)
+                        """.trimIndent()
+                    )
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            })
+            .build()
+
+        val rawHelper = FrameworkSQLiteOpenHelperFactory().create(helperConfig)
+        rawHelper.writableDatabase.close()
+        rawHelper.close()
+
+        val roomDb = Room.databaseBuilder(ctx, AppDatabase::class.java, dbName)
+            .addMigrations(AppDatabase.MIGRATION_6_7)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            runBlocking {
+                val repo = IndividualRepository(roomDb.individualDao(), roomDb.strikeEventDao())
+                val beforeUpdate = roomDb.strikeEventDao().getEventById(5L)
+                assertNotNull(beforeUpdate)
+                assertFalse(beforeUpdate!!.hasLocation)
+                assertFalse(beforeUpdate.isFirstStrike)
+
+                repo.updateStrikeEventLocationAndCategory(
+                    eventId = 5L,
+                    lat = 35.6971,
+                    lng = -0.6308,
+                    placeName = "Oran Harbor",
+                    isFirstStrike = false
+                )
+                val updated = roomDb.strikeEventDao().getEventById(5L)
+                assertNotNull(updated)
+                assertTrue(updated!!.hasLocation)
+                assertEquals(35.6971, updated.lat!!, 0.0001)
+                assertEquals(-0.6308, updated.lng!!, 0.0001)
+                assertEquals("Oran Harbor", updated.placeName)
+                assertFalse(updated.isFirstStrike)
+            }
+        } finally {
+            roomDb.close()
+            ctx.deleteDatabase(dbName)
+        }
+    }
+
+    @Test
+    fun mapStyleHelper_separatesFirstStrikeAndSnapMapRoutineHeatGeoJson() {
+        val person = Individual(
+            id = 42L,
+            fullName = "فريد",
+            type = "TS",
+            length = 22.0,
+            width = 10.0,
+            size = 220.0,
+            sScore = 80.0,
+            fScore = 80.0,
+            cScore = 80.0,
+            boost = 240.0,
+            strikeCount = 3,
+            firstStrikeLat = 36.7538,
+            firstStrikeLng = 3.0588,
+            firstStrikePlaceName = "Algiers Center"
+        )
+        val routineEvent = com.example.data.model.StrikeEvent(
+            id = 201L,
+            individualId = 42L,
+            individualName = "فريد",
+            year = 2026,
+            date = "2026-11-25",
+            time = "14:00:00",
+            count = 2,
+            strikeType = "Routine",
+            performanceValue = 240.0,
+            lat = 35.6971,
+            lng = -0.6308,
+            placeName = "Oran Corniche",
+            isFirstStrike = false
+        )
+
+        val firstJson = JSONObject(MapStyleHelper.buildFirstStrikeGeoJson(listOf(person), listOf(routineEvent)))
+        val routineJson = JSONObject(MapStyleHelper.buildRoutineStrikeGeoJson(listOf(person), listOf(routineEvent)))
+        assertEquals(1, firstJson.getJSONArray("features").length())
+        assertEquals(1, routineJson.getJSONArray("features").length())
+        assertEquals(
+            true,
+            firstJson.getJSONArray("features").getJSONObject(0).getJSONObject("properties").getBoolean("isFirstStrike")
+        )
+        assertEquals(
+            false,
+            routineJson.getJSONArray("features").getJSONObject(0).getJSONObject("properties").getBoolean("isFirstStrike")
+        )
+
+        val hotspots = MapStyleHelper.groupHotspots(listOf(person), listOf(routineEvent))
+        assertEquals(2, hotspots.size)
+        val routineHotspot = hotspots.first { it.hasRoutineStrikes }
+        assertEquals("Oran Corniche", routineHotspot.placeName)
+        assertEquals(1, routineHotspot.routineStrikeCount)
+        assertEquals(2, routineHotspot.points.sumOf { it.strikeCount })
+        assertEquals(0, routineHotspot.firstStrikeCount)
+    }
+
+    @Test
+    fun dashboardPersonProfile_canAddMultiStrikesAsRoutineOrFirstStrikeWithLocation() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val db = AppDatabase.getDatabase(ctx)
+        val repo = IndividualRepository(db.individualDao(), db.strikeEventDao())
+
+        val personId = runBlocking(Dispatchers.IO) {
+            repo.save(
+                Individual(
+                    fullName = "نسيم الباهي",
+                    type = "M",
+                    length = 21.0,
+                    width = 10.0,
+                    size = 210.0,
+                    sScore = 75.0,
+                    fScore = 76.0,
+                    cScore = 74.0,
+                    boost = 225.0,
+                    strikeCount = 0
+                )
+            )
+        }
+
+        // Exit launch heatmap cleanly and verify top bar icons are not wrapped in a pill container
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("top_bar_telemetry_pill_container").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("dna_header_icon").assertIsDisplayed()
+        composeRule.onNodeWithTag("header_flame_btn").assertIsDisplayed()
+
+        // Expand person record card -> open Multi-Strike dialog
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("record_expand_btn_$personId").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("record_expand_btn_$personId").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("person_multi_strike_panel_$personId").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("btn_add_multi_strike_$personId").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        // Pick Routine Strike category, increment default 2 -> 3, and pin map location
+        composeRule.onNodeWithTag("multi_strike_type_routine").performClick()
+        composeRule.onNodeWithTag("multi_strike_inc_btn").performClick()
+        composeRule.onNodeWithTag("btn_pick_multi_strike_location").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("first_strike_picker_dialog").assertIsDisplayed()
+        composeRule.onNodeWithTag("picker_confirm_btn").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("first_strike_picker_dialog").fetchSemanticsNodes().isEmpty()
+        }
+
+        composeRule.onNodeWithTag("btn_confirm_multi_strike").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            val ind = runBlocking(Dispatchers.IO) { db.individualDao().getIndividualById(personId) }
+            val currentEvents = runBlocking(Dispatchers.IO) { db.strikeEventDao().getEventsForIndividualList(personId) }
+            ind?.strikeCount == 3 && currentEvents.size >= 3
+        }
+
+        val events = runBlocking(Dispatchers.IO) { db.strikeEventDao().getEventsForIndividualList(personId) }
+        val routineMappedEvents = events.filter { !it.isFirstStrike && it.hasLocation }
+        assertEquals(3, routineMappedEvents.sumOf { it.count })
+
+        // Return to Heatmap -> open strikes list and verify Routine Strike appears live
+        composeRule.onNodeWithTag("top_bar_settings_btn").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("settings_open_heatmap_btn").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("settings_open_heatmap_btn").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("heatmap_stats_pill").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("heatmap_all_strikes_panel").assertIsDisplayed()
+        composeRule.onNode(
+            hasTestTag("heatmap_all_strikes_panel") and hasAnyDescendant(hasText("نسيم الباهي", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
     }
 }

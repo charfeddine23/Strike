@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -26,12 +27,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddLocationAlt
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -46,6 +49,7 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,18 +62,23 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 import com.example.data.repository.IndividualRepository
 import com.example.ui.components.CosmicStrikeButton
+import com.example.ui.components.FirstStrikeLocationPickerDialog
 import com.example.ui.components.GlassTypeBadge
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.StrikerStatus
@@ -124,6 +133,8 @@ fun StrikeScreen(
     val totalAllTimeStrikes = maxOf(allTimeStrikesCount, allList.sumOf { it.strikeCount })
 
     var showStrikeTargetPicker by remember { mutableStateOf(false) }
+    var pendingTargetPersonForLocation by remember { mutableStateOf<Individual?>(null) }
+    var editingStrikeEventLocation by remember { mutableStateOf<StrikeEvent?>(null) }
     var pendingDeleteEvent by remember { mutableStateOf<StrikeEvent?>(null) }
 
     val scaffoldPadding = LocalScaffoldContentPadding.current
@@ -242,7 +253,11 @@ fun StrikeScreen(
                         onRequestDelete = { targetEvent ->
                             pendingDeleteEvent = targetEvent
                         },
-                        darkTheme = isDarkTheme
+                        onEditLocation = { targetEvent ->
+                            editingStrikeEventLocation = targetEvent
+                        },
+                        darkTheme = isDarkTheme,
+                        isAr = isAr
                     )
                 }
             }
@@ -252,7 +267,7 @@ fun StrikeScreen(
             }
         }
 
-        // Overlay 1: Select Individual & Confirm to Register Strike
+        // Overlay 1: Select Individual -> proceeds to Strike Location Picker
         if (showStrikeTargetPicker) {
             StrikeTargetPickerDialog(
                 individuals = allList,
@@ -261,12 +276,125 @@ fun StrikeScreen(
                 isDarkTheme = isDarkTheme,
                 onDismiss = { showStrikeTargetPicker = false },
                 onConfirmStrike = { chosen ->
-                    HapticHelper.triggerStrikeHaptic(context, isHapticFeedbackEnabled)
+                    HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
                     viewModel.selectStrikeIndividual(chosen.id)
-                    viewModel.incrementStrikeForId(chosen.id, 1)
                     showStrikeTargetPicker = false
+                    pendingTargetPersonForLocation = chosen
                 }
             )
+        }
+
+        // Overlay 1b: Prompt for Strike Location & Category right after picking person, auto-adds to map on confirm
+        pendingTargetPersonForLocation?.let { targetPerson ->
+            Dialog(
+                onDismissRequest = { pendingTargetPersonForLocation = null },
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = true
+                )
+            ) {
+                val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+                SideEffect {
+                    dialogWindow?.setLayout(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    dialogWindow?.setBackgroundDrawableResource(android.R.color.transparent)
+                }
+                FirstStrikeLocationPickerDialog(
+                    initialLat = targetPerson.firstStrikeLat,
+                    initialLng = targetPerson.firstStrikeLng,
+                    initialPlaceName = targetPerson.firstStrikePlaceName,
+                    currentLang = currentLang,
+                    isDarkTheme = isDarkTheme,
+                    titleOverride = when {
+                        isAr -> "موقع السترايك (${targetPerson.fullName})"
+                        currentLang == "fr" -> "Lieu du strike (${targetPerson.fullName})"
+                        else -> "Strike Location (${targetPerson.fullName})"
+                    },
+                    confirmLabelOverride = when {
+                        isAr -> "تأكيد وإضافة للخريطة"
+                        currentLang == "fr" -> "Confirmer & Ajouter"
+                        else -> "Confirm & Add to Map"
+                    },
+                    allowCategorySelection = true,
+                    initialIsFirstStrike = !targetPerson.hasFirstStrikeLocation && targetPerson.strikeCount == 0,
+                    onConfirmWithCategory = { lat, lng, placeName, isFirstStrike ->
+                        HapticHelper.triggerStrikeHaptic(context, isHapticFeedbackEnabled)
+                        viewModel.recordStrikesWithLocation(
+                            id = targetPerson.id,
+                            delta = 1,
+                            isFirstStrike = isFirstStrike,
+                            lat = lat,
+                            lng = lng,
+                            placeName = placeName
+                        )
+                        pendingTargetPersonForLocation = null
+                    },
+                    onConfirm = { _, _, _ -> Unit },
+                    onClear = { pendingTargetPersonForLocation = null },
+                    onDismiss = { pendingTargetPersonForLocation = null }
+                )
+            }
+        }
+
+        // Overlay 1c: Pick/Edit Location & Category for any existing recent StrikeEvent
+        editingStrikeEventLocation?.let { targetEvent ->
+            val personFallback = remember(targetEvent.individualId, allList) {
+                allList.firstOrNull { it.id == targetEvent.individualId }
+            }
+            Dialog(
+                onDismissRequest = { editingStrikeEventLocation = null },
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = true
+                )
+            ) {
+                val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+                SideEffect {
+                    dialogWindow?.setLayout(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    dialogWindow?.setBackgroundDrawableResource(android.R.color.transparent)
+                }
+                FirstStrikeLocationPickerDialog(
+                    initialLat = targetEvent.lat ?: personFallback?.firstStrikeLat,
+                    initialLng = targetEvent.lng ?: personFallback?.firstStrikeLng,
+                    initialPlaceName = targetEvent.placeName.ifBlank { personFallback?.firstStrikePlaceName.orEmpty() },
+                    currentLang = currentLang,
+                    isDarkTheme = isDarkTheme,
+                    titleOverride = when {
+                        isAr -> "تحديد موقع سترايك ${targetEvent.individualName}"
+                        currentLang == "fr" -> "Lieu du strike (${targetEvent.individualName})"
+                        else -> "Pin Location (${targetEvent.individualName})"
+                    },
+                    allowCategorySelection = true,
+                    initialIsFirstStrike = targetEvent.isFirstStrike,
+                    onConfirmWithCategory = { lat, lng, placeName, isFirstStrike ->
+                        viewModel.updateStrikeEventLocation(
+                            eventId = targetEvent.id,
+                            lat = lat,
+                            lng = lng,
+                            placeName = placeName,
+                            isFirstStrike = isFirstStrike
+                        )
+                        editingStrikeEventLocation = null
+                    },
+                    onConfirm = { _, _, _ -> Unit },
+                    onClear = {
+                        viewModel.updateStrikeEventLocation(
+                            eventId = targetEvent.id,
+                            lat = null,
+                            lng = null,
+                            placeName = "",
+                            isFirstStrike = targetEvent.isFirstStrike
+                        )
+                        editingStrikeEventLocation = null
+                    },
+                    onDismiss = { editingStrikeEventLocation = null }
+                )
+            }
         }
 
         // Overlay 2: Biometric (Fingerprint) Confirmation to Delete a Recent Strike
@@ -837,15 +965,31 @@ fun BiometricDeleteStrikeDialog(
 fun StrikeLogItem(
     event: StrikeEvent,
     onDeleteClick: (() -> Unit)? = null,
-    darkTheme: Boolean = LocalAppDarkTheme.current
+    onEditLocation: (() -> Unit)? = null,
+    darkTheme: Boolean = LocalAppDarkTheme.current,
+    isAr: Boolean = true
 ) {
     val cardBg = if (darkTheme) Color(0xFF0D1527) else Color(0xFFFFFFFF)
-    val cardBorder = if (darkTheme) Color(0x3538BDF8) else Color(0x5500B4D8)
-    val boltBg = if (darkTheme) NeonCyan.copy(alpha = 0.2f) else Color(0x2000B4D8)
-    val boltColor = if (darkTheme) NeonCyan else DayCyan
+    val cardBorder = if (event.isFirstStrike) {
+        NeonAmber.copy(alpha = 0.42f)
+    } else if (darkTheme) {
+        Color(0x3538BDF8)
+    } else {
+        Color(0x5500B4D8)
+    }
+    val routineMagenta = Color(0xFFD946EF)
+    val boltBg = if (event.isFirstStrike) {
+        NeonAmber.copy(alpha = 0.2f)
+    } else if (darkTheme) {
+        routineMagenta.copy(alpha = 0.16f)
+    } else {
+        Color(0x208B5CF6)
+    }
+    val boltColor = if (event.isFirstStrike) NeonAmber else if (darkTheme) routineMagenta else DayPurple
     val yearColor = if (darkTheme) NeonAmber else DayOrange
     val countColor = if (darkTheme) NeonEmerald else DayEmerald
     val countBg = if (darkTheme) NeonEmerald.copy(alpha = 0.2f) else Color(0x2010B981)
+    val locCyan = if (darkTheme) NeonCyan else DayCyan
 
     Box(
         modifier = Modifier
@@ -870,7 +1014,7 @@ fun StrikeLogItem(
                         .size(34.dp)
                         .clip(CircleShape)
                         .background(boltBg)
-                        .border(1.dp, boltColor.copy(alpha = 0.6f), CircleShape),
+                        .border(1.dp, boltColor.copy(alpha = 0.65f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -881,16 +1025,43 @@ fun StrikeLogItem(
                     )
                 }
                 Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = event.individualName,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = PlusJakartaSans,
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = event.individualName,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = PlusJakartaSans,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(boltColor.copy(alpha = 0.16f))
+                                .border(0.8.dp, boltColor.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 5.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = if (event.isFirstStrike) {
+                                    "First"
+                                } else if (isAr) {
+                                    "روتيني"
+                                } else {
+                                    "Routine"
+                                },
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = boltColor,
+                                maxLines = 1
+                            )
+                        }
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "${event.date} • ${event.time}",
@@ -906,6 +1077,52 @@ fun StrikeLogItem(
                             fontWeight = FontWeight.Bold,
                             color = yearColor
                         )
+                    }
+                    if (onEditLocation != null || event.hasLocation) {
+                        val locLabel = if (event.hasLocation) {
+                            event.placeName.ifBlank {
+                                String.format(Locale.US, "%.4f, %.4f", event.lat, event.lng)
+                            }
+                        } else if (isAr) {
+                            "تحديد الموقع"
+                        } else {
+                            "Pin Location"
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (event.hasLocation) locCyan.copy(alpha = 0.13f) else Color.Transparent
+                                )
+                                .border(
+                                    0.8.dp,
+                                    (if (event.hasLocation) locCyan else MaterialTheme.colorScheme.onSurfaceVariant).copy(alpha = 0.4f),
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .then(
+                                    if (onEditLocation != null) Modifier.clickable(onClick = onEditLocation) else Modifier
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                .testTag("strike_event_loc_btn_${event.id}")
+                        ) {
+                            Icon(
+                                imageVector = if (event.hasLocation) Icons.Default.LocationOn else Icons.Default.AddLocationAlt,
+                                contentDescription = null,
+                                tint = if (event.hasLocation) boltColor else locCyan,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = locLabel,
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (event.hasLocation) MaterialTheme.colorScheme.onSurface else locCyan,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             }
@@ -954,8 +1171,10 @@ fun StrikeLogItem(
 fun SwipeableStrikeLogItem(
     event: StrikeEvent,
     onRequestDelete: (StrikeEvent) -> Unit,
+    onEditLocation: ((StrikeEvent) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    darkTheme: Boolean = LocalAppDarkTheme.current
+    darkTheme: Boolean = LocalAppDarkTheme.current,
+    isAr: Boolean = true
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { dismissValue ->
@@ -1014,7 +1233,9 @@ fun SwipeableStrikeLogItem(
         StrikeLogItem(
             event = event,
             onDeleteClick = { onRequestDelete(event) },
-            darkTheme = darkTheme
+            onEditLocation = onEditLocation?.let { cb -> { cb(event) } },
+            darkTheme = darkTheme,
+            isAr = isAr
         )
     }
 }

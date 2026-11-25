@@ -884,7 +884,8 @@ private fun isRobolectricRuntime(): Boolean =
 fun Modifier.edgeFadeInBlur(
     topHeight: Dp,
     bottomHeight: Dp,
-    blurRadius: Dp = 18.dp
+    blurRadius: Dp = 18.dp,
+    maxEdgeFraction: Float = 0.48f
 ): Modifier = composed {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || isRobolectricRuntime()) {
         return@composed this
@@ -898,7 +899,8 @@ fun Modifier.edgeFadeInBlur(
     this.drawWithContent {
         val totalW = size.width
         val totalH = size.height
-        val topH = topHeight.toPx().coerceIn(0f, totalH * 0.35f)
+        val safeFraction = maxEdgeFraction.coerceIn(0.15f, 0.65f)
+        val topH = topHeight.toPx().coerceIn(0f, totalH * safeFraction)
         val bottomH = bottomHeight.toPx().coerceIn(0f, totalH * 0.35f)
         val radiusPx = blurRadius.toPx().coerceAtLeast(1f)
 
@@ -929,9 +931,9 @@ fun Modifier.edgeFadeInBlur(
             }
             val topMaskBrush = Brush.verticalGradient(
                 0.00f to Color.White,
-                0.38f to Color.White.copy(alpha = 0.88f),
-                0.68f to Color.White.copy(alpha = 0.42f),
-                0.88f to Color.White.copy(alpha = 0.12f),
+                0.56f to Color.White.copy(alpha = 0.94f),
+                0.76f to Color.White.copy(alpha = 0.64f),
+                0.90f to Color.White.copy(alpha = 0.24f),
                 1.00f to Color.Transparent,
                 startY = 0f,
                 endY = topH
@@ -981,6 +983,47 @@ fun Modifier.edgeFadeInBlur(
                 canvas.restore()
             }
         }
+    }
+}
+
+/**
+ * Extended top frosted fade-to-liquid-glass veil for screens with taller floating chrome
+ * (such as Cyber Roadmap & Tasks Switch View + Daily/Weekly/Monthly/Eternal chips).
+ */
+@Composable
+fun BoxScope.TopFrostedLiquidGlassVeil(
+    height: Dp,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    testTag: String? = null
+) {
+    val veilBrush = remember(isDarkTheme) {
+        if (isDarkTheme) {
+            Brush.verticalGradient(
+                0.00f to Color(0x9E050A14),
+                0.45f to Color(0x82070F1F),
+                0.76f to Color(0x4E091428),
+                0.91f to Color(0x1E0B182E),
+                1.00f to Color.Transparent
+            )
+        } else {
+            Brush.verticalGradient(
+                0.00f to Color(0xB8F4F8FD),
+                0.45f to Color(0x90EEF4FB),
+                0.76f to Color(0x52EAF1FA),
+                0.91f to Color(0x1EE8F1FA),
+                1.00f to Color.Transparent
+            )
+        }
+    }
+    if (height > 0.dp) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(height)
+                .background(veilBrush)
+                .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+        )
     }
 }
 

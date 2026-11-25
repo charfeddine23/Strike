@@ -115,6 +115,14 @@ class BackupManager(private val repository: IndividualRepository) {
                         put("performanceValue", event.performanceValue)
                         put("notes", event.notes)
                         put("timestamp", event.timestamp)
+                        if (event.lat != null && event.lat.isFinite()) {
+                            put("lat", event.lat)
+                        }
+                        if (event.lng != null && event.lng.isFinite()) {
+                            put("lng", event.lng)
+                        }
+                        put("placeName", event.placeName)
+                        put("isFirstStrike", event.isFirstStrike)
                     }
                     eventsArray.put(obj)
                 }
@@ -270,6 +278,15 @@ class BackupManager(private val repository: IndividualRepository) {
             val eventsList = mutableListOf<StrikeEvent>()
             for (i in 0 until eventsJson.length()) {
                 val obj = eventsJson.getJSONObject(i)
+                val evLat = if (obj.has("lat") && !obj.isNull("lat")) {
+                    obj.optDouble("lat", Double.NaN).takeIf { it.isFinite() && it in -90.0..90.0 }
+                } else null
+                val evLng = if (obj.has("lng") && !obj.isNull("lng")) {
+                    obj.optDouble("lng", Double.NaN).takeIf { it.isFinite() && it in -180.0..180.0 }
+                } else null
+                val evPlace = com.example.data.map.NominatimGeocoder.stripTifinagh(
+                    obj.optString("placeName", "").take(250)
+                )
                 eventsList.add(
                     StrikeEvent(
                         id = obj.optLong("id", 0L).coerceAtLeast(0L),
@@ -282,7 +299,11 @@ class BackupManager(private val repository: IndividualRepository) {
                         strikeType = obj.optString("strikeType", "Automatic").take(64),
                         performanceValue = finiteNonNegative(obj.optDouble("performanceValue", 0.0)),
                         notes = obj.optString("notes", "").take(1000),
-                        timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                        timestamp = obj.optLong("timestamp", System.currentTimeMillis()),
+                        lat = if (evLat != null && evLng != null) evLat else null,
+                        lng = if (evLat != null && evLng != null) evLng else null,
+                        placeName = if (evLat != null && evLng != null) evPlace else "",
+                        isFirstStrike = obj.optBoolean("isFirstStrike", false)
                     )
                 )
             }

@@ -102,6 +102,7 @@ import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonRose
+import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Job
@@ -120,6 +121,11 @@ fun FirstStrikeLocationPickerDialog(
     initialPlaceName: String,
     currentLang: String,
     isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    titleOverride: String? = null,
+    confirmLabelOverride: String? = null,
+    allowCategorySelection: Boolean = false,
+    initialIsFirstStrike: Boolean = true,
+    onConfirmWithCategory: ((lat: Double, lng: Double, placeName: String, isFirstStrike: Boolean) -> Unit)? = null,
     onConfirm: (lat: Double, lng: Double, placeName: String) -> Unit,
     onClear: () -> Unit,
     onDismiss: () -> Unit
@@ -132,6 +138,7 @@ fun FirstStrikeLocationPickerDialog(
 
     val defaultLat = initialLat?.takeIf { it.isFinite() } ?: 36.7538
     val defaultLng = initialLng?.takeIf { it.isFinite() } ?: 3.0588
+    var isFirstStrikeSelected by remember(initialIsFirstStrike) { mutableStateOf(initialIsFirstStrike) }
 
     var selectedLat by remember { mutableDoubleStateOf(defaultLat) }
     var selectedLng by remember { mutableDoubleStateOf(defaultLng) }
@@ -219,7 +226,9 @@ fun FirstStrikeLocationPickerDialog(
     val bgColor = if (isDarkTheme) Color(0xFF060A13) else Color(0xFFF8FAFC)
     val panelBg = if (isDarkTheme) Color(0xEC0B1324) else Color(0xF5FFFFFF)
     val accentCyan = if (isDarkTheme) NeonCyan else DayCyan
-    val borderColor = accentCyan.copy(alpha = 0.45f)
+    val routineMagenta = Color(0xFFD946EF)
+    val activeAccent = if (allowCategorySelection && !isFirstStrikeSelected) routineMagenta else accentCyan
+    val borderColor = activeAccent.copy(alpha = 0.48f)
     val textPrimary = if (isDarkTheme) Color(0xFFF8FAFC) else DayTextPrimary
     val textSecondary = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF475569)
 
@@ -535,6 +544,17 @@ fun FirstStrikeLocationPickerDialog(
                     modifier = Modifier.align(Alignment.Center),
                     contentAlignment = Alignment.Center
                 ) {
+                    if (allowCategorySelection && !isFirstStrikeSelected) {
+                        // Subtle magenta/violet aura ring around center pin when Routine Strike is selected
+                        Box(
+                            modifier = Modifier
+                                .offset(y = 10.dp)
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(routineMagenta.copy(alpha = 0.22f))
+                                .border(1.3.dp, routineMagenta.copy(alpha = 0.72f), CircleShape)
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .offset(y = 14.dp)
@@ -546,8 +566,8 @@ fun FirstStrikeLocationPickerDialog(
                     )
                     Icon(
                         imageVector = Icons.Default.LocationOn,
-                        contentDescription = if (isAr) "موقع الضربة الأولى" else "First-Strike Pin",
-                        tint = NeonAmber,
+                        contentDescription = if (isAr) "موقع الضربة" else "Strike Pin",
+                        tint = if (allowCategorySelection && !isFirstStrikeSelected) routineMagenta else NeonAmber,
                         modifier = Modifier
                             .offset(y = (-12).dp + pinTranslationY)
                             .scale(pinScale)
@@ -568,6 +588,71 @@ fun FirstStrikeLocationPickerDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 if (!imeVisible) {
+                    if (allowCategorySelection) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val firstSelected = isFirstStrikeSelected
+                            val firstBg = if (firstSelected) NeonAmber.copy(alpha = 0.22f) else Color.Transparent
+                            val firstBorder = if (firstSelected) NeonAmber else borderColor.copy(alpha = 0.4f)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .minimumInteractiveComponentSize()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(firstBg)
+                                    .border(1.2.dp, firstBorder, RoundedCornerShape(12.dp))
+                                    .clickable { isFirstStrikeSelected = true }
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                                    .testTag("picker_category_first_strike"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = when {
+                                        isAr -> "ضربة أولى (First)"
+                                        isFr -> "Premier Strike"
+                                        else -> "First Strike"
+                                    },
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (firstSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                    color = if (firstSelected) NeonAmber else textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            val routineSelected = !isFirstStrikeSelected
+                            val routineBg = if (routineSelected) routineMagenta.copy(alpha = 0.22f) else Color.Transparent
+                            val routineBorder = if (routineSelected) routineMagenta else borderColor.copy(alpha = 0.4f)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .minimumInteractiveComponentSize()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(routineBg)
+                                    .border(1.2.dp, routineBorder, RoundedCornerShape(12.dp))
+                                    .clickable { isFirstStrikeSelected = false }
+                                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                                    .testTag("picker_category_routine_strike"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = when {
+                                        isAr -> "سترايك روتيني"
+                                        isFr -> "Strike routinier"
+                                        else -> "Routine Strike"
+                                    },
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (routineSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                    color = if (routineSelected) routineMagenta else textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -578,14 +663,19 @@ fun FirstStrikeLocationPickerDialog(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = when {
+                                text = titleOverride ?: when {
+                                    allowCategorySelection && !isFirstStrikeSelected -> when {
+                                        isAr -> "موقع السترايك الروتيني المحدد"
+                                        isFr -> "Lieu du strike routinier"
+                                        else -> "Selected Routine Strike Location"
+                                    }
                                     isAr -> "موقع الضربة الأولى المحدد"
                                     isFr -> "Lieu du premier strike sélectionné"
                                     else -> "Selected First-Strike Location"
                                 },
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = accentCyan,
+                                color = activeAccent,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)
@@ -646,17 +736,15 @@ fun FirstStrikeLocationPickerDialog(
 
                     Button(
                         onClick = {
-                            onConfirm(
-                                selectedLat,
-                                selectedLng,
-                                NominatimGeocoder.stripTifinagh(selectedPlaceName)
-                            )
+                            val cleanPlace = NominatimGeocoder.stripTifinagh(selectedPlaceName)
+                            onConfirmWithCategory?.invoke(selectedLat, selectedLng, cleanPlace, isFirstStrikeSelected)
+                            onConfirm(selectedLat, selectedLng, cleanPlace)
                         },
                         shape = RoundedCornerShape(14.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = accentCyan,
-                            contentColor = Color(0xFF031521)
+                            containerColor = activeAccent,
+                            contentColor = if (allowCategorySelection && !isFirstStrikeSelected) Color.White else Color(0xFF031521)
                         ),
                         modifier = Modifier
                             .weight(1f)
@@ -671,7 +759,12 @@ fun FirstStrikeLocationPickerDialog(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = when {
+                            text = confirmLabelOverride ?: when {
+                                allowCategorySelection && !isFirstStrikeSelected -> when {
+                                    isAr -> "تأكيد موقع السترايك"
+                                    isFr -> "Confirmer le lieu du strike"
+                                    else -> "Confirm Strike Location"
+                                }
                                 isAr -> "تأكيد موقع الضربة الأولى"
                                 isFr -> "Confirmer le lieu"
                                 else -> "Confirm First-Strike Location"

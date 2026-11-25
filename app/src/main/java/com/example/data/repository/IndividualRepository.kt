@@ -85,7 +85,14 @@ class IndividualRepository(
      * [StrikeEvent] records (each with count = 1) up to [MAX_LITERAL_RECENT_STRIKES] (10,000)
      * without deleting older historical records so All-Time and Yearly Analytics remain 100% intact.
      */
-    suspend fun incrementStrike(id: Long, delta: Int = 1): Long {
+    suspend fun incrementStrike(
+        id: Long,
+        delta: Int = 1,
+        isFirstStrike: Boolean = false,
+        lat: Double? = null,
+        lng: Double? = null,
+        placeName: String = ""
+    ): Long {
         val countDelta = delta.coerceAtLeast(1)
         dao.incrementStrike(id, countDelta)
 
@@ -98,6 +105,21 @@ class IndividualRepository(
         val personName = individual?.fullName ?: "Target #$id"
         val boostVal = individual?.boost ?: 0.0
 
+        val validLat = lat?.takeIf { it.isFinite() && it in -90.0..90.0 }
+        val validLng = lng?.takeIf { it.isFinite() && it in -180.0..180.0 }
+        val hasCoords = validLat != null && validLng != null
+        val cleanPlace = if (hasCoords) {
+            com.example.data.map.NominatimGeocoder.stripTifinagh(placeName)
+        } else {
+            ""
+        }
+
+        if (isFirstStrike && hasCoords && individual != null && !individual.hasFirstStrikeLocation) {
+            dao.updateFirstStrikeLocation(id, validLat, validLng, cleanPlace)
+        }
+
+        val strikeTypeLabel = if (isFirstStrike) "First Strike" else "Strike +1"
+
         if (countDelta == 1) {
             val event = StrikeEvent(
                 individualId = id,
@@ -106,10 +128,14 @@ class IndividualRepository(
                 date = dateStr,
                 time = timeStr,
                 count = 1,
-                strikeType = "Strike +1",
+                strikeType = strikeTypeLabel,
                 performanceValue = boostVal,
-                notes = "Auto-recorded strike event",
-                timestamp = baseTimestamp
+                notes = if (isFirstStrike) "First strike event" else "Auto-recorded strike event",
+                timestamp = baseTimestamp,
+                lat = if (hasCoords) validLat else null,
+                lng = if (hasCoords) validLng else null,
+                placeName = cleanPlace,
+                isFirstStrike = isFirstStrike
             )
             return strikeEventDao.insertEvent(event)
         }
@@ -129,10 +155,18 @@ class IndividualRepository(
                     date = dateStr,
                     time = timeStr,
                     count = 1,
-                    strikeType = "Strike +1",
+                    strikeType = strikeTypeLabel,
                     performanceValue = boostVal,
-                    notes = "Literal strike #${idx + 1}/$countDelta",
-                    timestamp = baseTimestamp + idx
+                    notes = if (isFirstStrike) {
+                        "First strike #${idx + 1}/$countDelta"
+                    } else {
+                        "Literal strike #${idx + 1}/$countDelta"
+                    },
+                    timestamp = baseTimestamp + idx,
+                    lat = if (hasCoords) validLat else null,
+                    lng = if (hasCoords) validLng else null,
+                    placeName = cleanPlace,
+                    isFirstStrike = isFirstStrike
                 )
             )
         }
@@ -145,10 +179,14 @@ class IndividualRepository(
                     date = dateStr,
                     time = timeStr,
                     count = overflowCount,
-                    strikeType = "Batch +$overflowCount",
+                    strikeType = if (isFirstStrike) "First Batch +$overflowCount" else "Batch +$overflowCount",
                     performanceValue = boostVal,
                     notes = "Historical overflow (+$overflowCount strikes)",
-                    timestamp = baseTimestamp + literalCount
+                    timestamp = baseTimestamp + literalCount,
+                    lat = if (hasCoords) validLat else null,
+                    lng = if (hasCoords) validLng else null,
+                    placeName = cleanPlace,
+                    isFirstStrike = isFirstStrike
                 )
             )
         }
@@ -416,5 +454,38 @@ class IndividualRepository(
             lng = lng,
             placeName = com.example.data.map.NominatimGeocoder.stripTifinagh(placeName)
         )
+    }
+
+    suspend fun updateStrikeEventLocationAndCategory(
+        eventId: Long,
+        lat: Double?,
+        lng: Double?,
+        placeName: String,
+        isFirstStrike: Boolean
+    ) {
+        val validLat = lat?.takeIf { it.isFinite() && it in -90.0..90.0 }
+        val validLng = lng?.takeIf { it.isFinite() && it in -180.0..180.0 }
+        val hasCoords = validLat != null && validLng != null
+        val cleanPlace = if (hasCoords) {
+            com.example.data.map.NominatimGeocoder.stripTifinagh(placeName)
+        } else {
+            ""
+        }
+        strikeEventDao.updateEventLocationAndCategory(
+            id = eventId,
+            lat = if (hasCoords) validLat else null,
+            lng = if (hasCoords) validLng else null,
+            placeName = cleanPlace,
+            isFirstStrike = isFirstStrike
+        )
+        if (isFirstStrike && hasCoords) {
+            val ev = strikeEventDao.getEventById(eventId)
+            if (ev != null) {
+                val ind = dao.getIndividualById(ev.individualId)
+                if (ind != null && !ind.hasFirstStrikeLocation) {
+                    dao.updateFirstStrikeLocation(ind.id, validLat, validLng, cleanPlace)
+                }
+            }
+        }
     }
 }

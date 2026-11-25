@@ -1064,10 +1064,39 @@ class IndividualViewModel(
     }
 
     fun incrementStrikeForId(id: Long, delta: Int = 1) {
+        recordStrikesWithLocation(
+            id = id,
+            delta = delta,
+            isFirstStrike = false,
+            lat = null,
+            lng = null,
+            placeName = ""
+        )
+    }
+
+    fun recordStrikesWithLocation(
+        id: Long,
+        delta: Int = 1,
+        isFirstStrike: Boolean = false,
+        lat: Double? = null,
+        lng: Double? = null,
+        placeName: String = ""
+    ) {
+        val lang = currentLanguage.value
+        val validLat = lat?.takeIf { it.isFinite() && it in -90.0..90.0 }
+        val validLng = lng?.takeIf { it.isFinite() && it in -180.0..180.0 }
+        val cleanPlace = com.example.data.map.NominatimGeocoder.stripTifinagh(placeName)
         viewModelScope.launch {
             val target = repository.getIndividualById(id)
             val latestBefore = repository.getLatestStrikeDate()
-            val eventId = repository.incrementStrike(id, delta)
+            val eventId = repository.incrementStrike(
+                id = id,
+                delta = delta,
+                isFirstStrike = isFirstStrike,
+                lat = validLat,
+                lng = validLng,
+                placeName = cleanPlace
+            )
             _strikeAnimCount.value += 1
 
             if (target != null) {
@@ -1088,32 +1117,51 @@ class IndividualViewModel(
                     repository.updateEventNotes(eventId, "PENALTY:${result.penaltyDeducted}|RULE:${result.ruleApplied}")
                 }
 
+                val typeTag = if (isFirstStrike) {
+                    when (lang) {
+                        "ar" -> "First Strike"
+                        "fr" -> "Premier Strike"
+                        else -> "First Strike"
+                    }
+                } else {
+                    when (lang) {
+                        "ar" -> "سترايك روتيني"
+                        "fr" -> "Strike routinier"
+                        else -> "Routine Strike"
+                    }
+                }
+                val placeSuffix = if (validLat != null && validLng != null) {
+                    " • ${cleanPlace.ifBlank { String.format(Locale.US, "%.4f, %.4f", validLat, validLng) }}"
+                } else {
+                    ""
+                }
+
                 val msg = when (result.ruleApplied) {
                     "DOUBLE_STRIKE" -> {
-                        when (currentLanguage.value) {
-                            "ar" -> "عقوبة الضربة المزدوجة! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} نقطة) وفتح درع 3 أيام"
-                            "fr" -> "Pénalité Double Strike ! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & Bouclier 3j débloqué"
-                            else -> "Double Strike Penalty! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & 3-Day Shield unlocked"
+                        when (lang) {
+                            "ar" -> "عقوبة الضربة المزدوجة! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} نقطة) وفتح درع 3 أيام$placeSuffix"
+                            "fr" -> "Pénalité Double Strike ! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & Bouclier 3j débloqué$placeSuffix"
+                            else -> "Double Strike Penalty! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & 3-Day Shield unlocked$placeSuffix"
                         }
                     }
                     "MULTI_STRIKE_COMBO" -> {
-                        when (currentLanguage.value) {
-                            "ar" -> "كومبو ضربات متعددة! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} نقطة) وتفعيل درع 7 أيام تلقائياً"
-                            "fr" -> "Combo Multi-Strikes ! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & Bouclier 7j activé"
-                            else -> "Multi-Strike Combo! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & 7-Day Shield auto-activated"
+                        when (lang) {
+                            "ar" -> "كومبو ضربات متعددة! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} نقطة) وتفعيل درع 7 أيام تلقائياً$placeSuffix"
+                            "fr" -> "Combo Multi-Strikes ! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & Bouclier 7j activé$placeSuffix"
+                            else -> "Multi-Strike Combo! (-${String.format(Locale.US, "%.1f", result.penaltyDeducted)} pts) & 7-Day Shield auto-activated$placeSuffix"
                         }
                     }
                     "EXTREME_OVERLOAD" -> {
-                        when (currentLanguage.value) {
+                        when (lang) {
                             "ar" -> "تحميل زائد أقصى! تم تصفير نقاط الشعلة إلى 0 وتجميد النار"
                             "fr" -> "Surcharge Extrême ! Score réinitialisé à 0 et flamme gelée"
                             else -> "Extreme System Overload! Flame score reset to 0 & flame frozen"
                         }
                     }
-                    else -> when (currentLanguage.value) {
-                        "ar" -> "تم تسجيل ضربة +$delta (${target.fullName})"
-                        "fr" -> "Strike enregistré +$delta (${target.fullName})"
-                        else -> "Strike registered +$delta (${target.fullName})"
+                    else -> when (lang) {
+                        "ar" -> "تم تسجيل +$delta ($typeTag - ${target.fullName})$placeSuffix"
+                        "fr" -> "Enregistré +$delta ($typeTag - ${target.fullName})$placeSuffix"
+                        else -> "Recorded +$delta ($typeTag - ${target.fullName})$placeSuffix"
                     }
                 }
                 emitMessage(msg)
@@ -1504,6 +1552,43 @@ class IndividualViewModel(
                     "ar" -> "تم مسح موقع الضربة الأولى"
                     "fr" -> "Lieu du premier strike effacé"
                     else -> "First-strike location cleared"
+                }
+            }
+            emitMessage(msg)
+        }
+    }
+
+    fun updateStrikeEventLocation(
+        eventId: Long,
+        lat: Double?,
+        lng: Double?,
+        placeName: String,
+        isFirstStrike: Boolean
+    ) {
+        val lang = currentLanguage.value
+        val validCoords = lat != null && lng != null && lat.isFinite() && lng.isFinite()
+        val cleanPlace = com.example.data.map.NominatimGeocoder.stripTifinagh(placeName)
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                repository.updateStrikeEventLocationAndCategory(
+                    eventId = eventId,
+                    lat = if (validCoords) lat else null,
+                    lng = if (validCoords) lng else null,
+                    placeName = if (validCoords) cleanPlace else "",
+                    isFirstStrike = isFirstStrike
+                )
+            }
+            val msg = if (validCoords) {
+                when (lang) {
+                    "ar" -> "تم حفظ موقع السترايك على الخريطة: ${cleanPlace.ifBlank { "%.4f, %.4f".format(Locale.US, lat, lng) }}"
+                    "fr" -> "Lieu du strike enregistré : ${cleanPlace.ifBlank { "%.4f, %.4f".format(Locale.US, lat, lng) }}"
+                    else -> "Strike location pinned on map: ${cleanPlace.ifBlank { "%.4f, %.4f".format(Locale.US, lat, lng) }}"
+                }
+            } else {
+                when (lang) {
+                    "ar" -> "تم مسح موقع السترايك"
+                    "fr" -> "Lieu du strike effacé"
+                    else -> "Strike location cleared"
                 }
             }
             emitMessage(msg)

@@ -40,7 +40,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -59,7 +61,9 @@ import com.example.ui.components.NeonAqua
 import com.example.ui.components.ObsidianRoadmapHubSwitcher
 import com.example.ui.components.RoadmapAmbientBackground
 import com.example.ui.components.RoadmapHubDestination
+import com.example.ui.components.TopFrostedLiquidGlassVeil
 import com.example.ui.components.WarmFireOrange
+import com.example.ui.components.edgeFadeInBlur
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayGlassSurface
@@ -182,6 +186,21 @@ fun TasksLedgerScreen(
     val mutedColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
 
     val scaffoldPadding = LocalScaffoldContentPadding.current
+    val density = LocalDensity.current
+    var ledgerHeaderHeightPx by remember { mutableIntStateOf(0) }
+    val ledgerHeaderClearanceDp = if (ledgerHeaderHeightPx > 0) {
+        with(density) { ledgerHeaderHeightPx.toDp() }
+    } else {
+        scaffoldPadding.calculateTopPadding() + 210.dp
+    }
+    val ledgerTopFadeHeightDp = ledgerHeaderClearanceDp + 18.dp
+
+    val dailyCount = remember(entries) { entries.count { it.task.period == TaskPeriod.DAILY } }
+    val weeklyCount = remember(entries) { entries.count { it.task.period == TaskPeriod.WEEKLY } }
+    val monthlyCount = remember(entries) { entries.count { it.task.period == TaskPeriod.MONTHLY } }
+    val eternalCount = remember(entries) {
+        entries.count { it.task.period == TaskPeriod.YEARLY || it.task.period == TaskPeriod.EVERLASTING }
+    }
 
     Box(
         modifier = modifier
@@ -193,9 +212,103 @@ fun TasksLedgerScreen(
             darkTheme = isDarkTheme
         )
 
-        Column(
+        // 1. FULL-BLEED EXPANDED TASKS DISPLAY AREA (scrolls seamlessly behind Switch View + Period filters with frosted liquid glass fade)
+        Box(
             modifier = Modifier
                 .fillMaxSize()
+                .edgeFadeInBlur(
+                    topHeight = ledgerTopFadeHeightDp,
+                    bottomHeight = 0.dp,
+                    blurRadius = 22.dp,
+                    maxEdgeFraction = 0.50f
+                )
+        ) {
+            if (filteredEntries.isEmpty()) {
+                LiquidGlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.TopCenter)
+                        .padding(
+                            top = ledgerHeaderClearanceDp + 14.dp,
+                            start = 14.dp,
+                            end = 14.dp
+                        ),
+                    shape = RoundedCornerShape(16.dp),
+                    darkTheme = isDarkTheme
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MenuBook,
+                            contentDescription = null,
+                            tint = mutedColor,
+                            modifier = Modifier.size(38.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = when {
+                                isAr -> "لا توجد مهام مطابقة للتصفية الحالية"
+                                isFr -> "Aucune mission ne correspond au filtre"
+                                else -> "No tasks match the active filter"
+                            },
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = mutedColor,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .testTag("tasks_ledger_list"),
+                    contentPadding = PaddingValues(
+                        start = 14.dp,
+                        end = 14.dp,
+                        top = ledgerHeaderClearanceDp + 6.dp,
+                        bottom = scaffoldPadding.calculateBottomPadding() + 20.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    items(filteredEntries, key = { it.task.id }) { entry ->
+                        LedgerTaskCard(
+                            entry = entry,
+                            nowMillis = nowMillis,
+                            currentLang = currentLang,
+                            isDarkTheme = isDarkTheme,
+                            onClaimTask = {
+                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                viewModel.claimTaskReward(entry.task.id)
+                            },
+                            onLongPressToggle = {
+                                HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                view.playSoundEffect(SoundEffectConstants.CLICK)
+                                viewModel.toggleTaskCompletionLedger(entry.task.id)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Expanded frosted liquid-glass fade veil beneath Switch View & Daily/Weekly/Monthly/Eternal filters
+        TopFrostedLiquidGlassVeil(
+            height = ledgerTopFadeHeightDp,
+            isDarkTheme = isDarkTheme,
+            testTag = "ledger_expanded_fade_veil"
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .onSizeChanged { ledgerHeaderHeightPx = it.height }
                 .padding(
                     start = 14.dp,
                     end = 14.dp,
@@ -337,9 +450,9 @@ fun TasksLedgerScreen(
             ) {
                 LedgerPeriodChip(
                     label = when {
-                        isAr -> "اليومية"
-                        isFr -> "Quotidiennes"
-                        else -> "Daily"
+                        isAr -> "اليومية ($dailyCount)"
+                        isFr -> "Quotidiennes ($dailyCount)"
+                        else -> "Daily ($dailyCount)"
                     },
                     selected = periodFilter == TaskPeriod.DAILY,
                     accentColor = cyanTone,
@@ -352,9 +465,9 @@ fun TasksLedgerScreen(
                 )
                 LedgerPeriodChip(
                     label = when {
-                        isAr -> "الأسبوعية"
-                        isFr -> "Hebdo"
-                        else -> "Weekly"
+                        isAr -> "الأسبوعية ($weeklyCount)"
+                        isFr -> "Hebdo ($weeklyCount)"
+                        else -> "Weekly ($weeklyCount)"
                     },
                     selected = periodFilter == TaskPeriod.WEEKLY,
                     accentColor = violetTone,
@@ -367,9 +480,9 @@ fun TasksLedgerScreen(
                 )
                 LedgerPeriodChip(
                     label = when {
-                        isAr -> "الشهرية"
-                        isFr -> "Mensuelles"
-                        else -> "Monthly"
+                        isAr -> "الشهرية ($monthlyCount)"
+                        isFr -> "Mensuelles ($monthlyCount)"
+                        else -> "Monthly ($monthlyCount)"
                     },
                     selected = periodFilter == TaskPeriod.MONTHLY,
                     accentColor = orangeTone,
@@ -382,9 +495,9 @@ fun TasksLedgerScreen(
                 )
                 LedgerPeriodChip(
                     label = when {
-                        isAr -> "الأبدية"
-                        isFr -> "Éternelles"
-                        else -> "Eternal"
+                        isAr -> "الأبدية ($eternalCount)"
+                        isFr -> "Éternelles ($eternalCount)"
+                        else -> "Eternal ($eternalCount)"
                     },
                     selected = periodFilter == TaskPeriod.YEARLY,
                     accentColor = amberTone,
@@ -397,9 +510,9 @@ fun TasksLedgerScreen(
                 )
                 LedgerPeriodChip(
                     label = when {
-                        isAr -> "الكل"
-                        isFr -> "Toutes"
-                        else -> "All"
+                        isAr -> "الكل (${entries.size})"
+                        isFr -> "Toutes (${entries.size})"
+                        else -> "All (${entries.size})"
                     },
                     selected = periodFilter == null,
                     accentColor = aquaTone,
@@ -410,80 +523,6 @@ fun TasksLedgerScreen(
                         periodFilter = null
                     }
                 )
-            }
-
-            // 5. EXPANDED TASKS DISPLAY AREA (Occupies maximum screen space)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                if (filteredEntries.isEmpty()) {
-                    LiquidGlassCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .align(Alignment.TopCenter)
-                            .padding(top = 12.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        darkTheme = isDarkTheme
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(28.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MenuBook,
-                                contentDescription = null,
-                                tint = mutedColor,
-                                modifier = Modifier.size(38.dp)
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = when {
-                                    isAr -> "لا توجد مهام مطابقة للتصفية الحالية"
-                                    isFr -> "Aucune mission ne correspond au filtre"
-                                    else -> "No tasks match the active filter"
-                                },
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = mutedColor,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .testTag("tasks_ledger_list"),
-                        contentPadding = PaddingValues(
-                            top = 2.dp,
-                            bottom = scaffoldPadding.calculateBottomPadding() + 20.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(7.dp)
-                    ) {
-                        items(filteredEntries, key = { it.task.id }) { entry ->
-                            LedgerTaskCard(
-                                entry = entry,
-                                nowMillis = nowMillis,
-                                currentLang = currentLang,
-                                isDarkTheme = isDarkTheme,
-                                onClaimTask = {
-                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    viewModel.claimTaskReward(entry.task.id)
-                                },
-                                onLongPressToggle = {
-                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                                    viewModel.toggleTaskCompletionLedger(entry.task.id)
-                                }
-                            )
-                        }
-                    }
-                }
             }
         }
     }

@@ -33,8 +33,20 @@ data class StrikeEvent(
     val strikeType: String = "Automatic", // "Automatic", "Quick +5", "Quick +10", "Historical"
     val performanceValue: Double = 0.0, // Impact metric / boost
     val notes: String = "",
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val lat: Double? = null,
+    val lng: Double? = null,
+    val placeName: String = "",
+    val isFirstStrike: Boolean = false
 ) {
+    val hasLocation: Boolean
+        get() = lat != null &&
+            lng != null &&
+            lat.isFinite() &&
+            lng.isFinite() &&
+            lat in -90.0..90.0 &&
+            lng in -180.0..180.0
+
     fun getEffectivePenalty(): Double {
         if (notes.contains("PENALTY:")) {
             val part = notes.substringAfter("PENALTY:").substringBefore("|").toDoubleOrNull()

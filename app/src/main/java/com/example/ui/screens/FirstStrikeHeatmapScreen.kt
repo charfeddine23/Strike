@@ -108,6 +108,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.Individual
+import com.example.data.model.StrikeEvent
 import com.example.ui.components.GlassTypeBadge
 import com.example.ui.components.hasLocationPermission
 import com.example.ui.components.resolveBestLocation
@@ -116,6 +117,7 @@ import com.example.ui.map.HeatmapDisplayMode
 import com.example.ui.map.HottestRegionTarget
 import com.example.ui.map.MapStyleHelper
 import com.example.ui.map.MapVisualTheme
+import com.example.ui.map.MappedStrikePoint
 import com.example.ui.map.isRobolectricRuntime
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayTextPrimary
@@ -142,12 +144,14 @@ class HeatmapMapController(context: Context) {
     var userLat by mutableStateOf<Double?>(null)
     var userLng by mutableStateOf<Double?>(null)
     var focusedStrikePerson by mutableStateOf<Individual?>(null)
+    var focusedStrikePoint by mutableStateOf<MappedStrikePoint?>(null)
 
     var mapLibreMap by mutableStateOf<MapLibreMap?>(null)
     var loadedStyle by mutableStateOf<Style?>(null)
     var hasAutoFramed by mutableStateOf(false)
 
     var latestIndividuals: List<Individual> = emptyList()
+    var latestStrikeEvents: List<StrikeEvent> = emptyList()
     var latestHotspots: List<FirstStrikeHotspot> = emptyList()
     var latestHottestRegion: HottestRegionTarget? = null
     var onHotspotTapped: ((FirstStrikeHotspot) -> Unit)? = null
@@ -170,7 +174,8 @@ class HeatmapMapController(context: Context) {
                         displayMode = displayMode,
                         individuals = latestIndividuals,
                         userLat = userLat,
-                        userLng = userLng
+                        userLng = userLng,
+                        strikeEvents = latestStrikeEvents
                     )
                 }
             }
@@ -204,7 +209,8 @@ class HeatmapMapController(context: Context) {
                         displayMode = displayMode,
                         individuals = latestIndividuals,
                         userLat = userLat,
-                        userLng = userLng
+                        userLng = userLng,
+                        strikeEvents = latestStrikeEvents
                     )
                 }
 
@@ -224,11 +230,23 @@ class HeatmapMapController(context: Context) {
                     val rendered = map.queryRenderedFeatures(
                         screenPt,
                         MapStyleHelper.CIRCLE_LAYER_ID,
-                        MapStyleHelper.HEATMAP_LAYER_ID
+                        MapStyleHelper.HEATMAP_LAYER_ID,
+                        MapStyleHelper.ROUTINE_CIRCLE_LAYER_ID,
+                        MapStyleHelper.ROUTINE_INNER_HALO_LAYER_ID,
+                        MapStyleHelper.ROUTINE_HALO_LAYER_ID,
+                        MapStyleHelper.ROUTINE_HEATMAP_LAYER_ID
                     )
                     val clickedId = rendered.firstOrNull()?.getNumberProperty("id")?.toLong()
                     val hitHotspot = if (clickedId != null) {
-                        currentHotspots.firstOrNull { hs -> hs.individuals.any { it.id == clickedId } }
+                        MapStyleHelper.findNearestHotspot(
+                            tapLat = point.latitude,
+                            tapLng = point.longitude,
+                            hotspots = currentHotspots.filter { hs ->
+                                hs.individuals.any { it.id == clickedId } ||
+                                    hs.points.any { it.individualId == clickedId }
+                            }.ifEmpty { currentHotspots },
+                            zoomLevel = map.cameraPosition.zoom
+                        ) ?: currentHotspots.firstOrNull { hs -> hs.individuals.any { it.id == clickedId } }
                     } else {
                         MapStyleHelper.findNearestHotspot(
                             tapLat = point.latitude,
@@ -274,7 +292,8 @@ class HeatmapMapController(context: Context) {
                 displayMode = displayMode,
                 individuals = latestIndividuals,
                 userLat = userLat,
-                userLng = userLng
+                userLng = userLng,
+                strikeEvents = latestStrikeEvents
             )
         }
     }
@@ -328,19 +347,25 @@ fun FirstStrikeHeatmapScreen(
     val ownsController = mapController == null
 
     val allIndividuals by viewModel.allIndividuals.collectAsStateWithLifecycle()
-    val hotspots = remember(allIndividuals) { MapStyleHelper.groupHotspots(allIndividuals) }
-    val hottestRegion = remember(allIndividuals) { MapStyleHelper.findHottestRegion(allIndividuals) }
-    val mappedIndividuals = remember(allIndividuals) {
-        allIndividuals
-            .filter { it.hasFirstStrikeLocation }
+    val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
+    val hotspots = remember(allIndividuals, allStrikeEvents) {
+        MapStyleHelper.groupHotspots(allIndividuals, allStrikeEvents)
+    }
+    val hottestRegion = remember(allIndividuals, allStrikeEvents) {
+        MapStyleHelper.findHottestRegion(allIndividuals, allStrikeEvents)
+    }
+    val allMappedPoints = remember(allIndividuals, allStrikeEvents) {
+        MapStyleHelper.collectAllMappedPoints(allIndividuals, allStrikeEvents)
             .sortedWith(
-                compareByDescending<Individual> { it.strikeCount }
+                compareByDescending<MappedStrikePoint> { it.isFirstStrike }
+                    .thenByDescending { it.weight }
                     .thenByDescending { it.boost }
             )
     }
-    val geoCount = mappedIndividuals.size
+    val geoCount = allMappedPoints.size
 
     activeController.latestIndividuals = allIndividuals
+    activeController.latestStrikeEvents = allStrikeEvents
     activeController.latestHotspots = hotspots
     activeController.latestHottestRegion = hottestRegion
 
@@ -350,20 +375,21 @@ fun FirstStrikeHeatmapScreen(
     val userLat = activeController.userLat
     val userLng = activeController.userLng
     val focusedStrikePerson = activeController.focusedStrikePerson
+    val focusedStrikePoint = activeController.focusedStrikePoint
 
     var showLayersMenu by remember { mutableStateOf(false) }
     var showAllStrikesMenu by remember { mutableStateOf(false) }
     var strikeSearchQuery by remember { mutableStateOf("") }
 
-    val filteredMappedIndividuals = remember(mappedIndividuals, strikeSearchQuery) {
+    val filteredMappedPoints = remember(allMappedPoints, strikeSearchQuery) {
         val q = strikeSearchQuery.trim()
         if (q.isEmpty()) {
-            mappedIndividuals
+            allMappedPoints
         } else {
-            mappedIndividuals.filter { person ->
-                person.fullName.contains(q, ignoreCase = true) ||
-                    person.firstStrikePlaceName.contains(q, ignoreCase = true) ||
-                    person.type.contains(q, ignoreCase = true)
+            allMappedPoints.filter { pt ->
+                pt.individualName.contains(q, ignoreCase = true) ||
+                    pt.placeName.contains(q, ignoreCase = true) ||
+                    pt.individualType.contains(q, ignoreCase = true)
             }
         }
     }
@@ -410,7 +436,17 @@ fun FirstStrikeHeatmapScreen(
     }
 
     // Keep MapLibre style synced with layer toggles & Room geospatial data (including on every re-mount)
-    LaunchedEffect(mapLibreRef, loadedStyleRef, mapVisualTheme, show3dBuildings, displayMode, allIndividuals, userLat, userLng) {
+    LaunchedEffect(
+        mapLibreRef,
+        loadedStyleRef,
+        mapVisualTheme,
+        show3dBuildings,
+        displayMode,
+        allIndividuals,
+        allStrikeEvents,
+        userLat,
+        userLng
+    ) {
         val map = mapLibreRef
         if (map != null) {
             map.getStyle { style ->
@@ -422,7 +458,8 @@ fun FirstStrikeHeatmapScreen(
                     displayMode = displayMode,
                     individuals = allIndividuals,
                     userLat = userLat,
-                    userLng = userLng
+                    userLng = userLng,
+                    strikeEvents = allStrikeEvents
                 )
             }
         } else if (loadedStyleRef != null) {
@@ -433,7 +470,8 @@ fun FirstStrikeHeatmapScreen(
                 displayMode = displayMode,
                 individuals = allIndividuals,
                 userLat = userLat,
-                userLng = userLng
+                userLng = userLng,
+                strikeEvents = allStrikeEvents
             )
         }
     }
@@ -509,6 +547,17 @@ fun FirstStrikeHeatmapScreen(
             )
         } else {
             // High-craft dark/light tactical canvas preview for Robolectric JVM environment
+            val routinePulseTransition = rememberInfiniteTransition(label = "routine_halo_pulse")
+            val haloPulse by routinePulseTransition.animateFloat(
+                initialValue = 0.86f,
+                targetValue = 1.14f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1900, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "halo_pulse_scale"
+            )
+
             Box(modifier = Modifier.fillMaxSize()) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     drawRect(if (isMapDark) Color(0xFF0F172A) else Color(0xFFF8F9FA))
@@ -518,29 +567,62 @@ fun FirstStrikeHeatmapScreen(
                         topLeft = Offset(0f, 0f),
                         size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.25f)
                     )
-                    // Draw glowing heatmap blobs for recorded hotspots
-                    hotspots.forEachIndexed { idx, _ ->
+                    // Draw glowing First Strike (Cyan/Amber/Red) and Routine Strike (Violet/Magenta halo) blobs
+                    hotspots.forEachIndexed { idx, hotspot ->
                         val cx = size.width * (0.28f + ((idx * 0.21f) % 0.48f))
                         val cy = size.height * (0.38f + ((idx * 0.14f) % 0.28f))
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                listOf(
-                                    Color(0xFFEF4444),
-                                    Color(0xFFF59E0B).copy(alpha = 0.72f),
-                                    Color(0xFF22D3EE).copy(alpha = 0.35f),
-                                    Color.Transparent
+                        if (hotspot.hasFirstStrikes) {
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    listOf(
+                                        Color(0xFFEF4444),
+                                        Color(0xFFF59E0B).copy(alpha = 0.72f),
+                                        Color(0xFF22D3EE).copy(alpha = 0.35f),
+                                        Color.Transparent
+                                    ),
+                                    center = Offset(cx, cy),
+                                    radius = 72.dp.toPx()
                                 ),
-                                center = Offset(cx, cy),
-                                radius = 72.dp.toPx()
-                            ),
-                            radius = 72.dp.toPx(),
-                            center = Offset(cx, cy)
-                        )
+                                radius = 72.dp.toPx(),
+                                center = Offset(cx, cy)
+                            )
+                        }
+                        if (hotspot.hasRoutineStrikes) {
+                            // Exact Snapchat Snap Map multi-stop thermal glow
+                            val outerRadius = 78.dp.toPx() * haloPulse
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    0.00f to Color(0xFFEF4444).copy(alpha = 0.94f),
+                                    0.24f to Color(0xFFF97316).copy(alpha = 0.88f),
+                                    0.44f to Color(0xFFFACC15).copy(alpha = 0.82f),
+                                    0.64f to Color(0xFF22C55E).copy(alpha = 0.70f),
+                                    0.82f to Color(0xFF06B6D4).copy(alpha = 0.50f),
+                                    0.94f to Color(0xFF2563EB).copy(alpha = 0.28f),
+                                    1.00f to Color.Transparent,
+                                    center = Offset(cx, cy),
+                                    radius = outerRadius
+                                ),
+                                radius = outerRadius,
+                                center = Offset(cx, cy)
+                            )
+                        }
                     }
                 }
 
                 // Tappable hotspot indicators in Robolectric preview
                 hotspots.forEachIndexed { idx, hotspot ->
+                    val isRoutineOnly = hotspot.hasRoutineStrikes && !hotspot.hasFirstStrikes
+                    val isMixed = hotspot.hasRoutineStrikes && hotspot.hasFirstStrikes
+                    val ringTint = when {
+                        isRoutineOnly -> Color(0xFF22C55E)
+                        isMixed -> Color(0xFFFACC15)
+                        else -> NeonCyan
+                    }
+                    val fillTint = when {
+                        isRoutineOnly -> Color(0x4406B6D4)
+                        isMixed -> Color(0x4422C55E)
+                        else -> Color(0x4422D3EE)
+                    }
                     Box(
                         modifier = Modifier
                             .align(Alignment.Center)
@@ -550,16 +632,16 @@ fun FirstStrikeHeatmapScreen(
                             )
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(Color(0x4422D3EE))
-                            .border(1.5.dp, NeonCyan, CircleShape)
+                            .background(fillTint)
+                            .border(1.8.dp, ringTint, CircleShape)
                             .clickable { selectedHotspot = hotspot }
                             .testTag("heatmap_hotspot_marker_${hotspot.id}"),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Whatshot,
+                            imageVector = if (isRoutineOnly) Icons.Default.Bolt else Icons.Default.Whatshot,
                             contentDescription = hotspot.placeName,
-                            tint = NeonAmber,
+                            tint = if (isRoutineOnly) Color(0xFFFACC15) else NeonAmber,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -618,18 +700,21 @@ fun FirstStrikeHeatmapScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    val focusedPt = focusedStrikePoint
                     val focused = focusedStrikePerson
                     Text(
                         text = when {
+                            focusedPt != null -> {
+                                val place = focusedPt.placeName.ifBlank {
+                                    "${String.format(java.util.Locale.US, "%.2f", focusedPt.lat)}, ${String.format(java.util.Locale.US, "%.2f", focusedPt.lng)}"
+                                }
+                                "${focusedPt.individualName} • $place"
+                            }
                             focused != null -> {
                                 val place = focused.firstStrikePlaceName.ifBlank {
                                     "${String.format(java.util.Locale.US, "%.2f", focused.firstStrikeLat ?: 0.0)}, ${String.format(java.util.Locale.US, "%.2f", focused.firstStrikeLng ?: 0.0)}"
                                 }
-                                when {
-                                    isAr -> "${focused.fullName} • $place"
-                                    isFr -> "${focused.fullName} • $place"
-                                    else -> "${focused.fullName} • $place"
-                                }
+                                "${focused.fullName} • $place"
                             }
                             hottestRegion != null -> when {
                                 isAr -> "الأكثر سخونة: ${hottestRegion.placeName}"
@@ -722,9 +807,9 @@ fun FirstStrikeHeatmapScreen(
                         )
                         Text(
                             text = when {
-                                isAr -> "كل الضربات على الخريطة (${mappedIndividuals.size})"
-                                isFr -> "Tous les strikes (${mappedIndividuals.size})"
-                                else -> "All Map Strikes (${mappedIndividuals.size})"
+                                isAr -> "كل الضربات على الخريطة (${allMappedPoints.size})"
+                                isFr -> "Tous les strikes (${allMappedPoints.size})"
+                                else -> "All Map Strikes (${allMappedPoints.size})"
                             },
                             fontSize = 12.5.sp,
                             fontWeight = FontWeight.Black,
@@ -747,7 +832,7 @@ fun FirstStrikeHeatmapScreen(
                     }
                 }
 
-                if (mappedIndividuals.isNotEmpty()) {
+                if (allMappedPoints.isNotEmpty()) {
                     // Compact luxury search bar to jump to any name cleanly
                     Row(
                         modifier = Modifier
@@ -810,10 +895,10 @@ fun FirstStrikeHeatmapScreen(
                     }
                 }
 
-                if (filteredMappedIndividuals.isEmpty()) {
+                if (filteredMappedPoints.isEmpty()) {
                     Text(
                         text = when {
-                            mappedIndividuals.isEmpty() -> when {
+                            allMappedPoints.isEmpty() -> when {
                                 isAr -> "لا توجد ضربات بموقع مسجل على الخريطة بعد"
                                 isFr -> "Aucun strike localisé sur la carte"
                                 else -> "No strikes pinned on the map yet"
@@ -829,26 +914,38 @@ fun FirstStrikeHeatmapScreen(
                         modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp)
                     )
                 } else {
+                    val primaryKeysByPersonId = remember(filteredMappedPoints) {
+                        val map = mutableMapOf<Long, String>()
+                        for (pt in filteredMappedPoints) {
+                            if (!map.containsKey(pt.individualId)) {
+                                map[pt.individualId] = pt.key
+                            }
+                        }
+                        map
+                    }
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 260.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        items(filteredMappedIndividuals, key = { it.id }) { person ->
-                            val isFocused = focusedStrikePerson?.id == person.id
+                        items(filteredMappedPoints, key = { it.key }) { pt ->
+                            val isFocused = focusedStrikePoint?.key == pt.key ||
+                                (focusedStrikePoint == null && focusedStrikePerson?.id == pt.individualId)
+                            val catAccent = if (pt.isFirstStrike) NeonAmber else Color(0xFF22C55E)
                             val itemBg = when {
                                 isFocused -> accentCyan.copy(alpha = if (isMapDark) 0.18f else 0.14f)
                                 isMapDark -> Color(0xFF131F36)
                                 else -> Color(0xFFF1F5F9)
                             }
-                            val itemBorder = if (isFocused) accentCyan else accentCyan.copy(alpha = 0.28f)
-                            val lat = person.firstStrikeLat
-                            val lng = person.firstStrikeLng
-                            val placeLabel = person.firstStrikePlaceName.ifBlank {
-                                if (lat != null && lng != null) {
-                                    String.format(java.util.Locale.US, "%.4f, %.4f", lat, lng)
-                                } else ""
+                            val itemBorder = if (isFocused) accentCyan else catAccent.copy(alpha = 0.34f)
+                            val placeLabel = pt.placeName.ifBlank {
+                                String.format(java.util.Locale.US, "%.4f, %.4f", pt.lat, pt.lng)
+                            }
+                            val itemTag = if (primaryKeysByPersonId[pt.individualId] == pt.key) {
+                                "heatmap_strike_list_item_${pt.individualId}"
+                            } else {
+                                "heatmap_strike_list_item_${pt.key}"
                             }
 
                             Row(
@@ -859,23 +956,22 @@ fun FirstStrikeHeatmapScreen(
                                     .border(1.dp, itemBorder, RoundedCornerShape(14.dp))
                                     .clickable {
                                         activeController.hasAutoFramed = true
-                                        activeController.focusedStrikePerson = person
+                                        activeController.focusedStrikePoint = pt
+                                        activeController.focusedStrikePerson = allIndividuals.firstOrNull { it.id == pt.individualId }
                                         showAllStrikesMenu = false
-                                        if (lat != null && lng != null) {
-                                            mapLibreRef?.let { map ->
-                                                MapStyleHelper.animateCameraTo(
-                                                    mapLibreMap = map,
-                                                    lat = lat,
-                                                    lng = lng,
-                                                    zoom = 16.0,
-                                                    durationMs = 850
-                                                )
-                                            }
+                                        mapLibreRef?.let { map ->
+                                            MapStyleHelper.animateCameraTo(
+                                                mapLibreMap = map,
+                                                lat = pt.lat,
+                                                lng = pt.lng,
+                                                zoom = 16.0,
+                                                durationMs = 850
+                                            )
                                         }
                                     }
                                     .minimumInteractiveComponentSize()
                                     .padding(horizontal = 10.dp, vertical = 8.dp)
-                                    .testTag("heatmap_strike_list_item_${person.id}"),
+                                    .testTag(itemTag),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -888,13 +984,18 @@ fun FirstStrikeHeatmapScreen(
                                         modifier = Modifier
                                             .size(30.dp)
                                             .clip(CircleShape)
-                                            .background(NeonAmber.copy(alpha = 0.18f)),
+                                            .background(catAccent.copy(alpha = 0.18f))
+                                            .border(
+                                                width = if (pt.isFirstStrike) 0.8.dp else 1.2.dp,
+                                                color = catAccent.copy(alpha = 0.7f),
+                                                shape = CircleShape
+                                            ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.LocationOn,
+                                            imageVector = if (pt.isFirstStrike) Icons.Default.LocationOn else Icons.Default.Bolt,
                                             contentDescription = null,
-                                            tint = NeonAmber,
+                                            tint = catAccent,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -904,7 +1005,7 @@ fun FirstStrikeHeatmapScreen(
                                             horizontalArrangement = Arrangement.spacedBy(5.dp)
                                         ) {
                                             Text(
-                                                text = person.fullName,
+                                                text = pt.individualName,
                                                 fontSize = 12.5.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 fontFamily = PlusJakartaSans,
@@ -913,13 +1014,31 @@ fun FirstStrikeHeatmapScreen(
                                                 overflow = TextOverflow.Ellipsis,
                                                 modifier = Modifier.weight(1f, fill = false)
                                             )
-                                            GlassTypeBadge(type = person.type, darkTheme = isMapDark)
+                                            GlassTypeBadge(type = pt.individualType, darkTheme = isMapDark)
+                                            Box(
+                                                modifier = Modifier
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(catAccent.copy(alpha = 0.16f))
+                                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                                            ) {
+                                                Text(
+                                                    text = when {
+                                                        pt.isFirstStrike && isAr -> "أول"
+                                                        pt.isFirstStrike -> "First"
+                                                        isAr -> "روتيني"
+                                                        else -> "Routine"
+                                                    },
+                                                    fontSize = 8.5.sp,
+                                                    fontWeight = FontWeight.Black,
+                                                    color = catAccent
+                                                )
+                                            }
                                         }
                                         Text(
                                             text = if (isAr) {
-                                                "$placeLabel • ${person.strikeCount} ضربة"
+                                                "$placeLabel • ${pt.strikeCount} ضربة"
                                             } else {
-                                                "$placeLabel • ${person.strikeCount} strikes"
+                                                "$placeLabel • ${pt.strikeCount}x"
                                             },
                                             fontSize = 10.5.sp,
                                             color = if (isFocused) accentCyan else textSecondary,
@@ -1124,6 +1243,62 @@ fun FirstStrikeHeatmapScreen(
                             )
                         }
                     }
+
+                    // Compact Halo Color Legend: First Strike (Thermal) vs Routine Strike (Violet/Magenta Halo)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isMapDark) Color(0x1E1E293B) else Color(0xFFF1F5F9))
+                            .padding(horizontal = 10.dp, vertical = 7.dp)
+                            .testTag("heatmap_halo_legend"),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(NeonAmber)
+                            )
+                            Text(
+                                text = if (isAr) "First Strike" else "First Strike",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textPrimary
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.radialGradient(
+                                            listOf(
+                                                Color(0xFFEF4444),
+                                                Color(0xFFFACC15),
+                                                Color(0xFF22C55E),
+                                                Color(0xFF2563EB)
+                                            )
+                                        )
+                                    )
+                            )
+                            Text(
+                                text = if (isAr) "روتيني (سناب)" else "Snap Heat",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4ADE80)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -1306,9 +1481,9 @@ fun FirstStrikeHeatmapScreen(
                             )
                             Text(
                                 text = when {
-                                    isAr -> "${inspected.individuals.size} شخص مسجل في هذا الموقع"
-                                    isFr -> "${inspected.individuals.size} personne(s) à cet endroit"
-                                    else -> "${inspected.individuals.size} person(s) with first strike here"
+                                    isAr -> "${inspected.individuals.size} شخص • ${inspected.firstStrikeCount} أول • ${inspected.routineStrikeCount} روتيني"
+                                    isFr -> "${inspected.individuals.size} pers. • ${inspected.firstStrikeCount} 1er • ${inspected.routineStrikeCount} routine"
+                                    else -> "${inspected.individuals.size} person(s) • ${inspected.firstStrikeCount} First • ${inspected.routineStrikeCount} Routine"
                                 },
                                 fontSize = 11.5.sp,
                                 color = accentCyan,

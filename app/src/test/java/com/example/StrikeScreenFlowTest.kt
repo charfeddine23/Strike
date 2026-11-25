@@ -12,6 +12,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.AppDatabase
 import com.example.data.model.Individual
@@ -131,14 +132,21 @@ class StrikeScreenFlowTest {
         composeRule.onNodeWithTag("strike_target_picker_dialog").assertIsDisplayed()
         composeRule.onNodeWithTag("btn_confirm_strike_target").assertIsNotEnabled()
 
-        // 4. Pick first individual -> Confirm becomes enabled -> Confirm registers +1 strike
+        // 4. Pick first individual -> Confirm opens location picker -> Confirm registers +1 strike with coordinates
         composeRule.onNodeWithTag("strike_picker_item_$id1").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("btn_confirm_strike_target").assertIsEnabled().performClick()
 
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
-            composeRule.onAllNodesWithTag("strike_target_picker_dialog").fetchSemanticsNodes().isEmpty()
+            composeRule.onAllNodesWithTag("first_strike_picker_dialog").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("picker_confirm_btn").performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("first_strike_picker_dialog").fetchSemanticsNodes().isEmpty() &&
+                composeRule.onAllNodesWithTag("strike_target_picker_dialog").fetchSemanticsNodes().isEmpty()
         }
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
@@ -152,15 +160,27 @@ class StrikeScreenFlowTest {
             }
         }
 
-        // Total strikes center counter updated from 5 -> 6
+        // Total strikes center counter updated from 5 -> 6 and location persisted on latest event
         composeRule.onNodeWithTag("strike_button_total_count", useUnmergedTree = true)
             .assertTextEquals("6")
 
         // 5. Verify deleting from Recent Strikes opens Biometric Confirmation dialog & blocks unverified delete
-        runBlocking(Dispatchers.IO) {
-            latestEventId = repo.allStrikeEvents.first().first().id
+        var latestEvent: com.example.data.model.StrikeEvent? = null
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            val candidate = runBlocking(Dispatchers.IO) { repo.allStrikeEvents.first().firstOrNull() }
+            if (candidate != null && candidate.hasLocation &&
+                composeRule.onAllNodesWithTag("delete_strike_btn_${candidate.id}").fetchSemanticsNodes().isNotEmpty()
+            ) {
+                latestEvent = candidate
+                true
+            } else {
+                false
+            }
         }
-        composeRule.onNodeWithTag("delete_strike_btn_$latestEventId").performClick()
+        latestEventId = latestEvent!!.id
+        org.junit.Assert.assertTrue("New strike from flow must carry map coordinates", latestEvent!!.hasLocation)
+        composeRule.onNodeWithTag("delete_strike_btn_$latestEventId").performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("delete_strike_biometric_dialog").assertIsDisplayed()
 

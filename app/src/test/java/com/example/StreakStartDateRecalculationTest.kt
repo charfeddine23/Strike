@@ -15,12 +15,14 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class StreakStartDateRecalculationTest {
 
     private lateinit var context: Context

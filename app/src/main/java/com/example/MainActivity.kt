@@ -941,38 +941,6 @@ fun LiquidGlassTopBar(
         )
     }
 
-    val telemetryPillFill = if (isDarkTheme) {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color(0x2EFFFFFF),
-                Color(0x1E0A1426)
-            )
-        )
-    } else {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color(0xDCFFFFFF),
-                Color(0xACE6F2FA)
-            )
-        )
-    }
-
-    val telemetryPillBorder = if (isDarkTheme) {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color(0x52FFFFFF),
-                Color(0x2838BDF8)
-            )
-        )
-    } else {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color(0xFFFFFFFF),
-                Color(0x420284C7)
-            )
-        )
-    }
-
     var topBarCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val latestPullDelta by rememberUpdatedState(onPullDownHeatmapDelta)
     val latestPullEnd by rememberUpdatedState(onPullDownHeatmapEnd)
@@ -1092,17 +1060,12 @@ fun LiquidGlassTopBar(
                 }
             }
 
-            // Right/End Cluster: Telemetry Pill (Shield -> Flame -> DNA) + Luxury 3-Line Settings Button
+            // Right/End Cluster: Borderless Shield, Flame, DNA + Luxury 3-Line Settings Button
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(telemetryPillFill)
-                        .border(0.85.dp, telemetryPillBorder, RoundedCornerShape(50))
-                        .padding(horizontal = 7.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {

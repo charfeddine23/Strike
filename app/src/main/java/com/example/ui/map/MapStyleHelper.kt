@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Color as AndroidColor
 import android.os.Build
 import com.example.data.model.Individual
+import com.example.data.model.StrikeEvent
 import org.json.JSONArray
 import org.json.JSONObject
 import org.maplibre.android.MapLibre
@@ -39,13 +40,34 @@ enum class HeatmapDisplayMode {
     CLUSTER_PINS
 }
 
+data class MappedStrikePoint(
+    val key: String,
+    val individualId: Long,
+    val individualName: String,
+    val individualType: String,
+    val boost: Double,
+    val strikeCount: Int,
+    val lat: Double,
+    val lng: Double,
+    val placeName: String,
+    val isFirstStrike: Boolean,
+    val eventId: Long? = null,
+    val date: String = "",
+    val weight: Double = 1.0
+)
+
 data class FirstStrikeHotspot(
     val id: String,
     val lat: Double,
     val lng: Double,
     val placeName: String,
     val individuals: List<Individual>,
-    val heatScore: Double = 0.0
+    val heatScore: Double = 0.0,
+    val points: List<MappedStrikePoint> = emptyList(),
+    val hasFirstStrikes: Boolean = true,
+    val hasRoutineStrikes: Boolean = false,
+    val firstStrikeCount: Int = 0,
+    val routineStrikeCount: Int = 0
 )
 
 data class HottestRegionTarget(
@@ -74,6 +96,13 @@ object MapStyleHelper {
     const val HEATMAP_LAYER_ID = "obsidian-first-strike-heatmap"
     const val CIRCLE_LAYER_ID = "obsidian-first-strike-circles"
     const val SYMBOL_LAYER_ID = "obsidian-first-strike-labels"
+
+    const val ROUTINE_STRIKE_SOURCE_ID = "obsidian-routine-strike-source"
+    const val ROUTINE_HEATMAP_LAYER_ID = "obsidian-routine-strike-heatmap"
+    const val ROUTINE_HALO_LAYER_ID = "obsidian-routine-strike-halo-outer"
+    const val ROUTINE_INNER_HALO_LAYER_ID = "obsidian-routine-strike-halo-inner"
+    const val ROUTINE_CIRCLE_LAYER_ID = "obsidian-routine-strike-circles"
+    const val ROUTINE_SYMBOL_LAYER_ID = "obsidian-routine-strike-labels"
 
     const val USER_LOCATION_SOURCE_ID = "obsidian-user-location-source"
     const val USER_LOCATION_HALO_LAYER_ID = "obsidian-user-location-halo"
@@ -113,6 +142,77 @@ object MapStyleHelper {
 
     fun pointHeatWeight(person: Individual): Double {
         return (1.0 + (person.strikeCount.coerceAtLeast(1) * 0.15)).coerceAtMost(4.0)
+    }
+
+    fun eventHeatWeight(event: StrikeEvent, person: Individual?): Double {
+        val base = if (event.isFirstStrike) 1.25 else 0.85
+        val countBoost = event.count.coerceAtLeast(1) * 0.18
+        val personBoost = ((person?.strikeCount ?: 0) * 0.05)
+        return (base + countBoost + personBoost).coerceAtMost(4.0)
+    }
+
+    fun collectAllMappedPoints(
+        individuals: List<Individual>,
+        strikeEvents: List<StrikeEvent>
+    ): List<MappedStrikePoint> {
+        val byId = individuals.associateBy { it.id }
+        val result = mutableListOf<MappedStrikePoint>()
+        val mappedEvents = strikeEvents.filter { it.hasLocation }
+
+        for (event in mappedEvents) {
+            val lat = event.lat ?: continue
+            val lng = event.lng ?: continue
+            val person = byId[event.individualId]
+            result.add(
+                MappedStrikePoint(
+                    key = "ev_${event.id}",
+                    individualId = event.individualId,
+                    individualName = person?.fullName ?: event.individualName,
+                    individualType = person?.type ?: "M",
+                    boost = person?.boost ?: 0.0,
+                    strikeCount = event.count.coerceAtLeast(1),
+                    lat = lat,
+                    lng = lng,
+                    placeName = event.placeName,
+                    isFirstStrike = event.isFirstStrike,
+                    eventId = event.id,
+                    date = event.date,
+                    weight = eventHeatWeight(event, person)
+                )
+            )
+        }
+
+        for (person in individuals) {
+            if (!person.hasFirstStrikeLocation) continue
+            val pLat = person.firstStrikeLat ?: continue
+            val pLng = person.firstStrikeLng ?: continue
+            val alreadyInEvents = mappedEvents.any { ev ->
+                ev.individualId == person.id &&
+                    ev.isFirstStrike &&
+                    abs((ev.lat ?: 0.0) - pLat) <= 0.0005 &&
+                    abs((ev.lng ?: 0.0) - pLng) <= 0.0005
+            }
+            if (!alreadyInEvents) {
+                result.add(
+                    MappedStrikePoint(
+                        key = "ind_${person.id}",
+                        individualId = person.id,
+                        individualName = person.fullName,
+                        individualType = person.type,
+                        boost = person.boost,
+                        strikeCount = person.strikeCount.coerceAtLeast(1),
+                        lat = pLat,
+                        lng = pLng,
+                        placeName = person.firstStrikePlaceName,
+                        isFirstStrike = true,
+                        eventId = null,
+                        date = "",
+                        weight = pointHeatWeight(person)
+                    )
+                )
+            }
+        }
+        return result
     }
 
     fun ensureMapLibreInitialized(context: Context): Boolean {
@@ -159,11 +259,30 @@ object MapStyleHelper {
         }
     }
 
-    fun buildFirstStrikeGeoJson(individuals: List<Individual>): String {
+    fun buildFirstStrikeGeoJson(individuals: List<Individual>): String =
+        buildFirstStrikeGeoJson(individuals, emptyList())
+
+    fun buildFirstStrikeGeoJson(
+        individuals: List<Individual>,
+        strikeEvents: List<StrikeEvent>
+    ): String {
+        val points = collectAllMappedPoints(individuals, strikeEvents).filter { it.isFirstStrike }
+        return buildGeoJsonFromPoints(points)
+    }
+
+    fun buildRoutineStrikeGeoJson(
+        individuals: List<Individual>,
+        strikeEvents: List<StrikeEvent>
+    ): String {
+        val points = collectAllMappedPoints(individuals, strikeEvents).filter { !it.isFirstStrike }
+        return buildGeoJsonFromPoints(points)
+    }
+
+    private fun buildGeoJsonFromPoints(points: List<MappedStrikePoint>): String {
         val features = JSONArray()
-        for (person in individuals) {
-            val lat = person.firstStrikeLat ?: continue
-            val lng = person.firstStrikeLng ?: continue
+        for (pt in points) {
+            val lat = pt.lat
+            val lng = pt.lng
             if (!lat.isFinite() || !lng.isFinite()) continue
             if (lat !in -90.0..90.0 || lng !in -180.0..180.0) continue
 
@@ -174,15 +293,16 @@ object MapStyleHelper {
                     put(lat)
                 })
             }
-            val weight = pointHeatWeight(person)
             val properties = JSONObject().apply {
-                put("id", person.id)
-                put("name", person.fullName)
-                put("type", person.type)
-                put("boost", person.boost)
-                put("strikeCount", person.strikeCount)
-                put("placeName", person.firstStrikePlaceName)
-                put("weight", weight)
+                put("id", pt.individualId)
+                put("eventId", pt.eventId ?: -1L)
+                put("name", pt.individualName)
+                put("type", pt.individualType)
+                put("boost", pt.boost)
+                put("strikeCount", pt.strikeCount)
+                put("placeName", pt.placeName)
+                put("isFirstStrike", pt.isFirstStrike)
+                put("weight", pt.weight)
             }
             val feature = JSONObject().apply {
                 put("type", "Feature")
@@ -222,40 +342,71 @@ object MapStyleHelper {
     fun groupHotspots(
         individuals: List<Individual>,
         thresholdDegrees: Double = 0.018
-    ): List<FirstStrikeHotspot> {
-        val geoPeople = individuals.filter { it.hasFirstStrikeLocation }
-        if (geoPeople.isEmpty()) return emptyList()
+    ): List<FirstStrikeHotspot> =
+        groupHotspots(individuals, emptyList(), thresholdDegrees)
 
-        val clusters = mutableListOf<MutableList<Individual>>()
-        for (person in geoPeople) {
-            val lat = person.firstStrikeLat ?: continue
-            val lng = person.firstStrikeLng ?: continue
+    fun groupHotspots(
+        individuals: List<Individual>,
+        strikeEvents: List<StrikeEvent>,
+        thresholdDegrees: Double = 0.018
+    ): List<FirstStrikeHotspot> {
+        val points = collectAllMappedPoints(individuals, strikeEvents)
+        if (points.isEmpty()) return emptyList()
+
+        val byId = individuals.associateBy { it.id }
+        val clusters = mutableListOf<MutableList<MappedStrikePoint>>()
+        for (pt in points) {
             val existing = clusters.firstOrNull { cluster ->
                 val anchor = cluster.first()
-                val aLat = anchor.firstStrikeLat ?: 0.0
-                val aLng = anchor.firstStrikeLng ?: 0.0
-                abs(lat - aLat) <= thresholdDegrees && abs(lng - aLng) <= thresholdDegrees
+                abs(pt.lat - anchor.lat) <= thresholdDegrees && abs(pt.lng - anchor.lng) <= thresholdDegrees
             }
             if (existing != null) {
-                existing.add(person)
+                existing.add(pt)
             } else {
-                clusters.add(mutableListOf(person))
+                clusters.add(mutableListOf(pt))
             }
         }
 
         return clusters.mapIndexed { idx, group ->
-            val avgLat = group.mapNotNull { it.firstStrikeLat }.average()
-            val avgLng = group.mapNotNull { it.firstStrikeLng }.average()
-            val place = group.firstOrNull { it.firstStrikePlaceName.isNotBlank() }?.firstStrikePlaceName
+            val avgLat = group.map { it.lat }.average()
+            val avgLng = group.map { it.lng }.average()
+            val place = group.firstOrNull { it.placeName.isNotBlank() }?.placeName
                 ?: String.format(java.util.Locale.US, "%.4f, %.4f", avgLat, avgLng)
-            val totalHeat = group.sumOf { pointHeatWeight(it) }
+            val totalHeat = group.sumOf { it.weight }
+            val uniquePeople = group.mapNotNull { pt ->
+                byId[pt.individualId] ?: Individual(
+                    id = pt.individualId,
+                    fullName = pt.individualName,
+                    type = pt.individualType,
+                    length = 0.0,
+                    width = 0.0,
+                    size = 0.0,
+                    sScore = 0.0,
+                    fScore = 0.0,
+                    cScore = 0.0,
+                    boost = pt.boost,
+                    strikeCount = pt.strikeCount,
+                    firstStrikeLat = pt.lat,
+                    firstStrikeLng = pt.lng,
+                    firstStrikePlaceName = pt.placeName
+                )
+            }.distinctBy { it.id }.sortedByDescending { it.boost }
+            val firstCount = group.count { it.isFirstStrike }
+            val routineCount = group.count { !it.isFirstStrike }
+            val leadId = group.first().individualId
+
             FirstStrikeHotspot(
-                id = "hotspot_${idx}_${group.first().id}",
+                id = "hotspot_${idx}_${leadId}",
                 lat = avgLat,
                 lng = avgLng,
                 placeName = place,
-                individuals = group.sortedByDescending { it.boost },
-                heatScore = totalHeat
+                individuals = uniquePeople,
+                heatScore = totalHeat,
+                points = group,
+                hasFirstStrikes = firstCount > 0,
+                hasRoutineStrikes = routineCount > 0,
+                firstStrikeCount = firstCount,
+                routineStrikeCount = routineCount
             )
         }.sortedWith(
             compareByDescending<FirstStrikeHotspot> { it.heatScore }
@@ -272,39 +423,41 @@ object MapStyleHelper {
     fun findHottestRegion(
         individuals: List<Individual>,
         regionRadiusDegrees: Double = 0.08
+    ): HottestRegionTarget? =
+        findHottestRegion(individuals, emptyList(), regionRadiusDegrees)
+
+    fun findHottestRegion(
+        individuals: List<Individual>,
+        strikeEvents: List<StrikeEvent>,
+        regionRadiusDegrees: Double = 0.08
     ): HottestRegionTarget? {
-        val geoPeople = individuals.filter {
-            val lat = it.firstStrikeLat
-            val lng = it.firstStrikeLng
-            lat != null && lng != null &&
-                lat.isFinite() && lng.isFinite() &&
-                lat in -90.0..90.0 && lng in -180.0..180.0
+        val points = collectAllMappedPoints(individuals, strikeEvents).filter {
+            it.lat.isFinite() && it.lng.isFinite() &&
+                it.lat in -90.0..90.0 && it.lng in -180.0..180.0
         }
-        if (geoPeople.isEmpty()) return null
+        if (points.isEmpty()) return null
 
         val radiusSq = regionRadiusDegrees * regionRadiusDegrees
-        var bestCluster: List<Individual> = emptyList()
+        var bestCluster: List<MappedStrikePoint> = emptyList()
         var bestHeat = -1.0
         var bestStrikes = -1
         var bestBoost = -1.0
 
-        for (anchor in geoPeople) {
-            val aLat = anchor.firstStrikeLat ?: continue
-            val aLng = anchor.firstStrikeLng ?: continue
-            val neighbors = geoPeople.filter { candidate ->
-                val cLat = candidate.firstStrikeLat ?: return@filter false
-                val cLng = candidate.firstStrikeLng ?: return@filter false
-                val dLat = cLat - aLat
-                val dLng = cLng - aLng
+        for (anchor in points) {
+            val neighbors = points.filter { candidate ->
+                val dLat = candidate.lat - anchor.lat
+                val dLng = candidate.lng - anchor.lng
                 (dLat * dLat + dLng * dLng) <= radiusSq
             }
-            val heat = neighbors.sumOf { pointHeatWeight(it) }
-            val strikes = neighbors.sumOf { it.strikeCount }
-            val boost = neighbors.sumOf { it.boost }
+            val heat = neighbors.sumOf { it.weight }
+            val strikes = neighbors.distinctBy { it.individualId }.sumOf { it.strikeCount }
+            val boost = neighbors.distinctBy { it.individualId }.sumOf { it.boost }
+            val distinctCount = neighbors.distinctBy { it.individualId }.size
+            val bestDistinctCount = bestCluster.distinctBy { it.individualId }.size
             val isBetter = heat > bestHeat + 1e-6 ||
-                (abs(heat - bestHeat) <= 1e-6 && neighbors.size > bestCluster.size) ||
-                (abs(heat - bestHeat) <= 1e-6 && neighbors.size == bestCluster.size && strikes > bestStrikes) ||
-                (abs(heat - bestHeat) <= 1e-6 && neighbors.size == bestCluster.size && strikes == bestStrikes && boost > bestBoost)
+                (abs(heat - bestHeat) <= 1e-6 && distinctCount > bestDistinctCount) ||
+                (abs(heat - bestHeat) <= 1e-6 && distinctCount == bestDistinctCount && strikes > bestStrikes) ||
+                (abs(heat - bestHeat) <= 1e-6 && distinctCount == bestDistinctCount && strikes == bestStrikes && boost > bestBoost)
             if (isBetter) {
                 bestCluster = neighbors
                 bestHeat = heat
@@ -318,20 +471,17 @@ object MapStyleHelper {
         var weightedLatSum = 0.0
         var weightedLngSum = 0.0
         var weightTotal = 0.0
-        for (p in bestCluster) {
-            val lat = p.firstStrikeLat ?: continue
-            val lng = p.firstStrikeLng ?: continue
-            val w = pointHeatWeight(p)
-            weightedLatSum += lat * w
-            weightedLngSum += lng * w
-            weightTotal += w
+        for (pt in bestCluster) {
+            weightedLatSum += pt.lat * pt.weight
+            weightedLngSum += pt.lng * pt.weight
+            weightTotal += pt.weight
         }
         val centerLat = weightedLatSum / weightTotal.coerceAtLeast(1e-6)
         val centerLng = weightedLngSum / weightTotal.coerceAtLeast(1e-6)
 
-        val maxSpreadDeg = bestCluster.maxOf { p ->
-            val dLat = (p.firstStrikeLat ?: centerLat) - centerLat
-            val dLng = (p.firstStrikeLng ?: centerLng) - centerLng
+        val maxSpreadDeg = bestCluster.maxOf { pt ->
+            val dLat = pt.lat - centerLat
+            val dLng = pt.lng - centerLng
             kotlin.math.hypot(dLat, dLng)
         }
         val recommendedZoom = when {
@@ -341,9 +491,9 @@ object MapStyleHelper {
         }
 
         val namedLeader = bestCluster
-            .filter { it.firstStrikePlaceName.isNotBlank() }
-            .maxByOrNull { pointHeatWeight(it) }
-        val placeLabel = namedLeader?.firstStrikePlaceName
+            .filter { it.placeName.isNotBlank() }
+            .maxByOrNull { it.weight }
+        val placeLabel = namedLeader?.placeName
             ?: String.format(java.util.Locale.US, "%.4f, %.4f", centerLat, centerLng)
 
         return HottestRegionTarget(
@@ -352,7 +502,7 @@ object MapStyleHelper {
             placeName = placeLabel,
             heatScore = bestHeat,
             recommendedZoom = recommendedZoom,
-            peopleCount = bestCluster.size
+            peopleCount = bestCluster.distinctBy { it.individualId }.size
         )
     }
 
@@ -402,11 +552,13 @@ object MapStyleHelper {
         displayMode: HeatmapDisplayMode,
         individuals: List<Individual>,
         userLat: Double? = null,
-        userLng: Double? = null
+        userLng: Double? = null,
+        strikeEvents: List<StrikeEvent> = emptyList()
     ) {
         restyleBaseLayers(style, theme)
         ensureOrUpdate3dBuildings(style, theme, show3dBuildings)
-        ensureOrUpdateFirstStrikeLayers(style, theme, displayMode, individuals)
+        ensureOrUpdateFirstStrikeLayers(style, theme, displayMode, individuals, strikeEvents)
+        ensureOrUpdateRoutineStrikeLayers(style, theme, displayMode, individuals, strikeEvents)
         ensureOrUpdateUserLocationLayers(style, userLat, userLng)
     }
 
@@ -416,9 +568,11 @@ object MapStyleHelper {
         displayMode: HeatmapDisplayMode,
         individuals: List<Individual>,
         userLat: Double?,
-        userLng: Double?
+        userLng: Double?,
+        strikeEvents: List<StrikeEvent> = emptyList()
     ) {
-        ensureOrUpdateFirstStrikeLayers(style, theme, displayMode, individuals)
+        ensureOrUpdateFirstStrikeLayers(style, theme, displayMode, individuals, strikeEvents)
+        ensureOrUpdateRoutineStrikeLayers(style, theme, displayMode, individuals, strikeEvents)
         ensureOrUpdateUserLocationLayers(style, userLat, userLng)
     }
 
@@ -554,9 +708,10 @@ object MapStyleHelper {
         style: Style,
         theme: MapVisualTheme,
         displayMode: HeatmapDisplayMode,
-        individuals: List<Individual>
+        individuals: List<Individual>,
+        strikeEvents: List<StrikeEvent>
     ) {
-        val geoJson = buildFirstStrikeGeoJson(individuals)
+        val geoJson = buildFirstStrikeGeoJson(individuals, strikeEvents)
         val existingSource = style.getSourceAs<GeoJsonSource>(FIRST_STRIKE_SOURCE_ID)
         if (existingSource != null) {
             existingSource.setGeoJson(geoJson)
@@ -686,6 +841,236 @@ object MapStyleHelper {
                 )
             }
             style.addLayer(symbolLayer)
+        } else {
+            existingSymbol.setProperties(
+                PropertyFactory.textColor(labelColor),
+                PropertyFactory.textHaloColor(labelHalo),
+                PropertyFactory.visibility(circleVisibility)
+            )
+        }
+    }
+
+    private fun ensureOrUpdateRoutineStrikeLayers(
+        style: Style,
+        theme: MapVisualTheme,
+        displayMode: HeatmapDisplayMode,
+        individuals: List<Individual>,
+        strikeEvents: List<StrikeEvent>
+    ) {
+        val geoJson = buildRoutineStrikeGeoJson(individuals, strikeEvents)
+        val existingSource = style.getSourceAs<GeoJsonSource>(ROUTINE_STRIKE_SOURCE_ID)
+        if (existingSource != null) {
+            existingSource.setGeoJson(geoJson)
+        } else {
+            style.addSource(GeoJsonSource(ROUTINE_STRIKE_SOURCE_ID, geoJson))
+        }
+
+        // Snapchat Snap Map keeps the thermal heat cloud rich & luminous from world zoom down to street level
+        val heatOpacityExpr = when (displayMode) {
+            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.literal(0.95f)
+            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
+            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
+                Expression.linear(),
+                Expression.zoom(),
+                Expression.stop(0, 0.92f),
+                Expression.stop(11, 0.94f),
+                Expression.stop(16, 0.78f)
+            )
+        }
+        val heatVisibility = if (displayMode == HeatmapDisplayMode.CLUSTER_PINS) Property.NONE else Property.VISIBLE
+
+        val existingHeat = style.getLayerAs<HeatmapLayer>(ROUTINE_HEATMAP_LAYER_ID)
+        if (existingHeat == null) {
+            style.addLayer(
+                HeatmapLayer(ROUTINE_HEATMAP_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
+                    setProperties(
+                        PropertyFactory.heatmapWeight(Expression.get("weight")),
+                        PropertyFactory.heatmapIntensity(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                Expression.stop(0, 0.90f),
+                                Expression.stop(9, 1.75f),
+                                Expression.stop(15, 2.35f)
+                            )
+                        ),
+                        // Wide Snap Map Gaussian spread so neighboring strikes blend organically
+                        PropertyFactory.heatmapRadius(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                Expression.stop(0, 22f),
+                                Expression.stop(9, 44f),
+                                Expression.stop(15, 74f)
+                            )
+                        ),
+                        // Exact Snapchat Snap Map Color Ramp: Transparent -> Blue -> Cyan -> Green -> Yellow -> Orange -> Red
+                        PropertyFactory.heatmapColor(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.heatmapDensity(),
+                                Expression.stop(0.00, Expression.rgba(0, 0, 0, 0.0f)),
+                                Expression.stop(0.15, Expression.rgba(37, 99, 235, 0.58f)),
+                                Expression.stop(0.32, Expression.rgba(6, 182, 212, 0.78f)),
+                                Expression.stop(0.50, Expression.rgba(74, 222, 128, 0.88f)),
+                                Expression.stop(0.68, Expression.rgba(250, 204, 21, 0.94f)),
+                                Expression.stop(0.85, Expression.rgba(249, 115, 22, 0.98f)),
+                                Expression.stop(1.00, Expression.rgba(239, 68, 68, 1.0f))
+                            )
+                        ),
+                        PropertyFactory.heatmapOpacity(heatOpacityExpr),
+                        PropertyFactory.visibility(heatVisibility)
+                    )
+                }
+            )
+        } else {
+            existingHeat.setProperties(
+                PropertyFactory.heatmapOpacity(heatOpacityExpr),
+                PropertyFactory.visibility(heatVisibility)
+            )
+        }
+
+        val showPins = displayMode != HeatmapDisplayMode.HEATMAP_GLOW
+        val circleVisibility = if (showPins) Property.VISIBLE else Property.NONE
+        val isPinsMode = displayMode == HeatmapDisplayMode.CLUSTER_PINS
+        val auraOpacityExpr = when (displayMode) {
+            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.32f)
+            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
+                Expression.linear(),
+                Expression.zoom(),
+                Expression.stop(10, 0.0f),
+                Expression.stop(13, 0.22f),
+                Expression.stop(16, 0.36f)
+            )
+            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.literal(0.0f)
+        }
+        val coreOpacityExpr = when (displayMode) {
+            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.95f)
+            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
+                Expression.linear(),
+                Expression.zoom(),
+                Expression.stop(12, 0.0f),
+                Expression.stop(14, 0.72f),
+                Expression.stop(16, 0.92f)
+            )
+            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.literal(0.0f)
+        }
+        val strokeColor = if (theme == MapVisualTheme.OBSIDIAN_DARK) DARK_LABEL_TEXT else LIGHT_LABEL_TEXT
+
+        val existingOuterHalo = style.getLayerAs<CircleLayer>(ROUTINE_HALO_LAYER_ID)
+        if (existingOuterHalo == null) {
+            style.addLayer(
+                CircleLayer(ROUTINE_HALO_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
+                    setProperties(
+                        PropertyFactory.circleRadius(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                Expression.stop(4, 16f),
+                                Expression.stop(10, 24f),
+                                Expression.stop(16, 34f)
+                            )
+                        ),
+                        PropertyFactory.circleColor(AndroidColor.parseColor("#2563EB")),
+                        PropertyFactory.circleBlur(1.0f),
+                        PropertyFactory.circleOpacity(auraOpacityExpr),
+                        PropertyFactory.visibility(circleVisibility)
+                    )
+                }
+            )
+        } else {
+            existingOuterHalo.setProperties(
+                PropertyFactory.circleOpacity(auraOpacityExpr),
+                PropertyFactory.visibility(circleVisibility)
+            )
+        }
+
+        val existingInnerHalo = style.getLayerAs<CircleLayer>(ROUTINE_INNER_HALO_LAYER_ID)
+        if (existingInnerHalo == null) {
+            style.addLayer(
+                CircleLayer(ROUTINE_INNER_HALO_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
+                    setProperties(
+                        PropertyFactory.circleRadius(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                Expression.stop(4, 10f),
+                                Expression.stop(10, 15f),
+                                Expression.stop(16, 20f)
+                            )
+                        ),
+                        PropertyFactory.circleColor(AndroidColor.parseColor("#22C55E")),
+                        PropertyFactory.circleBlur(0.9f),
+                        PropertyFactory.circleOpacity(auraOpacityExpr),
+                        PropertyFactory.visibility(circleVisibility)
+                    )
+                }
+            )
+        } else {
+            existingInnerHalo.setProperties(
+                PropertyFactory.circleOpacity(auraOpacityExpr),
+                PropertyFactory.visibility(circleVisibility)
+            )
+        }
+
+        val existingCircle = style.getLayerAs<CircleLayer>(ROUTINE_CIRCLE_LAYER_ID)
+        if (existingCircle == null) {
+            style.addLayer(
+                CircleLayer(ROUTINE_CIRCLE_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
+                    setProperties(
+                        PropertyFactory.circleRadius(
+                            Expression.interpolate(
+                                Expression.linear(),
+                                Expression.zoom(),
+                                Expression.stop(4, 4.5f),
+                                Expression.stop(10, 6.5f),
+                                Expression.stop(16, 9.5f)
+                            )
+                        ),
+                        PropertyFactory.circleColor(AndroidColor.parseColor("#FACC15")),
+                        PropertyFactory.circleBlur(if (isPinsMode) 0.0f else 0.35f),
+                        PropertyFactory.circleStrokeWidth(if (isPinsMode) 1.8f else 0.0f),
+                        PropertyFactory.circleStrokeColor(strokeColor),
+                        PropertyFactory.circleOpacity(coreOpacityExpr),
+                        PropertyFactory.circleStrokeOpacity(if (isPinsMode) coreOpacityExpr else Expression.literal(0.0f)),
+                        PropertyFactory.visibility(circleVisibility)
+                    )
+                }
+            )
+        } else {
+            existingCircle.setProperties(
+                PropertyFactory.circleBlur(if (isPinsMode) 0.0f else 0.35f),
+                PropertyFactory.circleStrokeWidth(if (isPinsMode) 1.8f else 0.0f),
+                PropertyFactory.circleStrokeColor(strokeColor),
+                PropertyFactory.circleOpacity(coreOpacityExpr),
+                PropertyFactory.circleStrokeOpacity(if (isPinsMode) coreOpacityExpr else Expression.literal(0.0f)),
+                PropertyFactory.visibility(circleVisibility)
+            )
+        }
+
+        val labelColor = if (theme == MapVisualTheme.OBSIDIAN_DARK) {
+            AndroidColor.parseColor("#86EFAC")
+        } else {
+            AndroidColor.parseColor("#15803D")
+        }
+        val labelHalo = if (theme == MapVisualTheme.OBSIDIAN_DARK) DARK_LABEL_HALO else LIGHT_LABEL_HALO
+        val existingSymbol = style.getLayerAs<SymbolLayer>(ROUTINE_SYMBOL_LAYER_ID)
+        if (existingSymbol == null) {
+            style.addLayer(
+                SymbolLayer(ROUTINE_SYMBOL_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
+                    minZoom = 12f
+                    setProperties(
+                        PropertyFactory.textField(Expression.get("name")),
+                        PropertyFactory.textSize(11.5f),
+                        PropertyFactory.textOffset(arrayOf(0f, 1.45f)),
+                        PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
+                        PropertyFactory.textColor(labelColor),
+                        PropertyFactory.textHaloColor(labelHalo),
+                        PropertyFactory.textHaloWidth(1.5f),
+                        PropertyFactory.visibility(circleVisibility)
+                    )
+                }
+            )
         } else {
             existingSymbol.setProperties(
                 PropertyFactory.textColor(labelColor),

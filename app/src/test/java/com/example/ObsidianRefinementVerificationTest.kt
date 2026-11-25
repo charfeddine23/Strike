@@ -314,7 +314,12 @@ class ObsidianRefinementVerificationTest {
         val selectorABounds = composeRule.onNodeWithTag("selector_person_a").assertIsDisplayed().getBoundsInRoot()
         assertTrue("Comparison top selectors must start clear of TopBar", selectorABounds.top >= cmpTopBarBounds.bottom)
 
-        // Roadmap & full-bleed Tasks viewport
+        // Top Bar icons must NOT be wrapped in an enclosing pill container
+        assertEquals(0, composeRule.onAllNodesWithTag("top_bar_telemetry_pill_container").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("dna_header_icon").assertIsDisplayed()
+        composeRule.onNodeWithTag("header_flame_btn").assertIsDisplayed()
+
+        // Roadmap & full-bleed Tasks viewport with expanded Fade-to-Liquid-Glass covering period chips (Daily/Weekly/Monthly/Eternal)
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
         val rmTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
@@ -329,13 +334,26 @@ class ObsidianRefinementVerificationTest {
         val tasksBounds = composeRule.onNodeWithTag("tasks_lazy_list").assertIsDisplayed().getBoundsInRoot()
         assertTrue("Tasks list must extend behind TopBar (${tasksBounds.top} vs ${rmTopBarBounds.bottom})", tasksBounds.top < rmTopBarBounds.bottom)
         assertTrue("Tasks list must extend behind BottomBar (${tasksBounds.bottom} vs ${rmBottomBarBounds.top})", tasksBounds.bottom > rmBottomBarBounds.top)
+        val eternalChipBounds = composeRule.onNodeWithTag("period_chip_eternal").performScrollTo().assertIsDisplayed().getBoundsInRoot()
+        val roadmapFadeVeilBounds = composeRule.onNodeWithTag("roadmap_expanded_fade_veil").assertIsDisplayed().getBoundsInRoot()
+        assertTrue(
+            "Roadmap expanded fade-to-liquid-glass (${roadmapFadeVeilBounds.bottom}) must extend down past Eternal chip (${eternalChipBounds.bottom})",
+            roadmapFadeVeilBounds.bottom >= eternalChipBounds.bottom
+        )
 
-        // Tap-to-Change from Roadmap -> Tasks Ledger: verify back button, title, and / 1000 pill are removed
+        // Tap-to-Change from Roadmap -> Tasks Ledger: verify expanded fade veil covers Switch View & period filters
         composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()
         composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
         composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
+        composeRule.onNodeWithTag("ledger_expanded_fade_veil").assertIsDisplayed()
+        val ledgerEternalBounds = composeRule.onNodeWithTag("ledger_period_eternal").performScrollTo().assertIsDisplayed().getBoundsInRoot()
+        val ledgerFadeVeilBounds = composeRule.onNodeWithTag("ledger_expanded_fade_veil").getBoundsInRoot()
+        assertTrue(
+            "Ledger expanded fade-to-liquid-glass (${ledgerFadeVeilBounds.bottom}) must cover Daily/Weekly/Monthly/Eternal chips (${ledgerEternalBounds.bottom})",
+            ledgerFadeVeilBounds.bottom >= ledgerEternalBounds.bottom
+        )
         assertEquals(0, composeRule.onAllNodesWithTag("ledger_back_btn").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("ledger_screen_title").fetchSemanticsNodes().size)
         val ledgerSwitcherBounds = composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed().getBoundsInRoot()

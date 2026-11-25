@@ -106,6 +106,17 @@ interface StrikeEventDao {
     @Query("UPDATE strike_events SET notes = :notes WHERE id = :id")
     suspend fun updateEventNotes(id: Long, notes: String)
 
+    @Query(
+        "UPDATE strike_events SET lat = :lat, lng = :lng, placeName = :placeName, isFirstStrike = :isFirstStrike WHERE id = :id"
+    )
+    suspend fun updateEventLocationAndCategory(
+        id: Long,
+        lat: Double?,
+        lng: Double?,
+        placeName: String,
+        isFirstStrike: Boolean
+    )
+
     @Query("DELETE FROM strike_events")
     suspend fun clearAll()
 }

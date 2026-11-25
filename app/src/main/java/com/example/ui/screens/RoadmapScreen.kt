@@ -134,9 +134,11 @@ import com.example.ui.components.RoadmapBiomeBackdrop
 import com.example.ui.components.RoadmapBiomeSubmersionOverlay
 import com.example.ui.components.RoadmapHubDestination
 import com.example.ui.components.RoadmapProgressHeader
+import com.example.ui.components.TopFrostedLiquidGlassVeil
 import com.example.ui.components.WavySnakeStationRow
 import com.example.ui.components.biomePrimaryAccent
 import com.example.ui.components.blendBiomeColor
+import com.example.ui.components.edgeFadeInBlur
 import com.example.ui.components.roadmapBiomeStateForStation
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
@@ -303,11 +305,19 @@ fun RoadmapScreen(
     val scaffoldPadding = LocalScaffoldContentPadding.current
     val density = LocalDensity.current
     var topHeaderHeightPx by remember { mutableIntStateOf(0) }
+    var periodChipsRowHeightPx by remember { mutableIntStateOf(0) }
     val topHeaderClearanceDp = if (topHeaderHeightPx > 0) {
         with(density) { topHeaderHeightPx.toDp() }
     } else {
         scaffoldPadding.calculateTopPadding() + 114.dp
     }
+    val periodChipsRowDp = if (periodChipsRowHeightPx > 0) {
+        with(density) { periodChipsRowHeightPx.toDp() }
+    } else {
+        46.dp
+    }
+    val roadmapTopFadeHeightDp = topHeaderClearanceDp +
+        if (selectedMainTab == 1) periodChipsRowDp + 22.dp else 18.dp
 
     Box(
         modifier = modifier
@@ -354,22 +364,40 @@ fun RoadmapScreen(
         ) { activeTab ->
             when (activeTab) {
                 0 -> {
-                    RoadmapStationsTabContent(
-                        stations = stations,
-                        roadmapListState = roadmapListState,
-                        nextStationId = stageProgress.nextStationId,
-                        currentStageXp = stageProgress.currentStageXp,
-                        currentStationId = currentStationId,
-                        currentLang = currentLang,
-                        isDarkTheme = isDarkTheme,
-                        topInset = topHeaderClearanceDp,
-                        bottomInset = scaffoldPadding.calculateBottomPadding(),
-                        onClaimStation = { stationId ->
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            view.playSoundEffect(SoundEffectConstants.CLICK)
-                            viewModel.claimStation(stationId)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .edgeFadeInBlur(
+                                    topHeight = roadmapTopFadeHeightDp,
+                                    bottomHeight = 0.dp,
+                                    blurRadius = 22.dp,
+                                    maxEdgeFraction = 0.48f
+                                )
+                        ) {
+                            RoadmapStationsTabContent(
+                                stations = stations,
+                                roadmapListState = roadmapListState,
+                                nextStationId = stageProgress.nextStationId,
+                                currentStageXp = stageProgress.currentStageXp,
+                                currentStationId = currentStationId,
+                                currentLang = currentLang,
+                                isDarkTheme = isDarkTheme,
+                                topInset = topHeaderClearanceDp,
+                                bottomInset = scaffoldPadding.calculateBottomPadding(),
+                                onClaimStation = { stationId ->
+                                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                    view.playSoundEffect(SoundEffectConstants.CLICK)
+                                    viewModel.claimStation(stationId)
+                                }
+                            )
                         }
-                    )
+                        TopFrostedLiquidGlassVeil(
+                            height = roadmapTopFadeHeightDp,
+                            isDarkTheme = isDarkTheme,
+                            testTag = "roadmap_expanded_fade_veil"
+                        )
+                    }
                 }
 
                 1 -> {
@@ -487,47 +515,65 @@ fun RoadmapScreen(
                             52.dp
                         }
 
-                        // Full-screen Tasks LazyColumn (top-to-bottom behind transparent top containers)
-                        LazyColumn(
-                            state = tasksListState,
+                        // Full-screen Tasks LazyColumn (top-to-bottom behind expanded fade-to-liquid-glass covering Switch View + Daily/Weekly/Monthly/Eternal)
+                        Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .nestedScroll(eternalHeaderNestedScroll)
-                                .testTag("tasks_lazy_list"),
-                            contentPadding = PaddingValues(
-                                start = 16.dp,
-                                end = 16.dp,
-                                top = topHeaderClearanceDp + tab1SubHeaderDp,
-                                bottom = scaffoldPadding.calculateBottomPadding() + 24.dp
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(currentTasks, key = { it.id }) { task ->
-                                TaskItemCard(
-                                    task = task,
-                                    nowMillis = nowMillis,
-                                    currentLang = currentLang,
-                                    isDarkTheme = isDarkTheme,
-                                    availableKeysForType = when (task.requiredSkipKey) {
-                                        SkipKeyType.WOODEN -> woodenKeys
-                                        SkipKeyType.BRONZE -> bronzeKeys
-                                        SkipKeyType.SILVER -> silverKeys
-                                    },
-                                    onClaimReward = {
-                                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        viewModel.claimTaskReward(task.id)
-                                    },
-                                    onSkipWithKey = {
-                                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                                        viewModel.useSkipKeyForTask(task.id)
-                                    }
+                                .edgeFadeInBlur(
+                                    topHeight = roadmapTopFadeHeightDp,
+                                    bottomHeight = 0.dp,
+                                    blurRadius = 22.dp,
+                                    maxEdgeFraction = 0.48f
                                 )
+                        ) {
+                            LazyColumn(
+                                state = tasksListState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .nestedScroll(eternalHeaderNestedScroll)
+                                    .testTag("tasks_lazy_list"),
+                                contentPadding = PaddingValues(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = topHeaderClearanceDp + tab1SubHeaderDp,
+                                    bottom = scaffoldPadding.calculateBottomPadding() + 24.dp
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(currentTasks, key = { it.id }) { task ->
+                                    TaskItemCard(
+                                        task = task,
+                                        nowMillis = nowMillis,
+                                        currentLang = currentLang,
+                                        isDarkTheme = isDarkTheme,
+                                        availableKeysForType = when (task.requiredSkipKey) {
+                                            SkipKeyType.WOODEN -> woodenKeys
+                                            SkipKeyType.BRONZE -> bronzeKeys
+                                            SkipKeyType.SILVER -> silverKeys
+                                        },
+                                        onClaimReward = {
+                                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            viewModel.claimTaskReward(task.id)
+                                        },
+                                        onSkipWithKey = {
+                                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                            view.playSoundEffect(SoundEffectConstants.CLICK)
+                                            viewModel.useSkipKeyForTask(task.id)
+                                        }
+                                    )
+                                }
                             }
                         }
 
-                        // Floating Transparent Period Chips + Collapsible Eternal Banner over the Tasks list
+                        // Frosted liquid-glass fade veil beneath Switch View, tabs, and Daily/Weekly/Monthly/Eternal chips
+                        TopFrostedLiquidGlassVeil(
+                            height = roadmapTopFadeHeightDp,
+                            isDarkTheme = isDarkTheme,
+                            testTag = "roadmap_expanded_fade_veil"
+                        )
+
+                        // Floating Transparent Period Chips + Collapsible Eternal Banner over the frosted liquid glass fade
                         Column(
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
@@ -539,6 +585,7 @@ fun RoadmapScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .onSizeChanged { periodChipsRowHeightPx = it.height }
                                     .horizontalScroll(rememberScrollState())
                                     .padding(top = 4.dp, bottom = 10.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1131,7 +1178,7 @@ private fun RoadmapPillTabButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val baseSurface = if (isDarkTheme) Color(0xF20D1628) else Color(0xF2FFFFFF)
+    val baseSurface = if (isDarkTheme) Color(0xBC0D1628) else Color(0xCEFFFFFF)
     val unselectedBg = baseSurface
     val selectedBg = accentColor.copy(alpha = if (isDarkTheme) 0.24f else 0.16f).compositeOver(baseSurface)
     val unselectedBorder = if (isDarkTheme) Color(0x44FFFFFF) else Color(0xCCFFFFFF)
@@ -1813,7 +1860,7 @@ fun PeriodFilterChip(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val baseSurface = if (isDarkTheme) Color(0xF20D1628) else Color(0xF2FFFFFF)
+    val baseSurface = if (isDarkTheme) Color(0xBC0D1628) else Color(0xD0FFFFFF)
     val bgColor = if (isSelected) {
         accentColor.copy(alpha = if (isDarkTheme) 0.24f else 0.16f).compositeOver(baseSurface)
     } else {
