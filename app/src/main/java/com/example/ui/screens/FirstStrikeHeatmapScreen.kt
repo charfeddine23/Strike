@@ -89,7 +89,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -109,7 +108,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
+import com.example.ui.components.ElevatedSwipeUpBeaconPill
 import com.example.ui.components.GlassTypeBadge
+import com.example.ui.components.HeatmapDualActionBar
+import com.example.ui.components.HeatmapSummaryAndToggleBar
 import com.example.ui.components.hasLocationPermission
 import com.example.ui.components.resolveBestLocation
 import com.example.ui.map.FirstStrikeHotspot
@@ -363,6 +365,9 @@ fun FirstStrikeHeatmapScreen(
             )
     }
     val geoCount = allMappedPoints.size
+    val registeredPeopleCount = remember(allMappedPoints) {
+        allMappedPoints.map { it.individualId }.distinct().size
+    }
 
     activeController.latestIndividuals = allIndividuals
     activeController.latestStrikeEvents = allStrikeEvents
@@ -432,6 +437,19 @@ fun FirstStrikeHeatmapScreen(
                 else -> "Location permission denied — pan the map manually"
             }
             viewModel.notifyMessage(deniedMsg)
+        }
+    }
+
+    val triggerKnowMyLocation: () -> Unit = {
+        if (hasLocationPermission(context)) {
+            requestLocationAndAnimate()
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.ACCESS_FINE_LOCATION
+                )
+            )
         }
     }
 
@@ -1302,34 +1320,23 @@ fun FirstStrikeHeatmapScreen(
                 }
             }
 
-            // Know My Location Icon-Only Button placed directly below Map Style & Layers
+            // Top-Right Quick Location FAB directly below Map Style & Layers
             IconButton(
-                onClick = {
-                    if (hasLocationPermission(context)) {
-                        requestLocationAndAnimate()
-                    } else {
-                        locationPermissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.ACCESS_COARSE_LOCATION,
-                                Manifest.permission.ACCESS_FINE_LOCATION
-                            )
-                        )
-                    }
-                },
+                onClick = triggerKnowMyLocation,
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(glassBg)
                     .border(1.1.dp, accentCyan.copy(alpha = 0.65f), CircleShape)
-                    .testTag("heatmap_know_location_btn")
+                    .testTag("heatmap_top_location_btn")
             ) {
                 Icon(
                     imageVector = Icons.Default.MyLocation,
                     contentDescription = when {
                         isAr -> "موقعي الآن"
                         isFr -> "Ma position"
-                        else -> "Know My Location"
+                        else -> "Center on My Location"
                     },
                     tint = accentCyan,
                     modifier = Modifier.size(21.dp)
@@ -1337,7 +1344,10 @@ fun FirstStrikeHeatmapScreen(
             }
         }
 
-        // 4. Bottom Luxury Swipe-Up Beacon (Only Swipe Up — animated upward chevron waves, beam, particles & 1:1 curtain drag)
+        // 4. Lower HUD & Entry Controls over a fade-in black Liquid Glass scrim:
+        //    - Elevated lower-center "Swipe up to hide map" pill
+        //    - Non-redundant Summary (Total Mapped People) + Instant Visualization Switcher (Heatmap <-> Pins)
+        //    - Bottom Dual-Action Bar (Know My Location & Enter)
         var bottomDockCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
         val latestOnDragDelta by rememberUpdatedState(onCurtainDragDelta)
         val latestOnDragEnd by rememberUpdatedState(onCurtainDragEnd)
@@ -1400,29 +1410,61 @@ fun FirstStrikeHeatmapScreen(
                 }
                 .background(
                     Brush.verticalGradient(
-                        listOf(
-                            Color.Transparent,
-                            Color(0x8802050B),
-                            Color(0xF0020408)
+                        colorStops = arrayOf(
+                            0.0f to Color.Transparent,
+                            0.24f to Color(0x6602050B),
+                            0.62f to Color(0xCC020409),
+                            1.0f to Color(0xF5020408)
                         )
                     )
                 )
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(horizontal = 20.dp, vertical = 14.dp)
-                .testTag("heatmap_bottom_bar"),
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .testTag("heatmap_lower_hud_dock"),
             contentAlignment = Alignment.BottomCenter
         ) {
-            LuxurySwipeUpBeacon(
-                label = when {
-                    isAr -> "اسحب لأعلى لإخفاء الخريطة"
-                    isFr -> "Glisser vers le haut"
-                    else -> "Swipe up to hide map"
-                },
-                accentCyan = accentCyan,
-                textPrimary = textPrimary,
-                isMapDark = isMapDark,
-                onClick = onEnterApp
-            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // 1) Elevated "Swipe up to hide map" Pill in the lower-center above the HUD stack
+                ElevatedSwipeUpBeaconPill(
+                    label = when {
+                        isAr -> "اسحب لأعلى لإخفاء الخريطة"
+                        isFr -> "Glisser vers le haut"
+                        else -> "Swipe up to hide map"
+                    },
+                    accentCyan = accentCyan,
+                    textPrimary = textPrimary,
+                    isMapDark = isMapDark,
+                    onClick = onEnterApp
+                )
+
+                // 2) Non-Redundant Summary (Total Mapped) + Instant Visualization Switcher (Heatmap <-> Pins)
+                HeatmapSummaryAndToggleBar(
+                    registeredPeopleCount = registeredPeopleCount,
+                    totalPinnedStrikesCount = geoCount,
+                    displayMode = displayMode,
+                    accentCyan = accentCyan,
+                    isMapDark = isMapDark,
+                    currentLang = currentLang,
+                    onSelectDisplayMode = { nextMode -> activeController.displayMode = nextMode },
+                    onCounterClick = {
+                        showAllStrikesMenu = !showAllStrikesMenu
+                        if (showAllStrikesMenu) showLayersMenu = false
+                    }
+                )
+
+                // 3) Bottom Dual-Action Bar: Know My Location & Enter
+                HeatmapDualActionBar(
+                    accentCyan = accentCyan,
+                    isMapDark = isMapDark,
+                    currentLang = currentLang,
+                    onKnowLocationClick = triggerKnowMyLocation,
+                    onEnterClick = onEnterApp
+                )
+            }
         }
     }
 
@@ -1649,148 +1691,5 @@ private fun LayerChipButton(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-    }
-}
-
-@Composable
-private fun LuxurySwipeUpBeacon(
-    label: String,
-    accentCyan: Color,
-    textPrimary: Color,
-    isMapDark: Boolean,
-    onClick: () -> Unit
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "luxury_swipe_up_beacon")
-    val waveProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1650, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "swipe_wave_progress"
-    )
-    val floatProgress by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "swipe_float_progress"
-    )
-    val shimmerSweep by infiniteTransition.animateFloat(
-        initialValue = -0.3f,
-        targetValue = 1.3f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "swipe_shimmer_sweep"
-    )
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Levitating Liquid Glass Pill with shimmering metallic-cyan rim & kinetic double arrows
-        val pillBg = if (isMapDark) {
-            Brush.verticalGradient(
-                listOf(
-                    Color(0xEE111E36),
-                    Color(0xF6070E1C)
-                )
-            )
-        } else {
-            Brush.verticalGradient(
-                listOf(
-                    Color(0xF8FFFFFF),
-                    Color(0xEEEDF3FC)
-                )
-            )
-        }
-
-        val borderSweep = Brush.horizontalGradient(
-            colorStops = arrayOf(
-                0.0f to accentCyan.copy(alpha = 0.28f),
-                (shimmerSweep - 0.15f).coerceIn(0f, 1f) to accentCyan.copy(alpha = 0.45f),
-                shimmerSweep.coerceIn(0f, 1f) to Color.White.copy(alpha = if (isMapDark) 0.92f else 0.95f),
-                (shimmerSweep + 0.15f).coerceIn(0f, 1f) to NeonEmerald.copy(alpha = 0.65f),
-                1.0f to accentCyan.copy(alpha = 0.28f)
-            )
-        )
-
-        val orbArrowShift = (waveProgress * 2f).let { p ->
-            if (p <= 1f) -p * 3.5f else -(2f - p) * 3.5f
-        }
-
-        Box(
-            modifier = Modifier
-                .graphicsLayer {
-                    translationY = ((floatProgress - 0.5f) * -5.dp.toPx())
-                }
-                .clip(RoundedCornerShape(50))
-                .background(pillBg)
-                .border(1.35.dp, borderSweep, RoundedCornerShape(50))
-                .clickable(onClick = onClick)
-                .minimumInteractiveComponentSize()
-                .padding(horizontal = 20.dp, vertical = 10.dp)
-                .testTag("heatmap_swipe_up_hide_btn"),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Luminous kinetic orb on start side
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.radialGradient(
-                                listOf(
-                                    accentCyan.copy(alpha = 0.34f + 0.18f * floatProgress),
-                                    accentCyan.copy(alpha = 0.10f)
-                                )
-                            )
-                        )
-                        .border(1.dp, accentCyan.copy(alpha = 0.72f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
-                        contentDescription = null,
-                        tint = accentCyan,
-                        modifier = Modifier
-                            .size(19.dp)
-                            .graphicsLayer {
-                                translationY = orbArrowShift.dp.toPx()
-                            }
-                    )
-                }
-
-                Text(
-                    text = label,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontFamily = PlusJakartaSans,
-                    color = textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                // Symmetrical kinetic trailing arrow
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = null,
-                    tint = accentCyan.copy(alpha = 0.7f + 0.3f * floatProgress),
-                    modifier = Modifier
-                        .size(20.dp)
-                        .graphicsLayer {
-                            translationY = orbArrowShift.dp.toPx()
-                        }
-                )
-            }
-        }
     }
 }

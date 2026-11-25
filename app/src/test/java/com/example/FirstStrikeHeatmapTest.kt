@@ -271,34 +271,47 @@ class FirstStrikeHeatmapTest {
 
         // Launch opens full-screen First-Strike Heatmap and completely hides TopBar & BottomBar
         composeRule.onNodeWithTag("first_strike_heatmap_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_lower_hud_dock").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_summary_toggle_bar").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_total_mapped_counter").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_hud_view_switcher").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_hud_mode_heatmap_btn").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_hud_mode_pins_btn").assertIsDisplayed()
         composeRule.onNodeWithTag("heatmap_bottom_bar").assertIsDisplayed()
         composeRule.onNodeWithTag("heatmap_know_location_btn").assertIsDisplayed()
-        composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").assertIsDisplayed()
-        assertEquals(0, composeRule.onAllNodesWithTag("heatmap_swipe_up_graphics").fetchSemanticsNodes().size)
-        assertEquals(0, composeRule.onAllNodes(hasText("Know My Location", substring = true)).fetchSemanticsNodes().size)
-        assertEquals(0, composeRule.onAllNodes(hasText("موقعي الآن", substring = true)).fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("heatmap_enter_btn").assertIsDisplayed()
         composeRule.onNodeWithTag("heatmap_layers_btn").assertIsDisplayed()
-        // Enter button must be removed
-        assertEquals(0, composeRule.onAllNodesWithTag("heatmap_enter_btn").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("heatmap_top_location_btn").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("top_bar_outer_container").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("bottom_bar_outer_container").fetchSemanticsNodes().size)
 
-        // Open floating Layers switcher and verify Know My Location sits directly below Map Style & Layers
+        // Ensure Summary bar does NOT duplicate "Hottest" (reserved for top-left card)
+        assertEquals(
+            0,
+            composeRule.onAllNodes(
+                hasTestTag("heatmap_summary_toggle_bar") and hasAnyDescendant(hasText("Hottest", substring = true)),
+                useUnmergedTree = true
+            ).fetchSemanticsNodes().size
+        )
+
+        // Open floating Layers switcher and verify top-right Location FAB sits below Map Style & Layers
         composeRule.onNodeWithTag("heatmap_layers_btn").performClick()
         composeRule.waitForIdle()
         val layersPanelBounds = composeRule.onNodeWithTag("heatmap_layers_panel").assertIsDisplayed().getBoundsInRoot()
-        val knowLocBelowPanelBounds = composeRule.onNodeWithTag("heatmap_know_location_btn").assertIsDisplayed().getBoundsInRoot()
+        val topLocBelowPanelBounds = composeRule.onNodeWithTag("heatmap_top_location_btn").assertIsDisplayed().getBoundsInRoot()
         assertTrue(
-            "Know My Location (${knowLocBelowPanelBounds.top}) must sit below Map Style & Layers (${layersPanelBounds.bottom})",
-            knowLocBelowPanelBounds.top >= layersPanelBounds.bottom
+            "Top Location FAB (${topLocBelowPanelBounds.top}) must sit below Map Style & Layers (${layersPanelBounds.bottom})",
+            topLocBelowPanelBounds.top >= layersPanelBounds.bottom
         )
         composeRule.onNodeWithTag("heatmap_theme_light_btn").performClick()
         composeRule.onNodeWithTag("heatmap_3d_buildings_toggle").performClick()
-        composeRule.onNodeWithTag("heatmap_mode_pins_btn").performClick()
+        composeRule.onNodeWithTag("heatmap_hud_mode_pins_btn").performClick()
+        composeRule.onNodeWithTag("heatmap_hud_mode_heatmap_btn").performClick()
         composeRule.waitForIdle()
 
-        // Swipe/Tap Swipe Up beacon -> navigates smoothly into Main App and displays TopBar & BottomBar
-        composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performClick()
+        // Tap Enter -> navigates smoothly into Main App and reveals TopBar & BottomBar
+        composeRule.onNodeWithTag("heatmap_enter_btn").performClick()
         composeRule.waitForIdle()
         assertEquals(0, composeRule.onAllNodesWithTag("first_strike_heatmap_screen").fetchSemanticsNodes().size)
         composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
@@ -429,36 +442,94 @@ class FirstStrikeHeatmapTest {
 
     @Test
     fun swipeUpHideMapButton_sitsAboveActionButtonsAndHidesMapOnSwipeAndTap() {
-        composeRule.waitForIdle()
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val db = AppDatabase.getDatabase(ctx)
+        val repo = IndividualRepository(db.individualDao(), db.strikeEventDao())
+        runBlocking(Dispatchers.IO) {
+            repo.save(
+                Individual(
+                    fullName = "عمر الساحلي",
+                    type = "M",
+                    length = 21.0,
+                    width = 10.0,
+                    size = 210.0,
+                    sScore = 70.0,
+                    fScore = 70.0,
+                    cScore = 70.0,
+                    boost = 210.0,
+                    strikeCount = 2,
+                    firstStrikeLat = 36.7538,
+                    firstStrikeLng = 3.0588,
+                    firstStrikePlaceName = "Algiers"
+                )
+            )
+            repo.save(
+                Individual(
+                    fullName = "بدر الدين",
+                    type = "TS",
+                    length = 22.0,
+                    width = 10.0,
+                    size = 220.0,
+                    sScore = 75.0,
+                    fScore = 75.0,
+                    cScore = 75.0,
+                    boost = 225.0,
+                    strikeCount = 1,
+                    firstStrikeLat = 35.6971,
+                    firstStrikeLng = -0.6308,
+                    firstStrikePlaceName = "Oran"
+                )
+            )
+        }
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodes(
+                hasTestTag("heatmap_total_mapped_counter") and hasAnyDescendant(hasText("2", substring = true)),
+                useUnmergedTree = true
+            ).fetchSemanticsNodes().isNotEmpty()
+        }
 
         val swipeBtn = composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").assertIsDisplayed()
-        assertEquals(0, composeRule.onAllNodesWithTag("heatmap_swipe_up_graphics").fetchSemanticsNodes().size)
+        val summaryBar = composeRule.onNodeWithTag("heatmap_summary_toggle_bar").assertIsDisplayed()
         val layersBtn = composeRule.onNodeWithTag("heatmap_layers_btn").assertIsDisplayed()
-        val knowLocBtn = composeRule.onNodeWithTag("heatmap_know_location_btn").assertIsDisplayed()
+        val topLocBtn = composeRule.onNodeWithTag("heatmap_top_location_btn").assertIsDisplayed()
         val bottomBar = composeRule.onNodeWithTag("heatmap_bottom_bar").assertIsDisplayed()
-        assertEquals(0, composeRule.onAllNodesWithTag("heatmap_enter_btn").fetchSemanticsNodes().size)
+        val knowLocBtn = composeRule.onNodeWithTag("heatmap_know_location_btn").assertIsDisplayed()
+        val enterBtn = composeRule.onNodeWithTag("heatmap_enter_btn").assertIsDisplayed()
 
         val layersBounds = layersBtn.getBoundsInRoot()
-        val knowLocBounds = knowLocBtn.getBoundsInRoot()
+        val topLocBounds = topLocBtn.getBoundsInRoot()
+        val swipeBounds = swipeBtn.getBoundsInRoot()
+        val summaryBounds = summaryBar.getBoundsInRoot()
         val bottomBarBounds = bottomBar.getBoundsInRoot()
+        val knowLocBounds = knowLocBtn.getBoundsInRoot()
+        val enterBounds = enterBtn.getBoundsInRoot()
 
         assertTrue(
-            "Know My Location (${knowLocBounds.top}) must sit below top-right Layers button (${layersBounds.bottom})",
-            knowLocBounds.top >= layersBounds.bottom
+            "Top Location FAB (${topLocBounds.top}) must sit below Layers button (${layersBounds.bottom})",
+            topLocBounds.top >= layersBounds.bottom
         )
         assertTrue(
-            "Know My Location (${knowLocBounds.bottom}) must sit cleanly above the bottom Swipe Up bar (${bottomBarBounds.top})",
-            knowLocBounds.bottom <= bottomBarBounds.top
+            "Elevated Swipe Up pill (${swipeBounds.bottom}) must sit above Summary/Toggle bar (${summaryBounds.top})",
+            swipeBounds.bottom <= summaryBounds.top
+        )
+        assertTrue(
+            "Summary/Toggle bar (${summaryBounds.bottom}) must sit cleanly above Dual-Action bar (${bottomBarBounds.top})",
+            summaryBounds.bottom <= bottomBarBounds.top
+        )
+        assertTrue(
+            "Know My Location and Enter must sit side-by-side inside Bottom Dual-Action Bar",
+            knowLocBounds.right <= enterBounds.left || enterBounds.right <= knowLocBounds.left
         )
 
-        // 1. Swipe up gesture on the handle hides the map & reveals TopBar/BottomBar
+        // 1. Swipe up gesture on elevated pill hides the map & reveals TopBar/BottomBar
         swipeBtn.performTouchInput { swipeUp(startY = centerY, endY = centerY - 220f) }
         composeRule.waitForIdle()
         assertEquals(0, composeRule.onAllNodesWithTag("first_strike_heatmap_screen").fetchSemanticsNodes().size)
         composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
         composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
 
-        // 2. Re-open map from Settings drawer and tap the button -> also hides map cleanly
+        // 2. Re-open map from Settings drawer and tap the pill -> also hides map cleanly
         composeRule.onNodeWithTag("top_bar_settings_btn").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
