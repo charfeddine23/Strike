@@ -954,11 +954,12 @@ object MapStyleHelper {
             )
         }
 
+        val heatmapLayer = style.getLayer(ROUTINE_HEATMAP_LAYER_ID)
         val labelLayer = style.layers.firstOrNull { it is SymbolLayer && !it.id.startsWith("obsidian-") }
-        if (labelLayer != null) {
-            style.addLayerBelow(extrusionLayer, labelLayer.id)
-        } else {
-            style.addLayer(extrusionLayer)
+        when {
+            heatmapLayer != null -> style.addLayerBelow(extrusionLayer, heatmapLayer.id)
+            labelLayer != null -> style.addLayerBelow(extrusionLayer, labelLayer.id)
+            else -> style.addLayer(extrusionLayer)
         }
     }
 
@@ -1124,55 +1125,22 @@ object MapStyleHelper {
         if (existingSource != null) {
             existingSource.setGeoJson(geoJson)
         } else {
-            // maxZoom=21, buffer=512, tolerance=0 eliminates overzoom blur and tile-border square clipping
+            // maxZoom=22 (> map maxZoom 21), buffer=512, tolerance=0 eliminates overzoom clipping at every zoom depth
             val highResHeatOptions = GeoJsonOptions()
-                .withMaxZoom(21)
+                .withMaxZoom(22)
                 .withBuffer(512)
                 .withTolerance(0.0f)
             style.addSource(GeoJsonSource(ROUTINE_STRIKE_SOURCE_ID, geoJson, highResHeatOptions))
         }
 
-        // Macro -> City (zoom 0..13.5): organic FBO heatmap blends multi-district clusters cleanly.
-        // Street -> Building (zoom 12.2..21): FBO fades out completely to 0.0f by zoom 14.2 while
-        // full-native-resolution 512x512 DENSITY_XXHIGH spectral SymbolLayers fade in seamlessly,
-        // guaranteeing crisp, non-pixelated, silky Snap-Map thermal islands at every close zoom depth.
+        // Keep GPU HeatmapLayer ALWAYS active across all zoom depths (0..24) with non-zero opacity
+        // so the thermal cloud NEVER disappears during fast zooming, tile transitions, or symbol re-layout,
+        // while 512x512 DENSITY_XXHIGH spectral SymbolLayers sharpen detail at close zoom (12.0..24).
         val showHeatmap = displayMode != HeatmapDisplayMode.CLUSTER_PINS
         val heatVisibility = if (showHeatmap) Property.VISIBLE else Property.NONE
-        val heatOpacityExpr = when (displayMode) {
-            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.interpolate(
-                Expression.linear(),
-                Expression.zoom(),
-                Expression.stop(0.0, 0.88f),
-                Expression.stop(12.4, 0.84f),
-                Expression.stop(13.3, 0.44f),
-                Expression.stop(14.2, 0.0f)
-            )
-            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
-                Expression.linear(),
-                Expression.zoom(),
-                Expression.stop(0.0, 0.86f),
-                Expression.stop(12.4, 0.82f),
-                Expression.stop(13.3, 0.42f),
-                Expression.stop(14.2, 0.0f)
-            )
-            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
-        }
-        val heatIntensityExpr = Expression.interpolate(
-            Expression.linear(),
-            Expression.zoom(),
-            Expression.stop(0, 0.95f),
-            Expression.stop(6, 1.35f),
-            Expression.stop(10, 1.85f),
-            Expression.stop(14, 2.45f)
-        )
-        val heatRadiusExpr = Expression.interpolate(
-            Expression.linear(),
-            Expression.zoom(),
-            Expression.stop(0, 18f),
-            Expression.stop(6, 28f),
-            Expression.stop(10, 40f),
-            Expression.stop(13.5, 52f)
-        )
+        val heatOpacityExpr = buildRoutineHeatmapOpacityExpression(displayMode)
+        val heatIntensityExpr = buildRoutineHeatmapIntensityExpression()
+        val heatRadiusExpr = buildRoutineHeatmapRadiusExpression()
         // Smooth, anti-aliased multi-stop ramp matching Snap Map thermal islands
         val heatColorExpr = Expression.interpolate(
             Expression.linear(),
@@ -1194,7 +1162,8 @@ object MapStyleHelper {
         val existingHeat = style.getLayerAs<HeatmapLayer>(ROUTINE_HEATMAP_LAYER_ID)
         if (existingHeat == null) {
             val routineHeatmapLayer = HeatmapLayer(ROUTINE_HEATMAP_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
-                maxZoom = 14.5f
+                minZoom = 0.0f
+                maxZoom = ROUTINE_HEATMAP_MAX_ZOOM
                 setProperties(
                     PropertyFactory.heatmapWeight(Expression.get("weight")),
                     PropertyFactory.heatmapIntensity(heatIntensityExpr),
@@ -1210,7 +1179,8 @@ object MapStyleHelper {
                 style.addLayer(routineHeatmapLayer)
             }
         } else {
-            existingHeat.maxZoom = 14.5f
+            existingHeat.minZoom = 0.0f
+            existingHeat.maxZoom = ROUTINE_HEATMAP_MAX_ZOOM
             existingHeat.setProperties(
                 PropertyFactory.heatmapIntensity(heatIntensityExpr),
                 PropertyFactory.heatmapRadius(heatRadiusExpr),
@@ -1220,25 +1190,25 @@ object MapStyleHelper {
             )
         }
 
-        // Full-Native-Resolution 512x512 Supersampled GPU Sprite Layers (zoom 12.2..21.0)
+        // Full-Native-Resolution 512x512 Supersampled GPU Sprite Layers (zoom 12.0..24.0)
         // Ordered bottom-to-top per band (Blue -> Cyan -> Green -> Yellow-Orange -> Coral-Red)
-        // directly beneath base map labels so adjacent hot spots coalesce seamlessly without blur/pixelation.
+        // directly above the base HeatmapLayer and beneath base map labels.
         val hdSpriteOpacityExpr = when (displayMode) {
             HeatmapDisplayMode.HEATMAP_GLOW -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(12.2, 0.0f),
-                Expression.stop(13.3, 0.56f),
-                Expression.stop(14.2, 0.90f),
-                Expression.stop(21.0, 0.90f)
+                Expression.stop(12.0, 0.0f),
+                Expression.stop(13.2, 0.56f),
+                Expression.stop(14.2, 0.88f),
+                Expression.stop(22.0, 0.88f)
             )
             HeatmapDisplayMode.HYBRID -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(12.2, 0.0f),
-                Expression.stop(13.3, 0.54f),
-                Expression.stop(14.2, 0.86f),
-                Expression.stop(21.0, 0.86f)
+                Expression.stop(12.0, 0.0f),
+                Expression.stop(13.2, 0.54f),
+                Expression.stop(14.2, 0.84f),
+                Expression.stop(22.0, 0.84f)
             )
             HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.0f)
         }
@@ -1257,12 +1227,15 @@ object MapStyleHelper {
             if (existingBand == null) {
                 val bandLayer = SymbolLayer(spec.layerId, ROUTINE_STRIKE_SOURCE_ID).apply {
                     minZoom = 12.0f
+                    maxZoom = ROUTINE_HEATMAP_MAX_ZOOM
                     setProperties(
                         PropertyFactory.iconImage(spec.imageId),
                         PropertyFactory.iconSize(iconSizeExpr),
                         PropertyFactory.iconOpacity(hdSpriteOpacityExpr),
                         PropertyFactory.iconAllowOverlap(true),
                         PropertyFactory.iconIgnorePlacement(true),
+                        PropertyFactory.iconOptional(false),
+                        PropertyFactory.iconPadding(0f),
                         PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_MAP),
                         PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
                         PropertyFactory.visibility(heatVisibility)
@@ -1275,10 +1248,17 @@ object MapStyleHelper {
                 }
             } else {
                 existingBand.minZoom = 12.0f
+                existingBand.maxZoom = ROUTINE_HEATMAP_MAX_ZOOM
                 existingBand.setProperties(
                     PropertyFactory.iconImage(spec.imageId),
                     PropertyFactory.iconSize(iconSizeExpr),
                     PropertyFactory.iconOpacity(hdSpriteOpacityExpr),
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                    PropertyFactory.iconOptional(false),
+                    PropertyFactory.iconPadding(0f),
+                    PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_MAP),
+                    PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
                     PropertyFactory.visibility(heatVisibility)
                 )
             }
@@ -1561,6 +1541,56 @@ object MapStyleHelper {
                     PropertyFactory.visibility(visibility)
                 )
             }
+        )
+    }
+
+    internal const val ROUTINE_HEATMAP_MAX_ZOOM = 24.0f
+
+    internal fun buildRoutineHeatmapOpacityExpression(displayMode: HeatmapDisplayMode): Expression {
+        return when (displayMode) {
+            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.interpolate(
+                Expression.linear(),
+                Expression.zoom(),
+                Expression.stop(0.0, 0.88f),
+                Expression.stop(12.5, 0.85f),
+                Expression.stop(15.5, 0.68f),
+                Expression.stop(22.0, 0.62f)
+            )
+            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
+                Expression.linear(),
+                Expression.zoom(),
+                Expression.stop(0.0, 0.86f),
+                Expression.stop(12.5, 0.82f),
+                Expression.stop(15.5, 0.64f),
+                Expression.stop(22.0, 0.58f)
+            )
+            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
+        }
+    }
+
+    internal fun buildRoutineHeatmapIntensityExpression(): Expression {
+        return Expression.interpolate(
+            Expression.linear(),
+            Expression.zoom(),
+            Expression.stop(0, 0.95f),
+            Expression.stop(6, 1.35f),
+            Expression.stop(10, 1.85f),
+            Expression.stop(14, 2.45f),
+            Expression.stop(18, 2.95f),
+            Expression.stop(22, 3.30f)
+        )
+    }
+
+    internal fun buildRoutineHeatmapRadiusExpression(): Expression {
+        return Expression.interpolate(
+            Expression.linear(),
+            Expression.zoom(),
+            Expression.stop(0, 18f),
+            Expression.stop(6, 28f),
+            Expression.stop(10, 40f),
+            Expression.stop(14, 58f),
+            Expression.stop(18, 88f),
+            Expression.stop(22, 120f)
         )
     }
 
