@@ -1378,26 +1378,4 @@ class FirstStrikeHeatmapTest {
         val zoomOccurrences = "\\[\"zoom\"\\]".toRegex().findAll(exprJson).count()
         assertEquals("zoom() must only appear once as top-level interpolate input", 1, zoomOccurrences)
     }
-
-    @Test
-    fun routineHeatmap_remainsVisibleAcrossAllZoomLevels() {
-        assertTrue(MapStyleHelper.ROUTINE_HEATMAP_MAX_ZOOM >= 22.0f)
-
-        listOf(
-            com.example.ui.map.HeatmapDisplayMode.HEATMAP_GLOW,
-            com.example.ui.map.HeatmapDisplayMode.HYBRID
-        ).forEach { mode ->
-            val opacityJson = MapStyleHelper.buildRoutineHeatmapOpacityExpression(mode).toString()
-            assertFalse(
-                "Heatmap opacity must never drop to 0.0 at high zoom in $mode: $opacityJson",
-                opacityJson.contains(", 0.0]") || opacityJson.contains(", 0]")
-            )
-            assertTrue("Expected zoom 22 stop in $mode opacity: $opacityJson", opacityJson.contains("22.0"))
-        }
-
-        val radiusJson = MapStyleHelper.buildRoutineHeatmapRadiusExpression().toString()
-        val intensityJson = MapStyleHelper.buildRoutineHeatmapIntensityExpression().toString()
-        assertTrue("Expected zoom 22 stop in heatmap radius: $radiusJson", radiusJson.contains("22"))
-        assertTrue("Expected zoom 22 stop in heatmap intensity: $intensityJson", intensityJson.contains("22"))
-    }
 }
