@@ -481,10 +481,7 @@ class IndividualRepository(
         if (isFirstStrike && hasCoords) {
             val ev = strikeEventDao.getEventById(eventId)
             if (ev != null) {
-                val ind = dao.getIndividualById(ev.individualId)
-                if (ind != null && !ind.hasFirstStrikeLocation) {
-                    dao.updateFirstStrikeLocation(ind.id, validLat, validLng, cleanPlace)
-                }
+                dao.updateFirstStrikeLocation(ev.individualId, validLat, validLng, cleanPlace)
             }
         }
     }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -38,6 +39,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -66,6 +68,7 @@ import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,6 +97,7 @@ import com.example.data.map.NominatimGeocoder
 import com.example.ui.map.HeatmapDisplayMode
 import com.example.ui.map.MapStyleHelper
 import com.example.ui.map.MapVisualTheme
+import com.example.ui.map.MappedStrikePoint
 import com.example.ui.map.isRobolectricRuntime
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayTextPrimary
@@ -125,6 +129,8 @@ fun FirstStrikeLocationPickerDialog(
     confirmLabelOverride: String? = null,
     allowCategorySelection: Boolean = false,
     initialIsFirstStrike: Boolean = true,
+    personName: String? = null,
+    existingPersonLocations: List<MappedStrikePoint> = emptyList(),
     onConfirmWithCategory: ((lat: Double, lng: Double, placeName: String, isFirstStrike: Boolean) -> Unit)? = null,
     onConfirm: (lat: Double, lng: Double, placeName: String) -> Unit,
     onClear: () -> Unit,
@@ -136,12 +142,14 @@ fun FirstStrikeLocationPickerDialog(
     val isAr = currentLang == "ar"
     val isFr = currentLang == "fr"
 
-    val defaultLat = initialLat?.takeIf { it.isFinite() } ?: 36.7538
-    val defaultLng = initialLng?.takeIf { it.isFinite() } ?: 3.0588
+    val firstSavedFallback = remember(existingPersonLocations) { existingPersonLocations.firstOrNull() }
+    val defaultLat = initialLat?.takeIf { it.isFinite() } ?: firstSavedFallback?.lat ?: 36.7538
+    val defaultLng = initialLng?.takeIf { it.isFinite() } ?: firstSavedFallback?.lng ?: 3.0588
     var isFirstStrikeSelected by remember(initialIsFirstStrike) { mutableStateOf(initialIsFirstStrike) }
 
     var selectedLat by remember { mutableDoubleStateOf(defaultLat) }
     var selectedLng by remember { mutableDoubleStateOf(defaultLng) }
+    val latestPersonLocations by rememberUpdatedState(existingPersonLocations)
     var selectedPlaceName by remember {
         mutableStateOf(
             NominatimGeocoder.stripTifinagh(initialPlaceName)
@@ -232,20 +240,32 @@ fun FirstStrikeLocationPickerDialog(
     val textPrimary = if (isDarkTheme) Color(0xFFF8FAFC) else DayTextPrimary
     val textSecondary = if (isDarkTheme) Color(0xFF94A3B8) else Color(0xFF475569)
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(bgColor)
+            .background(Color(0xB803060E))
             .clipToBounds()
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(horizontal = 12.dp, vertical = 10.dp)
-            .testTag("first_strike_picker_dialog"),
+            .padding(horizontal = 12.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
+        val compactMapHeight = if (imeVisible) {
+            140.dp
+        } else if (existingPersonLocations.isNotEmpty()) {
+            minOf(210.dp, (maxHeight * 0.30f).coerceAtLeast(155.dp))
+        } else {
+            minOf(235.dp, (maxHeight * 0.34f).coerceAtLeast(165.dp))
+        }
+
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .widthIn(max = 620.dp),
+                .fillMaxWidth()
+                .widthIn(max = 580.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(bgColor)
+                .border(1.2.dp, borderColor, RoundedCornerShape(24.dp))
+                .padding(12.dp)
+                .testTag("first_strike_picker_dialog"),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // 1. Top Search Bar & Action Row (strictly inside safe frame)
@@ -444,13 +464,21 @@ fun FirstStrikeLocationPickerDialog(
                 }
             }
 
-            // 2. Framed Map Viewport (weight(1f) keeps Top & Bottom controls strictly inside the screen bounds)
+            // Sync existing person strike pins whenever data/theme changes on live MapLibre style
+            LaunchedEffect(mapLibreRef, existingPersonLocations, mapTheme) {
+                val map = mapLibreRef ?: return@LaunchedEffect
+                map.getStyle { style ->
+                    MapStyleHelper.applyPickerPersonLocations(style, mapTheme, existingPersonLocations)
+                }
+            }
+
+            // 2. Framed Compact Map Viewport (proportionally sized height so dialog stays crisp & uncluttered)
             Box(
                 modifier = Modifier
-                    .weight(1f, fill = true)
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(22.dp))
-                    .border(1.1.dp, borderColor, RoundedCornerShape(22.dp))
+                    .height(compactMapHeight)
+                    .clip(RoundedCornerShape(20.dp))
+                    .border(1.1.dp, borderColor, RoundedCornerShape(20.dp))
                     .clipToBounds()
                     .testTag("picker_map_frame")
             ) {
@@ -461,7 +489,8 @@ fun FirstStrikeLocationPickerDialog(
                             getMapAsync { map ->
                                 mapLibreRef = map
                                 MapStyleHelper.configureHighPrecisionMap(map, context)
-                                val startZoom = if (initialLat != null && initialLng != null) 14.5 else 5.5
+                                val hasAnchor = (initialLat != null && initialLng != null) || firstSavedFallback != null
+                                val startZoom = if (hasAnchor) 14.5 else 5.5
                                 map.cameraPosition = CameraPosition.Builder()
                                     .target(LatLng(defaultLat, defaultLng))
                                     .zoom(startZoom)
@@ -474,6 +503,30 @@ fun FirstStrikeLocationPickerDialog(
                                         displayMode = HeatmapDisplayMode.CLUSTER_PINS,
                                         individuals = emptyList()
                                     )
+                                    MapStyleHelper.applyPickerPersonLocations(
+                                        style = style,
+                                        theme = mapTheme,
+                                        personLocations = latestPersonLocations
+                                    )
+                                }
+                                map.addOnMapClickListener { tapPoint ->
+                                    val candidate = MapStyleHelper.findNearestStrikePoint(
+                                        tapLat = tapPoint.latitude,
+                                        tapLng = tapPoint.longitude,
+                                        points = latestPersonLocations,
+                                        zoomLevel = map.cameraPosition.zoom
+                                    )
+                                    if (candidate != null) {
+                                        selectedLat = candidate.lat
+                                        selectedLng = candidate.lng
+                                        selectedPlaceName = candidate.placeName.ifBlank {
+                                            String.format(Locale.US, "%.4f, %.4f", candidate.lat, candidate.lng)
+                                        }
+                                        MapStyleHelper.animateCameraTo(map, candidate.lat, candidate.lng, zoom = 15.2, durationMs = 600)
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 }
                                 map.addOnCameraMoveStartedListener { reason ->
                                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
@@ -522,19 +575,58 @@ fun FirstStrikeLocationPickerDialog(
                     )
                 } else {
                     // Lightweight tactical grid canvas for Robolectric JVM environment
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawRect(if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF8F9FA))
-                        val step = 44.dp.toPx()
-                        val gridColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)
-                        var x = 0f
-                        while (x < size.width) {
-                            drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
-                            x += step
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            drawRect(if (isDarkTheme) Color(0xFF0F172A) else Color(0xFFF8F9FA))
+                            val step = 44.dp.toPx()
+                            val gridColor = if (isDarkTheme) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                            var x = 0f
+                            while (x < size.width) {
+                                drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                                x += step
+                            }
+                            var y = 0f
+                            while (y < size.height) {
+                                drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+                                y += step
+                            }
                         }
-                        var y = 0f
-                        while (y < size.height) {
-                            drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
-                            y += step
+
+                        // Preview all registered strikes for this person on the picker map
+                        existingPersonLocations.forEachIndexed { idx, pt ->
+                            val pinColor = if (pt.isFirstStrike) NeonAmber else routineMagenta
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(
+                                        start = (18 + ((idx * 52) % 210)).dp,
+                                        top = (16 + ((idx * 34) % 95)).dp
+                                    )
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(pinColor.copy(alpha = 0.22f))
+                                    .border(1.dp, pinColor, RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        selectedLat = pt.lat
+                                        selectedLng = pt.lng
+                                        selectedPlaceName = pt.placeName.ifBlank {
+                                            String.format(Locale.US, "%.4f, %.4f", pt.lat, pt.lng)
+                                        }
+                                    }
+                                    .padding(horizontal = 7.dp, vertical = 3.dp)
+                                    .testTag("picker_existing_pin_${pt.key}"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = pt.placeName.ifBlank {
+                                        String.format(Locale.US, "%.2f, %.2f", pt.lat, pt.lng)
+                                    },
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -574,6 +666,80 @@ fun FirstStrikeLocationPickerDialog(
                             .size(44.dp)
                             .testTag("location_picker_pin")
                     )
+                }
+            }
+
+            // 2b. Person's Existing Registered Map Strikes Strip (quick jump & inspect inside picker)
+            if (!imeVisible && existingPersonLocations.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(panelBg)
+                        .border(0.9.dp, borderColor.copy(alpha = 0.65f), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 10.dp, vertical = 7.dp)
+                        .testTag("picker_person_locations_strip"),
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    val ownerLabel = personName?.takeIf { it.isNotBlank() }
+                    Text(
+                        text = when {
+                            isAr && ownerLabel != null -> "سترايكات $ownerLabel المسجلة على الخريطة (${existingPersonLocations.size})"
+                            isAr -> "السترايكات المسجلة على الخريطة (${existingPersonLocations.size})"
+                            isFr && ownerLabel != null -> "Strikes enregistrés de $ownerLabel (${existingPersonLocations.size})"
+                            ownerLabel != null -> "$ownerLabel's Map Strikes (${existingPersonLocations.size})"
+                            else -> "Registered Map Strikes (${existingPersonLocations.size})"
+                        },
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accentCyan,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(existingPersonLocations, key = { it.key }) { pt ->
+                            val chipColor = if (pt.isFirstStrike) NeonAmber else routineMagenta
+                            val placeText = pt.placeName.ifBlank {
+                                String.format(Locale.US, "%.3f, %.3f", pt.lat, pt.lng)
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(chipColor.copy(alpha = 0.16f))
+                                    .border(0.9.dp, chipColor.copy(alpha = 0.58f), RoundedCornerShape(10.dp))
+                                    .clickable {
+                                        selectedLat = pt.lat
+                                        selectedLng = pt.lng
+                                        selectedPlaceName = placeText
+                                        mapLibreRef?.let { map ->
+                                            MapStyleHelper.animateCameraTo(map, pt.lat, pt.lng, zoom = 15.2, durationMs = 650)
+                                        }
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 5.dp)
+                                    .testTag("picker_saved_loc_chip_${pt.key}")
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(chipColor)
+                                )
+                                Text(
+                                    text = if (pt.date.isNotBlank()) "$placeText • ${pt.date}" else placeText,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
                 }
             }
 

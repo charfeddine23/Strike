@@ -83,6 +83,7 @@ import com.example.ui.components.GlassTypeBadge
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.StrikerStatus
 import com.example.ui.components.StrikerStatusBadge
+import com.example.ui.map.MapStyleHelper
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
@@ -301,6 +302,12 @@ fun StrikeScreen(
                     )
                     dialogWindow?.setBackgroundDrawableResource(android.R.color.transparent)
                 }
+                val existingForPerson = remember(targetPerson, allStrikeEvents) {
+                    MapStyleHelper.collectAllMappedPoints(
+                        listOf(targetPerson),
+                        allStrikeEvents.filter { it.individualId == targetPerson.id }
+                    )
+                }
                 FirstStrikeLocationPickerDialog(
                     initialLat = targetPerson.firstStrikeLat,
                     initialLng = targetPerson.firstStrikeLng,
@@ -319,6 +326,8 @@ fun StrikeScreen(
                     },
                     allowCategorySelection = true,
                     initialIsFirstStrike = !targetPerson.hasFirstStrikeLocation && targetPerson.strikeCount == 0,
+                    personName = targetPerson.fullName,
+                    existingPersonLocations = existingForPerson,
                     onConfirmWithCategory = { lat, lng, placeName, isFirstStrike ->
                         HapticHelper.triggerStrikeHaptic(context, isHapticFeedbackEnabled)
                         viewModel.recordStrikesWithLocation(
@@ -358,6 +367,12 @@ fun StrikeScreen(
                     )
                     dialogWindow?.setBackgroundDrawableResource(android.R.color.transparent)
                 }
+                val existingForEventPerson = remember(targetEvent, personFallback, allStrikeEvents) {
+                    MapStyleHelper.collectAllMappedPoints(
+                        listOfNotNull(personFallback),
+                        allStrikeEvents.filter { it.individualId == targetEvent.individualId }
+                    )
+                }
                 FirstStrikeLocationPickerDialog(
                     initialLat = targetEvent.lat ?: personFallback?.firstStrikeLat,
                     initialLng = targetEvent.lng ?: personFallback?.firstStrikeLng,
@@ -371,6 +386,8 @@ fun StrikeScreen(
                     },
                     allowCategorySelection = true,
                     initialIsFirstStrike = targetEvent.isFirstStrike,
+                    personName = targetEvent.individualName,
+                    existingPersonLocations = existingForEventPerson,
                     onConfirmWithCategory = { lat, lng, placeName, isFirstStrike ->
                         viewModel.updateStrikeEventLocation(
                             eventId = targetEvent.id,

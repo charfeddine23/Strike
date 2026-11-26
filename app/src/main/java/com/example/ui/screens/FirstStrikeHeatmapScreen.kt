@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.content.Context
+import android.graphics.RectF
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -53,13 +54,16 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.filled.Whatshot
@@ -155,9 +159,11 @@ class HeatmapMapController(context: Context) {
 
     var latestIndividuals: List<Individual> = emptyList()
     var latestStrikeEvents: List<StrikeEvent> = emptyList()
+    var latestMappedPoints: List<MappedStrikePoint> = emptyList()
     var latestHotspots: List<FirstStrikeHotspot> = emptyList()
     var latestHottestRegion: HottestRegionTarget? = null
     var onHotspotTapped: ((FirstStrikeHotspot) -> Unit)? = null
+    var onStrikeTapped: ((MappedStrikePoint, FirstStrikeHotspot?) -> Unit)? = null
 
     private var cachedMapView: MapView? = null
     private var isStarted = false
@@ -229,40 +235,97 @@ class HeatmapMapController(context: Context) {
 
                 map.addOnMapClickListener { point ->
                     val currentHotspots = latestHotspots
+                    val currentPoints = latestMappedPoints
                     val screenPt = map.projection.toScreenLocation(point)
+                    val hitBox = RectF(
+                        screenPt.x - 28f,
+                        screenPt.y - 28f,
+                        screenPt.x + 28f,
+                        screenPt.y + 28f
+                    )
                     val rendered = map.queryRenderedFeatures(
-                        screenPt,
+                        hitBox,
                         MapStyleHelper.FIRST_STRIKE_CORE_SPARK_LAYER_ID,
                         MapStyleHelper.CIRCLE_LAYER_ID,
                         MapStyleHelper.FIRST_STRIKE_AURA_LAYER_ID,
+                        MapStyleHelper.SYMBOL_LAYER_ID,
                         MapStyleHelper.ROUTINE_CIRCLE_LAYER_ID,
                         MapStyleHelper.ROUTINE_INNER_HALO_LAYER_ID,
                         MapStyleHelper.ROUTINE_HALO_LAYER_ID,
+                        MapStyleHelper.ROUTINE_SYMBOL_LAYER_ID,
                         MapStyleHelper.ROUTINE_HEAT_RED_LAYER_ID,
                         MapStyleHelper.ROUTINE_HEAT_YELLOW_LAYER_ID,
                         MapStyleHelper.ROUTINE_HEAT_GREEN_LAYER_ID,
+                        MapStyleHelper.ROUTINE_HEAT_CYAN_LAYER_ID,
+                        MapStyleHelper.ROUTINE_HEAT_OUTER_BLUE_LAYER_ID,
                         MapStyleHelper.ROUTINE_HEATMAP_LAYER_ID
                     )
-                    val clickedId = rendered.firstOrNull()?.getNumberProperty("id")?.toLong()
-                    val hitHotspot = if (clickedId != null) {
-                        MapStyleHelper.findNearestHotspot(
+
+                    var hitStrike: MappedStrikePoint? = null
+                    for (feature in rendered) {
+                        val keyProp = feature.getStringProperty("key")?.takeIf { it.isNotBlank() }
+                        if (keyProp != null) {
+                            val exactByKey = currentPoints.firstOrNull { it.key == keyProp }
+                            if (exactByKey != null) {
+                                hitStrike = exactByKey
+                                break
+                            }
+                        }
+                        val eventIdProp = feature.getNumberProperty("eventId")?.toLong() ?: -1L
+                        if (eventIdProp > 0L) {
+                            val exactByEvent = currentPoints.firstOrNull { it.eventId == eventIdProp }
+                            if (exactByEvent != null) {
+                                hitStrike = exactByEvent
+                                break
+                            }
+                        }
+                        val idProp = feature.getNumberProperty("id")?.toLong()
+                        if (idProp != null) {
+                            val personPoints = currentPoints.filter { it.individualId == idProp }
+                            val nearestForPerson = personPoints.minByOrNull { pt ->
+                                val dLat = pt.lat - point.latitude
+                                val dLng = pt.lng - point.longitude
+                                dLat * dLat + dLng * dLng
+                            }
+                            if (nearestForPerson != null) {
+                                hitStrike = nearestForPerson
+                                break
+                            }
+                        }
+                    }
+
+                    val zoom = map.cameraPosition.zoom
+                    if (hitStrike == null) {
+                        hitStrike = MapStyleHelper.findNearestStrikePoint(
                             tapLat = point.latitude,
                             tapLng = point.longitude,
-                            hotspots = currentHotspots.filter { hs ->
-                                hs.individuals.any { it.id == clickedId } ||
-                                    hs.points.any { it.individualId == clickedId }
-                            }.ifEmpty { currentHotspots },
-                            zoomLevel = map.cameraPosition.zoom
-                        ) ?: currentHotspots.firstOrNull { hs -> hs.individuals.any { it.id == clickedId } }
+                            points = currentPoints,
+                            zoomLevel = zoom
+                        )
+                    }
+
+                    val hitHotspot = if (hitStrike != null) {
+                        currentHotspots.firstOrNull { hs -> hs.points.any { it.key == hitStrike.key } }
+                            ?: MapStyleHelper.findNearestHotspot(
+                                tapLat = hitStrike.lat,
+                                tapLng = hitStrike.lng,
+                                hotspots = currentHotspots,
+                                zoomLevel = zoom
+                            )
                     } else {
                         MapStyleHelper.findNearestHotspot(
                             tapLat = point.latitude,
                             tapLng = point.longitude,
                             hotspots = currentHotspots,
-                            zoomLevel = map.cameraPosition.zoom
+                            zoomLevel = zoom
                         )
                     }
-                    if (hitHotspot != null) {
+
+                    val resolvedStrike = hitStrike ?: hitHotspot?.points?.firstOrNull()
+                    if (resolvedStrike != null && onStrikeTapped != null) {
+                        onStrikeTapped?.invoke(resolvedStrike, hitHotspot)
+                        true
+                    } else if (hitHotspot != null) {
                         onHotspotTapped?.invoke(hitHotspot)
                         true
                     } else {
@@ -376,6 +439,7 @@ fun FirstStrikeHeatmapScreen(
 
     activeController.latestIndividuals = allIndividuals
     activeController.latestStrikeEvents = allStrikeEvents
+    activeController.latestMappedPoints = allMappedPoints
     activeController.latestHotspots = hotspots
     activeController.latestHottestRegion = hottestRegion
 
@@ -405,6 +469,7 @@ fun FirstStrikeHeatmapScreen(
     }
 
     var selectedHotspot by remember { mutableStateOf<FirstStrikeHotspot?>(null) }
+    var selectedStrikePoint by remember { mutableStateOf<MappedStrikePoint?>(null) }
 
     val mapLibreRef = activeController.mapLibreMap
     val loadedStyleRef = activeController.loadedStyle
@@ -532,7 +597,16 @@ fun FirstStrikeHeatmapScreen(
             val mapView = remember(activeController) { activeController.getOrCreateMapView() }
 
             DisposableEffect(lifecycleOwner, activeController, mapView) {
-                activeController.onHotspotTapped = { hotspot -> selectedHotspot = hotspot }
+                activeController.onStrikeTapped = { strikePoint, hotspot ->
+                    selectedStrikePoint = strikePoint
+                    selectedHotspot = hotspot ?: hotspots.firstOrNull { hs ->
+                        hs.points.any { it.key == strikePoint.key }
+                    }
+                }
+                activeController.onHotspotTapped = { hotspot ->
+                    selectedStrikePoint = hotspot.points.firstOrNull()
+                    selectedHotspot = hotspot
+                }
                 val observer = LifecycleEventObserver { _, event ->
                     when (event) {
                         Lifecycle.Event.ON_START -> activeController.onStart()
@@ -551,6 +625,7 @@ fun FirstStrikeHeatmapScreen(
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose {
                     lifecycleOwner.lifecycle.removeObserver(observer)
+                    activeController.onStrikeTapped = null
                     activeController.onHotspotTapped = null
                     if (ownsController) {
                         activeController.destroy()
@@ -645,7 +720,10 @@ fun FirstStrikeHeatmapScreen(
                             .size(48.dp)
                             .clip(CircleShape)
                             .semantics { contentDescription = hotspot.placeName }
-                            .clickable { selectedHotspot = hotspot }
+                            .clickable {
+                                selectedStrikePoint = hotspot.points.firstOrNull()
+                                selectedHotspot = hotspot
+                            }
                             .testTag("heatmap_hotspot_marker_${hotspot.id}"),
                         contentAlignment = Alignment.Center
                     ) {
@@ -1468,18 +1546,37 @@ fun FirstStrikeHeatmapScreen(
         }
     }
 
-    // 5. Interactive Hotspot Inspection Liquid Glass Bottom Sheet
+    // 5. Interactive Strike & Hotspot Inspection Liquid Glass Bottom Sheet
     val inspected = selectedHotspot
-    if (inspected != null) {
+    val activeStrike = selectedStrikePoint ?: inspected?.points?.firstOrNull()
+    if (inspected != null || activeStrike != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
-            onDismissRequest = { selectedHotspot = null },
+            onDismissRequest = {
+                selectedHotspot = null
+                selectedStrikePoint = null
+            },
             sheetState = sheetState,
             containerColor = if (isMapDark) Color(0xF50B1324) else Color(0xFAFFFFFF),
             contentColor = textPrimary,
             shape = RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp),
             modifier = Modifier.testTag("heatmap_hotspot_sheet")
         ) {
+            val headerPlace = activeStrike?.placeName?.takeIf { it.isNotBlank() }
+                ?: inspected?.placeName
+                ?: String.format(
+                    java.util.Locale.US,
+                    "%.4f, %.4f",
+                    activeStrike?.lat ?: inspected?.lat ?: 0.0,
+                    activeStrike?.lng ?: inspected?.lng ?: 0.0
+                )
+            val matchedEvent = activeStrike?.eventId?.let { evId ->
+                allStrikeEvents.firstOrNull { it.id == evId }
+            }
+            val matchedPerson = activeStrike?.let { pt ->
+                allIndividuals.firstOrNull { it.id == pt.individualId }
+            }
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1513,7 +1610,7 @@ fun FirstStrikeHeatmapScreen(
                         }
                         Column {
                             Text(
-                                text = inspected.placeName,
+                                text = headerPlace,
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 fontFamily = PlusJakartaSans,
@@ -1522,10 +1619,14 @@ fun FirstStrikeHeatmapScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = when {
-                                    isAr -> "${inspected.individuals.size} شخص • ${inspected.firstStrikeCount} أول • ${inspected.routineStrikeCount} روتيني"
-                                    isFr -> "${inspected.individuals.size} pers. • ${inspected.firstStrikeCount} 1er • ${inspected.routineStrikeCount} routine"
-                                    else -> "${inspected.individuals.size} person(s) • ${inspected.firstStrikeCount} First • ${inspected.routineStrikeCount} Routine"
+                                text = if (inspected != null) {
+                                    when {
+                                        isAr -> "${inspected.individuals.size} شخص • ${inspected.firstStrikeCount} أول • ${inspected.routineStrikeCount} روتيني"
+                                        isFr -> "${inspected.individuals.size} pers. • ${inspected.firstStrikeCount} 1er • ${inspected.routineStrikeCount} routine"
+                                        else -> "${inspected.individuals.size} person(s) • ${inspected.firstStrikeCount} First • ${inspected.routineStrikeCount} Routine"
+                                    }
+                                } else {
+                                    activeStrike?.individualName.orEmpty()
                                 },
                                 fontSize = 11.5.sp,
                                 color = accentCyan,
@@ -1533,29 +1634,428 @@ fun FirstStrikeHeatmapScreen(
                             )
                         }
                     }
+                    IconButton(
+                        onClick = {
+                            selectedHotspot = null
+                            selectedStrikePoint = null
+                        },
+                        modifier = Modifier.minimumInteractiveComponentSize()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = if (isAr) "إغلاق" else "Close",
+                            tint = textSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
 
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 320.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 18.dp)
+                        .heightIn(max = 420.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 20.dp)
                 ) {
-                    items(inspected.individuals, key = { it.id }) { person ->
-                        HotspotPersonCard(
-                            person = person,
-                            isDark = isMapDark,
-                            accentCyan = accentCyan,
-                            isAr = isAr,
-                            onClick = {
-                                selectedHotspot = null
-                                onNavigateToPersonProfile(person.id)
+                    if (activeStrike != null) {
+                        item(key = "selected_strike_detail") {
+                            SelectedStrikeDetailCard(
+                                strikePoint = activeStrike,
+                                strikeEvent = matchedEvent,
+                                person = matchedPerson,
+                                isDark = isMapDark,
+                                accentCyan = accentCyan,
+                                isAr = isAr,
+                                isFr = isFr,
+                                onOpenProfile = {
+                                    val targetId = activeStrike.individualId
+                                    selectedHotspot = null
+                                    selectedStrikePoint = null
+                                    onNavigateToPersonProfile(targetId)
+                                }
+                            )
+                        }
+                    }
+
+                    val siblingStrikes = inspected?.points.orEmpty()
+                    if (siblingStrikes.size > 1) {
+                        item(key = "sibling_strikes_header") {
+                            Text(
+                                text = when {
+                                    isAr -> "الضربات المسجلة في هذه النقطة (${siblingStrikes.size})"
+                                    isFr -> "Strikes enregistrés ici (${siblingStrikes.size})"
+                                    else -> "Strikes in this Hotspot (${siblingStrikes.size})"
+                                },
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textSecondary
+                            )
+                        }
+                        items(siblingStrikes, key = { "sib_${it.key}" }) { siblingPt ->
+                            val isSelected = siblingPt.key == activeStrike?.key
+                            val sibEvent = siblingPt.eventId?.let { evId ->
+                                allStrikeEvents.firstOrNull { it.id == evId }
                             }
-                        )
+                            val sibAccent = if (siblingPt.isFirstStrike) NeonAmber else Color(0xFF22C55E)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(
+                                        when {
+                                            isSelected -> sibAccent.copy(alpha = if (isMapDark) 0.18f else 0.13f)
+                                            isMapDark -> Color(0xFF131F36)
+                                            else -> Color(0xFFF1F5F9)
+                                        }
+                                    )
+                                    .border(
+                                        width = if (isSelected) 1.3.dp else 0.8.dp,
+                                        color = if (isSelected) sibAccent else sibAccent.copy(alpha = 0.3f),
+                                        shape = RoundedCornerShape(14.dp)
+                                    )
+                                    .clickable { selectedStrikePoint = siblingPt }
+                                    .padding(horizontal = 12.dp, vertical = 9.dp)
+                                    .testTag("hotspot_strike_item_${siblingPt.key}"),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = if (siblingPt.isFirstStrike) Icons.Default.LocationOn else Icons.Default.Bolt,
+                                        contentDescription = null,
+                                        tint = sibAccent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "${siblingPt.individualName} • +${siblingPt.strikeCount}",
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = textPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        val dateLine = sibEvent?.date?.takeIf { it.isNotBlank() }
+                                            ?: siblingPt.date.takeIf { it.isNotBlank() }
+                                            ?: siblingPt.placeName
+                                        Text(
+                                            text = dateLine,
+                                            fontSize = 10.5.sp,
+                                            color = textSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(sibAccent.copy(alpha = 0.18f))
+                                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = when {
+                                            siblingPt.isFirstStrike && isAr -> "أول"
+                                            siblingPt.isFirstStrike -> "First"
+                                            isAr -> "روتيني"
+                                            else -> "Routine"
+                                        },
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = sibAccent
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    val people = inspected?.individuals
+                        ?: listOfNotNull(matchedPerson)
+                    if (people.isNotEmpty()) {
+                        item(key = "hotspot_people_header") {
+                            Text(
+                                text = when {
+                                    isAr -> "الملفات المرتبطة (${people.size})"
+                                    isFr -> "Profils associés (${people.size})"
+                                    else -> "Profiles in Area (${people.size})"
+                                },
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textSecondary
+                            )
+                        }
+                        items(people, key = { it.id }) { person ->
+                            HotspotPersonCard(
+                                person = person,
+                                isDark = isMapDark,
+                                accentCyan = accentCyan,
+                                isAr = isAr,
+                                onClick = {
+                                    selectedHotspot = null
+                                    selectedStrikePoint = null
+                                    onNavigateToPersonProfile(person.id)
+                                }
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SelectedStrikeDetailCard(
+    strikePoint: MappedStrikePoint,
+    strikeEvent: StrikeEvent?,
+    person: Individual?,
+    isDark: Boolean,
+    accentCyan: Color,
+    isAr: Boolean,
+    isFr: Boolean,
+    onOpenProfile: () -> Unit
+) {
+    val strikeAccent = if (strikePoint.isFirstStrike) NeonAmber else Color(0xFF22C55E)
+    val cardBg = if (isDark) Color(0xFF101C33) else Color(0xFFF8FAFC)
+    val textPrimary = if (isDark) Color(0xFFF8FAFC) else DayTextPrimary
+    val textSecondary = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+
+    val categoryTitle = when {
+        strikePoint.isFirstStrike && isAr -> "أول سترايك (الضربة الأولى)"
+        strikePoint.isFirstStrike && isFr -> "Premier Strike"
+        strikePoint.isFirstStrike -> "First Strike"
+        isAr -> "سترايك روتيني"
+        isFr -> "Strike de routine"
+        else -> "Routine Strike"
+    }
+    val dateLabel = strikeEvent?.date?.takeIf { it.isNotBlank() }
+        ?: strikePoint.date.takeIf { it.isNotBlank() }
+        ?: (if (isAr) "ملف الضارب الرئيسي" else "Profile pin")
+    val timeLabel = strikeEvent?.time?.takeIf { it.isNotBlank() }
+    val placeLabel = strikePoint.placeName.ifBlank {
+        String.format(java.util.Locale.US, "%.4f, %.4f", strikePoint.lat, strikePoint.lng)
+    }
+    val coordsLabel = String.format(java.util.Locale.US, "%.5f, %.5f", strikePoint.lat, strikePoint.lng)
+    val notesText = strikeEvent?.notes?.trim().orEmpty()
+    val perfBoost = strikeEvent?.performanceValue ?: person?.boost ?: strikePoint.boost
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(cardBg)
+            .border(1.3.dp, strikeAccent.copy(alpha = 0.65f), RoundedCornerShape(20.dp))
+            .padding(14.dp)
+            .testTag("selected_strike_detail_card"),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        // Category badge + Count + Name
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(strikeAccent.copy(alpha = 0.18f))
+                        .border(0.9.dp, strikeAccent.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = categoryTitle,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Black,
+                        color = strikeAccent
+                    )
+                }
+                GlassTypeBadge(type = strikePoint.individualType, darkTheme = isDark)
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(accentCyan.copy(alpha = 0.16f))
+                    .padding(horizontal = 9.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = if (isAr) "+${strikePoint.strikeCount} ضربة" else "+${strikePoint.strikeCount} Strike(s)",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = accentCyan
+                )
+            }
+        }
+
+        // Striker Name + Impact Score
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = strikePoint.individualName,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Black,
+                fontFamily = PlusJakartaSans,
+                color = textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = if (isAr) "التعزيز ${perfBoost.toInt()}" else "BOOST ${perfBoost.toInt()}",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = NeonAmber
+            )
+        }
+
+        // Date / Time & Location metadata rows
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CalendarToday,
+                    contentDescription = null,
+                    tint = accentCyan,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = dateLabel,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = textPrimary
+                )
+            }
+            if (timeLabel != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        tint = accentCyan,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = timeLabel,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = textSecondary
+                    )
+                }
+            }
+            if (strikeEvent != null && strikeEvent.strikeType.isNotBlank()) {
+                Text(
+                    text = "• ${strikeEvent.strikeType}",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = null,
+                tint = strikeAccent,
+                modifier = Modifier.size(15.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = placeLabel,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = coordsLabel,
+                    fontSize = 10.sp,
+                    color = textSecondary
+                )
+            }
+        }
+
+        if (notesText.isNotBlank()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isDark) Color(0x1E38BDF8) else Color(0xFFEFF6FF))
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Description,
+                    contentDescription = null,
+                    tint = accentCyan,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    text = notesText,
+                    fontSize = 11.5.sp,
+                    color = textPrimary,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .minimumInteractiveComponentSize()
+                .clip(RoundedCornerShape(14.dp))
+                .background(accentCyan.copy(alpha = 0.16f))
+                .border(1.dp, accentCyan.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                .clickable(onClick = onOpenProfile)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .testTag("btn_selected_strike_open_profile"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = null,
+                tint = accentCyan,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = when {
+                    isAr -> "فتح ملف الضارب"
+                    isFr -> "Voir le profil du frappeur"
+                    else -> "View Striker Profile"
+                },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = accentCyan
+            )
         }
     }
 }

@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.model.Individual
+import com.example.ui.map.MapStyleHelper
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
@@ -1444,12 +1445,28 @@ fun DataEntryDialog(
         }
 
         if (showLocationPicker) {
+            val editingId = viewModel.editingId
+            val allIndividualsList by viewModel.allIndividuals.collectAsStateWithLifecycle()
+            val allEventsList by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
+            val existingPersonLocations = remember(editingId, allIndividualsList, allEventsList) {
+                if (editingId == null) {
+                    emptyList()
+                } else {
+                    val ind = allIndividualsList.firstOrNull { it.id == editingId }
+                    MapStyleHelper.collectAllMappedPoints(
+                        listOfNotNull(ind),
+                        allEventsList.filter { it.individualId == editingId }
+                    )
+                }
+            }
             FirstStrikeLocationPickerDialog(
                 initialLat = firstStrikeLat,
                 initialLng = firstStrikeLng,
                 initialPlaceName = firstStrikePlaceName,
                 currentLang = currentLang,
                 isDarkTheme = isDarkTheme,
+                personName = name.takeIf { it.isNotBlank() },
+                existingPersonLocations = existingPersonLocations,
                 onConfirm = { lat, lng, place ->
                     viewModel.formFirstStrikeLat.value = lat
                     viewModel.formFirstStrikeLng.value = lng

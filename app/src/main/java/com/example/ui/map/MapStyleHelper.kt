@@ -1,8 +1,10 @@
 package com.example.ui.map
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Color as AndroidColor
 import android.os.Build
+import android.util.DisplayMetrics
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 import org.json.JSONArray
@@ -28,7 +30,13 @@ import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonOptions
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.android.style.sources.VectorSource
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.exp
+import kotlin.math.hypot
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 enum class MapVisualTheme {
     OBSIDIAN_DARK,
@@ -112,9 +120,21 @@ object MapStyleHelper {
     const val ROUTINE_CIRCLE_LAYER_ID = "obsidian-routine-strike-circles"
     const val ROUTINE_SYMBOL_LAYER_ID = "obsidian-routine-strike-labels"
 
+    const val HEAT_SPRITE_BLUE_ID = "obsidian-heat-sprite-blue"
+    const val HEAT_SPRITE_CYAN_ID = "obsidian-heat-sprite-cyan"
+    const val HEAT_SPRITE_GREEN_ID = "obsidian-heat-sprite-green"
+    const val HEAT_SPRITE_YELLOW_ID = "obsidian-heat-sprite-yellow"
+    const val HEAT_SPRITE_RED_ID = "obsidian-heat-sprite-red"
+    const val HEAT_SPRITE_SIZE_PX = 512
+
     const val USER_LOCATION_SOURCE_ID = "obsidian-user-location-source"
     const val USER_LOCATION_HALO_LAYER_ID = "obsidian-user-location-halo"
     const val USER_LOCATION_CORE_LAYER_ID = "obsidian-user-location-core"
+
+    const val PICKER_PERSON_SOURCE_ID = "obsidian-picker-person-source"
+    const val PICKER_PERSON_FIRST_LAYER_ID = "obsidian-picker-person-first-pins"
+    const val PICKER_PERSON_ROUTINE_LAYER_ID = "obsidian-picker-person-routine-pins"
+    const val PICKER_PERSON_LABEL_LAYER_ID = "obsidian-picker-person-labels"
 
     const val BUILDINGS_3D_LAYER_ID = "obsidian-3d-buildings"
 
@@ -147,6 +167,145 @@ object MapStyleHelper {
     private val LIGHT_BUILDING_3D = AndroidColor.parseColor("#CBD5E1")
     private val LIGHT_LABEL_TEXT = AndroidColor.parseColor("#1E293B")
     private val LIGHT_LABEL_HALO = AndroidColor.parseColor("#FFFFFF")
+
+    private val cachedHeatSprites = arrayOfNulls<Bitmap>(5)
+
+    private data class HeatSpriteSpec(
+        val bandIndex: Int,
+        val imageId: String,
+        val layerId: String,
+        val scaleRelativeToBlue: Float
+    )
+
+    private val HEAT_SPRITE_BANDS = listOf(
+        HeatSpriteSpec(0, HEAT_SPRITE_BLUE_ID, ROUTINE_HEAT_OUTER_BLUE_LAYER_ID, 1.00f),
+        HeatSpriteSpec(1, HEAT_SPRITE_CYAN_ID, ROUTINE_HEAT_CYAN_LAYER_ID, 0.80f),
+        HeatSpriteSpec(2, HEAT_SPRITE_GREEN_ID, ROUTINE_HEAT_GREEN_LAYER_ID, 0.62f),
+        HeatSpriteSpec(3, HEAT_SPRITE_YELLOW_ID, ROUTINE_HEAT_YELLOW_LAYER_ID, 0.47f),
+        HeatSpriteSpec(4, HEAT_SPRITE_RED_ID, ROUTINE_HEAT_RED_LAYER_ID, 0.39f)
+    )
+
+    /**
+     * Generates a 3x-supersampled (512x512 @ DENSITY_XXHIGH) triangular-dithered radial spectral
+     * sprite for full-native-resolution GPU rendering when zoomed in closely (zoom 12.2..21.0).
+     * Eliminates MapLibre HeatmapLayer's 1/4-res FBO pixelation and CircleLayer banding rings.
+     */
+    internal fun createHeatBandBitmap(bandIndex: Int, sizePx: Int = HEAT_SPRITE_SIZE_PX): Bitmap {
+        val safeSize = sizePx.coerceIn(64, 1024)
+        val bitmap = Bitmap.createBitmap(safeSize, safeSize, Bitmap.Config.ARGB_8888).apply {
+            density = DisplayMetrics.DENSITY_XXHIGH
+        }
+        val pixels = IntArray(safeSize * safeSize)
+        val center = (safeSize - 1) * 0.5
+        val invRadius = 1.0 / ((safeSize - 1) * 0.5)
+
+        val lutSize = 2048
+        val lutR = FloatArray(lutSize + 1)
+        val lutG = FloatArray(lutSize + 1)
+        val lutB = FloatArray(lutSize + 1)
+        val lutA = FloatArray(lutSize + 1)
+
+        fun smoothCosineDrop(r: Double, plateauEnd: Double): Double {
+            if (r <= plateauEnd) return 1.0
+            if (r >= 1.0) return 0.0
+            val t = (r - plateauEnd) / (1.0 - plateauEnd)
+            return 0.5 * (1.0 + cos(PI * t))
+        }
+
+        for (i in 0..lutSize) {
+            val r = i.toDouble() / lutSize.toDouble()
+            when (bandIndex) {
+                0 -> {
+                    // Outer translucent Royal Blue Gaussian mist (#4080FF)
+                    val envelope = exp(-2.7 * r * r) * smoothCosineDrop(r, 0.48)
+                    lutR[i] = 64f
+                    lutG[i] = 128f
+                    lutB[i] = 255f
+                    lutA[i] = (0.38 * envelope).toFloat()
+                }
+                1 -> {
+                    // Sky Cyan aura (#38DEF0)
+                    val envelope = smoothCosineDrop(r, 0.28)
+                    lutR[i] = 56f
+                    lutG[i] = 222f
+                    lutB[i] = 240f
+                    lutA[i] = (0.50 * envelope).toFloat()
+                }
+                2 -> {
+                    // Vibrant Lime Green band (#42F252)
+                    val envelope = smoothCosineDrop(r, 0.40)
+                    lutR[i] = 66f
+                    lutG[i] = 242f
+                    lutB[i] = 82f
+                    lutA[i] = (0.64 * envelope).toFloat()
+                }
+                3 -> {
+                    // Warm Orange (#FF8C1E) -> Luminous Yellow (#FFE426) rim
+                    val envelope = smoothCosineDrop(r, 0.50)
+                    val rimMix = ((r - 0.52) / 0.42).coerceIn(0.0, 1.0).toFloat()
+                    lutR[i] = 255f
+                    lutG[i] = 140f + (228f - 140f) * rimMix
+                    lutB[i] = 30f + (38f - 30f) * rimMix
+                    lutA[i] = (0.74 * envelope).toFloat()
+                }
+                else -> {
+                    // Broad uniform Coral-Red core plateau (#EF3E38)
+                    val envelope = smoothCosineDrop(r, 0.62)
+                    lutR[i] = 239f
+                    lutG[i] = 62f
+                    lutB[i] = 56f
+                    lutA[i] = (0.76 * envelope).toFloat()
+                }
+            }
+        }
+
+        val invRadiusSq = invRadius * invRadius
+        for (y in 0 until safeSize) {
+            val dy = y - center
+            val dySq = dy * dy
+            val rowOffset = y * safeSize
+            for (x in 0 until safeSize) {
+                val dx = x - center
+                val distSq = (dx * dx + dySq) * invRadiusSq
+                if (distSq >= 1.0) continue
+
+                val r = sqrt(distSq)
+                val exactIdx = (r * lutSize).coerceIn(0.0, (lutSize - 1).toDouble())
+                val idx0 = exactIdx.toInt()
+                val frac = (exactIdx - idx0).toFloat()
+                val idx1 = idx0 + 1
+
+                val alphaF = lutA[idx0] + (lutA[idx1] - lutA[idx0]) * frac
+                if (alphaF <= 0.0005f) continue
+
+                // Deterministic hash dither prevents 8-bit concentric quantization banding
+                val h = ((x * 374761393) xor (y * 668265263)) * 1274126177
+                val dither = (((h ushr 24) and 0xFF) / 255.0f - 0.5f) * 1.1f
+
+                val a = (alphaF * 255.0f + dither).roundToInt().coerceIn(0, 255)
+                if (a == 0) continue
+
+                val rC = (lutR[idx0] + (lutR[idx1] - lutR[idx0]) * frac).roundToInt().coerceIn(0, 255)
+                val gC = (lutG[idx0] + (lutG[idx1] - lutG[idx0]) * frac).roundToInt().coerceIn(0, 255)
+                val bC = (lutB[idx0] + (lutB[idx1] - lutB[idx0]) * frac).roundToInt().coerceIn(0, 255)
+
+                pixels[rowOffset + x] = (a shl 24) or (rC shl 16) or (gC shl 8) or bC
+            }
+        }
+
+        bitmap.setPixels(pixels, 0, safeSize, 0, 0, safeSize, safeSize)
+        return bitmap
+    }
+
+    private fun getOrCreateHeatBandBitmap(bandIndex: Int): Bitmap {
+        val idx = bandIndex.coerceIn(0, 4)
+        cachedHeatSprites[idx]?.let { cached ->
+            if (!cached.isRecycled) return cached
+        }
+        val created = createHeatBandBitmap(idx, HEAT_SPRITE_SIZE_PX)
+        cachedHeatSprites[idx] = created
+        return created
+    }
 
     fun pointHeatWeight(person: Individual): Double {
         return (1.0 + (person.strikeCount.coerceAtLeast(1) * 0.15)).coerceAtMost(4.0)
@@ -302,6 +461,7 @@ object MapStyleHelper {
                 })
             }
             val properties = JSONObject().apply {
+                put("key", pt.key)
                 put("id", pt.individualId)
                 put("eventId", pt.eventId ?: -1L)
                 put("name", pt.individualName)
@@ -310,7 +470,10 @@ object MapStyleHelper {
                 put("strikeCount", pt.strikeCount)
                 put("placeName", pt.placeName)
                 put("isFirstStrike", pt.isFirstStrike)
+                put("date", pt.date)
                 put("weight", pt.weight)
+                put("lat", pt.lat)
+                put("lng", pt.lng)
             }
             val feature = JSONObject().apply {
                 put("type", "Feature")
@@ -536,6 +699,36 @@ object MapStyleHelper {
             }
             .filter { (_, distSq) -> distSq <= hitRadiusDeg * hitRadiusDeg }
             .minByOrNull { it.second }
+            ?.first
+    }
+
+    fun findNearestStrikePoint(
+        tapLat: Double,
+        tapLng: Double,
+        points: List<MappedStrikePoint>,
+        zoomLevel: Double
+    ): MappedStrikePoint? {
+        if (points.isEmpty()) return null
+        val hitRadiusDeg = when {
+            zoomLevel >= 18.0 -> 0.0018
+            zoomLevel >= 15.0 -> 0.0065
+            zoomLevel >= 12.0 -> 0.022
+            zoomLevel >= 9.0 -> 0.11
+            zoomLevel >= 6.0 -> 0.50
+            else -> 1.5
+        }
+        return points
+            .map { pt ->
+                val dLat = pt.lat - tapLat
+                val dLng = pt.lng - tapLng
+                pt to (dLat * dLat + dLng * dLng)
+            }
+            .filter { (_, distSq) -> distSq <= hitRadiusDeg * hitRadiusDeg }
+            .minWithOrNull(
+                compareBy<Pair<MappedStrikePoint, Double>> { it.second }
+                    .thenByDescending { it.first.isFirstStrike }
+                    .thenByDescending { it.first.weight }
+            )
             ?.first
     }
 
@@ -882,27 +1075,28 @@ object MapStyleHelper {
             style.addSource(GeoJsonSource(ROUTINE_STRIKE_SOURCE_ID, geoJson, highResHeatOptions))
         }
 
-        // Macro -> City (zoom 0..14): organic FBO heatmap blends clusters cleanly.
-        // Street -> Building (zoom 14..21): FBO softens gracefully while full-native-resolution GPU vector
-        // contour layers fade in seamlessly so there is ZERO 1/4-res FBO pixelation at any zoom level.
+        // Macro -> City (zoom 0..13.5): organic FBO heatmap blends multi-district clusters cleanly.
+        // Street -> Building (zoom 12.2..21): FBO fades out completely to 0.0f by zoom 14.2 while
+        // full-native-resolution 512x512 DENSITY_XXHIGH spectral SymbolLayers fade in seamlessly,
+        // guaranteeing crisp, non-pixelated, silky Snap-Map thermal islands at every close zoom depth.
         val showHeatmap = displayMode != HeatmapDisplayMode.CLUSTER_PINS
         val heatVisibility = if (showHeatmap) Property.VISIBLE else Property.NONE
         val heatOpacityExpr = when (displayMode) {
             HeatmapDisplayMode.HEATMAP_GLOW -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(0, 0.88f),
-                Expression.stop(13.5, 0.86f),
-                Expression.stop(16.0, 0.42f),
-                Expression.stop(18.5, 0.18f)
+                Expression.stop(0.0, 0.88f),
+                Expression.stop(12.4, 0.84f),
+                Expression.stop(13.3, 0.44f),
+                Expression.stop(14.2, 0.0f)
             )
             HeatmapDisplayMode.HYBRID -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(0, 0.86f),
-                Expression.stop(13.5, 0.84f),
-                Expression.stop(16.0, 0.38f),
-                Expression.stop(18.5, 0.15f)
+                Expression.stop(0.0, 0.86f),
+                Expression.stop(12.4, 0.82f),
+                Expression.stop(13.3, 0.42f),
+                Expression.stop(14.2, 0.0f)
             )
             HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
         }
@@ -912,21 +1106,17 @@ object MapStyleHelper {
             Expression.stop(0, 0.95f),
             Expression.stop(6, 1.35f),
             Expression.stop(10, 1.85f),
-            Expression.stop(14, 2.55f),
-            Expression.stop(17, 3.40f),
-            Expression.stop(21, 4.25f)
+            Expression.stop(14, 2.45f)
         )
         val heatRadiusExpr = Expression.interpolate(
             Expression.linear(),
             Expression.zoom(),
-            Expression.stop(0, 22f),
-            Expression.stop(6, 34f),
-            Expression.stop(10, 48f),
-            Expression.stop(14, 64f),
-            Expression.stop(17, 84f),
-            Expression.stop(21, 108f)
+            Expression.stop(0, 18f),
+            Expression.stop(6, 28f),
+            Expression.stop(10, 40f),
+            Expression.stop(13.5, 52f)
         )
-        // Smooth, anti-aliased multi-stop ramp prevents 8-bit/half-float stair-stepping artifacts
+        // Smooth, anti-aliased multi-stop ramp matching Snap Map thermal islands
         val heatColorExpr = Expression.interpolate(
             Expression.linear(),
             Expression.heatmapDensity(),
@@ -947,6 +1137,7 @@ object MapStyleHelper {
         val existingHeat = style.getLayerAs<HeatmapLayer>(ROUTINE_HEATMAP_LAYER_ID)
         if (existingHeat == null) {
             val routineHeatmapLayer = HeatmapLayer(ROUTINE_HEATMAP_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
+                maxZoom = 14.5f
                 setProperties(
                     PropertyFactory.heatmapWeight(Expression.get("weight")),
                     PropertyFactory.heatmapIntensity(heatIntensityExpr),
@@ -962,6 +1153,7 @@ object MapStyleHelper {
                 style.addLayer(routineHeatmapLayer)
             }
         } else {
+            existingHeat.maxZoom = 14.5f
             existingHeat.setProperties(
                 PropertyFactory.heatmapIntensity(heatIntensityExpr),
                 PropertyFactory.heatmapRadius(heatRadiusExpr),
@@ -971,139 +1163,69 @@ object MapStyleHelper {
             )
         }
 
-        // Full-native-resolution GPU Vector Thermal Contours (zero FBO blur/pixelation at close zoom 13.5..21.0)
-        // Ordered bottom-to-top per band so all points merge cleanly like a contour map beneath base labels.
-        val vecContourOpacity = if (showHeatmap) {
-            Expression.interpolate(
+        // Full-Native-Resolution 512x512 Supersampled GPU Sprite Layers (zoom 12.2..21.0)
+        // Ordered bottom-to-top per band (Blue -> Cyan -> Green -> Yellow-Orange -> Coral-Red)
+        // directly beneath base map labels so adjacent hot spots coalesce seamlessly without blur/pixelation.
+        val hdSpriteOpacityExpr = when (displayMode) {
+            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(13.2, 0.0f),
-                Expression.stop(15.2, 0.58f),
-                Expression.stop(17.5, 0.78f),
-                Expression.stop(21.0, 0.82f)
+                Expression.stop(12.2, 0.0f),
+                Expression.stop(13.3, 0.56f),
+                Expression.stop(14.2, 0.90f),
+                Expression.stop(21.0, 0.90f)
             )
-        } else {
-            Expression.literal(0.0f)
-        }
-        val vecContourBlueOpacity = if (showHeatmap) {
-            Expression.interpolate(
+            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(13.2, 0.0f),
-                Expression.stop(15.2, 0.36f),
-                Expression.stop(17.5, 0.48f),
-                Expression.stop(21.0, 0.50f)
+                Expression.stop(12.2, 0.0f),
+                Expression.stop(13.3, 0.54f),
+                Expression.stop(14.2, 0.86f),
+                Expression.stop(21.0, 0.86f)
             )
-        } else {
-            Expression.literal(0.0f)
-        }
-        val vecContourCyanOpacity = if (showHeatmap) {
-            Expression.interpolate(
-                Expression.linear(),
-                Expression.zoom(),
-                Expression.stop(13.2, 0.0f),
-                Expression.stop(15.2, 0.48f),
-                Expression.stop(17.5, 0.64f),
-                Expression.stop(21.0, 0.68f)
-            )
-        } else {
-            Expression.literal(0.0f)
+            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.0f)
         }
 
-        val vecBands = listOf(
-            Triple(
-                ROUTINE_HEAT_OUTER_BLUE_LAYER_ID,
-                AndroidColor.parseColor("#4080FF"),
-                Triple(
-                    Expression.interpolate(
-                        Expression.linear(),
-                        Expression.zoom(),
-                        Expression.stop(13.0, 34f),
-                        Expression.stop(16.0, 62f),
-                        Expression.stop(19.0, 90f),
-                        Expression.stop(21.0, 114f)
-                    ),
-                    0.95f,
-                    vecContourBlueOpacity
-                )
-            ),
-            Triple(
-                ROUTINE_HEAT_CYAN_LAYER_ID,
-                AndroidColor.parseColor("#38DEF0"),
-                Triple(
-                    Expression.interpolate(
-                        Expression.linear(),
-                        Expression.zoom(),
-                        Expression.stop(13.0, 26f),
-                        Expression.stop(16.0, 48f),
-                        Expression.stop(19.0, 70f),
-                        Expression.stop(21.0, 88f)
-                    ),
-                    0.85f,
-                    vecContourCyanOpacity
-                )
-            ),
-            Triple(
-                ROUTINE_HEAT_GREEN_LAYER_ID,
-                AndroidColor.parseColor("#42F252"),
-                Triple(
-                    Expression.interpolate(
-                        Expression.linear(),
-                        Expression.zoom(),
-                        Expression.stop(13.0, 19f),
-                        Expression.stop(16.0, 36f),
-                        Expression.stop(19.0, 52f),
-                        Expression.stop(21.0, 66f)
-                    ),
-                    0.72f,
-                    vecContourOpacity
-                )
-            ),
-            Triple(
-                ROUTINE_HEAT_YELLOW_LAYER_ID,
-                AndroidColor.parseColor("#FFB820"),
-                Triple(
-                    Expression.interpolate(
-                        Expression.linear(),
-                        Expression.zoom(),
-                        Expression.stop(13.0, 14f),
-                        Expression.stop(16.0, 25f),
-                        Expression.stop(19.0, 37f),
-                        Expression.stop(21.0, 47f)
-                    ),
-                    0.50f,
-                    vecContourOpacity
-                )
-            ),
-            Triple(
-                ROUTINE_HEAT_RED_LAYER_ID,
-                AndroidColor.parseColor("#EF3E38"),
-                Triple(
-                    Expression.interpolate(
-                        Expression.linear(),
-                        Expression.zoom(),
-                        Expression.stop(13.0, 10.5f),
-                        Expression.stop(16.0, 19.5f),
-                        Expression.stop(19.0, 29f),
-                        Expression.stop(21.0, 37f)
-                    ),
-                    0.34f,
-                    vecContourOpacity
-                )
-            )
+        val weightMultiplierExpr = Expression.interpolate(
+            Expression.linear(),
+            Expression.coalesce(Expression.get("weight"), Expression.literal(1.0)),
+            Expression.stop(0.8, 0.92f),
+            Expression.stop(1.5, 1.04f),
+            Expression.stop(3.0, 1.20f),
+            Expression.stop(4.0, 1.30f)
         )
 
-        for ((layerId, colorInt, spec) in vecBands) {
-            val (radiusExpr, blurVal, opacityExpr) = spec
-            val existingBand = style.getLayerAs<CircleLayer>(layerId)
+        for (spec in HEAT_SPRITE_BANDS) {
+            if (style.getImage(spec.imageId) == null) {
+                style.addImage(spec.imageId, getOrCreateHeatBandBitmap(spec.bandIndex))
+            }
+            val s = spec.scaleRelativeToBlue
+            val zoomScaleExpr = Expression.interpolate(
+                Expression.linear(),
+                Expression.zoom(),
+                Expression.stop(12.2, 0.66f * s),
+                Expression.stop(14.2, 0.88f * s),
+                Expression.stop(17.5, 1.24f * s),
+                Expression.stop(21.0, 1.62f * s)
+            )
+            val iconSizeExpr = Expression.product(zoomScaleExpr, weightMultiplierExpr)
+
+            val existingRaw = style.getLayer(spec.layerId)
+            if (existingRaw != null && existingRaw !is SymbolLayer) {
+                style.removeLayer(existingRaw)
+            }
+            val existingBand = style.getLayerAs<SymbolLayer>(spec.layerId)
             if (existingBand == null) {
-                val bandLayer = CircleLayer(layerId, ROUTINE_STRIKE_SOURCE_ID).apply {
-                    minZoom = 13.0f
+                val bandLayer = SymbolLayer(spec.layerId, ROUTINE_STRIKE_SOURCE_ID).apply {
+                    minZoom = 12.0f
                     setProperties(
-                        PropertyFactory.circleRadius(radiusExpr),
-                        PropertyFactory.circleColor(colorInt),
-                        PropertyFactory.circleBlur(blurVal),
-                        PropertyFactory.circleOpacity(opacityExpr),
+                        PropertyFactory.iconImage(spec.imageId),
+                        PropertyFactory.iconSize(iconSizeExpr),
+                        PropertyFactory.iconOpacity(hdSpriteOpacityExpr),
+                        PropertyFactory.iconAllowOverlap(true),
+                        PropertyFactory.iconIgnorePlacement(true),
+                        PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_MAP),
+                        PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
                         PropertyFactory.visibility(heatVisibility)
                     )
                 }
@@ -1113,38 +1235,23 @@ object MapStyleHelper {
                     style.addLayer(bandLayer)
                 }
             } else {
+                existingBand.minZoom = 12.0f
                 existingBand.setProperties(
-                    PropertyFactory.circleRadius(radiusExpr),
-                    PropertyFactory.circleBlur(blurVal),
-                    PropertyFactory.circleOpacity(opacityExpr),
+                    PropertyFactory.iconImage(spec.imageId),
+                    PropertyFactory.iconSize(iconSizeExpr),
+                    PropertyFactory.iconOpacity(hdSpriteOpacityExpr),
                     PropertyFactory.visibility(heatVisibility)
                 )
             }
         }
 
-        val showPins = displayMode != HeatmapDisplayMode.HEATMAP_GLOW
-        val circleVisibility = if (showPins) Property.VISIBLE else Property.NONE
+        // Discrete routine pins strictly in CLUSTER_PINS mode so HYBRID/HEATMAP_GLOW stay pure thermal islands
         val isPinsMode = displayMode == HeatmapDisplayMode.CLUSTER_PINS
-        val auraOpacityExpr = when (displayMode) {
-            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.30f)
-            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
-                Expression.linear(),
-                Expression.zoom(),
-                Expression.stop(13, 0.0f),
-                Expression.stop(15, 0.24f)
-            )
-            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.literal(0.0f)
-        }
-        val coreOpacityExpr = when (displayMode) {
-            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.95f)
-            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
-                Expression.linear(),
-                Expression.zoom(),
-                Expression.stop(13.5, 0.0f),
-                Expression.stop(15.0, 0.88f)
-            )
-            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.literal(0.0f)
-        }
+        val pinVisibility = if (isPinsMode) Property.VISIBLE else Property.NONE
+        val showRoutineLabels = displayMode != HeatmapDisplayMode.HEATMAP_GLOW
+        val labelVisibility = if (showRoutineLabels) Property.VISIBLE else Property.NONE
+        val auraOpacityExpr = if (isPinsMode) Expression.literal(0.30f) else Expression.literal(0.0f)
+        val coreOpacityExpr = if (isPinsMode) Expression.literal(0.95f) else Expression.literal(0.0f)
         val strokeColor = if (theme == MapVisualTheme.OBSIDIAN_DARK) DARK_LABEL_TEXT else LIGHT_LABEL_TEXT
 
         val existingOuterHalo = style.getLayerAs<CircleLayer>(ROUTINE_HALO_LAYER_ID)
@@ -1164,14 +1271,14 @@ object MapStyleHelper {
                         PropertyFactory.circleColor(AndroidColor.parseColor("#38BDF8")),
                         PropertyFactory.circleBlur(1.0f),
                         PropertyFactory.circleOpacity(auraOpacityExpr),
-                        PropertyFactory.visibility(circleVisibility)
+                        PropertyFactory.visibility(pinVisibility)
                     )
                 }
             )
         } else {
             existingOuterHalo.setProperties(
                 PropertyFactory.circleOpacity(auraOpacityExpr),
-                PropertyFactory.visibility(circleVisibility)
+                PropertyFactory.visibility(pinVisibility)
             )
         }
 
@@ -1192,14 +1299,14 @@ object MapStyleHelper {
                         PropertyFactory.circleColor(AndroidColor.parseColor("#4ADE80")),
                         PropertyFactory.circleBlur(0.9f),
                         PropertyFactory.circleOpacity(auraOpacityExpr),
-                        PropertyFactory.visibility(circleVisibility)
+                        PropertyFactory.visibility(pinVisibility)
                     )
                 }
             )
         } else {
             existingInnerHalo.setProperties(
                 PropertyFactory.circleOpacity(auraOpacityExpr),
-                PropertyFactory.visibility(circleVisibility)
+                PropertyFactory.visibility(pinVisibility)
             )
         }
 
@@ -1218,23 +1325,23 @@ object MapStyleHelper {
                             )
                         ),
                         PropertyFactory.circleColor(AndroidColor.parseColor("#EF4444")),
-                        PropertyFactory.circleBlur(if (isPinsMode) 0.0f else 0.25f),
-                        PropertyFactory.circleStrokeWidth(if (isPinsMode) 1.8f else 0.0f),
+                        PropertyFactory.circleBlur(0.0f),
+                        PropertyFactory.circleStrokeWidth(1.8f),
                         PropertyFactory.circleStrokeColor(strokeColor),
                         PropertyFactory.circleOpacity(coreOpacityExpr),
-                        PropertyFactory.circleStrokeOpacity(if (isPinsMode) coreOpacityExpr else Expression.literal(0.0f)),
-                        PropertyFactory.visibility(circleVisibility)
+                        PropertyFactory.circleStrokeOpacity(coreOpacityExpr),
+                        PropertyFactory.visibility(pinVisibility)
                     )
                 }
             )
         } else {
             existingCircle.setProperties(
-                PropertyFactory.circleBlur(if (isPinsMode) 0.0f else 0.25f),
-                PropertyFactory.circleStrokeWidth(if (isPinsMode) 1.8f else 0.0f),
+                PropertyFactory.circleBlur(0.0f),
+                PropertyFactory.circleStrokeWidth(1.8f),
                 PropertyFactory.circleStrokeColor(strokeColor),
                 PropertyFactory.circleOpacity(coreOpacityExpr),
-                PropertyFactory.circleStrokeOpacity(if (isPinsMode) coreOpacityExpr else Expression.literal(0.0f)),
-                PropertyFactory.visibility(circleVisibility)
+                PropertyFactory.circleStrokeOpacity(coreOpacityExpr),
+                PropertyFactory.visibility(pinVisibility)
             )
         }
 
@@ -1257,7 +1364,7 @@ object MapStyleHelper {
                         PropertyFactory.textColor(labelColor),
                         PropertyFactory.textHaloColor(labelHalo),
                         PropertyFactory.textHaloWidth(1.5f),
-                        PropertyFactory.visibility(circleVisibility)
+                        PropertyFactory.visibility(labelVisibility)
                     )
                 }
             )
@@ -1265,7 +1372,7 @@ object MapStyleHelper {
             existingSymbol.setProperties(
                 PropertyFactory.textColor(labelColor),
                 PropertyFactory.textHaloColor(labelHalo),
-                PropertyFactory.visibility(circleVisibility)
+                PropertyFactory.visibility(labelVisibility)
             )
         }
     }
@@ -1307,6 +1414,99 @@ object MapStyleHelper {
                         PropertyFactory.circleStrokeColor(AndroidColor.WHITE)
                     )
                 }
+            )
+        }
+    }
+
+    /**
+     * Renders all registered strikes for a single person directly onto the Location Picker map
+     * so editing or adding a strike location shows every existing pin under that person's name.
+     */
+    fun applyPickerPersonLocations(
+        style: Style,
+        theme: MapVisualTheme,
+        personLocations: List<MappedStrikePoint>
+    ) {
+        val geoJson = buildGeoJsonFromPoints(personLocations)
+        val existingSource = style.getSourceAs<GeoJsonSource>(PICKER_PERSON_SOURCE_ID)
+        if (existingSource != null) {
+            existingSource.setGeoJson(geoJson)
+        } else {
+            style.addSource(
+                GeoJsonSource(
+                    PICKER_PERSON_SOURCE_ID,
+                    geoJson,
+                    GeoJsonOptions().withMaxZoom(21).withBuffer(256).withTolerance(0.0f)
+                )
+            )
+        }
+
+        val isDark = theme == MapVisualTheme.OBSIDIAN_DARK
+        val visibility = if (personLocations.isNotEmpty()) Property.VISIBLE else Property.NONE
+
+        val existingRoutine = style.getLayerAs<CircleLayer>(PICKER_PERSON_ROUTINE_LAYER_ID)
+        if (existingRoutine == null) {
+            style.addLayer(
+                CircleLayer(PICKER_PERSON_ROUTINE_LAYER_ID, PICKER_PERSON_SOURCE_ID).apply {
+                    setFilter(Expression.eq(Expression.get("isFirstStrike"), Expression.literal(false)))
+                    setProperties(
+                        PropertyFactory.circleRadius(8.0f),
+                        PropertyFactory.circleColor(AndroidColor.parseColor("#D946EF")),
+                        PropertyFactory.circleStrokeWidth(2.0f),
+                        PropertyFactory.circleStrokeColor(AndroidColor.WHITE),
+                        PropertyFactory.circleOpacity(0.92f),
+                        PropertyFactory.visibility(visibility)
+                    )
+                }
+            )
+        } else {
+            existingRoutine.setProperties(PropertyFactory.visibility(visibility))
+        }
+
+        val existingFirst = style.getLayerAs<CircleLayer>(PICKER_PERSON_FIRST_LAYER_ID)
+        if (existingFirst == null) {
+            style.addLayer(
+                CircleLayer(PICKER_PERSON_FIRST_LAYER_ID, PICKER_PERSON_SOURCE_ID).apply {
+                    setFilter(Expression.eq(Expression.get("isFirstStrike"), Expression.literal(true)))
+                    setProperties(
+                        PropertyFactory.circleRadius(9.5f),
+                        PropertyFactory.circleColor(AndroidColor.parseColor("#0B1221")),
+                        PropertyFactory.circleStrokeWidth(2.6f),
+                        PropertyFactory.circleStrokeColor(AndroidColor.parseColor("#FBBF24")),
+                        PropertyFactory.circleOpacity(0.96f),
+                        PropertyFactory.visibility(visibility)
+                    )
+                }
+            )
+        } else {
+            existingFirst.setProperties(PropertyFactory.visibility(visibility))
+        }
+
+        val labelColor = if (isDark) DARK_LABEL_TEXT else LIGHT_LABEL_TEXT
+        val labelHalo = if (isDark) DARK_LABEL_HALO else LIGHT_LABEL_HALO
+        val existingLabels = style.getLayerAs<SymbolLayer>(PICKER_PERSON_LABEL_LAYER_ID)
+        val labelExpr = Expression.coalesce(Expression.get("placeName"), Expression.get("name"))
+        if (existingLabels == null) {
+            style.addLayer(
+                SymbolLayer(PICKER_PERSON_LABEL_LAYER_ID, PICKER_PERSON_SOURCE_ID).apply {
+                    setProperties(
+                        PropertyFactory.textField(labelExpr),
+                        PropertyFactory.textSize(11f),
+                        PropertyFactory.textOffset(arrayOf(0f, 1.35f)),
+                        PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
+                        PropertyFactory.textColor(labelColor),
+                        PropertyFactory.textHaloColor(labelHalo),
+                        PropertyFactory.textHaloWidth(1.4f),
+                        PropertyFactory.textAllowOverlap(true),
+                        PropertyFactory.visibility(visibility)
+                    )
+                }
+            )
+        } else {
+            existingLabels.setProperties(
+                PropertyFactory.textColor(labelColor),
+                PropertyFactory.textHaloColor(labelHalo),
+                PropertyFactory.visibility(visibility)
             )
         }
     }

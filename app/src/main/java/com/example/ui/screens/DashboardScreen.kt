@@ -706,12 +706,20 @@ fun DashboardScreen(
                 )
                 dialogWindow?.setBackgroundDrawableResource(android.R.color.transparent)
             }
+            val personMappedPoints = remember(target, eventsByIndividual) {
+                com.example.ui.map.MapStyleHelper.collectAllMappedPoints(
+                    listOf(target),
+                    eventsByIndividual[target.id].orEmpty()
+                )
+            }
             com.example.ui.components.FirstStrikeLocationPickerDialog(
                 initialLat = target.firstStrikeLat,
                 initialLng = target.firstStrikeLng,
                 initialPlaceName = target.firstStrikePlaceName,
                 currentLang = currentLang,
                 isDarkTheme = isDarkTheme,
+                personName = target.fullName,
+                existingPersonLocations = personMappedPoints,
                 onConfirm = { lat, lng, place ->
                     viewModel.updatePersonFirstStrikeLocation(target.id, lat, lng, place)
                     personForLocationEdit = null
@@ -729,6 +737,7 @@ fun DashboardScreen(
         val target = personForMultiStrike!!
         PersonMultiStrikeDialog(
             individual = target,
+            personStrikeEvents = eventsByIndividual[target.id].orEmpty(),
             currentLang = currentLang,
             isDarkTheme = isDarkTheme,
             isHapticEnabled = isHapticFeedbackEnabled,
@@ -767,6 +776,12 @@ fun DashboardScreen(
                 )
                 dialogWindow?.setBackgroundDrawableResource(android.R.color.transparent)
             }
+            val ownerMappedPoints = remember(targetEvent, ownerPerson, eventsByIndividual) {
+                com.example.ui.map.MapStyleHelper.collectAllMappedPoints(
+                    listOfNotNull(ownerPerson),
+                    eventsByIndividual[targetEvent.individualId].orEmpty()
+                )
+            }
             com.example.ui.components.FirstStrikeLocationPickerDialog(
                 initialLat = targetEvent.lat ?: ownerPerson?.firstStrikeLat,
                 initialLng = targetEvent.lng ?: ownerPerson?.firstStrikeLng,
@@ -780,6 +795,8 @@ fun DashboardScreen(
                 },
                 allowCategorySelection = true,
                 initialIsFirstStrike = targetEvent.isFirstStrike,
+                personName = targetEvent.individualName,
+                existingPersonLocations = ownerMappedPoints,
                 onConfirmWithCategory = { lat, lng, place, isFirstStrike ->
                     viewModel.updateStrikeEventLocation(
                         eventId = targetEvent.id,
@@ -1397,8 +1414,30 @@ fun IndividualRecordCard(
                 }
             }
 
-            if (onEditFirstStrikeLocation != null || individual.hasFirstStrikeLocation) {
+            val pinnedLocationEvents = remember(personStrikeEvents) {
+                personStrikeEvents.filter { it.hasLocation }
+            }
+            if (onEditFirstStrikeLocation != null || individual.hasFirstStrikeLocation || pinnedLocationEvents.isNotEmpty()) {
                 val locCyan = if (darkTheme) NeonCyan else DayCyan
+                val firstEventFallback = remember(pinnedLocationEvents) {
+                    pinnedLocationEvents.firstOrNull { it.isFirstStrike }
+                }
+                val hasFirstLoc = individual.hasFirstStrikeLocation || firstEventFallback != null
+                val primaryLat = if (individual.hasFirstStrikeLocation) individual.firstStrikeLat else firstEventFallback?.lat
+                val primaryLng = if (individual.hasFirstStrikeLocation) individual.firstStrikeLng else firstEventFallback?.lng
+                val primaryPlace = if (individual.hasFirstStrikeLocation) {
+                    individual.firstStrikePlaceName
+                } else {
+                    firstEventFallback?.placeName.orEmpty()
+                }
+                val pinnedPlaceLabels = remember(pinnedLocationEvents) {
+                    pinnedLocationEvents.map { ev ->
+                        ev.placeName.ifBlank {
+                            String.format(java.util.Locale.US, "%.4f, %.4f", ev.lat, ev.lng)
+                        }
+                    }.distinct()
+                }
+
                 Spacer(modifier = Modifier.height(10.dp))
                 LiquidGlassInnerPanel(
                     modifier = Modifier
@@ -1406,76 +1445,105 @@ fun IndividualRecordCard(
                         .testTag("person_first_strike_location_panel_${individual.id}"),
                     darkTheme = darkTheme
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.weight(1f)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.LocationOn,
-                                contentDescription = null,
-                                tint = if (individual.hasFirstStrikeLocation) NeonAmber else locCyan,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (isAr) "موقع الضربة الأولى" else "First-Strike Location",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = PlusJakartaSans,
-                                    color = locCyan
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = if (hasFirstLoc) NeonAmber else locCyan,
+                                    modifier = Modifier.size(16.dp)
                                 )
-                                Text(
-                                    text = if (individual.hasFirstStrikeLocation) {
-                                        val coords = String.format(
-                                            java.util.Locale.US,
-                                            "%.4f, %.4f",
-                                            individual.firstStrikeLat,
-                                            individual.firstStrikeLng
-                                        )
-                                        individual.firstStrikePlaceName.ifBlank { coords }
-                                    } else {
-                                        if (isAr) "لم يتم تحديد موقع بعد" else "No location pinned yet"
-                                    },
-                                    fontSize = 11.5.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (isAr) "موقع الضربة الأولى" else "First-Strike Location",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = PlusJakartaSans,
+                                        color = locCyan
+                                    )
+                                    Text(
+                                        text = when {
+                                            hasFirstLoc -> {
+                                                val coords = String.format(
+                                                    java.util.Locale.US,
+                                                    "%.4f, %.4f",
+                                                    primaryLat,
+                                                    primaryLng
+                                                )
+                                                primaryPlace.ifBlank { coords }
+                                            }
+                                            pinnedPlaceLabels.isNotEmpty() -> {
+                                                if (isAr) {
+                                                    "مواقع سترايكات مسجلة (${pinnedLocationEvents.size}): ${pinnedPlaceLabels.joinToString(" • ")}"
+                                                } else {
+                                                    "Pinned strike locations (${pinnedLocationEvents.size}): ${pinnedPlaceLabels.joinToString(" • ")}"
+                                                }
+                                            }
+                                            else -> {
+                                                if (isAr) "لم يتم تحديد موقع بعد" else "No location pinned yet"
+                                            }
+                                        },
+                                        fontSize = 11.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            if (onEditFirstStrikeLocation != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(locCyan.copy(alpha = if (darkTheme) 0.18f else 0.12f))
+                                        .border(1.dp, locCyan.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                                            onEditFirstStrikeLocation()
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                        .testTag("btn_edit_person_location_${individual.id}"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = when {
+                                            hasFirstLoc && isAr -> "تعديل"
+                                            hasFirstLoc -> "Edit"
+                                            isAr -> "تحديد"
+                                            else -> "Pin"
+                                        },
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = locCyan
+                                    )
+                                }
                             }
                         }
 
-                        if (onEditFirstStrikeLocation != null) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(locCyan.copy(alpha = if (darkTheme) 0.18f else 0.12f))
-                                    .border(1.dp, locCyan.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
-                                    .clickable {
-                                        HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
-                                        onEditFirstStrikeLocation()
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 5.dp)
-                                    .testTag("btn_edit_person_location_${individual.id}"),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = when {
-                                        individual.hasFirstStrikeLocation && isAr -> "تعديل"
-                                        individual.hasFirstStrikeLocation -> "Edit"
-                                        isAr -> "تحديد"
-                                        else -> "Pin"
-                                    },
-                                    fontSize = 10.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = locCyan
-                                )
-                            }
+                        if (hasFirstLoc && pinnedPlaceLabels.isNotEmpty()) {
+                            Text(
+                                text = if (isAr) {
+                                    "مواقع السترايكات المسجلة (${pinnedLocationEvents.size}): ${pinnedPlaceLabels.joinToString(" • ")}"
+                                } else {
+                                    "Mapped Strikes (${pinnedLocationEvents.size}): ${pinnedPlaceLabels.joinToString(" • ")}"
+                                },
+                                fontSize = 10.sp,
+                                color = if (darkTheme) Color(0xFF94A3B8) else Color(0xFF475569),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
@@ -1489,12 +1557,21 @@ fun IndividualRecordCard(
                     personStrikeEvents.filter { it.isFirstStrike }.sumOf { it.count.coerceAtLeast(1) }
                 }
                 val routineCount = remember(personStrikeEvents) {
-                    personStrikeEvents.filter { !it.isFirstStrike && !IndividualRepository.isHistoricalStrikeType(it.strikeType) }
-                        .sumOf { it.count.coerceAtLeast(1) }
+                    personStrikeEvents.filter {
+                        !it.isFirstStrike && (it.hasLocation || !IndividualRepository.isHistoricalStrikeType(it.strikeType))
+                    }.sumOf { it.count.coerceAtLeast(1) }
                 }
                 var showAllPersonEvents by remember(individual.id) { mutableStateOf(false) }
                 val nonHistoricalEvents = remember(personStrikeEvents) {
-                    personStrikeEvents.filterNot { IndividualRepository.isHistoricalStrikeType(it.strikeType) }
+                    personStrikeEvents
+                        .filter { ev ->
+                            ev.hasLocation || !IndividualRepository.isHistoricalStrikeType(ev.strikeType)
+                        }
+                        .sortedWith(
+                            compareByDescending<StrikeEvent> { it.hasLocation }
+                                .thenByDescending { it.timestamp }
+                                .thenByDescending { it.id }
+                        )
                 }
                 val displayedEvents = if (showAllPersonEvents) {
                     nonHistoricalEvents
@@ -2761,6 +2838,7 @@ private fun PersonHistoricalStrikesEditorDialog(
 @Composable
 private fun PersonMultiStrikeDialog(
     individual: Individual,
+    personStrikeEvents: List<StrikeEvent> = emptyList(),
     currentLang: String,
     isDarkTheme: Boolean,
     isHapticEnabled: Boolean,
@@ -3158,6 +3236,12 @@ private fun PersonMultiStrikeDialog(
                 )
                 dialogWindow?.setBackgroundDrawableResource(android.R.color.transparent)
             }
+            val personExistingLocations = remember(individual, personStrikeEvents) {
+                com.example.ui.map.MapStyleHelper.collectAllMappedPoints(
+                    listOf(individual),
+                    personStrikeEvents
+                )
+            }
             com.example.ui.components.FirstStrikeLocationPickerDialog(
                 initialLat = pickedLat,
                 initialLng = pickedLng,
@@ -3166,6 +3250,8 @@ private fun PersonMultiStrikeDialog(
                 isDarkTheme = isDarkTheme,
                 allowCategorySelection = true,
                 initialIsFirstStrike = isFirstStrike,
+                personName = individual.fullName,
+                existingPersonLocations = personExistingLocations,
                 onConfirmWithCategory = { lat, lng, place, first ->
                     pickedLat = lat
                     pickedLng = lng

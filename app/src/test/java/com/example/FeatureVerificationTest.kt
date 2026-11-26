@@ -86,8 +86,8 @@ class FeatureVerificationTest {
         val dailyTask = RoadmapManager.dailyTasks.value.first()
         assertTrue(RoadmapManager.completeTask(context, dailyTask.id))
         // 6. Skip Key completion
-        ProfileManager.grantSkipKeys(context, SkipKeyType.WOODEN, 1)
-        val skippable = RoadmapManager.dailyTasks.value.first { it.canBeSkipped && !it.isLocked() }
+        val skippable = RoadmapManager.dailyTasks.value.first { it.status == TaskStatus.PENDING && it.canBeSkipped && !it.isLocked() }
+        ProfileManager.grantSkipKeys(context, skippable.requiredSkipKey, 1)
         assertTrue(RoadmapManager.useSkipKeyForTask(context, skippable.id))
 
         val history = RoadmapManager.xpHistory.value

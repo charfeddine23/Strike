@@ -26,6 +26,7 @@ import com.example.data.flame.FlameManager
 import com.example.data.local.AppDatabase
 import com.example.data.map.NominatimGeocoder
 import com.example.data.model.Individual
+import com.example.data.model.StrikeEvent
 import com.example.data.profile.ProfileManager
 import com.example.data.repository.IndividualRepository
 import com.example.data.roadmap.RoadmapManager
@@ -1040,5 +1041,302 @@ class FirstStrikeHeatmapTest {
             hasTestTag("heatmap_all_strikes_panel") and hasAnyDescendant(hasText("نسيم الباهي", substring = true)),
             useUnmergedTree = true
         ).assertIsDisplayed()
+    }
+
+    @Test
+    fun mapStyleHelper_createsHighDefinitionRadialSpectralSprites() {
+        val bands = (0..4).map { band -> MapStyleHelper.createHeatBandBitmap(band) }
+        bands.forEachIndexed { band, bmp ->
+            assertEquals(MapStyleHelper.HEAT_SPRITE_SIZE_PX, bmp.width)
+            assertEquals(MapStyleHelper.HEAT_SPRITE_SIZE_PX, bmp.height)
+            assertEquals(android.util.DisplayMetrics.DENSITY_XXHIGH, bmp.density)
+
+            val cornerAlpha = (bmp.getPixel(0, 0) ushr 24) and 0xFF
+            assertEquals("Band $band corner must stay strictly transparent", 0, cornerAlpha)
+
+            val centerPixel = bmp.getPixel(bmp.width / 2, bmp.height / 2)
+            val centerAlpha = (centerPixel ushr 24) and 0xFF
+            assertTrue("Band $band center alpha ($centerAlpha) must be visibly dense", centerAlpha in 80..220)
+
+            val edgePixel = bmp.getPixel((bmp.width * 0.90).toInt(), bmp.height / 2)
+            val edgeAlpha = (edgePixel ushr 24) and 0xFF
+            assertTrue("Band $band must fall off smoothly toward edge ($edgeAlpha < $centerAlpha)", edgeAlpha < centerAlpha)
+        }
+
+        val redCenter = bands[4].getPixel(MapStyleHelper.HEAT_SPRITE_SIZE_PX / 2, MapStyleHelper.HEAT_SPRITE_SIZE_PX / 2)
+        val redR = (redCenter ushr 16) and 0xFF
+        val redB = redCenter and 0xFF
+        assertTrue("Band 4 core should be Coral-Red dominant (R=$redR > B=$redB)", redR > redB + 120)
+    }
+
+    @Test
+    fun oldHistoricalStrikeLocation_updatesPersonProfileAndShowsInDashboardCard() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val db = AppDatabase.getDatabase(ctx)
+        val repo = IndividualRepository(db.individualDao(), db.strikeEventDao())
+
+        val personId = runBlocking(Dispatchers.IO) {
+            repo.save(
+                Individual(
+                    fullName = "زياد التاريخي",
+                    type = "TS",
+                    length = 22.0,
+                    width = 10.0,
+                    size = 220.0,
+                    sScore = 80.0,
+                    fScore = 78.0,
+                    cScore = 82.0,
+                    boost = 240.0,
+                    strikeCount = 1
+                )
+            )
+        }
+        val oldEventId = runBlocking(Dispatchers.IO) {
+            db.strikeEventDao().insertEvent(
+                StrikeEvent(
+                    individualId = personId,
+                    individualName = "زياد التاريخي",
+                    year = 2024,
+                    date = "2024-05-10",
+                    time = "11:15",
+                    count = 1,
+                    strikeType = "Historical",
+                    performanceValue = 240.0,
+                    notes = "Old untagged strike",
+                    timestamp = 1_715_339_700_000L
+                )
+            )
+        }
+
+        // Pin old historical event location and promote to First Strike
+        runBlocking(Dispatchers.IO) {
+            repo.updateStrikeEventLocationAndCategory(
+                eventId = oldEventId,
+                lat = 36.7538,
+                lng = 3.0588,
+                placeName = "Hydra Old Strike",
+                isFirstStrike = true
+            )
+        }
+
+        val updatedPerson = runBlocking(Dispatchers.IO) { db.individualDao().getIndividualById(personId) }
+        assertNotNull(updatedPerson)
+        assertTrue("First strike location must be recorded on Individual", updatedPerson!!.hasFirstStrikeLocation)
+        assertEquals("Hydra Old Strike", updatedPerson.firstStrikePlaceName)
+
+        // Also update the same event later (regression check: previously !ind.hasFirstStrikeLocation blocked updates)
+        runBlocking(Dispatchers.IO) {
+            repo.updateStrikeEventLocationAndCategory(
+                eventId = oldEventId,
+                lat = 36.7610,
+                lng = 3.0510,
+                placeName = "El Biar Summit",
+                isFirstStrike = true
+            )
+        }
+        val reUpdatedPerson = runBlocking(Dispatchers.IO) { db.individualDao().getIndividualById(personId) }
+        assertEquals("El Biar Summit", reUpdatedPerson?.firstStrikePlaceName)
+
+        // Verify inside striker profile card in DashboardScreen
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("record_expand_btn_$personId").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("record_expand_btn_$personId").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("person_first_strike_location_panel_$personId").performScrollTo()
+        composeRule.onNode(
+            hasTestTag("person_first_strike_location_panel_$personId") and
+                hasAnyDescendant(hasText("El Biar Summit", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+
+        composeRule.onNodeWithTag("person_multi_strike_panel_$personId").performScrollTo()
+        composeRule.onNode(
+            hasTestTag("person_multi_strike_panel_$personId") and
+                hasAnyDescendant(hasText("El Biar Summit", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun locationPicker_isCompactAndDisplaysAllRegisteredStrikesForPerson() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val db = AppDatabase.getDatabase(ctx)
+        val repo = IndividualRepository(db.individualDao(), db.strikeEventDao())
+
+        val personId = runBlocking(Dispatchers.IO) {
+            repo.save(
+                Individual(
+                    fullName = "نزار متعدد المواقع",
+                    type = "FG",
+                    length = 21.0,
+                    width = 10.0,
+                    size = 210.0,
+                    sScore = 76.0,
+                    fScore = 76.0,
+                    cScore = 76.0,
+                    boost = 228.0,
+                    strikeCount = 3,
+                    firstStrikeLat = 36.7480,
+                    firstStrikeLng = 3.0400,
+                    firstStrikePlaceName = "Algiers Hydra"
+                )
+            )
+        }
+        val ev1Id = runBlocking(Dispatchers.IO) {
+            db.strikeEventDao().insertEvent(
+                StrikeEvent(
+                    individualId = personId,
+                    individualName = "نزار متعدد المواقع",
+                    year = 2026,
+                    date = "2026-10-05",
+                    time = "15:00",
+                    count = 1,
+                    strikeType = "Routine",
+                    performanceValue = 228.0,
+                    lat = 35.6971,
+                    lng = -0.6308,
+                    placeName = "Oran Corniche",
+                    isFirstStrike = false,
+                    timestamp = 1_791_212_400_000L
+                )
+            )
+        }
+        val ev2Id = runBlocking(Dispatchers.IO) {
+            db.strikeEventDao().insertEvent(
+                StrikeEvent(
+                    individualId = personId,
+                    individualName = "نزار متعدد المواقع",
+                    year = 2026,
+                    date = "2026-11-12",
+                    time = "20:10",
+                    count = 1,
+                    strikeType = "Routine",
+                    performanceValue = 228.0,
+                    lat = 36.3650,
+                    lng = 6.6147,
+                    placeName = "Constantine Bridge",
+                    isFirstStrike = false,
+                    timestamp = 1_794_514_200_000L
+                )
+            )
+        }
+
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("record_expand_btn_$personId").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("record_expand_btn_$personId").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("btn_edit_person_location_$personId").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        val dialogBounds = composeRule.onNodeWithTag("first_strike_picker_dialog").assertIsDisplayed().getBoundsInRoot()
+        val mapBounds = composeRule.onNodeWithTag("picker_map_frame").assertIsDisplayed().getBoundsInRoot()
+        val mapHeightDp = mapBounds.bottom - mapBounds.top
+        assertTrue("Picker map height ($mapHeightDp) must be compact (<= 260.dp)", mapHeightDp.value <= 260f)
+        assertTrue(
+            "Compact picker map ($mapBounds) must stay strictly inside dialog ($dialogBounds)",
+            mapBounds.top >= dialogBounds.top && mapBounds.bottom <= dialogBounds.bottom
+        )
+
+        // Verify all registered strikes for this person appear in the horizontal strip and on the picker canvas
+        composeRule.onNodeWithTag("picker_person_locations_strip").assertIsDisplayed()
+        composeRule.onNodeWithTag("picker_saved_loc_chip_ind_$personId").assertIsDisplayed()
+        composeRule.onNodeWithTag("picker_saved_loc_chip_ev_$ev1Id").assertIsDisplayed()
+        composeRule.onNodeWithTag("picker_saved_loc_chip_ev_$ev2Id").assertIsDisplayed()
+        composeRule.onNodeWithTag("picker_existing_pin_ev_$ev1Id").assertIsDisplayed()
+
+        // Tapping a saved chip jumps selected preview location cleanly
+        composeRule.onNodeWithTag("picker_saved_loc_chip_ev_$ev2Id").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNode(
+            hasTestTag("first_strike_picker_dialog") and hasAnyDescendant(hasText("Constantine Bridge", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun tappingStrikeOnMap_showsSpecificSelectedStrikeDetailCard() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val db = AppDatabase.getDatabase(ctx)
+        val repo = IndividualRepository(db.individualDao(), db.strikeEventDao())
+
+        val personId = runBlocking(Dispatchers.IO) {
+            repo.save(
+                Individual(
+                    fullName = "طاهر قسنطينة",
+                    type = "TS",
+                    length = 23.0,
+                    width = 10.5,
+                    size = 241.5,
+                    sScore = 88.0,
+                    fScore = 84.0,
+                    cScore = 86.0,
+                    boost = 258.0,
+                    strikeCount = 3
+                )
+            )
+        }
+        runBlocking(Dispatchers.IO) {
+            db.strikeEventDao().insertEvent(
+                StrikeEvent(
+                    individualId = personId,
+                    individualName = "طاهر قسنطينة",
+                    year = 2026,
+                    date = "2026-10-14",
+                    time = "19:30",
+                    count = 3,
+                    strikeType = "Routine",
+                    performanceValue = 258.0,
+                    notes = "Evening tactical checkpoint",
+                    lat = 36.3720,
+                    lng = 6.6120,
+                    placeName = "Sidi M'Cid",
+                    isFirstStrike = false,
+                    timestamp = 1_792_006_200_000L
+                )
+            )
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("heatmap_hotspot_marker_hotspot_0_$personId").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("heatmap_hotspot_marker_hotspot_0_$personId").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("heatmap_hotspot_sheet").assertIsDisplayed()
+        composeRule.onNodeWithTag("selected_strike_detail_card").assertIsDisplayed()
+        composeRule.onNode(
+            hasTestTag("selected_strike_detail_card") and hasAnyDescendant(hasText("طاهر قسنطينة", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+        composeRule.onNode(
+            hasTestTag("selected_strike_detail_card") and hasAnyDescendant(hasText("2026-10-14", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+        composeRule.onNode(
+            hasTestTag("selected_strike_detail_card") and hasAnyDescendant(hasText("Sidi M'Cid", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+        composeRule.onNode(
+            hasTestTag("selected_strike_detail_card") and hasAnyDescendant(hasText("Evening tactical checkpoint", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+
+        // Navigate directly from the specific strike detail card to the striker profile
+        composeRule.onNodeWithTag("btn_selected_strike_open_profile").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("person_first_strike_location_panel_$personId").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("person_first_strike_location_panel_$personId").assertIsDisplayed()
     }
 }
