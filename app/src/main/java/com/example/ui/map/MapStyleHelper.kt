@@ -1243,29 +1243,11 @@ object MapStyleHelper {
             HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.0f)
         }
 
-        val weightMultiplierExpr = Expression.interpolate(
-            Expression.linear(),
-            Expression.coalesce(Expression.get("weight"), Expression.literal(1.0)),
-            Expression.stop(0.8, 0.92f),
-            Expression.stop(1.5, 1.04f),
-            Expression.stop(3.0, 1.20f),
-            Expression.stop(4.0, 1.30f)
-        )
-
         for (spec in HEAT_SPRITE_BANDS) {
             if (style.getImage(spec.imageId) == null) {
                 style.addImage(spec.imageId, getOrCreateHeatBandBitmap(spec.bandIndex))
             }
-            val s = spec.scaleRelativeToBlue
-            val zoomScaleExpr = Expression.interpolate(
-                Expression.linear(),
-                Expression.zoom(),
-                Expression.stop(12.2, 0.66f * s),
-                Expression.stop(14.2, 0.88f * s),
-                Expression.stop(17.5, 1.24f * s),
-                Expression.stop(21.0, 1.62f * s)
-            )
-            val iconSizeExpr = Expression.product(zoomScaleExpr, weightMultiplierExpr)
+            val iconSizeExpr = buildHeatSpriteIconSizeExpression(spec.scaleRelativeToBlue)
 
             val existingRaw = style.getLayer(spec.layerId)
             if (existingRaw != null && existingRaw !is SymbolLayer) {
@@ -1579,6 +1561,25 @@ object MapStyleHelper {
                     PropertyFactory.visibility(visibility)
                 )
             }
+        )
+    }
+
+    internal fun buildHeatSpriteIconSizeExpression(scaleRelativeToBlue: Float): Expression {
+        val weightMultiplierExpr = Expression.interpolate(
+            Expression.linear(),
+            Expression.coalesce(Expression.get("weight"), Expression.literal(1.0)),
+            Expression.stop(0.8, 0.92f),
+            Expression.stop(1.5, 1.04f),
+            Expression.stop(3.0, 1.20f),
+            Expression.stop(4.0, 1.30f)
+        )
+        return Expression.interpolate(
+            Expression.linear(),
+            Expression.zoom(),
+            Expression.stop(12.2, Expression.product(Expression.literal(0.66f * scaleRelativeToBlue), weightMultiplierExpr)),
+            Expression.stop(14.2, Expression.product(Expression.literal(0.88f * scaleRelativeToBlue), weightMultiplierExpr)),
+            Expression.stop(17.5, Expression.product(Expression.literal(1.24f * scaleRelativeToBlue), weightMultiplierExpr)),
+            Expression.stop(21.0, Expression.product(Expression.literal(1.62f * scaleRelativeToBlue), weightMultiplierExpr))
         )
     }
 }

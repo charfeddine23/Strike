@@ -1367,4 +1367,15 @@ class FirstStrikeHeatmapTest {
         }
         composeRule.onNodeWithTag("person_first_strike_location_panel_$personId").assertIsDisplayed()
     }
+
+    @Test
+    fun heatSpriteIconSizeExpression_usesZoomOnlyAsTopLevelInterpolateInput() {
+        val exprJson = MapStyleHelper.buildHeatSpriteIconSizeExpression(1.0f).toString()
+        assertTrue(
+            "Expected top-level interpolate expression with zoom input, got: $exprJson",
+            exprJson.startsWith("[\"interpolate\", [\"linear\"], [\"zoom\"],")
+        )
+        val zoomOccurrences = "\\[\"zoom\"\\]".toRegex().findAll(exprJson).count()
+        assertEquals("zoom() must only appear once as top-level interpolate input", 1, zoomOccurrences)
+    }
 }
