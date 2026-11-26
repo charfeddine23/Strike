@@ -372,4 +372,115 @@ class ObsidianRefinementVerificationTest {
         val xpTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
         assertTrue("Xp Logs Hub Switcher must clear TopBar", xpSwitcherBounds.top >= xpTopBarBounds.bottom)
     }
+
+    @Test
+    fun dataEntryDialog_pendingHistoricalYearAndCount_autoSavesOnNewAndEdit() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val db = AppDatabase.getDatabase(ctx)
+        val repo = IndividualRepository(db.individualDao(), db.strikeEventDao())
+
+        enterMainAppFromHeatmap()
+        composeRule.onNodeWithTag("add_record_fab").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("input_fullname").performTextReplacement("أمين التاريخي")
+        composeRule.onNodeWithTag("input_historical_year").performScrollTo().performTextReplacement("2022")
+        composeRule.onNodeWithTag("input_historical_count").performScrollTo().performTextReplacement("7")
+
+        // Tap Save directly without tapping "+" first
+        composeRule.onNodeWithTag("save_record_btn").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("data_entry_overlay").fetchSemanticsNodes().isEmpty()
+        }
+
+        val savedPerson = runBlocking(Dispatchers.IO) {
+            db.individualDao().getAllIndividualsList().firstOrNull { it.fullName == "أمين التاريخي" }
+        }
+        assertTrue("Person must be saved", savedPerson != null)
+        val personId = savedPerson!!.id
+        assertEquals(7, savedPerson.strikeCount)
+        val initialHist = runBlocking(Dispatchers.IO) { repo.getHistoricalStrikesByYear(personId).toMap() }
+        assertEquals(7, initialHist[2022])
+
+        // Expand card & edit via DataEntryDialog, adding another pending historical year without tapping "+"
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("record_expand_btn_$personId").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("record_expand_btn_$personId").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("person_yearly_strikes_panel_$personId").assertIsDisplayed()
+        composeRule.onNodeWithTag("record_edit_btn_$personId").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("data_entry_overlay").assertIsDisplayed()
+        composeRule.onNodeWithTag("input_historical_year").performScrollTo().performTextReplacement("2021")
+        composeRule.onNodeWithTag("input_historical_count").performScrollTo().performTextReplacement("3")
+        composeRule.onNodeWithTag("save_record_btn").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("data_entry_overlay").fetchSemanticsNodes().isEmpty()
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            runBlocking(Dispatchers.IO) { db.individualDao().getIndividualById(personId)?.strikeCount == 10 }
+        }
+        val editedHist = runBlocking(Dispatchers.IO) { repo.getHistoricalStrikesByYear(personId).toMap() }
+        assertEquals(7, editedHist[2022])
+        assertEquals(3, editedHist[2021])
+    }
+
+    @Test
+    fun personHistoricalEditor_pendingInputWithoutAddTap_savesToDatabaseCleanly() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val db = AppDatabase.getDatabase(ctx)
+        val repo = IndividualRepository(db.individualDao(), db.strikeEventDao())
+
+        val personId = runBlocking(Dispatchers.IO) {
+            repo.save(
+                Individual(
+                    fullName = "خالد السنوي",
+                    type = "M",
+                    length = 24.0,
+                    width = 11.0,
+                    size = 264.0,
+                    sScore = 75.0,
+                    fScore = 75.0,
+                    cScore = 75.0,
+                    boost = 200.0
+                )
+            )
+        }
+
+        enterMainAppFromHeatmap()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("record_expand_btn_$personId").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeRule.onNodeWithTag("record_expand_btn_$personId").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("btn_edit_person_yearly_strikes_$personId").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("person_historical_strikes_dialog").assertIsDisplayed()
+        composeRule.onNodeWithTag("person_hist_add_year_input").performScrollTo().performTextReplacement("2023")
+        composeRule.onNodeWithTag("person_hist_add_count_input").performScrollTo().performTextReplacement("9")
+
+        // Tap Save directly without clicking the "+" button
+        composeRule.onNodeWithTag("btn_save_person_yearly_strikes").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            composeRule.onAllNodesWithTag("person_historical_strikes_dialog").fetchSemanticsNodes().isEmpty()
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            Shadows.shadowOf(Looper.getMainLooper()).idle()
+            runBlocking(Dispatchers.IO) { db.individualDao().getIndividualById(personId)?.strikeCount == 9 }
+        }
+        val histMap = runBlocking(Dispatchers.IO) { repo.getHistoricalStrikesByYear(personId).toMap() }
+        assertEquals(9, histMap[2023])
+    }
 }

@@ -125,6 +125,14 @@ class IndividualViewModel(
         initialValue = emptyList()
     )
 
+    // Unfiltered SQL-aggregated historical strikes by year per individual (never truncated by LIMIT 10000)
+    val historicalStrikesByIndividual: StateFlow<Map<Long, List<Pair<Int, Int>>>> =
+        repository.historicalYearlyByIndividualFlow.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
+
     // All-Time Strikes Count directly from unfiltered SQL aggregate query (no limits or date restrictions)
     val allTimeStrikesCount: StateFlow<Int> = repository.allTimeStrikesCountFlow.stateIn(
         scope = viewModelScope,
@@ -1182,7 +1190,8 @@ class IndividualViewModel(
     }
 
     fun addHistoricalYearEntry(year: Int, count: Int) {
-        if (count <= 0) return
+        if (year !in 1950..2100 || count <= 0) return
+        hasEditedHistoricalEntriesInForm = true
         val current = formHistoricalEntries.value.toMutableList()
         val existingIndex = current.indexOfFirst { it.first == year }
         if (existingIndex >= 0) {
@@ -1195,7 +1204,8 @@ class IndividualViewModel(
     }
 
     fun setHistoricalYearEntry(year: Int, count: Int) {
-        if (year !in 2000..2050) return
+        if (year !in 1950..2100) return
+        hasEditedHistoricalEntriesInForm = true
         val current = formHistoricalEntries.value.toMutableList()
         val existingIndex = current.indexOfFirst { it.first == year }
         if (count <= 0) {
@@ -1209,7 +1219,8 @@ class IndividualViewModel(
     }
 
     fun updateHistoricalYearEntry(oldYear: Int, newYear: Int, newCount: Int) {
-        if (newYear !in 2000..2050) return
+        if (newYear !in 1950..2100) return
+        hasEditedHistoricalEntriesInForm = true
         val current = formHistoricalEntries.value.toMutableList()
         current.removeAll { it.first == oldYear }
         if (newCount > 0) {
@@ -1226,6 +1237,7 @@ class IndividualViewModel(
     fun removeHistoricalYearEntry(index: Int) {
         val current = formHistoricalEntries.value.toMutableList()
         if (index in current.indices) {
+            hasEditedHistoricalEntriesInForm = true
             current.removeAt(index)
             formHistoricalEntries.value = current
         }
@@ -1244,41 +1256,55 @@ class IndividualViewModel(
     ) {
         val lang = currentLanguage.value
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                repository.replaceHistoricalStrikesForIndividual(individualId, entries, lang)
-                val appCtx = getApplication<Application>()
-                val startDate = FlameManager.getStreakStartDate(appCtx)
-                if (!startDate.isNullOrBlank()) {
-                    val cfg = FlameManager.getSavedRecalculationConfig(appCtx)
-                    val endDate = FlameManager.getStreakEndDate(appCtx)
-                    XpCalculationEngine.syncRetroactiveTelemetry(
-                        context = appCtx,
-                        trackingStartDate = startDate,
-                        flameLogs = FlameManager.flameLogs.value,
-                        strikeEvents = repository.getAllStrikeEventsList(),
-                        individuals = repository.getAllIndividualsList(),
-                        recalculateExact = true,
-                        trackingEndDate = endDate,
-                        strikesStartDate = cfg.strikesRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                        strikesEndDate = cfg.strikesRange?.takeIf { it.isCustom }?.endDate ?: endDate,
-                        girlStartDate = cfg.girlRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                        girlEndDate = cfg.girlRange?.takeIf { it.isCustom }?.endDate ?: endDate,
-                        deflameStartDate = cfg.deflameRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                        deflameEndDate = cfg.deflameRange?.takeIf { it.isCustom }?.endDate ?: endDate
-                    )
+            try {
+                withContext(Dispatchers.IO) {
+                    repository.replaceHistoricalStrikesForIndividual(individualId, entries, lang)
+                    try {
+                        val appCtx = getApplication<Application>()
+                        val startDate = FlameManager.getStreakStartDate(appCtx)
+                        if (!startDate.isNullOrBlank()) {
+                            val cfg = FlameManager.getSavedRecalculationConfig(appCtx)
+                            val endDate = FlameManager.getStreakEndDate(appCtx)
+                            XpCalculationEngine.syncRetroactiveTelemetry(
+                                context = appCtx,
+                                trackingStartDate = startDate,
+                                flameLogs = FlameManager.flameLogs.value,
+                                strikeEvents = repository.getAllStrikeEventsList(),
+                                individuals = repository.getAllIndividualsList(),
+                                recalculateExact = true,
+                                trackingEndDate = endDate,
+                                strikesStartDate = cfg.strikesRange?.takeIf { it.isCustom }?.startDate ?: startDate,
+                                strikesEndDate = cfg.strikesRange?.takeIf { it.isCustom }?.endDate ?: endDate,
+                                girlStartDate = cfg.girlRange?.takeIf { it.isCustom }?.startDate ?: startDate,
+                                girlEndDate = cfg.girlRange?.takeIf { it.isCustom }?.endDate ?: endDate,
+                                deflameStartDate = cfg.deflameRange?.takeIf { it.isCustom }?.startDate ?: startDate,
+                                deflameEndDate = cfg.deflameRange?.takeIf { it.isCustom }?.endDate ?: endDate
+                            )
+                        }
+                    } catch (_: Exception) {
+                        // Telemetry recalculation is secondary; never abort saved historical strikes
+                    }
                 }
+                val msg = when (lang) {
+                    "ar" -> "تم تحديث سجل الضربات السنوية وحفظه"
+                    "fr" -> "Strikes historiques par année mis à jour"
+                    else -> "Historical strikes by year saved"
+                }
+                emitMessage(msg)
+                onSuccess()
+            } catch (e: Exception) {
+                val errMsg = when (lang) {
+                    "ar" -> "تعذر حفظ الضربات التاريخية: ${e.localizedMessage ?: "خطأ غير متوقع"}"
+                    "fr" -> "Impossible d'enregistrer les strikes historiques : ${e.localizedMessage ?: "Erreur"}"
+                    else -> "Could not save historical strikes: ${e.localizedMessage ?: "Unexpected error"}"
+                }
+                emitMessage(errMsg)
             }
-            val msg = when (lang) {
-                "ar" -> "تم تحديث سجل الضربات السنوية وحفظه"
-                "fr" -> "Strikes historiques par année mis à jour"
-                else -> "Historical strikes by year saved"
-            }
-            emitMessage(msg)
-            onSuccess()
         }
     }
 
     private var formHistoricalBaselineForEdit: List<Pair<Int, Int>> = emptyList()
+    private var hasEditedHistoricalEntriesInForm: Boolean = false
 
     fun openDataEntryForNew() {
         initFormForNew()
@@ -1308,6 +1334,7 @@ class IndividualViewModel(
         formFirstStrikeLat.value = null
         formFirstStrikeLng.value = null
         formFirstStrikePlaceName.value = ""
+        hasEditedHistoricalEntriesInForm = false
         formHistoricalBaselineForEdit = emptyList()
         formHistoricalEntries.value = emptyList()
     }
@@ -1326,15 +1353,21 @@ class IndividualViewModel(
         formFirstStrikeLng.value = individual.firstStrikeLng
         formFirstStrikePlaceName.value = individual.firstStrikePlaceName
         formError.value = null
+        hasEditedHistoricalEntriesInForm = false
 
-        val quickSnapshot = allStrikeEvents.value
-            .filter { it.individualId == individual.id && IndividualRepository.isHistoricalStrikeType(it.strikeType) }
-            .groupBy { it.year }
-            .mapValues { (_, rows) -> rows.sumOf { it.count.coerceAtLeast(1) } }
-            .entries
-            .filter { it.value > 0 }
-            .sortedByDescending { it.key }
-            .map { it.key to it.value }
+        val quickFromSql = historicalStrikesByIndividual.value[individual.id].orEmpty()
+        val quickSnapshot = if (quickFromSql.isNotEmpty()) {
+            quickFromSql
+        } else {
+            allStrikeEvents.value
+                .filter { it.individualId == individual.id && IndividualRepository.isHistoricalStrikeType(it.strikeType) }
+                .groupBy { it.year }
+                .mapValues { (_, rows) -> rows.sumOf { it.count.coerceAtLeast(1) } }
+                .entries
+                .filter { it.value > 0 }
+                .sortedByDescending { it.key }
+                .map { it.key to it.value }
+        }
         formHistoricalBaselineForEdit = quickSnapshot
         formHistoricalEntries.value = quickSnapshot
 
@@ -1343,7 +1376,7 @@ class IndividualViewModel(
             val exactDbList = withContext(Dispatchers.IO) {
                 repository.getHistoricalStrikesByYear(targetId)
             }
-            if (editingId == targetId && formHistoricalEntries.value == formHistoricalBaselineForEdit) {
+            if (editingId == targetId && !hasEditedHistoricalEntriesInForm) {
                 formHistoricalBaselineForEdit = exactDbList
                 formHistoricalEntries.value = exactDbList
             }
@@ -1394,7 +1427,8 @@ class IndividualViewModel(
         val currentEditingId = editingId
         val isNewRecord = currentEditingId == null || currentEditingId == 0L
         val historicalSnapshot = formHistoricalEntries.value.toList()
-        val historicalChanged = !isNewRecord && historicalSnapshot != formHistoricalBaselineForEdit
+        val historicalChanged = !isNewRecord &&
+            (hasEditedHistoricalEntriesInForm || historicalSnapshot != formHistoricalBaselineForEdit)
         val historicalStrikesTotal = historicalSnapshot.sumOf { it.second.toLong().coerceAtLeast(0L) }
             .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         val safeType = formType.value.takeIf { it in Individual.VALID_TYPES } ?: "M"
@@ -1437,7 +1471,17 @@ class IndividualViewModel(
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
-                    val savedId = repository.save(individualToSave)
+                    val preparedIndividual = if (!isNewRecord && currentEditingId != null) {
+                        val dbPerson = repository.getIndividualById(currentEditingId)
+                        if (dbPerson != null) {
+                            individualToSave.copy(strikeCount = dbPerson.strikeCount)
+                        } else {
+                            individualToSave
+                        }
+                    } else {
+                        individualToSave
+                    }
+                    val savedId = repository.save(preparedIndividual)
                     val effectiveId = if (!isNewRecord) currentEditingId!! else savedId
 
                     if (isNewRecord) {
@@ -1453,31 +1497,35 @@ class IndividualViewModel(
                         RoadmapManager.onActionOccurred(appCtx, "PERSON")
                         XpCalculationEngine.onNewPersonAdded(
                             context = appCtx,
-                            size = individualToSave.size,
-                            personName = individualToSave.fullName
+                            size = preparedIndividual.size,
+                            personName = preparedIndividual.fullName
                         )
                     }
 
                     if ((isNewRecord && historicalSnapshot.isNotEmpty()) || historicalChanged) {
-                        val startDate = FlameManager.getStreakStartDate(appCtx)
-                        if (!startDate.isNullOrBlank()) {
-                            val cfg = FlameManager.getSavedRecalculationConfig(appCtx)
-                            val endDate = FlameManager.getStreakEndDate(appCtx)
-                            XpCalculationEngine.syncRetroactiveTelemetry(
-                                context = appCtx,
-                                trackingStartDate = startDate,
-                                flameLogs = FlameManager.flameLogs.value,
-                                strikeEvents = repository.getAllStrikeEventsList(),
-                                individuals = repository.getAllIndividualsList(),
-                                recalculateExact = historicalChanged,
-                                trackingEndDate = endDate,
-                                strikesStartDate = cfg.strikesRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                                strikesEndDate = cfg.strikesRange?.takeIf { it.isCustom }?.endDate ?: endDate,
-                                girlStartDate = cfg.girlRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                                girlEndDate = cfg.girlRange?.takeIf { it.isCustom }?.endDate ?: endDate,
-                                deflameStartDate = cfg.deflameRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                                deflameEndDate = cfg.deflameRange?.takeIf { it.isCustom }?.endDate ?: endDate
-                            )
+                        try {
+                            val startDate = FlameManager.getStreakStartDate(appCtx)
+                            if (!startDate.isNullOrBlank()) {
+                                val cfg = FlameManager.getSavedRecalculationConfig(appCtx)
+                                val endDate = FlameManager.getStreakEndDate(appCtx)
+                                XpCalculationEngine.syncRetroactiveTelemetry(
+                                    context = appCtx,
+                                    trackingStartDate = startDate,
+                                    flameLogs = FlameManager.flameLogs.value,
+                                    strikeEvents = repository.getAllStrikeEventsList(),
+                                    individuals = repository.getAllIndividualsList(),
+                                    recalculateExact = historicalChanged,
+                                    trackingEndDate = endDate,
+                                    strikesStartDate = cfg.strikesRange?.takeIf { it.isCustom }?.startDate ?: startDate,
+                                    strikesEndDate = cfg.strikesRange?.takeIf { it.isCustom }?.endDate ?: endDate,
+                                    girlStartDate = cfg.girlRange?.takeIf { it.isCustom }?.startDate ?: startDate,
+                                    girlEndDate = cfg.girlRange?.takeIf { it.isCustom }?.endDate ?: endDate,
+                                    deflameStartDate = cfg.deflameRange?.takeIf { it.isCustom }?.startDate ?: startDate,
+                                    deflameEndDate = cfg.deflameRange?.takeIf { it.isCustom }?.endDate ?: endDate
+                                )
+                            }
+                        } catch (_: Exception) {
+                            // Telemetry recalculation is secondary; never abort saved historical strikes
                         }
                     }
                 }

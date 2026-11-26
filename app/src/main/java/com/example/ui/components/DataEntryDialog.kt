@@ -240,6 +240,10 @@ fun DataEntryDialog(
     val currentYear = Calendar.getInstance().get(Calendar.YEAR)
     var inputYear by remember { mutableStateOf((currentYear - 1).toString()) }
     var inputStrikeCount by remember { mutableStateOf("15") }
+    var hasPendingHistoricalDraft by remember { mutableStateOf(false) }
+    var inlineEditingYear by remember { mutableStateOf<Int?>(null) }
+    var inlineEditYearText by remember { mutableStateOf("") }
+    var inlineEditCountText by remember { mutableStateOf("") }
     val totalHistoricalStrikes = historicalEntries.sumOf { it.second }
 
     val modalBg = if (isDarkTheme) Color(0xFF070B14) else Color(0xFFF1F5F9)
@@ -1041,6 +1045,8 @@ fun DataEntryDialog(
                                             value = inputYear,
                                             onValueChange = { newValue ->
                                                 inputYear = newValue
+                                                hasPendingHistoricalDraft = true
+                                                if (error != null) viewModel.formError.value = null
                                             },
                                             label = { Text(stringResource(R.string.year)) },
                                             modifier = Modifier
@@ -1062,6 +1068,8 @@ fun DataEntryDialog(
                                             value = inputStrikeCount,
                                             onValueChange = { newValue ->
                                                 inputStrikeCount = newValue
+                                                hasPendingHistoricalDraft = true
+                                                if (error != null) viewModel.formError.value = null
                                             },
                                             label = { Text(stringResource(R.string.strikes_amount)) },
                                             modifier = Modifier
@@ -1083,15 +1091,17 @@ fun DataEntryDialog(
                                             onClick = {
                                                 val y = IndividualViewModel.parseLocalizedInt(inputYear)
                                                 val c = IndividualViewModel.parseLocalizedInt(inputStrikeCount)
-                                                if (y != null && y in 2000..2050 && c != null && c in 1..100_000) {
+                                                if (y != null && y in 1950..2100 && c != null && c in 1..100_000) {
                                                     viewModel.addHistoricalYearEntry(y, c)
-                                                    inputYear = (y - 1).toString()
+                                                    hasPendingHistoricalDraft = false
+                                                    viewModel.formError.value = null
+                                                    inputYear = (y - 1).coerceIn(1950, 2100).toString()
                                                     inputStrikeCount = "10"
                                                 } else {
                                                     viewModel.formError.value = when (currentLang) {
-                                                        "ar" -> "يرجى إدخال سنة صحيحة (2000-2050) وعدد ضربات صالح"
-                                                        "fr" -> "Veuillez saisir une année valide (2000-2050) et un nombre positif"
-                                                        else -> "Please enter a valid year (2000-2050) and strike count"
+                                                        "ar" -> "يرجى إدخال سنة صحيحة (1950-2100) وعدد ضربات صالح"
+                                                        "fr" -> "Veuillez saisir une année valide (1950-2100) et un nombre positif"
+                                                        else -> "Please enter a valid year (1950-2100) and strike count"
                                                     }
                                                 }
                                             },
@@ -1125,7 +1135,11 @@ fun DataEntryDialog(
                                                         if (isDarkTheme) Color(0x28FFFFFF) else Color(0xFFCBD5E1),
                                                         RoundedCornerShape(8.dp)
                                                     )
-                                                    .clickable { inputYear = yr.toString() }
+                                                    .clickable {
+                                                        inputYear = yr.toString()
+                                                        hasPendingHistoricalDraft = true
+                                                        if (error != null) viewModel.formError.value = null
+                                                    }
                                                     .padding(horizontal = 8.dp, vertical = 6.dp)
                                             ) {
                                                 Text(
@@ -1139,10 +1153,6 @@ fun DataEntryDialog(
                                     }
 
                                     if (historicalEntries.isNotEmpty()) {
-                                        var inlineEditingYear by remember { mutableStateOf<Int?>(null) }
-                                        var inlineEditYearText by remember { mutableStateOf("") }
-                                        var inlineEditCountText by remember { mutableStateOf("") }
-
                                         Spacer(modifier = Modifier.height(14.dp))
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             historicalEntries.forEachIndexed { index, (yr, cnt) ->
@@ -1301,9 +1311,16 @@ fun DataEntryDialog(
                                                                 onClick = {
                                                                     val parsedYear = IndividualViewModel.parseLocalizedInt(inlineEditYearText)
                                                                     val parsedCount = IndividualViewModel.parseLocalizedInt(inlineEditCountText)
-                                                                    if (parsedYear != null && parsedYear in 2000..2050 && parsedCount != null && parsedCount in 1..100_000) {
+                                                                    if (parsedYear != null && parsedYear in 1950..2100 && parsedCount != null && parsedCount in 1..100_000) {
                                                                         viewModel.updateHistoricalYearEntry(yr, parsedYear, parsedCount)
                                                                         inlineEditingYear = null
+                                                                        viewModel.formError.value = null
+                                                                    } else {
+                                                                        viewModel.formError.value = when (currentLang) {
+                                                                            "ar" -> "يرجى إدخال سنة صحيحة (1950-2100) وعدد ضربات صالح"
+                                                                            "fr" -> "Veuillez saisir une année valide (1950-2100) et un nombre positif"
+                                                                            else -> "Please enter a valid year (1950-2100) and strike count"
+                                                                        }
                                                                     }
                                                                 },
                                                                 modifier = Modifier
@@ -1374,6 +1391,39 @@ fun DataEntryDialog(
 
                             Button(
                                 onClick = {
+                                    val editingYr = inlineEditingYear
+                                    if (editingYr != null) {
+                                        val parsedYear = IndividualViewModel.parseLocalizedInt(inlineEditYearText)
+                                        val parsedCount = IndividualViewModel.parseLocalizedInt(inlineEditCountText)
+                                        if (parsedYear != null && parsedYear in 1950..2100 && parsedCount != null && parsedCount in 1..100_000) {
+                                            viewModel.updateHistoricalYearEntry(editingYr, parsedYear, parsedCount)
+                                            inlineEditingYear = null
+                                            viewModel.formError.value = null
+                                        } else {
+                                            viewModel.formError.value = when (currentLang) {
+                                                "ar" -> "يرجى إدخال سنة صحيحة (1950-2100) وعدد ضربات صالح"
+                                                "fr" -> "Veuillez saisir une année valide (1950-2100) et un nombre positif"
+                                                else -> "Please enter a valid year (1950-2100) and strike count"
+                                            }
+                                            return@Button
+                                        }
+                                    }
+                                    if (hasPendingHistoricalDraft && (inputYear.isNotBlank() || inputStrikeCount.isNotBlank())) {
+                                        val pendingY = IndividualViewModel.parseLocalizedInt(inputYear)
+                                        val pendingC = IndividualViewModel.parseLocalizedInt(inputStrikeCount)
+                                        if (pendingY != null && pendingY in 1950..2100 && pendingC != null && pendingC in 1..100_000) {
+                                            viewModel.addHistoricalYearEntry(pendingY, pendingC)
+                                            hasPendingHistoricalDraft = false
+                                            viewModel.formError.value = null
+                                        } else {
+                                            viewModel.formError.value = when (currentLang) {
+                                                "ar" -> "يرجى إدخال سنة صحيحة (1950-2100) وعدد ضربات صالح"
+                                                "fr" -> "Veuillez saisir une année valide (1950-2100) et un nombre positif"
+                                                else -> "Please enter a valid year (1950-2100) and strike count"
+                                            }
+                                            return@Button
+                                        }
+                                    }
                                     viewModel.saveCurrentForm {
                                         onDismiss()
                                     }

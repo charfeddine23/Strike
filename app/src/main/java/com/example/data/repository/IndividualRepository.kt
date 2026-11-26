@@ -7,6 +7,7 @@ import com.example.data.local.YearlyPersonAggregate
 import com.example.data.model.Individual
 import com.example.data.model.StrikeEvent
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -30,6 +31,16 @@ class IndividualRepository(
     val yearlyPersonAggregatesFlow: Flow<List<YearlyPersonAggregate>> = strikeEventDao.getYearlyPersonAggregatesFlow()
     val latestStrikeDateByIndividualFlow: Flow<List<IndividualLatestDateTuple>> =
         strikeEventDao.getLatestStrikeDateByIndividualFlow()
+    val historicalYearlyByIndividualFlow: Flow<Map<Long, List<Pair<Int, Int>>>> =
+        strikeEventDao.getHistoricalYearlyByIndividualFlow().map { rows ->
+            rows
+                .filter { it.totalStrikes > 0 }
+                .groupBy { it.individualId }
+                .mapValues { (_, list) ->
+                    list.sortedByDescending { it.year }
+                        .map { it.year to it.totalStrikes }
+                }
+        }
 
     suspend fun getAllTimeStrikesCount(): Int = strikeEventDao.getAllTimeStrikesCount()
 
@@ -310,7 +321,7 @@ class IndividualRepository(
     ): Int {
         val mergedByYear = linkedMapOf<Int, Int>()
         for ((year, count) in historicalEntries) {
-            if (year in 2000..2050 && count > 0) {
+            if (year in 1950..2100 && count > 0) {
                 mergedByYear[year] = (mergedByYear[year] ?: 0) + count
             }
         }

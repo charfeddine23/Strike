@@ -65,6 +65,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -78,6 +79,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -85,9 +87,12 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlin.math.roundToInt
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -161,6 +166,10 @@ fun FirstStrikeLocationPickerDialog(
     var isSearching by remember { mutableStateOf(false) }
     var isReverseGeocoding by remember { mutableStateOf(false) }
     var isCameraDragging by remember { mutableStateOf(false) }
+    var hasUserMovedCamera by remember { mutableStateOf(false) }
+    var hasAutoFittedBounds by remember { mutableStateOf(false) }
+    var cameraProjectionTick by remember { mutableIntStateOf(0) }
+    var mapFrameSizePx by remember { mutableStateOf(IntSize.Zero) }
     var mapLibreRef by remember { mutableStateOf<MapLibreMap?>(null) }
     var searchJob by remember { mutableStateOf<Job?>(null) }
     var reverseJob by remember { mutableStateOf<Job?>(null) }
@@ -469,6 +478,17 @@ fun FirstStrikeLocationPickerDialog(
                 val map = mapLibreRef ?: return@LaunchedEffect
                 map.getStyle { style ->
                     MapStyleHelper.applyPickerPersonLocations(style, mapTheme, existingPersonLocations)
+                    cameraProjectionTick++
+                }
+                if (!hasAutoFittedBounds && existingPersonLocations.isNotEmpty()) {
+                    hasAutoFittedBounds = true
+                    MapStyleHelper.fitCameraToPoints(
+                        mapLibreMap = map,
+                        points = existingPersonLocations,
+                        paddingPx = 86,
+                        singlePointZoom = if (initialLat != null && initialLng != null) 13.8 else 13.0,
+                        durationMs = 420
+                    )
                 }
             }
 
@@ -477,6 +497,7 @@ fun FirstStrikeLocationPickerDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(compactMapHeight)
+                    .onSizeChanged { mapFrameSizePx = it }
                     .clip(RoundedCornerShape(20.dp))
                     .border(1.1.dp, borderColor, RoundedCornerShape(20.dp))
                     .clipToBounds()
@@ -490,12 +511,17 @@ fun FirstStrikeLocationPickerDialog(
                                 mapLibreRef = map
                                 MapStyleHelper.configureHighPrecisionMap(map, context)
                                 val hasAnchor = (initialLat != null && initialLng != null) || firstSavedFallback != null
-                                val startZoom = if (hasAnchor) 14.5 else 5.5
+                                val startZoom = when {
+                                    latestPersonLocations.size >= 2 -> 11.8
+                                    hasAnchor -> 13.4
+                                    else -> 5.5
+                                }
                                 map.cameraPosition = CameraPosition.Builder()
                                     .target(LatLng(defaultLat, defaultLng))
                                     .zoom(startZoom)
                                     .build()
-                                map.setStyle(Style.Builder().fromUri(MapStyleHelper.OPEN_FREE_MAP_LIBERTY_STYLE_URI)) { style ->
+
+                                val syncPickerStyle: (Style) -> Unit = { style ->
                                     MapStyleHelper.applyGoogleGradeStyling(
                                         style = style,
                                         theme = mapTheme,
@@ -508,6 +534,29 @@ fun FirstStrikeLocationPickerDialog(
                                         theme = mapTheme,
                                         personLocations = latestPersonLocations
                                     )
+                                    cameraProjectionTick++
+                                }
+
+                                this@apply.addOnDidFinishLoadingStyleListener {
+                                    map.getStyle { style ->
+                                        syncPickerStyle(style)
+                                    }
+                                }
+
+                                map.setStyle(Style.Builder().fromUri(MapStyleHelper.OPEN_FREE_MAP_LIBERTY_STYLE_URI)) { style ->
+                                    syncPickerStyle(style)
+                                    if (!hasAutoFittedBounds && latestPersonLocations.isNotEmpty()) {
+                                        this@apply.post {
+                                            hasAutoFittedBounds = true
+                                            MapStyleHelper.fitCameraToPoints(
+                                                mapLibreMap = map,
+                                                points = latestPersonLocations,
+                                                paddingPx = 86,
+                                                singlePointZoom = 13.4,
+                                                durationMs = 450
+                                            )
+                                        }
+                                    }
                                 }
                                 map.addOnMapClickListener { tapPoint ->
                                     val candidate = MapStyleHelper.findNearestStrikePoint(
@@ -517,12 +566,13 @@ fun FirstStrikeLocationPickerDialog(
                                         zoomLevel = map.cameraPosition.zoom
                                     )
                                     if (candidate != null) {
+                                        hasUserMovedCamera = true
                                         selectedLat = candidate.lat
                                         selectedLng = candidate.lng
                                         selectedPlaceName = candidate.placeName.ifBlank {
                                             String.format(Locale.US, "%.4f, %.4f", candidate.lat, candidate.lng)
                                         }
-                                        MapStyleHelper.animateCameraTo(map, candidate.lat, candidate.lng, zoom = 15.2, durationMs = 600)
+                                        MapStyleHelper.animateCameraTo(map, candidate.lat, candidate.lng, zoom = 15.0, durationMs = 550)
                                         true
                                     } else {
                                         false
@@ -531,14 +581,21 @@ fun FirstStrikeLocationPickerDialog(
                                 map.addOnCameraMoveStartedListener { reason ->
                                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                                         isCameraDragging = true
+                                        hasUserMovedCamera = true
                                     }
+                                }
+                                map.addOnCameraMoveListener {
+                                    cameraProjectionTick++
                                 }
                                 map.addOnCameraIdleListener {
                                     isCameraDragging = false
-                                    val target = map.cameraPosition.target ?: return@addOnCameraIdleListener
-                                    selectedLat = target.latitude
-                                    selectedLng = target.longitude
-                                    triggerReverseGeocode(target.latitude, target.longitude)
+                                    cameraProjectionTick++
+                                    if (hasUserMovedCamera) {
+                                        val target = map.cameraPosition.target ?: return@addOnCameraIdleListener
+                                        selectedLat = target.latitude
+                                        selectedLng = target.longitude
+                                        triggerReverseGeocode(target.latitude, target.longitude)
+                                    }
                                 }
                             }
                         }
@@ -573,6 +630,79 @@ fun FirstStrikeLocationPickerDialog(
                         factory = { mapView },
                         modifier = Modifier.fillMaxSize()
                     )
+
+                    // Live 60-90 FPS Screen-Projected Strike Dots Overlay (guarantees all person locations appear live on map)
+                    val projTick = cameraProjectionTick
+                    val liveMap = mapLibreRef
+                    if (liveMap != null && existingPersonLocations.isNotEmpty() && mapFrameSizePx.width > 0 && mapFrameSizePx.height > 0 && projTick >= 0) {
+                        val density = LocalDensity.current
+                        val halfDotPx = with(density) { 14.dp.toPx() }
+                        existingPersonLocations.forEach { pt ->
+                            val screenPt = try {
+                                liveMap.projection.toScreenLocation(LatLng(pt.lat, pt.lng))
+                            } catch (_: Throwable) {
+                                null
+                            }
+                            if (screenPt != null &&
+                                screenPt.x.isFinite() &&
+                                screenPt.y.isFinite() &&
+                                screenPt.x >= -24f &&
+                                screenPt.x <= mapFrameSizePx.width + 24f &&
+                                screenPt.y >= -24f &&
+                                screenPt.y <= mapFrameSizePx.height + 24f
+                            ) {
+                                val dotAccent = if (pt.isFirstStrike) NeonAmber else routineMagenta
+                                val coreBg = if (pt.isFirstStrike) Color(0xFF0B1221) else routineMagenta
+                                val rimColor = if (pt.isFirstStrike) NeonAmber else Color.White
+                                Box(
+                                    modifier = Modifier
+                                        .offset {
+                                            IntOffset(
+                                                (screenPt.x - halfDotPx).roundToInt(),
+                                                (screenPt.y - halfDotPx).roundToInt()
+                                            )
+                                        }
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .clickable {
+                                            hasUserMovedCamera = true
+                                            selectedLat = pt.lat
+                                            selectedLng = pt.lng
+                                            selectedPlaceName = pt.placeName.ifBlank {
+                                                String.format(Locale.US, "%.4f, %.4f", pt.lat, pt.lng)
+                                            }
+                                            MapStyleHelper.animateCameraTo(liveMap, pt.lat, pt.lng, zoom = 15.0, durationMs = 550)
+                                        }
+                                        .testTag("picker_live_dot_${pt.key}"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // Soft glowing halo
+                                    Box(
+                                        modifier = Modifier
+                                            .size(26.dp)
+                                            .clip(CircleShape)
+                                            .background(dotAccent.copy(alpha = 0.28f))
+                                    )
+                                    // Crisp jewel dot with high-contrast rim & white center spark
+                                    Box(
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clip(CircleShape)
+                                            .background(coreBg)
+                                            .border(2.2.dp, rimColor, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(4.5.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFFFFFBEB))
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 } else {
                     // Lightweight tactical grid canvas for Robolectric JVM environment
                     Box(modifier = Modifier.fillMaxSize()) {
@@ -592,19 +722,18 @@ fun FirstStrikeLocationPickerDialog(
                             }
                         }
 
-                        // Preview all registered strikes for this person on the picker map
+                        // Preview all registered strikes for this person on the picker map as live dots + labels
                         existingPersonLocations.forEachIndexed { idx, pt ->
                             val pinColor = if (pt.isFirstStrike) NeonAmber else routineMagenta
-                            Box(
+                            val coreBg = if (pt.isFirstStrike) Color(0xFF0B1221) else routineMagenta
+                            val rimColor = if (pt.isFirstStrike) NeonAmber else Color.White
+                            Row(
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
                                     .padding(
-                                        start = (18 + ((idx * 52) % 210)).dp,
-                                        top = (16 + ((idx * 34) % 95)).dp
+                                        start = (14 + ((idx * 58) % 210)).dp,
+                                        top = (36 + ((idx * 34) % 105)).dp
                                     )
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(pinColor.copy(alpha = 0.22f))
-                                    .border(1.dp, pinColor, RoundedCornerShape(10.dp))
                                     .clickable {
                                         selectedLat = pt.lat
                                         selectedLng = pt.lng
@@ -612,22 +741,99 @@ fun FirstStrikeLocationPickerDialog(
                                             String.format(Locale.US, "%.4f, %.4f", pt.lat, pt.lng)
                                         }
                                     }
-                                    .padding(horizontal = 7.dp, vertical = 3.dp)
                                     .testTag("picker_existing_pin_${pt.key}"),
-                                contentAlignment = Alignment.Center
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Text(
-                                    text = pt.placeName.ifBlank {
-                                        String.format(Locale.US, "%.2f, %.2f", pt.lat, pt.lng)
-                                    },
-                                    fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = textPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .clip(CircleShape)
+                                        .background(pinColor.copy(alpha = 0.28f))
+                                        .testTag("picker_live_dot_${pt.key}"),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(11.dp)
+                                            .clip(CircleShape)
+                                            .background(coreBg)
+                                            .border(1.8.dp, rimColor, CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(3.5.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFFFFFBEB))
+                                        )
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(panelBg.copy(alpha = 0.88f))
+                                        .border(0.8.dp, pinColor.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = pt.placeName.ifBlank {
+                                            String.format(Locale.US, "%.2f, %.2f", pt.lat, pt.lng)
+                                        },
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = textPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
+                    }
+                }
+
+                if (existingPersonLocations.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(8.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(panelBg)
+                            .border(1.dp, borderColor, RoundedCornerShape(50))
+                            .clickable {
+                                hasAutoFittedBounds = true
+                                mapLibreRef?.let { map ->
+                                    MapStyleHelper.fitCameraToPoints(
+                                        mapLibreMap = map,
+                                        points = existingPersonLocations,
+                                        paddingPx = 86,
+                                        singlePointZoom = 13.4,
+                                        durationMs = 500
+                                    )
+                                }
+                            }
+                            .padding(horizontal = 9.dp, vertical = 5.dp)
+                            .testTag("picker_fit_all_pins_btn"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(NeonAmber)
+                        )
+                        Text(
+                            text = when {
+                                isAr -> "${existingPersonLocations.size} نقاط • عرض الكل"
+                                isFr -> "${existingPersonLocations.size} pts • Voir tout"
+                                else -> "${existingPersonLocations.size} Dots • Fit All"
+                            },
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = textPrimary,
+                            maxLines = 1
+                        )
                     }
                 }
 
@@ -713,11 +919,12 @@ fun FirstStrikeLocationPickerDialog(
                                     .background(chipColor.copy(alpha = 0.16f))
                                     .border(0.9.dp, chipColor.copy(alpha = 0.58f), RoundedCornerShape(10.dp))
                                     .clickable {
+                                        hasUserMovedCamera = true
                                         selectedLat = pt.lat
                                         selectedLng = pt.lng
                                         selectedPlaceName = placeText
                                         mapLibreRef?.let { map ->
-                                            MapStyleHelper.animateCameraTo(map, pt.lat, pt.lng, zoom = 15.2, durationMs = 650)
+                                            MapStyleHelper.animateCameraTo(map, pt.lat, pt.lng, zoom = 15.0, durationMs = 550)
                                         }
                                     }
                                     .padding(horizontal = 8.dp, vertical = 5.dp)

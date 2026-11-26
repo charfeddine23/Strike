@@ -1246,15 +1246,20 @@ class FirstStrikeHeatmapTest {
             mapBounds.top >= dialogBounds.top && mapBounds.bottom <= dialogBounds.bottom
         )
 
-        // Verify all registered strikes for this person appear in the horizontal strip and on the picker canvas
+        // Verify all registered strikes for this person appear LIVE as dots on the map AND in the horizontal strip
+        composeRule.onNodeWithTag("picker_fit_all_pins_btn").assertIsDisplayed()
+        composeRule.onNodeWithTag("picker_live_dot_ind_$personId", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("picker_live_dot_ev_$ev1Id", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("picker_live_dot_ev_$ev2Id", useUnmergedTree = true).assertIsDisplayed()
+
         composeRule.onNodeWithTag("picker_person_locations_strip").assertIsDisplayed()
         composeRule.onNodeWithTag("picker_saved_loc_chip_ind_$personId").assertIsDisplayed()
         composeRule.onNodeWithTag("picker_saved_loc_chip_ev_$ev1Id").assertIsDisplayed()
         composeRule.onNodeWithTag("picker_saved_loc_chip_ev_$ev2Id").assertIsDisplayed()
         composeRule.onNodeWithTag("picker_existing_pin_ev_$ev1Id").assertIsDisplayed()
 
-        // Tapping a saved chip jumps selected preview location cleanly
-        composeRule.onNodeWithTag("picker_saved_loc_chip_ev_$ev2Id").performClick()
+        // Tapping a live dot directly on the map jumps selected preview location cleanly
+        composeRule.onNodeWithTag("picker_existing_pin_ev_$ev2Id").performClick()
         composeRule.waitForIdle()
         composeRule.onNode(
             hasTestTag("first_strike_picker_dialog") and hasAnyDescendant(hasText("Constantine Bridge", substring = true)),

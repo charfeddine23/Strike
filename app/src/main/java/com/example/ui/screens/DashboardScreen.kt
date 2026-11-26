@@ -175,6 +175,7 @@ fun DashboardScreen(
     val lastStrikeMap by viewModel.individualLastStrikeMap.collectAsStateWithLifecycle()
     val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
     val eventsByIndividual = remember(allStrikeEvents) { allStrikeEvents.groupBy { it.individualId } }
+    val historicalByIndividual by viewModel.historicalStrikesByIndividual.collectAsStateWithLifecycle()
     val isDataEntryOpen by viewModel.isDataEntryOpen.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
@@ -593,6 +594,7 @@ fun DashboardScreen(
                         },
                         onDelete = { individualToDelete = item },
                         personStrikeEvents = eventsByIndividual[item.id].orEmpty(),
+                        personHistoricalByYear = historicalByIndividual[item.id].orEmpty(),
                         onEditYearlyStrikes = { personForHistoricalEdit = item },
                         onEditFirstStrikeLocation = { personForLocationEdit = item },
                         onOpenMultiStrikeEditor = { personForMultiStrike = item },
@@ -675,15 +677,20 @@ fun DashboardScreen(
     // Person Historical Strikes by Year Editor Dialog
     if (personForHistoricalEdit != null) {
         val target = personForHistoricalEdit!!
+        val resolvedTarget = remember(target.id, allList) {
+            allList.firstOrNull { it.id == target.id } ?: target
+        }
         PersonHistoricalStrikesEditorDialog(
-            individual = target,
-            personStrikeEvents = eventsByIndividual[target.id].orEmpty(),
+            individual = resolvedTarget,
+            personStrikeEvents = eventsByIndividual[resolvedTarget.id].orEmpty(),
+            initialHistoricalByYear = historicalByIndividual[resolvedTarget.id].orEmpty(),
+            onLoadHistoricalFromDb = { viewModel.loadHistoricalStrikesByYear(resolvedTarget.id) },
             currentLang = currentLang,
             isDarkTheme = isDarkTheme,
             isHapticEnabled = isHapticFeedbackEnabled,
             onDismiss = { personForHistoricalEdit = null },
             onSave = { editedEntries ->
-                viewModel.saveHistoricalStrikesForPerson(target.id, editedEntries) {
+                viewModel.saveHistoricalStrikesForPerson(resolvedTarget.id, editedEntries) {
                     personForHistoricalEdit = null
                 }
             }
@@ -837,6 +844,7 @@ fun IndividualRecordCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     personStrikeEvents: List<StrikeEvent> = emptyList(),
+    personHistoricalByYear: List<Pair<Int, Int>> = emptyList(),
     onEditYearlyStrikes: (() -> Unit)? = null,
     onEditFirstStrikeLocation: (() -> Unit)? = null,
     onOpenMultiStrikeEditor: (() -> Unit)? = null,
@@ -1288,13 +1296,17 @@ fun IndividualRecordCard(
             }
 
             // Historical Strikes by Year Section inside Person Card
-            val historicalByYear = remember(personStrikeEvents) {
-                personStrikeEvents
-                    .filter { IndividualRepository.isHistoricalStrikeType(it.strikeType) && it.count > 0 }
-                    .groupBy { it.year }
-                    .mapValues { (_, list) -> list.sumOf { it.count } }
-                    .toList()
-                    .sortedByDescending { it.first }
+            val historicalByYear = remember(personHistoricalByYear, personStrikeEvents) {
+                if (personHistoricalByYear.isNotEmpty()) {
+                    personHistoricalByYear.sortedByDescending { it.first }
+                } else {
+                    personStrikeEvents
+                        .filter { IndividualRepository.isHistoricalStrikeType(it.strikeType) && it.count > 0 }
+                        .groupBy { it.year }
+                        .mapValues { (_, list) -> list.sumOf { it.count } }
+                        .toList()
+                        .sortedByDescending { it.first }
+                }
             }
             if (onEditYearlyStrikes != null || historicalByYear.isNotEmpty()) {
                 val histCyan = if (darkTheme) NeonCyan else DayCyan
@@ -2237,6 +2249,8 @@ private fun LuxurySortButtonPopup(
 private fun PersonHistoricalStrikesEditorDialog(
     individual: Individual,
     personStrikeEvents: List<StrikeEvent>,
+    initialHistoricalByYear: List<Pair<Int, Int>> = emptyList(),
+    onLoadHistoricalFromDb: (suspend () -> List<Pair<Int, Int>>)? = null,
     currentLang: String,
     isDarkTheme: Boolean,
     isHapticEnabled: Boolean,
@@ -2252,22 +2266,54 @@ private fun PersonHistoricalStrikesEditorDialog(
     val accentRose = if (isDarkTheme) NeonRose else DayRose
 
     val currentYear = remember { java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) }
-    val initialHistorical = remember(individual.id, personStrikeEvents) {
-        personStrikeEvents
-            .filter { IndividualRepository.isHistoricalStrikeType(it.strikeType) && it.count > 0 }
-            .groupBy { it.year }
-            .mapValues { (_, list) -> list.sumOf { it.count } }
-            .toList()
-            .sortedByDescending { it.first }
-    }
-    val nonHistoricalBaseline = remember(individual.id, individual.strikeCount, initialHistorical) {
-        val histSum = initialHistorical.sumOf { it.second }
-        (individual.strikeCount - histSum).coerceAtLeast(0)
+    val initialHistorical = remember(individual.id, initialHistoricalByYear, personStrikeEvents) {
+        if (initialHistoricalByYear.isNotEmpty()) {
+            initialHistoricalByYear.sortedByDescending { it.first }
+        } else {
+            personStrikeEvents
+                .filter { IndividualRepository.isHistoricalStrikeType(it.strikeType) && it.count > 0 }
+                .groupBy { it.year }
+                .mapValues { (_, list) -> list.sumOf { it.count } }
+                .toList()
+                .sortedByDescending { it.first }
+        }
     }
 
     var entries by remember(individual.id) { mutableStateOf(initialHistorical) }
+    var hasModifiedEntries by remember(individual.id) { mutableStateOf(false) }
+    var loadedDbBaseline by remember(individual.id) { mutableStateOf<List<Pair<Int, Int>>?>(null) }
+
+    LaunchedEffect(initialHistorical) {
+        if (!hasModifiedEntries && loadedDbBaseline == null) {
+            entries = initialHistorical
+        }
+    }
+
+    LaunchedEffect(individual.id) {
+        if (onLoadHistoricalFromDb != null) {
+            val dbEntries = try {
+                onLoadHistoricalFromDb()
+            } catch (_: Exception) {
+                null
+            }
+            if (dbEntries != null) {
+                loadedDbBaseline = dbEntries
+                if (!hasModifiedEntries) {
+                    entries = dbEntries
+                }
+            }
+        }
+    }
+
+    val effectiveBaseline = loadedDbBaseline ?: initialHistorical
+    val nonHistoricalBaseline = remember(individual.id, individual.strikeCount, effectiveBaseline) {
+        val histSum = effectiveBaseline.sumOf { it.second }
+        (individual.strikeCount - histSum).coerceAtLeast(0)
+    }
+
     var newYearInput by remember { mutableStateOf((currentYear - 1).toString()) }
     var newCountInput by remember { mutableStateOf("5") }
+    var hasPendingNewInput by remember(individual.id) { mutableStateOf(false) }
     var inlineEditingYear by remember { mutableStateOf<Int?>(null) }
     var inlineYearText by remember { mutableStateOf("") }
     var inlineCountText by remember { mutableStateOf("") }
@@ -2538,6 +2584,7 @@ private fun PersonHistoricalStrikesEditorDialog(
                                                 onClick = {
                                                     if (cnt > 1) {
                                                         HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                                        hasModifiedEntries = true
                                                         entries = entries.map { (y, c) -> if (y == yr) y to (c - 1) else y to c }
                                                     }
                                                 },
@@ -2558,6 +2605,7 @@ private fun PersonHistoricalStrikesEditorDialog(
                                             IconButton(
                                                 onClick = {
                                                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                                                    hasModifiedEntries = true
                                                     entries = entries.map { (y, c) -> if (y == yr) y to (c + 1).coerceAtMost(100_000) else y to c }
                                                 },
                                                 modifier = Modifier
@@ -2599,6 +2647,7 @@ private fun PersonHistoricalStrikesEditorDialog(
                                             IconButton(
                                                 onClick = {
                                                     if (isRowEditing) inlineEditingYear = null
+                                                    hasModifiedEntries = true
                                                     entries = entries.filterNot { it.first == yr }
                                                 },
                                                 modifier = Modifier
@@ -2623,7 +2672,10 @@ private fun PersonHistoricalStrikesEditorDialog(
                                         ) {
                                             OutlinedTextField(
                                                 value = inlineYearText,
-                                                onValueChange = { inlineYearText = it },
+                                                onValueChange = {
+                                                    inlineYearText = it
+                                                    validationError = null
+                                                },
                                                 label = { Text(stringResource(R.string.year), fontSize = 11.sp) },
                                                 singleLine = true,
                                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -2634,7 +2686,10 @@ private fun PersonHistoricalStrikesEditorDialog(
                                             )
                                             OutlinedTextField(
                                                 value = inlineCountText,
-                                                onValueChange = { inlineCountText = it },
+                                                onValueChange = {
+                                                    inlineCountText = it
+                                                    validationError = null
+                                                },
                                                 label = { Text(stringResource(R.string.strikes_amount), fontSize = 11.sp) },
                                                 singleLine = true,
                                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -2647,7 +2702,7 @@ private fun PersonHistoricalStrikesEditorDialog(
                                                 onClick = {
                                                     val py = IndividualViewModel.parseLocalizedInt(inlineYearText)
                                                     val pc = IndividualViewModel.parseLocalizedInt(inlineCountText)
-                                                    if (py != null && py in 2000..2050 && pc != null && pc in 1..100_000) {
+                                                    if (py != null && py in 1950..2100 && pc != null && pc in 1..100_000) {
                                                         val updated = entries.filterNot { it.first == yr }.toMutableList()
                                                         val existingIdx = updated.indexOfFirst { it.first == py }
                                                         if (existingIdx >= 0) {
@@ -2655,14 +2710,15 @@ private fun PersonHistoricalStrikesEditorDialog(
                                                         } else {
                                                             updated.add(py to pc)
                                                         }
+                                                        hasModifiedEntries = true
                                                         entries = updated.sortedByDescending { it.first }
                                                         inlineEditingYear = null
                                                         validationError = null
                                                     } else {
                                                         validationError = if (isAr) {
-                                                            "يرجى إدخال سنة (2000-2050) وعدد ضربات صالح"
+                                                            "يرجى إدخال سنة (1950-2100) وعدد ضربات صالح"
                                                         } else {
-                                                            "Enter a valid year (2000-2050) and positive count"
+                                                            "Enter a valid year (1950-2100) and positive count"
                                                         }
                                                     }
                                                 },
@@ -2695,7 +2751,11 @@ private fun PersonHistoricalStrikesEditorDialog(
                     ) {
                         OutlinedTextField(
                             value = newYearInput,
-                            onValueChange = { newYearInput = it },
+                            onValueChange = {
+                                newYearInput = it
+                                hasPendingNewInput = true
+                                validationError = null
+                            },
                             label = { Text(stringResource(R.string.year)) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -2706,7 +2766,11 @@ private fun PersonHistoricalStrikesEditorDialog(
                         )
                         OutlinedTextField(
                             value = newCountInput,
-                            onValueChange = { newCountInput = it },
+                            onValueChange = {
+                                newCountInput = it
+                                hasPendingNewInput = true
+                                validationError = null
+                            },
                             label = { Text(stringResource(R.string.strikes_amount)) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -2719,7 +2783,7 @@ private fun PersonHistoricalStrikesEditorDialog(
                             onClick = {
                                 val y = IndividualViewModel.parseLocalizedInt(newYearInput)
                                 val c = IndividualViewModel.parseLocalizedInt(newCountInput)
-                                if (y != null && y in 2000..2050 && c != null && c in 1..100_000) {
+                                if (y != null && y in 1950..2100 && c != null && c in 1..100_000) {
                                     val updated = entries.toMutableList()
                                     val idx = updated.indexOfFirst { it.first == y }
                                     if (idx >= 0) {
@@ -2727,15 +2791,17 @@ private fun PersonHistoricalStrikesEditorDialog(
                                     } else {
                                         updated.add(y to c)
                                     }
+                                    hasModifiedEntries = true
+                                    hasPendingNewInput = false
                                     entries = updated.sortedByDescending { it.first }
-                                    newYearInput = (y - 1).coerceIn(2000, 2050).toString()
+                                    newYearInput = (y - 1).coerceIn(1950, 2100).toString()
                                     newCountInput = "5"
                                     validationError = null
                                 } else {
                                     validationError = if (isAr) {
-                                        "يرجى إدخال سنة (2000-2050) وعدد ضربات صالح"
+                                        "يرجى إدخال سنة (1950-2100) وعدد ضربات صالح"
                                     } else {
-                                        "Enter a valid year (2000-2050) and positive count"
+                                        "Enter a valid year (1950-2100) and positive count"
                                     }
                                 }
                             },
@@ -2766,7 +2832,11 @@ private fun PersonHistoricalStrikesEditorDialog(
                                         if (isDarkTheme) Color(0x28FFFFFF) else Color(0xFFCBD5E1),
                                         RoundedCornerShape(8.dp)
                                     )
-                                    .clickable { newYearInput = yr.toString() }
+                                    .clickable {
+                                        newYearInput = yr.toString()
+                                        hasPendingNewInput = true
+                                        validationError = null
+                                    }
                                     .padding(horizontal = 8.dp, vertical = 5.dp)
                             ) {
                                 Text(
@@ -2804,6 +2874,58 @@ private fun PersonHistoricalStrikesEditorDialog(
                         }
                         Button(
                             onClick = {
+                                var finalEntries = entries.toMutableList()
+                                val editingYr = inlineEditingYear
+                                if (editingYr != null) {
+                                    val py = IndividualViewModel.parseLocalizedInt(inlineYearText)
+                                    val pc = IndividualViewModel.parseLocalizedInt(inlineCountText)
+                                    if (py != null && py in 1950..2100 && pc != null && pc in 1..100_000) {
+                                        finalEntries.removeAll { it.first == editingYr }
+                                        val existingIdx = finalEntries.indexOfFirst { it.first == py }
+                                        if (existingIdx >= 0) {
+                                            finalEntries[existingIdx] = py to (finalEntries[existingIdx].second + pc)
+                                        } else {
+                                            finalEntries.add(py to pc)
+                                        }
+                                        inlineEditingYear = null
+                                        hasModifiedEntries = true
+                                    } else {
+                                        validationError = if (isAr) {
+                                            "يرجى إدخال سنة (1950-2100) وعدد ضربات صالح"
+                                        } else {
+                                            "Enter a valid year (1950-2100) and positive count"
+                                        }
+                                        return@Button
+                                    }
+                                }
+
+                                val shouldAutoCommitNew = (hasPendingNewInput && (newYearInput.isNotBlank() || newCountInput.isNotBlank())) ||
+                                    (!hasModifiedEntries && finalEntries.isEmpty() && effectiveBaseline.isEmpty() &&
+                                        newYearInput.isNotBlank() && newCountInput.isNotBlank())
+                                if (shouldAutoCommitNew) {
+                                    val y = IndividualViewModel.parseLocalizedInt(newYearInput)
+                                    val c = IndividualViewModel.parseLocalizedInt(newCountInput)
+                                    if (y != null && y in 1950..2100 && c != null && c in 1..100_000) {
+                                        val idx = finalEntries.indexOfFirst { it.first == y }
+                                        if (idx >= 0) {
+                                            finalEntries[idx] = y to (finalEntries[idx].second + c)
+                                        } else {
+                                            finalEntries.add(y to c)
+                                        }
+                                        hasModifiedEntries = true
+                                        hasPendingNewInput = false
+                                    } else {
+                                        validationError = if (isAr) {
+                                            "يرجى إدخال سنة (1950-2100) وعدد ضربات صالح"
+                                        } else {
+                                            "Enter a valid year (1950-2100) and positive count"
+                                        }
+                                        return@Button
+                                    }
+                                }
+
+                                validationError = null
+                                entries = finalEntries.sortedByDescending { it.first }
                                 HapticHelper.triggerActionHaptic(context, isHapticEnabled)
                                 onSave(entries)
                             },

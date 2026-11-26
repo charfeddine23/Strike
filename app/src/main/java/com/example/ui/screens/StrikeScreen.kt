@@ -302,22 +302,25 @@ fun StrikeScreen(
                     )
                     dialogWindow?.setBackgroundDrawableResource(android.R.color.transparent)
                 }
-                val existingForPerson = remember(targetPerson, allStrikeEvents) {
+                val resolvedTarget = remember(targetPerson.id, allList) {
+                    allList.firstOrNull { it.id == targetPerson.id } ?: targetPerson
+                }
+                val existingForPerson = remember(resolvedTarget, allStrikeEvents) {
                     MapStyleHelper.collectAllMappedPoints(
-                        listOf(targetPerson),
-                        allStrikeEvents.filter { it.individualId == targetPerson.id }
+                        listOf(resolvedTarget),
+                        allStrikeEvents.filter { it.individualId == resolvedTarget.id }
                     )
                 }
                 FirstStrikeLocationPickerDialog(
-                    initialLat = targetPerson.firstStrikeLat,
-                    initialLng = targetPerson.firstStrikeLng,
-                    initialPlaceName = targetPerson.firstStrikePlaceName,
+                    initialLat = resolvedTarget.firstStrikeLat,
+                    initialLng = resolvedTarget.firstStrikeLng,
+                    initialPlaceName = resolvedTarget.firstStrikePlaceName,
                     currentLang = currentLang,
                     isDarkTheme = isDarkTheme,
                     titleOverride = when {
-                        isAr -> "موقع السترايك (${targetPerson.fullName})"
-                        currentLang == "fr" -> "Lieu du strike (${targetPerson.fullName})"
-                        else -> "Strike Location (${targetPerson.fullName})"
+                        isAr -> "موقع السترايك (${resolvedTarget.fullName})"
+                        currentLang == "fr" -> "Lieu du strike (${resolvedTarget.fullName})"
+                        else -> "Strike Location (${resolvedTarget.fullName})"
                     },
                     confirmLabelOverride = when {
                         isAr -> "تأكيد وإضافة للخريطة"
@@ -325,13 +328,13 @@ fun StrikeScreen(
                         else -> "Confirm & Add to Map"
                     },
                     allowCategorySelection = true,
-                    initialIsFirstStrike = !targetPerson.hasFirstStrikeLocation && targetPerson.strikeCount == 0,
-                    personName = targetPerson.fullName,
+                    initialIsFirstStrike = !resolvedTarget.hasFirstStrikeLocation && resolvedTarget.strikeCount == 0,
+                    personName = resolvedTarget.fullName,
                     existingPersonLocations = existingForPerson,
                     onConfirmWithCategory = { lat, lng, placeName, isFirstStrike ->
                         HapticHelper.triggerStrikeHaptic(context, isHapticFeedbackEnabled)
                         viewModel.recordStrikesWithLocation(
-                            id = targetPerson.id,
+                            id = resolvedTarget.id,
                             delta = 1,
                             isFirstStrike = isFirstStrike,
                             lat = lat,

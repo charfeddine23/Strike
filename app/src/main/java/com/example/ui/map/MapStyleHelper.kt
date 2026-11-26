@@ -132,8 +132,10 @@ object MapStyleHelper {
     const val USER_LOCATION_CORE_LAYER_ID = "obsidian-user-location-core"
 
     const val PICKER_PERSON_SOURCE_ID = "obsidian-picker-person-source"
+    const val PICKER_PERSON_AURA_LAYER_ID = "obsidian-picker-person-aura"
     const val PICKER_PERSON_FIRST_LAYER_ID = "obsidian-picker-person-first-pins"
     const val PICKER_PERSON_ROUTINE_LAYER_ID = "obsidian-picker-person-routine-pins"
+    const val PICKER_PERSON_SPARK_LAYER_ID = "obsidian-picker-person-sparks"
     const val PICKER_PERSON_LABEL_LAYER_ID = "obsidian-picker-person-labels"
 
     const val BUILDINGS_3D_LAYER_ID = "obsidian-3d-buildings"
@@ -744,6 +746,61 @@ object MapStyleHelper {
             CameraUpdateFactory.newLatLngZoom(LatLng(lat, lng), zoom),
             durationMs
         )
+    }
+
+    fun fitCameraToPoints(
+        mapLibreMap: MapLibreMap,
+        points: List<MappedStrikePoint>,
+        paddingPx: Int = 96,
+        singlePointZoom: Double = 13.4,
+        durationMs: Int = 550
+    ) {
+        val valid = points.filter {
+            it.lat.isFinite() && it.lng.isFinite() && it.lat in -90.0..90.0 && it.lng in -180.0..180.0
+        }
+        if (valid.isEmpty()) return
+
+        var minLat = Double.MAX_VALUE
+        var maxLat = -Double.MAX_VALUE
+        var minLng = Double.MAX_VALUE
+        var maxLng = -Double.MAX_VALUE
+        for (pt in valid) {
+            if (pt.lat < minLat) minLat = pt.lat
+            if (pt.lat > maxLat) maxLat = pt.lat
+            if (pt.lng < minLng) minLng = pt.lng
+            if (pt.lng > maxLng) maxLng = pt.lng
+        }
+
+        val spanLat = maxLat - minLat
+        val spanLng = maxLng - minLng
+        if (valid.size == 1 || (spanLat < 0.0008 && spanLng < 0.0008)) {
+            val center = valid.first()
+            mapLibreMap.animateCamera(
+                CameraUpdateFactory.newLatLngZoom(LatLng(center.lat, center.lng), singlePointZoom),
+                durationMs
+            )
+            return
+        }
+
+        val latPad = (spanLat * 0.14).coerceAtLeast(0.0012)
+        val lngPad = (spanLng * 0.14).coerceAtLeast(0.0012)
+        val bounds = org.maplibre.android.geometry.LatLngBounds.Builder()
+            .include(LatLng((minLat - latPad).coerceIn(-85.0, 85.0), (minLng - lngPad).coerceIn(-180.0, 180.0)))
+            .include(LatLng((maxLat + latPad).coerceIn(-85.0, 85.0), (maxLng + lngPad).coerceIn(-180.0, 180.0)))
+            .build()
+        try {
+            mapLibreMap.animateCamera(
+                CameraUpdateFactory.newLatLngBounds(bounds, paddingPx),
+                durationMs
+            )
+        } catch (_: Throwable) {
+            val midLat = (minLat + maxLat) * 0.5
+            val midLng = (minLng + maxLng) * 0.5
+            mapLibreMap.animateCamera(
+                CameraUpdateFactory.newLatLngZoom(LatLng(midLat, midLng), singlePointZoom),
+                durationMs
+            )
+        }
     }
 
     fun applyGoogleGradeStyling(
@@ -1420,7 +1477,7 @@ object MapStyleHelper {
 
     /**
      * Renders all registered strikes for a single person directly onto the Location Picker map
-     * so editing or adding a strike location shows every existing pin under that person's name.
+     * as high-contrast glowing live dots so editing or adding a strike location shows every existing pin.
      */
     fun applyPickerPersonLocations(
         style: Style,
@@ -1444,66 +1501,156 @@ object MapStyleHelper {
         val isDark = theme == MapVisualTheme.OBSIDIAN_DARK
         val visibility = if (personLocations.isNotEmpty()) Property.VISIBLE else Property.NONE
 
-        val existingRoutine = style.getLayerAs<CircleLayer>(PICKER_PERSON_ROUTINE_LAYER_ID)
-        if (existingRoutine == null) {
-            style.addLayer(
-                CircleLayer(PICKER_PERSON_ROUTINE_LAYER_ID, PICKER_PERSON_SOURCE_ID).apply {
-                    setFilter(Expression.eq(Expression.get("isFirstStrike"), Expression.literal(false)))
-                    setProperties(
-                        PropertyFactory.circleRadius(8.0f),
-                        PropertyFactory.circleColor(AndroidColor.parseColor("#D946EF")),
-                        PropertyFactory.circleStrokeWidth(2.0f),
-                        PropertyFactory.circleStrokeColor(AndroidColor.WHITE),
-                        PropertyFactory.circleOpacity(0.92f),
-                        PropertyFactory.visibility(visibility)
-                    )
-                }
-            )
-        } else {
-            existingRoutine.setProperties(PropertyFactory.visibility(visibility))
+        // Ensure picker layers always sit at the very top of the style stack
+        fun ensureTopCircleLayer(layerId: String, initBlock: CircleLayer.() -> Unit, updateBlock: CircleLayer.() -> Unit) {
+            val existing = style.getLayerAs<CircleLayer>(layerId)
+            if (existing == null) {
+                style.addLayer(CircleLayer(layerId, PICKER_PERSON_SOURCE_ID).apply(initBlock))
+            } else {
+                existing.updateBlock()
+            }
         }
 
-        val existingFirst = style.getLayerAs<CircleLayer>(PICKER_PERSON_FIRST_LAYER_ID)
-        if (existingFirst == null) {
-            style.addLayer(
-                CircleLayer(PICKER_PERSON_FIRST_LAYER_ID, PICKER_PERSON_SOURCE_ID).apply {
-                    setFilter(Expression.eq(Expression.get("isFirstStrike"), Expression.literal(true)))
-                    setProperties(
-                        PropertyFactory.circleRadius(9.5f),
-                        PropertyFactory.circleColor(AndroidColor.parseColor("#0B1221")),
-                        PropertyFactory.circleStrokeWidth(2.6f),
-                        PropertyFactory.circleStrokeColor(AndroidColor.parseColor("#FBBF24")),
-                        PropertyFactory.circleOpacity(0.96f),
-                        PropertyFactory.visibility(visibility)
-                    )
-                }
-            )
-        } else {
-            existingFirst.setProperties(PropertyFactory.visibility(visibility))
-        }
+        ensureTopCircleLayer(
+            layerId = PICKER_PERSON_AURA_LAYER_ID,
+            initBlock = {
+                setProperties(
+                    PropertyFactory.circleRadius(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(4, 11f),
+                            Expression.stop(10, 15f),
+                            Expression.stop(16, 19f)
+                        )
+                    ),
+                    PropertyFactory.circleColor(
+                        Expression.switchCase(
+                            Expression.eq(Expression.get("isFirstStrike"), Expression.literal(true)),
+                            Expression.color(AndroidColor.parseColor("#F59E0B")),
+                            Expression.color(AndroidColor.parseColor("#EC4899"))
+                        )
+                    ),
+                    PropertyFactory.circleBlur(0.85f),
+                    PropertyFactory.circleOpacity(0.42f),
+                    PropertyFactory.visibility(visibility)
+                )
+            },
+            updateBlock = {
+                setProperties(
+                    PropertyFactory.circleOpacity(0.42f),
+                    PropertyFactory.visibility(visibility)
+                )
+            }
+        )
+
+        ensureTopCircleLayer(
+            layerId = PICKER_PERSON_ROUTINE_LAYER_ID,
+            initBlock = {
+                setFilter(Expression.eq(Expression.get("isFirstStrike"), Expression.literal(false)))
+                setProperties(
+                    PropertyFactory.circleRadius(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(4, 6.5f),
+                            Expression.stop(10, 8.5f),
+                            Expression.stop(16, 10.5f)
+                        )
+                    ),
+                    PropertyFactory.circleColor(AndroidColor.parseColor("#EC4899")),
+                    PropertyFactory.circleStrokeWidth(2.4f),
+                    PropertyFactory.circleStrokeColor(AndroidColor.WHITE),
+                    PropertyFactory.circleOpacity(0.98f),
+                    PropertyFactory.visibility(visibility)
+                )
+            },
+            updateBlock = {
+                setProperties(PropertyFactory.visibility(visibility))
+            }
+        )
+
+        ensureTopCircleLayer(
+            layerId = PICKER_PERSON_FIRST_LAYER_ID,
+            initBlock = {
+                setFilter(Expression.eq(Expression.get("isFirstStrike"), Expression.literal(true)))
+                setProperties(
+                    PropertyFactory.circleRadius(
+                        Expression.interpolate(
+                            Expression.linear(),
+                            Expression.zoom(),
+                            Expression.stop(4, 7.5f),
+                            Expression.stop(10, 9.8f),
+                            Expression.stop(16, 12.0f)
+                        )
+                    ),
+                    PropertyFactory.circleColor(AndroidColor.parseColor("#0B1221")),
+                    PropertyFactory.circleStrokeWidth(2.8f),
+                    PropertyFactory.circleStrokeColor(AndroidColor.parseColor("#FBBF24")),
+                    PropertyFactory.circleOpacity(0.98f),
+                    PropertyFactory.visibility(visibility)
+                )
+            },
+            updateBlock = {
+                setProperties(PropertyFactory.visibility(visibility))
+            }
+        )
+
+        ensureTopCircleLayer(
+            layerId = PICKER_PERSON_SPARK_LAYER_ID,
+            initBlock = {
+                setProperties(
+                    PropertyFactory.circleRadius(2.8f),
+                    PropertyFactory.circleColor(AndroidColor.parseColor("#FFFBEB")),
+                    PropertyFactory.circleOpacity(0.95f),
+                    PropertyFactory.visibility(visibility)
+                )
+            },
+            updateBlock = {
+                setProperties(PropertyFactory.visibility(visibility))
+            }
+        )
 
         val labelColor = if (isDark) DARK_LABEL_TEXT else LIGHT_LABEL_TEXT
         val labelHalo = if (isDark) DARK_LABEL_HALO else LIGHT_LABEL_HALO
         val existingLabels = style.getLayerAs<SymbolLayer>(PICKER_PERSON_LABEL_LAYER_ID)
-        val labelExpr = Expression.coalesce(Expression.get("placeName"), Expression.get("name"))
+        val labelExpr = Expression.switchCase(
+            Expression.neq(Expression.length(Expression.get("placeName")), Expression.literal(0)),
+            Expression.get("placeName"),
+            Expression.neq(Expression.length(Expression.get("date")), Expression.literal(0)),
+            Expression.get("date"),
+            Expression.get("name")
+        )
+        // Extract style font stack (OpenFreeMap uses Noto Sans rather than Open Sans) so labels always render
+        val styleFontStack = style.layers
+            .filterIsInstance<SymbolLayer>()
+            .firstOrNull { !it.id.startsWith("obsidian-") && it.textFont.value != null }
+            ?.textFont
+            ?.value
+            ?: arrayOf("Noto Sans Bold", "Noto Sans Regular")
+
         if (existingLabels == null) {
             style.addLayer(
                 SymbolLayer(PICKER_PERSON_LABEL_LAYER_ID, PICKER_PERSON_SOURCE_ID).apply {
                     setProperties(
                         PropertyFactory.textField(labelExpr),
+                        PropertyFactory.textFont(styleFontStack),
                         PropertyFactory.textSize(11f),
                         PropertyFactory.textOffset(arrayOf(0f, 1.35f)),
                         PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
                         PropertyFactory.textColor(labelColor),
                         PropertyFactory.textHaloColor(labelHalo),
-                        PropertyFactory.textHaloWidth(1.4f),
+                        PropertyFactory.textHaloWidth(1.5f),
                         PropertyFactory.textAllowOverlap(true),
+                        PropertyFactory.textIgnorePlacement(true),
                         PropertyFactory.visibility(visibility)
                     )
                 }
             )
         } else {
             existingLabels.setProperties(
+                PropertyFactory.textField(labelExpr),
+                PropertyFactory.textFont(styleFontStack),
                 PropertyFactory.textColor(labelColor),
                 PropertyFactory.textHaloColor(labelHalo),
                 PropertyFactory.visibility(visibility)

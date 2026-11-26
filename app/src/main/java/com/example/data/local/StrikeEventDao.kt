@@ -20,6 +20,12 @@ data class IndividualLatestDateTuple(
     val latestDate: String?
 )
 
+data class HistoricalYearlyPersonTuple(
+    val individualId: Long,
+    val year: Int,
+    val totalStrikes: Int
+)
+
 @Dao
 interface StrikeEventDao {
     @Query("SELECT * FROM strike_events ORDER BY timestamp DESC, id DESC LIMIT 10000")
@@ -54,6 +60,17 @@ interface StrikeEventDao {
         """
     )
     suspend fun getYearlyPersonAggregates(): List<YearlyPersonAggregate>
+
+    @Query(
+        """
+        SELECT individualId, year, COALESCE(SUM(count), 0) AS totalStrikes
+        FROM strike_events
+        WHERE strikeType LIKE 'Historical%' OR strikeType = 'Historical'
+        GROUP BY individualId, year
+        ORDER BY year DESC
+        """
+    )
+    fun getHistoricalYearlyByIndividualFlow(): Flow<List<HistoricalYearlyPersonTuple>>
 
     @Query("SELECT individualId, MAX(date) AS latestDate FROM strike_events GROUP BY individualId")
     fun getLatestStrikeDateByIndividualFlow(): Flow<List<IndividualLatestDateTuple>>
