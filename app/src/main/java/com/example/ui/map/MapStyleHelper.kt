@@ -1477,7 +1477,7 @@ object MapStyleHelper {
 
     /**
      * Renders all registered strikes for a single person directly onto the Location Picker map
-     * as high-contrast glowing live dots so editing or adding a strike location shows every existing pin.
+     * strictly as plain red dots without place name labels, halos, borders, or extra badges.
      */
     fun applyPickerPersonLocations(
         style: Style,
@@ -1498,10 +1498,9 @@ object MapStyleHelper {
             )
         }
 
-        val isDark = theme == MapVisualTheme.OBSIDIAN_DARK
         val visibility = if (personLocations.isNotEmpty()) Property.VISIBLE else Property.NONE
+        val pureRedColor = AndroidColor.parseColor("#EF4444")
 
-        // Ensure picker layers always sit at the very top of the style stack
         fun ensureTopCircleLayer(layerId: String, initBlock: CircleLayer.() -> Unit, updateBlock: CircleLayer.() -> Unit) {
             val existing = style.getLayerAs<CircleLayer>(layerId)
             if (existing == null) {
@@ -1511,37 +1510,15 @@ object MapStyleHelper {
             }
         }
 
-        ensureTopCircleLayer(
-            layerId = PICKER_PERSON_AURA_LAYER_ID,
-            initBlock = {
-                setProperties(
-                    PropertyFactory.circleRadius(
-                        Expression.interpolate(
-                            Expression.linear(),
-                            Expression.zoom(),
-                            Expression.stop(4, 11f),
-                            Expression.stop(10, 15f),
-                            Expression.stop(16, 19f)
-                        )
-                    ),
-                    PropertyFactory.circleColor(
-                        Expression.switchCase(
-                            Expression.eq(Expression.get("isFirstStrike"), Expression.literal(true)),
-                            Expression.color(AndroidColor.parseColor("#F59E0B")),
-                            Expression.color(AndroidColor.parseColor("#EC4899"))
-                        )
-                    ),
-                    PropertyFactory.circleBlur(0.85f),
-                    PropertyFactory.circleOpacity(0.42f),
-                    PropertyFactory.visibility(visibility)
-                )
-            },
-            updateBlock = {
-                setProperties(
-                    PropertyFactory.circleOpacity(0.42f),
-                    PropertyFactory.visibility(visibility)
-                )
-            }
+        // Hide aura, spark, and place-name label layers so only plain red dots appear
+        style.getLayerAs<CircleLayer>(PICKER_PERSON_AURA_LAYER_ID)?.setProperties(
+            PropertyFactory.visibility(Property.NONE)
+        )
+        style.getLayerAs<CircleLayer>(PICKER_PERSON_SPARK_LAYER_ID)?.setProperties(
+            PropertyFactory.visibility(Property.NONE)
+        )
+        style.getLayerAs<SymbolLayer>(PICKER_PERSON_LABEL_LAYER_ID)?.setProperties(
+            PropertyFactory.visibility(Property.NONE)
         )
 
         ensureTopCircleLayer(
@@ -1553,20 +1530,24 @@ object MapStyleHelper {
                         Expression.interpolate(
                             Expression.linear(),
                             Expression.zoom(),
-                            Expression.stop(4, 6.5f),
-                            Expression.stop(10, 8.5f),
-                            Expression.stop(16, 10.5f)
+                            Expression.stop(4, 5.0f),
+                            Expression.stop(10, 6.5f),
+                            Expression.stop(16, 8.5f)
                         )
                     ),
-                    PropertyFactory.circleColor(AndroidColor.parseColor("#EC4899")),
-                    PropertyFactory.circleStrokeWidth(2.4f),
-                    PropertyFactory.circleStrokeColor(AndroidColor.WHITE),
-                    PropertyFactory.circleOpacity(0.98f),
+                    PropertyFactory.circleColor(pureRedColor),
+                    PropertyFactory.circleStrokeWidth(0f),
+                    PropertyFactory.circleOpacity(1.0f),
                     PropertyFactory.visibility(visibility)
                 )
             },
             updateBlock = {
-                setProperties(PropertyFactory.visibility(visibility))
+                setProperties(
+                    PropertyFactory.circleColor(pureRedColor),
+                    PropertyFactory.circleStrokeWidth(0f),
+                    PropertyFactory.circleOpacity(1.0f),
+                    PropertyFactory.visibility(visibility)
+                )
             }
         )
 
@@ -1579,82 +1560,25 @@ object MapStyleHelper {
                         Expression.interpolate(
                             Expression.linear(),
                             Expression.zoom(),
-                            Expression.stop(4, 7.5f),
-                            Expression.stop(10, 9.8f),
-                            Expression.stop(16, 12.0f)
+                            Expression.stop(4, 5.0f),
+                            Expression.stop(10, 6.5f),
+                            Expression.stop(16, 8.5f)
                         )
                     ),
-                    PropertyFactory.circleColor(AndroidColor.parseColor("#0B1221")),
-                    PropertyFactory.circleStrokeWidth(2.8f),
-                    PropertyFactory.circleStrokeColor(AndroidColor.parseColor("#FBBF24")),
-                    PropertyFactory.circleOpacity(0.98f),
+                    PropertyFactory.circleColor(pureRedColor),
+                    PropertyFactory.circleStrokeWidth(0f),
+                    PropertyFactory.circleOpacity(1.0f),
                     PropertyFactory.visibility(visibility)
                 )
             },
             updateBlock = {
-                setProperties(PropertyFactory.visibility(visibility))
-            }
-        )
-
-        ensureTopCircleLayer(
-            layerId = PICKER_PERSON_SPARK_LAYER_ID,
-            initBlock = {
                 setProperties(
-                    PropertyFactory.circleRadius(2.8f),
-                    PropertyFactory.circleColor(AndroidColor.parseColor("#FFFBEB")),
-                    PropertyFactory.circleOpacity(0.95f),
+                    PropertyFactory.circleColor(pureRedColor),
+                    PropertyFactory.circleStrokeWidth(0f),
+                    PropertyFactory.circleOpacity(1.0f),
                     PropertyFactory.visibility(visibility)
                 )
-            },
-            updateBlock = {
-                setProperties(PropertyFactory.visibility(visibility))
             }
         )
-
-        val labelColor = if (isDark) DARK_LABEL_TEXT else LIGHT_LABEL_TEXT
-        val labelHalo = if (isDark) DARK_LABEL_HALO else LIGHT_LABEL_HALO
-        val existingLabels = style.getLayerAs<SymbolLayer>(PICKER_PERSON_LABEL_LAYER_ID)
-        val labelExpr = Expression.switchCase(
-            Expression.neq(Expression.length(Expression.get("placeName")), Expression.literal(0)),
-            Expression.get("placeName"),
-            Expression.neq(Expression.length(Expression.get("date")), Expression.literal(0)),
-            Expression.get("date"),
-            Expression.get("name")
-        )
-        // Extract style font stack (OpenFreeMap uses Noto Sans rather than Open Sans) so labels always render
-        val styleFontStack = style.layers
-            .filterIsInstance<SymbolLayer>()
-            .firstOrNull { !it.id.startsWith("obsidian-") && it.textFont.value != null }
-            ?.textFont
-            ?.value
-            ?: arrayOf("Noto Sans Bold", "Noto Sans Regular")
-
-        if (existingLabels == null) {
-            style.addLayer(
-                SymbolLayer(PICKER_PERSON_LABEL_LAYER_ID, PICKER_PERSON_SOURCE_ID).apply {
-                    setProperties(
-                        PropertyFactory.textField(labelExpr),
-                        PropertyFactory.textFont(styleFontStack),
-                        PropertyFactory.textSize(11f),
-                        PropertyFactory.textOffset(arrayOf(0f, 1.35f)),
-                        PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
-                        PropertyFactory.textColor(labelColor),
-                        PropertyFactory.textHaloColor(labelHalo),
-                        PropertyFactory.textHaloWidth(1.5f),
-                        PropertyFactory.textAllowOverlap(true),
-                        PropertyFactory.textIgnorePlacement(true),
-                        PropertyFactory.visibility(visibility)
-                    )
-                }
-            )
-        } else {
-            existingLabels.setProperties(
-                PropertyFactory.textField(labelExpr),
-                PropertyFactory.textFont(styleFontStack),
-                PropertyFactory.textColor(labelColor),
-                PropertyFactory.textHaloColor(labelHalo),
-                PropertyFactory.visibility(visibility)
-            )
-        }
     }
 }

@@ -631,12 +631,13 @@ fun FirstStrikeLocationPickerDialog(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Live 60-90 FPS Screen-Projected Strike Dots Overlay (guarantees all person locations appear live on map)
+                    // Live 60-90 FPS Screen-Projected Strike Dots Overlay (plain red dot only, no labels or halos)
                     val projTick = cameraProjectionTick
                     val liveMap = mapLibreRef
                     if (liveMap != null && existingPersonLocations.isNotEmpty() && mapFrameSizePx.width > 0 && mapFrameSizePx.height > 0 && projTick >= 0) {
                         val density = LocalDensity.current
-                        val halfDotPx = with(density) { 14.dp.toPx() }
+                        val halfHitPx = with(density) { 24.dp.toPx() }
+                        val pureRedDot = Color(0xFFEF4444)
                         existingPersonLocations.forEach { pt ->
                             val screenPt = try {
                                 liveMap.projection.toScreenLocation(LatLng(pt.lat, pt.lng))
@@ -651,18 +652,15 @@ fun FirstStrikeLocationPickerDialog(
                                 screenPt.y >= -24f &&
                                 screenPt.y <= mapFrameSizePx.height + 24f
                             ) {
-                                val dotAccent = if (pt.isFirstStrike) NeonAmber else routineMagenta
-                                val coreBg = if (pt.isFirstStrike) Color(0xFF0B1221) else routineMagenta
-                                val rimColor = if (pt.isFirstStrike) NeonAmber else Color.White
                                 Box(
                                     modifier = Modifier
                                         .offset {
                                             IntOffset(
-                                                (screenPt.x - halfDotPx).roundToInt(),
-                                                (screenPt.y - halfDotPx).roundToInt()
+                                                (screenPt.x - halfHitPx).roundToInt(),
+                                                (screenPt.y - halfHitPx).roundToInt()
                                             )
                                         }
-                                        .size(28.dp)
+                                        .size(48.dp)
                                         .clip(CircleShape)
                                         .clickable {
                                             hasUserMovedCamera = true
@@ -676,29 +674,12 @@ fun FirstStrikeLocationPickerDialog(
                                         .testTag("picker_live_dot_${pt.key}"),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    // Soft glowing halo
                                     Box(
                                         modifier = Modifier
-                                            .size(26.dp)
+                                            .size(10.dp)
                                             .clip(CircleShape)
-                                            .background(dotAccent.copy(alpha = 0.28f))
+                                            .background(pureRedDot)
                                     )
-                                    // Crisp jewel dot with high-contrast rim & white center spark
-                                    Box(
-                                        modifier = Modifier
-                                            .size(14.dp)
-                                            .clip(CircleShape)
-                                            .background(coreBg)
-                                            .border(2.2.dp, rimColor, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(4.5.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFFFFFBEB))
-                                        )
-                                    }
                                 }
                             }
                         }
@@ -722,18 +703,18 @@ fun FirstStrikeLocationPickerDialog(
                             }
                         }
 
-                        // Preview all registered strikes for this person on the picker map as live dots + labels
+                        // Preview all registered strikes for this person on the picker map strictly as plain red dots
+                        val pureRedDot = Color(0xFFEF4444)
                         existingPersonLocations.forEachIndexed { idx, pt ->
-                            val pinColor = if (pt.isFirstStrike) NeonAmber else routineMagenta
-                            val coreBg = if (pt.isFirstStrike) Color(0xFF0B1221) else routineMagenta
-                            val rimColor = if (pt.isFirstStrike) NeonAmber else Color.White
-                            Row(
+                            Box(
                                 modifier = Modifier
                                     .align(Alignment.TopStart)
                                     .padding(
                                         start = (14 + ((idx * 58) % 210)).dp,
                                         top = (36 + ((idx * 34) % 105)).dp
                                     )
+                                    .size(48.dp)
+                                    .clip(CircleShape)
                                     .clickable {
                                         selectedLat = pt.lat
                                         selectedLng = pt.lng
@@ -742,51 +723,15 @@ fun FirstStrikeLocationPickerDialog(
                                         }
                                     }
                                     .testTag("picker_existing_pin_${pt.key}"),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                contentAlignment = Alignment.Center
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(18.dp)
+                                        .size(10.dp)
                                         .clip(CircleShape)
-                                        .background(pinColor.copy(alpha = 0.28f))
-                                        .testTag("picker_live_dot_${pt.key}"),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(11.dp)
-                                            .clip(CircleShape)
-                                            .background(coreBg)
-                                            .border(1.8.dp, rimColor, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(3.5.dp)
-                                                .clip(CircleShape)
-                                                .background(Color(0xFFFFFBEB))
-                                        )
-                                    }
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(panelBg.copy(alpha = 0.88f))
-                                        .border(0.8.dp, pinColor.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = pt.placeName.ifBlank {
-                                            String.format(Locale.US, "%.2f, %.2f", pt.lat, pt.lng)
-                                        },
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = textPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                                        .background(pureRedDot)
+                                        .testTag("picker_live_dot_${pt.key}")
+                                )
                             }
                         }
                     }
@@ -821,7 +766,7 @@ fun FirstStrikeLocationPickerDialog(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(NeonAmber)
+                                .background(Color(0xFFEF4444))
                         )
                         Text(
                             text = when {

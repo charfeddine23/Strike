@@ -1246,11 +1246,25 @@ class FirstStrikeHeatmapTest {
             mapBounds.top >= dialogBounds.top && mapBounds.bottom <= dialogBounds.bottom
         )
 
-        // Verify all registered strikes for this person appear LIVE as dots on the map AND in the horizontal strip
+        // Verify all registered strikes for this person appear LIVE as plain red dots on the map (with NO place-name labels inside map frame)
         composeRule.onNodeWithTag("picker_fit_all_pins_btn").assertIsDisplayed()
         composeRule.onNodeWithTag("picker_live_dot_ind_$personId", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("picker_live_dot_ev_$ev1Id", useUnmergedTree = true).assertIsDisplayed()
         composeRule.onNodeWithTag("picker_live_dot_ev_$ev2Id", useUnmergedTree = true).assertIsDisplayed()
+        assertEquals(
+            0,
+            composeRule.onAllNodes(
+                hasTestTag("picker_map_frame") and hasAnyDescendant(hasText("Oran Corniche", substring = true)),
+                useUnmergedTree = true
+            ).fetchSemanticsNodes().size
+        )
+        assertEquals(
+            0,
+            composeRule.onAllNodes(
+                hasTestTag("picker_map_frame") and hasAnyDescendant(hasText("Constantine Bridge", substring = true)),
+                useUnmergedTree = true
+            ).fetchSemanticsNodes().size
+        )
 
         composeRule.onNodeWithTag("picker_person_locations_strip").assertIsDisplayed()
         composeRule.onNodeWithTag("picker_saved_loc_chip_ind_$personId").assertIsDisplayed()
@@ -1258,7 +1272,7 @@ class FirstStrikeHeatmapTest {
         composeRule.onNodeWithTag("picker_saved_loc_chip_ev_$ev2Id").assertIsDisplayed()
         composeRule.onNodeWithTag("picker_existing_pin_ev_$ev1Id").assertIsDisplayed()
 
-        // Tapping a live dot directly on the map jumps selected preview location cleanly
+        // Tapping a live red dot directly on the map jumps selected preview location cleanly
         composeRule.onNodeWithTag("picker_existing_pin_ev_$ev2Id").performClick()
         composeRule.waitForIdle()
         composeRule.onNode(
