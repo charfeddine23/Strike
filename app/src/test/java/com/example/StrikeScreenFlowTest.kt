@@ -101,7 +101,7 @@ class StrikeScreenFlowTest {
             composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performClick()
             composeRule.waitForIdle()
         }
-        composeRule.onNodeWithTag("nav_tab_strike").performClick()
+        composeRule.onNodeWithTag("home_add_strike_btn").performClick()
         composeRule.waitForIdle()
 
         // 1. Verify extras (Select Individual + Smart Search) are gone on Strike tab

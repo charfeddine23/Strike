@@ -98,6 +98,7 @@ class ObsidianRefinementVerificationTest {
         }
 
         enterMainAppFromHeatmap()
+        composeRule.onNodeWithTag("home_records_btn").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
             composeRule.onAllNodesWithTag("record_expand_btn_$personId").fetchSemanticsNodes().isNotEmpty()
@@ -277,7 +278,10 @@ class ObsidianRefinementVerificationTest {
     fun topAndBottomBars_maintainTransparentOuterContainerAndFadeInBlurAcrossAllPages() {
         enterMainAppFromHeatmap()
 
-        // Dashboard
+        // Home -> Records (Dashboard)
+        composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("home_records_btn").performClick()
+        composeRule.waitForIdle()
         val dashTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
         val dashBottomBarBounds = composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
         composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
@@ -296,8 +300,10 @@ class ObsidianRefinementVerificationTest {
         composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
         composeRule.onNodeWithTag("inventory_screen").assertIsDisplayed()
 
-        // Strike
-        composeRule.onNodeWithTag("nav_tab_strike").performClick()
+        // Home -> Add Strike
+        composeRule.onNodeWithTag("nav_tab_home").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_add_strike_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed()
         composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
@@ -380,6 +386,8 @@ class ObsidianRefinementVerificationTest {
         val repo = IndividualRepository(db.individualDao(), db.strikeEventDao())
 
         enterMainAppFromHeatmap()
+        composeRule.onNodeWithTag("home_records_btn").performClick()
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("add_record_fab").performClick()
         composeRule.waitForIdle()
 
@@ -455,6 +463,7 @@ class ObsidianRefinementVerificationTest {
         }
 
         enterMainAppFromHeatmap()
+        composeRule.onNodeWithTag("home_records_btn").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
             composeRule.onAllNodesWithTag("record_expand_btn_$personId").fetchSemanticsNodes().isNotEmpty()

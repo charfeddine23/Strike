@@ -59,8 +59,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Timeline
@@ -144,6 +143,7 @@ import com.example.ui.screens.DeviationsScreen
 import com.example.ui.screens.FirstStrikeHeatmapScreen
 import com.example.ui.screens.FlameScreen
 import com.example.ui.screens.HeatmapMapController
+import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.InventoryScreen
 import com.example.ui.screens.RoadmapScreen
 import com.example.ui.screens.StrikeScreen
@@ -175,6 +175,7 @@ import kotlinx.coroutines.flow.collectLatest
 import java.util.Locale
 
 enum class AppScreen {
+    HOME,
     DASHBOARD,
     INVENTORY,
     STRIKE,
@@ -312,7 +313,7 @@ fun LiquidGlassApp(
             )
         }
     }
-    var currentScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
+    var currentScreen by remember { mutableStateOf(AppScreen.HOME) }
     var roadmapMainTab by remember { mutableIntStateOf(0) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showShieldDropdown by remember { mutableStateOf(false) }
@@ -406,12 +407,12 @@ fun LiquidGlassApp(
         }
     }
 
-    // Hardware/gesture BackHandler: return from TASKS_LEDGER or XP_LOGS to ROADMAP, otherwise return to DASHBOARD
-    BackHandler(enabled = !showHeatmapEntry && currentScreen != AppScreen.DASHBOARD) {
+    // Hardware/gesture BackHandler: return from TASKS_LEDGER or XP_LOGS to ROADMAP, otherwise return to HOME
+    BackHandler(enabled = !showHeatmapEntry && currentScreen != AppScreen.HOME) {
         currentScreen = if (currentScreen == AppScreen.TASKS_LEDGER || currentScreen == AppScreen.XP_LOGS) {
             AppScreen.ROADMAP
         } else {
-            AppScreen.DASHBOARD
+            AppScreen.HOME
         }
     }
 
@@ -572,6 +573,15 @@ fun LiquidGlassApp(
                 label = "screen_transition"
             ) { screen ->
                 when (screen) {
+                    AppScreen.HOME -> HomeScreen(
+                        viewModel = viewModel,
+                        onOpenHeatmap = { animateCurtainTo(0f) },
+                        onOpenRecords = { currentScreen = AppScreen.DASHBOARD },
+                        onOpenAddStrike = { currentScreen = AppScreen.STRIKE },
+                        onOpenRoadmap = { currentScreen = AppScreen.ROADMAP },
+                        isDarkTheme = isDarkTheme
+                    )
+
                     AppScreen.DASHBOARD -> DashboardScreen(
                         viewModel = viewModel,
                         onNavigateToStrike = { id ->
@@ -585,7 +595,8 @@ fun LiquidGlassApp(
                         hostDataEntryExternally = true,
                         isDarkTheme = isDarkTheme,
                         isDashboardOpen = showRecordsDashboardDialog,
-                        onOpenDashboard = { showRecordsDashboardDialog = !showRecordsDashboardDialog }
+                        onOpenDashboard = { showRecordsDashboardDialog = !showRecordsDashboardDialog },
+                        onNavigateBack = { currentScreen = AppScreen.HOME }
                     )
 
                     AppScreen.INVENTORY -> InventoryScreen(
@@ -595,7 +606,8 @@ fun LiquidGlassApp(
 
                     AppScreen.STRIKE -> StrikeScreen(
                         viewModel = viewModel,
-                        isDarkTheme = isDarkTheme
+                        isDarkTheme = isDarkTheme,
+                        onNavigateBack = { currentScreen = AppScreen.HOME }
                     )
 
                     AppScreen.COMPARISON -> ComparisonScreen(
@@ -605,19 +617,19 @@ fun LiquidGlassApp(
 
                     AppScreen.FLAME -> FlameScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD },
+                        onNavigateBack = { currentScreen = AppScreen.HOME },
                         isDarkTheme = isDarkTheme
                     )
 
                     AppScreen.DEVIATIONS -> DeviationsScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD },
+                        onNavigateBack = { currentScreen = AppScreen.HOME },
                         isDarkTheme = isDarkTheme
                     )
 
                     AppScreen.ROADMAP -> RoadmapScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD },
+                        onNavigateBack = { currentScreen = AppScreen.HOME },
                         isDarkTheme = isDarkTheme,
                         initialMainTab = roadmapMainTab,
                         onMainTabChanged = { roadmapMainTab = it },
@@ -648,7 +660,7 @@ fun LiquidGlassApp(
 
                     AppScreen.PROFILE -> com.example.ui.screens.ProfileScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.DASHBOARD },
+                        onNavigateBack = { currentScreen = AppScreen.HOME },
                         isDarkTheme = isDarkTheme
                     )
                 }
@@ -877,6 +889,7 @@ fun LiquidGlassTopBar(
     isHapticEnabled: Boolean = true
 ) {
     val title = when (currentScreen) {
+        AppScreen.HOME -> stringResource(R.string.nav_home)
         AppScreen.DASHBOARD -> stringResource(R.string.nav_dashboard)
         AppScreen.INVENTORY -> stringResource(R.string.nav_inventory)
         AppScreen.STRIKE -> stringResource(R.string.nav_strike)
@@ -1266,7 +1279,6 @@ fun LiquidGlassBottomBar(
 ) {
     val dashColor = if (isDarkTheme) NeonCyan else DayCyan
     val invColor = if (isDarkTheme) NeonEmerald else DayEmerald
-    val strikeColor = if (isDarkTheme) NeonAmber else DayOrange
     val compareColor = if (isDarkTheme) NeonViolet else DayPurple
     val roadmapColor = if (isDarkTheme) NeonAmber else DayOrange
 
@@ -1324,13 +1336,13 @@ fun LiquidGlassBottomBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             BottomNavItem(
-                icon = Icons.Default.FormatListNumbered,
-                label = stringResource(R.string.nav_dashboard),
-                isSelected = currentScreen == AppScreen.DASHBOARD,
+                icon = Icons.Default.Home,
+                label = stringResource(R.string.nav_home),
+                isSelected = currentScreen == AppScreen.HOME,
                 activeColor = dashColor,
                 isDarkTheme = isDarkTheme,
-                testTag = "nav_tab_dashboard",
-                onClick = { onScreenSelected(AppScreen.DASHBOARD) },
+                testTag = "nav_tab_home",
+                onClick = { onScreenSelected(AppScreen.HOME) },
                 modifier = Modifier.weight(1f)
             )
 
@@ -1342,17 +1354,6 @@ fun LiquidGlassBottomBar(
                 isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_inventory",
                 onClick = { onScreenSelected(AppScreen.INVENTORY) },
-                modifier = Modifier.weight(1f)
-            )
-
-            BottomNavItem(
-                icon = Icons.Default.Bolt,
-                label = stringResource(R.string.nav_strike),
-                isSelected = currentScreen == AppScreen.STRIKE,
-                activeColor = strikeColor,
-                isDarkTheme = isDarkTheme,
-                testTag = "nav_tab_strike",
-                onClick = { onScreenSelected(AppScreen.STRIKE) },
                 modifier = Modifier.weight(1f)
             )
 

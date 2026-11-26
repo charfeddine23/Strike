@@ -44,6 +44,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddLocationAlt
@@ -165,7 +166,8 @@ fun DashboardScreen(
     hostDataEntryExternally: Boolean = false,
     isDarkTheme: Boolean = LocalAppDarkTheme.current,
     isDashboardOpen: Boolean = false,
-    onOpenDashboard: () -> Unit = {}
+    onOpenDashboard: () -> Unit = {},
+    onNavigateBack: (() -> Unit)? = null
 ) {
     val individuals by viewModel.filteredIndividuals.collectAsStateWithLifecycle()
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
@@ -220,12 +222,59 @@ fun DashboardScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
 
-            // Search Bar & Sort Button
+            // Search Bar & Sort Button (+ Back to Home strip when launched from Home)
             item {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (onNavigateBack != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(if (isDarkTheme) Color(0x281E293B) else Color(0xE8FFFFFF))
+                                    .border(1.dp, accentCyan.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+                                    .clickable {
+                                        HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                                        onNavigateBack()
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    .testTag("records_back_to_home_btn"),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = if (isAr) "العودة إلى Home" else "Back to Home",
+                                    tint = accentCyan,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = if (isAr) "Home" else "Home",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = accentCyan
+                                )
+                            }
+                            Text(
+                                text = stringResource(R.string.nav_dashboard),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = PlusJakartaSans,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = { viewModel.setSearchQuery(it) },
@@ -365,6 +414,7 @@ fun DashboardScreen(
                             tint = if (isDashboardOpen) accentCyan else dashAccent,
                             modifier = Modifier.size(22.dp)
                         )
+                    }
                     }
                 }
             }

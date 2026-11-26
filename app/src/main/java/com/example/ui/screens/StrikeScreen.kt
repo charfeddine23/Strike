@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddLocationAlt
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
@@ -47,6 +48,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -117,7 +119,8 @@ fun StrikeScreen(
         onSuccess: () -> Unit,
         onError: (String) -> Unit,
         onCancel: () -> Unit
-    ) -> Unit)? = null
+    ) -> Unit)? = null,
+    onNavigateBack: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
@@ -152,24 +155,74 @@ fun StrikeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // ==========================================
-            // HERO STRIKE BUTTON (Displays Total All-Time Strikes)
+            // HERO STRIKE BUTTON (+ Back to Home strip when launched from Home)
             // ==========================================
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    CosmicStrikeButton(
-                        onClick = {
-                            HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
-                            showStrikeTargetPicker = true
-                        },
-                        strikeCount = totalAllTimeStrikes,
-                        subtitle = stringResource(R.string.strike_action),
-                        darkTheme = isDarkTheme
-                    )
+                    if (onNavigateBack != null) {
+                        val strikeAccent = if (isDarkTheme) NeonAmber else DayOrange
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(if (isDarkTheme) Color(0x281E293B) else Color(0xE8FFFFFF))
+                                    .border(1.dp, strikeAccent.copy(alpha = 0.50f), RoundedCornerShape(14.dp))
+                                    .clickable {
+                                        HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                                        onNavigateBack()
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    .testTag("strike_back_to_home_btn"),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = if (isAr) "العودة إلى Home" else "Back to Home",
+                                    tint = strikeAccent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "Home",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = strikeAccent
+                                )
+                            }
+                            Text(
+                                text = "Add Strike",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontFamily = PlusJakartaSans,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CosmicStrikeButton(
+                            onClick = {
+                                HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                                showStrikeTargetPicker = true
+                            },
+                            strikeCount = totalAllTimeStrikes,
+                            subtitle = stringResource(R.string.strike_action),
+                            darkTheme = isDarkTheme
+                        )
+                    }
                 }
             }
 

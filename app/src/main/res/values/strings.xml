@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">Obsidian</string>
+    <string name="nav_home">Home</string>
     <string name="nav_dashboard">Records</string>
     <string name="nav_entry">Data Entry</string>
     <string name="nav_inventory">Inventory</string>

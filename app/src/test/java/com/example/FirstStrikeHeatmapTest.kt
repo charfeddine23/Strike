@@ -395,6 +395,8 @@ class FirstStrikeHeatmapTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performClick()
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_records_btn").performClick()
+        composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("add_record_fab").performClick()
         composeRule.waitForIdle()
@@ -776,7 +778,7 @@ class FirstStrikeHeatmapTest {
         // Navigate across tabs inside main pages
         composeRule.onNodeWithTag("nav_tab_inventory").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("nav_tab_dashboard").performClick()
+        composeRule.onNodeWithTag("nav_tab_home").performClick()
         composeRule.waitForIdle()
 
         // Return to Heatmap by pulling down Top Bar -> hotspots MUST remain intact & clickable
@@ -991,6 +993,9 @@ class FirstStrikeHeatmapTest {
         composeRule.onNodeWithTag("dna_header_icon").assertIsDisplayed()
         composeRule.onNodeWithTag("header_flame_btn").assertIsDisplayed()
 
+        composeRule.onNodeWithTag("home_records_btn").performClick()
+        composeRule.waitForIdle()
+
         // Expand person record card -> open Multi-Strike dialog
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
@@ -1140,6 +1145,8 @@ class FirstStrikeHeatmapTest {
         // Verify inside striker profile card in DashboardScreen
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_records_btn").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
             composeRule.onAllNodesWithTag("record_expand_btn_$personId").fetchSemanticsNodes().isNotEmpty()
@@ -1228,6 +1235,8 @@ class FirstStrikeHeatmapTest {
 
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_records_btn").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             Shadows.shadowOf(Looper.getMainLooper()).idle()
             composeRule.onAllNodesWithTag("record_expand_btn_$personId").fetchSemanticsNodes().isNotEmpty()

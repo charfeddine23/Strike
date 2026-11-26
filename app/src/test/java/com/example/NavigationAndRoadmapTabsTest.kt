@@ -67,6 +67,9 @@ class NavigationAndRoadmapTabsTest {
     @Test
     fun mainNavigationSwitchesCleanlyWithoutOverlappingScreensOrStuckBanners() {
         enterMainAppFromHeatmap()
+        composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("home_records_btn").performClick()
+        composeRule.waitForIdle()
         assertEquals(0, composeRule.onAllNodesWithTag("records_dashboard_banner").fetchSemanticsNodes().size)
         composeRule.onNodeWithTag("sort_button").assertIsDisplayed()
         composeRule.onNodeWithTag("records_dashboard_btn").assertIsDisplayed()
@@ -101,8 +104,11 @@ class NavigationAndRoadmapTabsTest {
         assertEquals(0, composeRule.onAllNodesWithText("Head-to-head metrics analysis", substring = true).fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("inventory_screen").fetchSemanticsNodes().size)
 
-        // Navigate Comparison -> Dashboard (Dashboard button returns)
-        composeRule.onNodeWithTag("nav_tab_dashboard").performClick()
+        // Navigate Comparison -> Home -> Records (Dashboard button returns)
+        composeRule.onNodeWithTag("nav_tab_home").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("home_records_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("records_dashboard_btn").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("smart_search_banner").fetchSemanticsNodes().size)
@@ -142,6 +148,8 @@ class NavigationAndRoadmapTabsTest {
     @Test
     fun dataEntryDialogHistoricalStrikesScrollsAndAcceptsEntryCleanly() {
         enterMainAppFromHeatmap()
+        composeRule.onNodeWithTag("home_records_btn").performClick()
+        composeRule.waitForIdle()
         composeRule.onNodeWithTag("add_record_fab").performClick()
         composeRule.waitForIdle()
 
@@ -256,9 +264,8 @@ class NavigationAndRoadmapTabsTest {
     fun bottomNavBar_showsIconsOnlyAndKeepsFixedTabBoundsAcrossSwitches() {
         enterMainAppFromHeatmap()
         val navTags = listOf(
-            "nav_tab_dashboard",
+            "nav_tab_home",
             "nav_tab_inventory",
-            "nav_tab_strike",
             "nav_tab_compare",
             "nav_tab_roadmap"
         )
@@ -266,11 +273,15 @@ class NavigationAndRoadmapTabsTest {
             composeRule.onNodeWithTag(tag).assertIsDisplayed().getBoundsInRoot()
         }
 
+        // Old Records and Strike tabs are moved out of BottomBar into Home
+        assertEquals(0, composeRule.onAllNodesWithTag("nav_tab_dashboard").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("nav_tab_strike").fetchSemanticsNodes().size)
+
         // Bottom bar tab label for Strike Recording ("تسجيل ضربة") is not rendered anywhere in the bar
         assertEquals(0, composeRule.onAllNodesWithText("تسجيل ضربة", substring = false).fetchSemanticsNodes().size)
 
         // Switch across multiple tabs and confirm every bottom bar tab stays in its exact fixed X slot
-        listOf("nav_tab_inventory", "nav_tab_strike", "nav_tab_compare", "nav_tab_roadmap").forEach { targetTab ->
+        listOf("nav_tab_inventory", "nav_tab_compare", "nav_tab_roadmap", "nav_tab_home").forEach { targetTab ->
             composeRule.onNodeWithTag(targetTab).performClick()
             composeRule.waitForIdle()
             navTags.forEach { tag ->
@@ -280,5 +291,58 @@ class NavigationAndRoadmapTabsTest {
                 assertEquals("Right X shifted for $tag after clicking $targetTab", base.right.value, updated.right.value, 0.5f)
             }
         }
+    }
+
+    @Test
+    fun homeScreen_displaysRoadmapLevelHeatmapRecordsAndAddStrike_andNavigatesToEachCorrectly() {
+        enterMainAppFromHeatmap()
+        composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
+
+        val topBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        val roadmapBounds = composeRule.onNodeWithTag("home_roadmap_level_card").assertIsDisplayed().getBoundsInRoot()
+        val heatmapBounds = composeRule.onNodeWithTag("home_heatmap_card").assertIsDisplayed().getBoundsInRoot()
+        val recordsBounds = composeRule.onNodeWithTag("home_records_btn").assertIsDisplayed().getBoundsInRoot()
+        val addStrikeBounds = composeRule.onNodeWithTag("home_add_strike_btn").assertIsDisplayed().getBoundsInRoot()
+
+        // Vertical order: TopBar -> Roadmap Level -> (Heatmap & Records side-by-side) -> Add Strike
+        assertTrue(roadmapBounds.top >= topBarBounds.bottom)
+        assertTrue(heatmapBounds.top >= roadmapBounds.bottom)
+        assertTrue(recordsBounds.top >= roadmapBounds.bottom)
+        assertTrue(addStrikeBounds.top >= heatmapBounds.bottom)
+        assertTrue(addStrikeBounds.top >= recordsBounds.bottom)
+        assertTrue(
+            "Heatmap and Records must sit side-by-side horizontally",
+            heatmapBounds.right <= recordsBounds.left || recordsBounds.right <= heatmapBounds.left
+        )
+
+        // 1. Tap Heatmap tile -> opens First-Strike Heatmap, then swipe up back to Home
+        composeRule.onNodeWithTag("home_heatmap_card").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("first_strike_heatmap_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
+
+        // 2. Tap Records button -> opens old Records (DashboardScreen), then Back returns to Home
+        composeRule.onNodeWithTag("home_records_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("search_input").assertIsDisplayed()
+        composeRule.onNodeWithTag("add_record_fab").assertIsDisplayed()
+        composeRule.onNodeWithTag("records_back_to_home_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
+
+        // 3. Tap Add Strike button -> opens moved StrikeScreen, then Back returns to Home
+        composeRule.onNodeWithTag("home_add_strike_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("strike_button").assertIsDisplayed()
+        composeRule.onNodeWithTag("strike_back_to_home_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
+
+        // 4. Tap Roadmap Level card -> opens RoadmapScreen
+        composeRule.onNodeWithTag("home_roadmap_level_card").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
     }
 }
