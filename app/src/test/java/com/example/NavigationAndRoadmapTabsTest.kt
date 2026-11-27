@@ -122,17 +122,19 @@ class NavigationAndRoadmapTabsTest {
 
         composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
         composeRule.onNodeWithTag("roadmap_tab_stations").assertIsDisplayed()
-        composeRule.onNodeWithTag("roadmap_tab_tasks").assertIsDisplayed()
         composeRule.onNodeWithTag("roadmap_tab_elite_missions").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_tab_tasks").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_header_progress_btn").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("obsidian_roadmap_hub_switcher").fetchSemanticsNodes().size)
 
         composeRule.onNodeWithTag("roadmap_tab_stations").assertTextEquals("المسار")
-        composeRule.onNodeWithTag("roadmap_tab_tasks").assertTextEquals("المهام")
         composeRule.onNodeWithTag("roadmap_tab_elite_missions").assertTextEquals("مهام النخبة")
 
         // Verify English resource strings match requested labels
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         assertEquals("Roadmap", ctx.getString(R.string.roadmap_tab_stations))
-        assertEquals("Tasks", ctx.getString(R.string.roadmap_tab_tasks))
+        assertEquals("Tasks", ctx.getString(R.string.nav_tasks))
+        assertEquals("Cyber Roadmap", ctx.getString(R.string.roadmap_title))
         assertEquals("Elite Missions", ctx.getString(R.string.roadmap_tab_elite_missions))
         assertEquals("Soon", ctx.getString(R.string.elite_missions_soon))
 
@@ -202,12 +204,10 @@ class NavigationAndRoadmapTabsTest {
     @Test
     fun eternalGoalsHeader_hidesOnUpwardSwipe_andReappearsOnDownwardPullAtFirstTask() {
         enterMainAppFromHeatmap()
-        composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
+        composeRule.onNodeWithTag("nav_tab_tasks").performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("roadmap_tab_tasks").performClick()
-        composeRule.waitForIdle()
-
+        composeRule.onNodeWithTag("tasks_screen").assertIsDisplayed()
         composeRule.onNodeWithTag("period_chip_eternal").performClick()
         composeRule.waitForIdle()
 
@@ -267,6 +267,7 @@ class NavigationAndRoadmapTabsTest {
             "nav_tab_home",
             "nav_tab_inventory",
             "nav_tab_compare",
+            "nav_tab_tasks",
             "nav_tab_roadmap"
         )
         val initialBounds = navTags.associateWith { tag ->
@@ -280,8 +281,8 @@ class NavigationAndRoadmapTabsTest {
         // Bottom bar tab label for Strike Recording ("تسجيل ضربة") is not rendered anywhere in the bar
         assertEquals(0, composeRule.onAllNodesWithText("تسجيل ضربة", substring = false).fetchSemanticsNodes().size)
 
-        // Switch across multiple tabs and confirm every bottom bar tab stays in its exact fixed X slot
-        listOf("nav_tab_inventory", "nav_tab_compare", "nav_tab_roadmap", "nav_tab_home").forEach { targetTab ->
+        // Switch across all 5 tabs and confirm every bottom bar tab stays in its exact fixed X slot
+        listOf("nav_tab_inventory", "nav_tab_compare", "nav_tab_tasks", "nav_tab_roadmap", "nav_tab_home").forEach { targetTab ->
             composeRule.onNodeWithTag(targetTab).performClick()
             composeRule.waitForIdle()
             navTags.forEach { tag ->

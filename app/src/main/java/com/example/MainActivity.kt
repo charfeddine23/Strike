@@ -62,6 +62,7 @@ import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.DropdownMenu
@@ -134,6 +135,7 @@ import com.example.ui.components.FullscreenFingerprintUnlockScreen
 import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.LuxurySettingsMenuButton
+import com.example.ui.components.NeonAqua
 import com.example.ui.components.RecordsDashboardExpandablePanel
 import com.example.ui.components.SettingsSideDrawer
 import com.example.ui.map.isRobolectricRuntime
@@ -148,6 +150,7 @@ import com.example.ui.screens.InventoryScreen
 import com.example.ui.screens.RoadmapScreen
 import com.example.ui.screens.StrikeScreen
 import com.example.ui.screens.TasksLedgerScreen
+import com.example.ui.screens.TasksScreen
 import com.example.ui.screens.XpLogsScreen
 import com.example.ui.theme.AppThemeMode
 import com.example.ui.theme.CosmicDarkSurface
@@ -182,6 +185,7 @@ enum class AppScreen {
     COMPARISON,
     FLAME,
     DEVIATIONS,
+    TASKS,
     ROADMAP,
     TASKS_LEDGER,
     XP_LOGS,
@@ -315,6 +319,7 @@ fun LiquidGlassApp(
     }
     var currentScreen by remember { mutableStateOf(AppScreen.HOME) }
     var roadmapMainTab by remember { mutableIntStateOf(0) }
+    var tasksHubTab by remember { mutableIntStateOf(0) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showShieldDropdown by remember { mutableStateOf(false) }
     var showStartDateDialog by remember { mutableStateOf(false) }
@@ -407,10 +412,10 @@ fun LiquidGlassApp(
         }
     }
 
-    // Hardware/gesture BackHandler: return from TASKS_LEDGER or XP_LOGS to ROADMAP, otherwise return to HOME
+    // Hardware/gesture BackHandler: return from TASKS_LEDGER or XP_LOGS to TASKS, otherwise return to HOME
     BackHandler(enabled = !showHeatmapEntry && currentScreen != AppScreen.HOME) {
         currentScreen = if (currentScreen == AppScreen.TASKS_LEDGER || currentScreen == AppScreen.XP_LOGS) {
-            AppScreen.ROADMAP
+            AppScreen.TASKS
         } else {
             AppScreen.HOME
         }
@@ -627,24 +632,25 @@ fun LiquidGlassApp(
                         isDarkTheme = isDarkTheme
                     )
 
+                    AppScreen.TASKS -> TasksScreen(
+                        viewModel = viewModel,
+                        onNavigateBack = { currentScreen = AppScreen.HOME },
+                        isDarkTheme = isDarkTheme,
+                        initialTab = tasksHubTab,
+                        onTabChanged = { tasksHubTab = it }
+                    )
+
                     AppScreen.ROADMAP -> RoadmapScreen(
                         viewModel = viewModel,
                         onNavigateBack = { currentScreen = AppScreen.HOME },
                         isDarkTheme = isDarkTheme,
                         initialMainTab = roadmapMainTab,
-                        onMainTabChanged = { roadmapMainTab = it },
-                        onOpenTasksLedger = {
-                            roadmapMainTab = 1
-                            currentScreen = AppScreen.TASKS_LEDGER
-                        },
-                        onOpenXpLogs = {
-                            currentScreen = AppScreen.XP_LOGS
-                        }
+                        onMainTabChanged = { roadmapMainTab = it }
                     )
 
                     AppScreen.TASKS_LEDGER -> TasksLedgerScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.ROADMAP },
+                        onNavigateBack = { currentScreen = AppScreen.TASKS },
                         onOpenRoadmap = { currentScreen = AppScreen.ROADMAP },
                         onOpenXpLogs = { currentScreen = AppScreen.XP_LOGS },
                         isDarkTheme = isDarkTheme
@@ -652,7 +658,7 @@ fun LiquidGlassApp(
 
                     AppScreen.XP_LOGS -> XpLogsScreen(
                         viewModel = viewModel,
-                        onNavigateBack = { currentScreen = AppScreen.ROADMAP },
+                        onNavigateBack = { currentScreen = AppScreen.TASKS },
                         onOpenTasksLedger = { currentScreen = AppScreen.TASKS_LEDGER },
                         onOpenRoadmap = { currentScreen = AppScreen.ROADMAP },
                         isDarkTheme = isDarkTheme
@@ -896,6 +902,7 @@ fun LiquidGlassTopBar(
         AppScreen.COMPARISON -> stringResource(R.string.nav_compare)
         AppScreen.FLAME -> stringResource(R.string.flame_system_title)
         AppScreen.DEVIATIONS -> stringResource(R.string.deviations_title)
+        AppScreen.TASKS -> stringResource(R.string.nav_tasks)
         AppScreen.ROADMAP -> stringResource(R.string.roadmap_title)
         AppScreen.TASKS_LEDGER -> when (currentLang) {
             "ar" -> "دفتر المهام"
@@ -1280,6 +1287,7 @@ fun LiquidGlassBottomBar(
     val dashColor = if (isDarkTheme) NeonCyan else DayCyan
     val invColor = if (isDarkTheme) NeonEmerald else DayEmerald
     val compareColor = if (isDarkTheme) NeonViolet else DayPurple
+    val tasksColor = if (isDarkTheme) NeonAqua else DayCyan
     val roadmapColor = if (isDarkTheme) NeonAmber else DayOrange
 
     val navGlassFill = if (isDarkTheme) {
@@ -1331,8 +1339,8 @@ fun LiquidGlassBottomBar(
                 .clip(RoundedCornerShape(26.dp))
                 .background(navGlassFill)
                 .border(0.95.dp, navGlassBorder, RoundedCornerShape(26.dp))
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             BottomNavItem(
@@ -1365,6 +1373,17 @@ fun LiquidGlassBottomBar(
                 isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_compare",
                 onClick = { onScreenSelected(AppScreen.COMPARISON) },
+                modifier = Modifier.weight(1f)
+            )
+
+            BottomNavItem(
+                icon = Icons.Default.TaskAlt,
+                label = stringResource(R.string.nav_tasks),
+                isSelected = currentScreen == AppScreen.TASKS,
+                activeColor = tasksColor,
+                isDarkTheme = isDarkTheme,
+                testTag = "nav_tab_tasks",
+                onClick = { onScreenSelected(AppScreen.TASKS) },
                 modifier = Modifier.weight(1f)
             )
 

@@ -58,9 +58,7 @@ import com.example.ui.components.ElectricMint
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.MilestoneGold
 import com.example.ui.components.NeonAqua
-import com.example.ui.components.ObsidianRoadmapHubSwitcher
 import com.example.ui.components.RoadmapAmbientBackground
-import com.example.ui.components.RoadmapHubDestination
 import com.example.ui.components.WarmFireOrange
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
@@ -89,12 +87,33 @@ fun XpLogsScreen(
     viewModel: IndividualViewModel,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onOpenTasksLedger: () -> Unit = {},
-    onOpenRoadmap: () -> Unit = onNavigateBack,
+    @Suppress("UNUSED_PARAMETER") onOpenTasksLedger: () -> Unit = {},
+    @Suppress("UNUSED_PARAMETER") onOpenRoadmap: () -> Unit = onNavigateBack,
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
+) {
+    val scaffoldPadding = LocalScaffoldContentPadding.current
+    Box(modifier = modifier.fillMaxSize()) {
+        RoadmapAmbientBackground(
+            modifier = Modifier.fillMaxSize(),
+            darkTheme = isDarkTheme
+        )
+        XpLogsContent(
+            viewModel = viewModel,
+            topHeaderClearanceDp = scaffoldPadding.calculateTopPadding() + 6.dp,
+            isDarkTheme = isDarkTheme,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Composable
+fun XpLogsContent(
+    viewModel: IndividualViewModel,
+    topHeaderClearanceDp: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
     isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val context = LocalContext.current
-    val view = LocalView.current
     val isHapticEnabled by viewModel.isHapticFeedbackEnabled
     val currentLang by viewModel.currentLanguage.collectAsStateWithLifecycle()
     val isAr = currentLang == "ar"
@@ -102,7 +121,6 @@ fun XpLogsScreen(
 
     val xpHistory by viewModel.xpHistory.collectAsStateWithLifecycle()
     val totalXp by viewModel.totalXp.collectAsStateWithLifecycle()
-    val stageProgress = remember(totalXp) { RoadmapManager.getStageProgress(totalXp) }
 
     var selectedCategory by remember { mutableStateOf<XpSourceCategory?>(null) }
 
@@ -130,41 +148,15 @@ fun XpLogsScreen(
             .fillMaxSize()
             .testTag("xp_logs_screen")
     ) {
-        RoadmapAmbientBackground(
-            modifier = Modifier.fillMaxSize(),
-            darkTheme = isDarkTheme
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(
                     start = 14.dp,
                     end = 14.dp,
-                    top = scaffoldPadding.calculateTopPadding() + 6.dp
+                    top = topHeaderClearanceDp
                 )
         ) {
-            // Unified Hub Switcher (Tasks Ledger <-> LVL X/700 <-> Xp Logs)
-            ObsidianRoadmapHubSwitcher(
-                activeDestination = RoadmapHubDestination.XP_LOGS,
-                unlockedStationId = stageProgress.unlockedStationId,
-                progressFraction = stageProgress.progressFraction,
-                currentLang = currentLang,
-                isDarkTheme = isDarkTheme,
-                roadmapAccent = cyanTone,
-                onTasksLedgerClick = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    onOpenTasksLedger()
-                },
-                onProgressClick = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    onOpenRoadmap()
-                },
-                onXpLogsClick = {},
-                modifier = Modifier.padding(bottom = 10.dp)
-            )
 
             // 2. SUMMARY COUNTERS
             Row(

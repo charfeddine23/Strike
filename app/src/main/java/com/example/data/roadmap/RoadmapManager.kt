@@ -579,16 +579,24 @@ object RoadmapManager {
     private fun applyReward(context: Context, reward: StationReward) {
         when (reward.type) {
             RewardType.SHIELD_24H -> {
-                FlameManager.grant1DayShield(context, reward.quantity)
-                FlameManager.activate1DayShield(context, notifyRoadmapTask = false)
+                val total = FlameManager.grant1DayShield(context, reward.quantity)
+                _shields24h.value = total
+                getPrefs(context).edit().putInt(KEY_SHIELDS_24H, total).apply()
             }
             RewardType.SHIELD_48H -> {
-                FlameManager.grant48hShield(context, reward.quantity)
-                FlameManager.activate48hShield(context, notifyRoadmapTask = false)
+                val total = FlameManager.grant48hShield(context, reward.quantity)
+                _shields48h.value = total
+                getPrefs(context).edit().putInt(KEY_SHIELDS_48H, total).apply()
             }
             RewardType.SHIELD_72H -> {
-                FlameManager.grantManualShield(context, days = 3)
-                FlameManager.activateManualShield(context, days = 3, notifyRoadmapTask = false)
+                val total = FlameManager.grantManualShield(
+                    context = context,
+                    days = 3,
+                    count = reward.quantity,
+                    reason = "Roadmap Station Reward"
+                )
+                _shields72h.value = total
+                getPrefs(context).edit().putInt(KEY_SHIELDS_72H, total).apply()
             }
             RewardType.KEY_WOODEN -> ProfileManager.grantSkipKeys(context, SkipKeyType.WOODEN, reward.quantity)
             RewardType.KEY_BRONZE -> ProfileManager.grantSkipKeys(context, SkipKeyType.BRONZE, reward.quantity)

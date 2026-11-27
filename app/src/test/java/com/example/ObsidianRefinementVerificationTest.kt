@@ -229,49 +229,46 @@ class ObsidianRefinementVerificationTest {
     }
 
     @Test
-    fun roadmapHubSwitcher_transitionsCrisplyBetweenRoadmapLvlPopupXpLogsAndTasksLedger() {
+    fun tasksHub_transitionsCrisplyBetweenTasksTasksLedgerAndXpLogs_andRoadmapHasNoLevelOrTasks() {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         XpCalculationEngine.onDeflameAction(ctx, bonusNote = "Obsidian Calibration")
         XpCalculationEngine.onStrikeRecorded(ctx, strikeCount = 1, personName = "طارق")
 
         enterMainAppFromHeatmap()
+
+        // Roadmap must NOT contain Level pill, popup, hub switcher, or Tasks tab
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_tab_stations").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_tab_elite_missions").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("obsidian_roadmap_hub_switcher").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_header_progress_btn").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_hub_menu_btn").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_tab_tasks").fetchSemanticsNodes().size)
 
-        // Redesigned Split Command Strip: Living LVL X/700 Capsule + Expanding Obsidian Portal Menu Trigger
-        composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed()
-        val progressBounds = composeRule.onNodeWithTag("roadmap_header_progress_btn").assertIsDisplayed().getBoundsInRoot()
-        val menuBtnBounds = composeRule.onNodeWithTag("roadmap_hub_menu_btn").assertIsDisplayed().getBoundsInRoot()
-        assertTrue(progressBounds.right <= menuBtnBounds.left || menuBtnBounds.right <= progressBounds.left)
-        composeRule.onNodeWithTag("roadmap_header_progress_btn")
-            .assertTextContains("LVL", substring = true)
-
-        // Tap LVL X/700 -> popup appears with both Tasks Ledger & Xp Logs quick actions -> tap Xp Logs -> opens Xp Logs
-        composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
+        // Open dedicated Tasks tab from Bottom Bar -> Segmented Strip [ Tasks | Tasks Ledger | Xp Logs ]
+        composeRule.onNodeWithTag("nav_tab_tasks").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("roadmap_progress_popup").assertIsDisplayed()
-        composeRule.onNodeWithTag("btn_popup_switch_tasks_ledger").assertIsDisplayed()
-        composeRule.onNodeWithTag("btn_popup_switch_xp_logs").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("tasks_screen").assertIsDisplayed()
+        val tTabBounds = composeRule.onNodeWithTag("tasks_hub_tab_tasks").assertIsDisplayed().getBoundsInRoot()
+        val lTabBounds = composeRule.onNodeWithTag("tasks_hub_tab_ledger").assertIsDisplayed().getBoundsInRoot()
+        val xTabBounds = composeRule.onNodeWithTag("tasks_hub_tab_xp_logs").assertIsDisplayed().getBoundsInRoot()
+        assertTrue(tTabBounds.right <= lTabBounds.left || lTabBounds.right <= tTabBounds.left)
+        assertTrue(lTabBounds.right <= xTabBounds.left || xTabBounds.right <= lTabBounds.left)
+
+        // Switch smoothly across Tasks -> Tasks Ledger -> Xp Logs -> Tasks
+        composeRule.onNodeWithTag("tasks_hub_tab_ledger").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("tasks_hub_tab_xp_logs").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("xp_logs_screen").assertIsDisplayed()
 
-        // Tap-to-Change cycle: Xp Logs -> Roadmap -> Tasks Ledger -> Xp Logs -> Roadmap
-        composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed()
-        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
+        composeRule.onNodeWithTag("tasks_hub_tab_tasks").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
-
-        // Tap Switch View on Roadmap -> goes directly to Tasks Ledger (no dropdown menu)
-        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
-        composeRule.waitForIdle()
-        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_hub_menu").fetchSemanticsNodes().size)
-        composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()
-
-        // From Tasks Ledger, tap LVL X/700 capsule -> returns straight back to RoadmapScreen
-        composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed()
-        composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("tasks_lazy_list").assertIsDisplayed()
     }
 
     @Test
@@ -325,30 +322,28 @@ class ObsidianRefinementVerificationTest {
         composeRule.onNodeWithTag("dna_header_icon").assertIsDisplayed()
         composeRule.onNodeWithTag("header_flame_btn").assertIsDisplayed()
 
-        // Roadmap & full-bleed Tasks viewport with expanded Fade-to-Liquid-Glass covering period chips (Daily/Weekly/Monthly/Eternal)
-        composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
+        // Tasks Hub & full-bleed Tasks viewport with expanded Fade-to-Liquid-Glass covering period chips (Daily/Weekly/Monthly/Eternal)
+        composeRule.onNodeWithTag("nav_tab_tasks").performClick()
         composeRule.waitForIdle()
-        val rmTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
-        val rmBottomBarBounds = composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        val tasksTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        val tasksBottomBarBounds = composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
         composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
         composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
-        val hubSwitcherBounds = composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed().getBoundsInRoot()
-        assertTrue("Roadmap command bar must start clear of TopBar", hubSwitcherBounds.top >= rmTopBarBounds.bottom)
+        val tasksTabBarBounds = composeRule.onNodeWithTag("tasks_hub_tab_tasks").assertIsDisplayed().getBoundsInRoot()
+        assertTrue("Tasks tabs must start clear of TopBar", tasksTabBarBounds.top >= tasksTopBarBounds.bottom)
 
-        composeRule.onNodeWithTag("roadmap_tab_tasks").performClick()
-        composeRule.waitForIdle()
         val tasksBounds = composeRule.onNodeWithTag("tasks_lazy_list").assertIsDisplayed().getBoundsInRoot()
-        assertTrue("Tasks list must extend behind TopBar (${tasksBounds.top} vs ${rmTopBarBounds.bottom})", tasksBounds.top < rmTopBarBounds.bottom)
-        assertTrue("Tasks list must extend behind BottomBar (${tasksBounds.bottom} vs ${rmBottomBarBounds.top})", tasksBounds.bottom > rmBottomBarBounds.top)
+        assertTrue("Tasks list must extend behind TopBar (${tasksBounds.top} vs ${tasksTopBarBounds.bottom})", tasksBounds.top < tasksTopBarBounds.bottom)
+        assertTrue("Tasks list must extend behind BottomBar (${tasksBounds.bottom} vs ${tasksBottomBarBounds.top})", tasksBounds.bottom > tasksBottomBarBounds.top)
         val eternalChipBounds = composeRule.onNodeWithTag("period_chip_eternal").performScrollTo().assertIsDisplayed().getBoundsInRoot()
         val roadmapFadeVeilBounds = composeRule.onNodeWithTag("roadmap_expanded_fade_veil").assertIsDisplayed().getBoundsInRoot()
         assertTrue(
-            "Roadmap expanded fade-to-liquid-glass (${roadmapFadeVeilBounds.bottom}) must extend down past Eternal chip (${eternalChipBounds.bottom})",
+            "Tasks expanded fade-to-liquid-glass (${roadmapFadeVeilBounds.bottom}) must extend down past Eternal chip (${eternalChipBounds.bottom})",
             roadmapFadeVeilBounds.bottom >= eternalChipBounds.bottom
         )
 
-        // Tap-to-Change from Roadmap -> Tasks Ledger: verify expanded fade veil covers Switch View & period filters
-        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
+        // Tasks -> Tasks Ledger: verify expanded fade veil covers period filters & clears TopBar
+        composeRule.onNodeWithTag("tasks_hub_tab_ledger").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()
         composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
@@ -362,21 +357,25 @@ class ObsidianRefinementVerificationTest {
         )
         assertEquals(0, composeRule.onAllNodesWithTag("ledger_back_btn").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("ledger_screen_title").fetchSemanticsNodes().size)
-        val ledgerSwitcherBounds = composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed().getBoundsInRoot()
-        val ledgerTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
-        assertTrue("Tasks Ledger Hub Switcher must clear TopBar", ledgerSwitcherBounds.top >= ledgerTopBarBounds.bottom)
 
-        // Tap-to-Change from Tasks Ledger -> Xp Logs: verify back button & Xp Logs title are removed
-        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
+        // Tasks -> Xp Logs: verify back button & Xp Logs title are removed
+        composeRule.onNodeWithTag("tasks_hub_tab_xp_logs").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("xp_logs_screen").assertIsDisplayed()
         composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
         composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("xp_logs_back_btn").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("xp_logs_title").fetchSemanticsNodes().size)
-        val xpSwitcherBounds = composeRule.onNodeWithTag("obsidian_roadmap_hub_switcher").assertIsDisplayed().getBoundsInRoot()
-        val xpTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
-        assertTrue("Xp Logs Hub Switcher must clear TopBar", xpSwitcherBounds.top >= xpTopBarBounds.bottom)
+
+        // Roadmap screen starts cleanly clear of TopBar & keeps blur veils active
+        composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
+        composeRule.waitForIdle()
+        val rmTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
+        composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
+        val rmStationsTabBounds = composeRule.onNodeWithTag("roadmap_tab_stations").assertIsDisplayed().getBoundsInRoot()
+        assertTrue("Roadmap tabs must start clear of TopBar", rmStationsTabBounds.top >= rmTopBarBounds.bottom)
     }
 
     @Test

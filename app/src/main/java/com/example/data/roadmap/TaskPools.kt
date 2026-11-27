@@ -50,12 +50,12 @@ object TaskPools {
         // Tier 1: 24h Protective Shield
         StationReward(
             type = RewardType.SHIELD_24H,
-            title = "درع حماية 24 ساعة (تفعيل فوري)",
-            description = "حماية فورية وتلقائية للشعلة من غرامة الـ 3 نقاط اليومية لمدة 24 ساعة",
+            title = "درع حماية 24 ساعة (يُخزن في المخزون)",
+            description = "يُضاف إلى مخزون الدروع لتفعيله يدوياً وحماية الشعلة لمدة 24 ساعة",
             iconName = "shield_24h",
             quantity = 1,
-            titleEn = "24h Protective Shield (Instant)",
-            descriptionEn = "Immediate automatic flame protection against daily +3 inactivity penalty for 24 hours"
+            titleEn = "24h Protective Shield (Inventory)",
+            descriptionEn = "Stored in your Shield Inventory for manual activation to pause +3 daily inactivity for 24h"
         ),
         // Tier 2: Wooden Skip Key
         StationReward(
@@ -80,12 +80,12 @@ object TaskPools {
         // Tier 1: 48h Shield
         StationReward(
             type = RewardType.SHIELD_48H,
-            title = "درع حماية 48 ساعة (تفعيل فوري)",
-            description = "حماية فورية وتلقائية للشعلة من الخمول لمدة يومين كاملين",
+            title = "درع حماية 48 ساعة (يُخزن في المخزون)",
+            description = "يُضاف إلى مخزون الدروع لتفعيله يدوياً وحماية الشعلة لمدة يومين كاملين",
             iconName = "shield_48h",
             quantity = 1,
-            titleEn = "48h Protective Shield (Instant)",
-            descriptionEn = "Immediate automatic flame protection against inactivity for 2 full days"
+            titleEn = "48h Protective Shield (Inventory)",
+            descriptionEn = "Stored in your Shield Inventory for manual activation to guard flame for 2 full days"
         ),
         // Tier 2: Bronze Skip Key
         StationReward(
@@ -110,12 +110,12 @@ object TaskPools {
         // Tier 1: 72h Shield
         StationReward(
             type = RewardType.SHIELD_72H,
-            title = "درع حماية 72 ساعة (تفعيل فوري)",
-            description = "حماية متينة للشعلة لمدة 3 أيام متتالية من أي غرامة خمول",
+            title = "درع حماية 72 ساعة (يُخزن في المخزون)",
+            description = "يُضاف إلى مخزون الدروع لتفعيله يدوياً وحماية الشعلة لـ 3 أيام متتالية",
             iconName = "shield_72h",
             quantity = 1,
-            titleEn = "72h Protective Shield (Instant)",
-            descriptionEn = "Heavy-duty flame protection for 3 consecutive days against inactivity penalties"
+            titleEn = "72h Protective Shield (Inventory)",
+            descriptionEn = "Stored in your Shield Inventory for manual activation for 3 consecutive days of protection"
         ),
         // Tier 2: Silver Skip Key
         StationReward(

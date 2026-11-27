@@ -35,6 +35,7 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.hypot
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -115,6 +116,7 @@ object MapStyleHelper {
     const val ROUTINE_HEAT_GREEN_LAYER_ID = "obsidian-routine-heat-vec-green"
     const val ROUTINE_HEAT_YELLOW_LAYER_ID = "obsidian-routine-heat-vec-yellow"
     const val ROUTINE_HEAT_RED_LAYER_ID = "obsidian-routine-heat-vec-red"
+    const val ROUTINE_LIVE_PULSE_RING_LAYER_ID = "obsidian-routine-strike-pulse-ring"
     const val ROUTINE_HALO_LAYER_ID = "obsidian-routine-strike-halo-outer"
     const val ROUTINE_INNER_HALO_LAYER_ID = "obsidian-routine-strike-halo-inner"
     const val ROUTINE_CIRCLE_LAYER_ID = "obsidian-routine-strike-circles"
@@ -125,7 +127,7 @@ object MapStyleHelper {
     const val HEAT_SPRITE_GREEN_ID = "obsidian-heat-sprite-green"
     const val HEAT_SPRITE_YELLOW_ID = "obsidian-heat-sprite-yellow"
     const val HEAT_SPRITE_RED_ID = "obsidian-heat-sprite-red"
-    const val HEAT_SPRITE_SIZE_PX = 512
+    const val HEAT_SPRITE_SIZE_PX = 768
 
     const val USER_LOCATION_SOURCE_ID = "obsidian-user-location-source"
     const val USER_LOCATION_HALO_LAYER_ID = "obsidian-user-location-halo"
@@ -188,20 +190,20 @@ object MapStyleHelper {
     )
 
     /**
-     * Generates a 3x-supersampled (512x512 @ DENSITY_XXHIGH) triangular-dithered radial spectral
-     * sprite for full-native-resolution GPU rendering when zoomed in closely (zoom 12.2..21.0).
-     * Eliminates MapLibre HeatmapLayer's 1/4-res FBO pixelation and CircleLayer banding rings.
+     * Generates a 4x-supersampled (768x768 @ DENSITY_XXXHIGH) triangular-dithered radial spectral
+     * sprite for ultra-crisp native-resolution GPU rendering when zoomed in closely (zoom 12.0..22.0).
+     * Preserves the exact Snap-Map color ramp while eliminating pixelation and banding rings.
      */
     internal fun createHeatBandBitmap(bandIndex: Int, sizePx: Int = HEAT_SPRITE_SIZE_PX): Bitmap {
         val safeSize = sizePx.coerceIn(64, 1024)
         val bitmap = Bitmap.createBitmap(safeSize, safeSize, Bitmap.Config.ARGB_8888).apply {
-            density = DisplayMetrics.DENSITY_XXHIGH
+            density = DisplayMetrics.DENSITY_XXXHIGH
         }
         val pixels = IntArray(safeSize * safeSize)
         val center = (safeSize - 1) * 0.5
         val invRadius = 1.0 / ((safeSize - 1) * 0.5)
 
-        val lutSize = 2048
+        val lutSize = 4096
         val lutR = FloatArray(lutSize + 1)
         val lutG = FloatArray(lutSize + 1)
         val lutB = FloatArray(lutSize + 1)
@@ -975,8 +977,8 @@ object MapStyleHelper {
             existingSource.setGeoJson(geoJson)
         } else {
             val highPrecisionOptions = GeoJsonOptions()
-                .withMaxZoom(21)
-                .withBuffer(256)
+                .withMaxZoom(15)
+                .withBuffer(512)
                 .withTolerance(0.0f)
             style.addSource(GeoJsonSource(FIRST_STRIKE_SOURCE_ID, geoJson, highPrecisionOptions))
         }
@@ -1124,18 +1126,18 @@ object MapStyleHelper {
         if (existingSource != null) {
             existingSource.setGeoJson(geoJson)
         } else {
-            // maxZoom=21, buffer=512, tolerance=0 eliminates overzoom blur and tile-border square clipping
+            // maxZoom=14 + buffer=512 allows MapLibre to overzoom cleanly up to z22 without clipping large heat sprites at tiny deep-zoom tile edges
             val highResHeatOptions = GeoJsonOptions()
-                .withMaxZoom(21)
+                .withMaxZoom(14)
                 .withBuffer(512)
                 .withTolerance(0.0f)
             style.addSource(GeoJsonSource(ROUTINE_STRIKE_SOURCE_ID, geoJson, highResHeatOptions))
         }
 
-        // Macro -> City (zoom 0..13.5): organic FBO heatmap blends multi-district clusters cleanly.
-        // Street -> Building (zoom 12.2..21): FBO fades out completely to 0.0f by zoom 14.2 while
-        // full-native-resolution 512x512 DENSITY_XXHIGH spectral SymbolLayers fade in seamlessly,
-        // guaranteeing crisp, non-pixelated, silky Snap-Map thermal islands at every close zoom depth.
+        // Macro -> City (zoom 0..14.4): organic FBO heatmap blends multi-district clusters cleanly.
+        // Street -> Building (zoom 12.0..22.0): ultra-crisp 768x768 DENSITY_XXXHIGH spectral sprites
+        // reach full opacity at zoom 12.9 BEFORE heatmap fades cleanly from zoom 13.4 -> 14.4,
+        // eliminating crossfade dips or disappearing hotspots at any zoom level.
         val showHeatmap = displayMode != HeatmapDisplayMode.CLUSTER_PINS
         val heatVisibility = if (showHeatmap) Property.VISIBLE else Property.NONE
         val heatOpacityExpr = when (displayMode) {
@@ -1143,17 +1145,15 @@ object MapStyleHelper {
                 Expression.linear(),
                 Expression.zoom(),
                 Expression.stop(0.0, 0.88f),
-                Expression.stop(12.4, 0.84f),
-                Expression.stop(13.3, 0.44f),
-                Expression.stop(14.2, 0.0f)
+                Expression.stop(13.4, 0.88f),
+                Expression.stop(14.4, 0.0f)
             )
             HeatmapDisplayMode.HYBRID -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
                 Expression.stop(0.0, 0.86f),
-                Expression.stop(12.4, 0.82f),
-                Expression.stop(13.3, 0.42f),
-                Expression.stop(14.2, 0.0f)
+                Expression.stop(13.4, 0.86f),
+                Expression.stop(14.4, 0.0f)
             )
             HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
         }
@@ -1194,7 +1194,7 @@ object MapStyleHelper {
         val existingHeat = style.getLayerAs<HeatmapLayer>(ROUTINE_HEATMAP_LAYER_ID)
         if (existingHeat == null) {
             val routineHeatmapLayer = HeatmapLayer(ROUTINE_HEATMAP_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
-                maxZoom = 14.5f
+                maxZoom = 14.6f
                 setProperties(
                     PropertyFactory.heatmapWeight(Expression.get("weight")),
                     PropertyFactory.heatmapIntensity(heatIntensityExpr),
@@ -1210,7 +1210,7 @@ object MapStyleHelper {
                 style.addLayer(routineHeatmapLayer)
             }
         } else {
-            existingHeat.maxZoom = 14.5f
+            existingHeat.maxZoom = 14.6f
             existingHeat.setProperties(
                 PropertyFactory.heatmapIntensity(heatIntensityExpr),
                 PropertyFactory.heatmapRadius(heatRadiusExpr),
@@ -1220,25 +1220,23 @@ object MapStyleHelper {
             )
         }
 
-        // Full-Native-Resolution 512x512 Supersampled GPU Sprite Layers (zoom 12.2..21.0)
+        // Full-Native-Resolution 768x768 DENSITY_XXXHIGH Supersampled GPU Sprite Layers (zoom 11.8..22.0)
         // Ordered bottom-to-top per band (Blue -> Cyan -> Green -> Yellow-Orange -> Coral-Red)
         // directly beneath base map labels so adjacent hot spots coalesce seamlessly without blur/pixelation.
         val hdSpriteOpacityExpr = when (displayMode) {
             HeatmapDisplayMode.HEATMAP_GLOW -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(12.2, 0.0f),
-                Expression.stop(13.3, 0.56f),
-                Expression.stop(14.2, 0.90f),
-                Expression.stop(21.0, 0.90f)
+                Expression.stop(12.0, 0.0f),
+                Expression.stop(12.9, 0.90f),
+                Expression.stop(22.0, 0.90f)
             )
             HeatmapDisplayMode.HYBRID -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(12.2, 0.0f),
-                Expression.stop(13.3, 0.54f),
-                Expression.stop(14.2, 0.86f),
-                Expression.stop(21.0, 0.86f)
+                Expression.stop(12.0, 0.0f),
+                Expression.stop(12.9, 0.86f),
+                Expression.stop(22.0, 0.86f)
             )
             HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.0f)
         }
@@ -1256,13 +1254,14 @@ object MapStyleHelper {
             val existingBand = style.getLayerAs<SymbolLayer>(spec.layerId)
             if (existingBand == null) {
                 val bandLayer = SymbolLayer(spec.layerId, ROUTINE_STRIKE_SOURCE_ID).apply {
-                    minZoom = 12.0f
+                    minZoom = 11.8f
                     setProperties(
                         PropertyFactory.iconImage(spec.imageId),
                         PropertyFactory.iconSize(iconSizeExpr),
                         PropertyFactory.iconOpacity(hdSpriteOpacityExpr),
                         PropertyFactory.iconAllowOverlap(true),
                         PropertyFactory.iconIgnorePlacement(true),
+                        PropertyFactory.iconPadding(0f),
                         PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_MAP),
                         PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
                         PropertyFactory.visibility(heatVisibility)
@@ -1274,14 +1273,47 @@ object MapStyleHelper {
                     style.addLayer(bandLayer)
                 }
             } else {
-                existingBand.minZoom = 12.0f
+                existingBand.minZoom = 11.8f
                 existingBand.setProperties(
                     PropertyFactory.iconImage(spec.imageId),
                     PropertyFactory.iconSize(iconSizeExpr),
                     PropertyFactory.iconOpacity(hdSpriteOpacityExpr),
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                    PropertyFactory.iconPadding(0f),
+                    PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_MAP),
+                    PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
                     PropertyFactory.visibility(heatVisibility)
                 )
             }
+        }
+
+        // Subtle live expanding sonar ring around hotspot cores indicating active/live hotspots
+        val pulseRingColor = AndroidColor.parseColor("#FF7A3D")
+        val existingPulseRing = style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)
+        if (existingPulseRing == null) {
+            val pulseRingLayer = CircleLayer(ROUTINE_LIVE_PULSE_RING_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
+                setProperties(
+                    PropertyFactory.circleRadius(buildLivePulseRingRadiusExpression(1.0f)),
+                    PropertyFactory.circleColor(AndroidColor.TRANSPARENT),
+                    PropertyFactory.circleOpacity(0f),
+                    PropertyFactory.circleStrokeWidth(2.1f),
+                    PropertyFactory.circleStrokeColor(pulseRingColor),
+                    PropertyFactory.circleStrokeOpacity(0.28f),
+                    PropertyFactory.circlePitchAlignment(Property.CIRCLE_PITCH_ALIGNMENT_MAP),
+                    PropertyFactory.visibility(heatVisibility)
+                )
+            }
+            if (firstBaseLabel != null) {
+                style.addLayerBelow(pulseRingLayer, firstBaseLabel.id)
+            } else {
+                style.addLayer(pulseRingLayer)
+            }
+        } else {
+            existingPulseRing.setProperties(
+                PropertyFactory.circleStrokeColor(pulseRingColor),
+                PropertyFactory.visibility(heatVisibility)
+            )
         }
 
         // Discrete routine pins strictly in CLUSTER_PINS mode so HYBRID/HEATMAP_GLOW stay pure thermal islands
@@ -1564,7 +1596,76 @@ object MapStyleHelper {
         )
     }
 
-    internal fun buildHeatSpriteIconSizeExpression(scaleRelativeToBlue: Float): Expression {
+    /**
+     * Drives smooth ~30fps live breathing & expanding thermal sonar motion on active MapLibre layers.
+     * Preserves the exact Snap-Map color ramp while giving every hotspot subtle organic life.
+     */
+    fun updateLiveHotspotPulse(
+        style: Style,
+        displayMode: HeatmapDisplayMode,
+        phase: Float
+    ) {
+        val p = ((phase % 1.0f) + 1.0f) % 1.0f
+        val wave = (0.5 - 0.5 * cos(2.0 * PI * p)).toFloat()
+
+        val firstAura = style.getLayerAs<CircleLayer>(FIRST_STRIKE_AURA_LAYER_ID)
+        firstAura?.setProperties(
+            PropertyFactory.circleOpacity(0.24f + 0.10f * wave)
+        )
+
+        if (displayMode == HeatmapDisplayMode.CLUSTER_PINS) {
+            style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)?.setProperties(
+                PropertyFactory.visibility(Property.NONE)
+            )
+            return
+        }
+
+        val spritePulse = 0.94f + 0.12f * wave
+        for (spec in HEAT_SPRITE_BANDS) {
+            style.getLayerAs<SymbolLayer>(spec.layerId)?.setProperties(
+                PropertyFactory.iconSize(buildHeatSpriteIconSizeExpression(spec.scaleRelativeToBlue, spritePulse))
+            )
+        }
+
+        val ringExpand = 1.0f + 1.35f * p
+        val ringOpacity = ((1.0f - p).toDouble().pow(1.4) * 0.36).toFloat().coerceIn(0f, 0.40f)
+        style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)?.setProperties(
+            PropertyFactory.visibility(Property.VISIBLE),
+            PropertyFactory.circleRadius(buildLivePulseRingRadiusExpression(ringExpand)),
+            PropertyFactory.circleStrokeOpacity(ringOpacity)
+        )
+
+        val heatGain = 0.95f + 0.10f * wave
+        style.getLayerAs<HeatmapLayer>(ROUTINE_HEATMAP_LAYER_ID)?.setProperties(
+            PropertyFactory.heatmapIntensity(
+                Expression.interpolate(
+                    Expression.linear(),
+                    Expression.zoom(),
+                    Expression.stop(0, 0.95f * heatGain),
+                    Expression.stop(6, 1.35f * heatGain),
+                    Expression.stop(10, 1.85f * heatGain),
+                    Expression.stop(14, 2.45f * heatGain)
+                )
+            )
+        )
+    }
+
+    internal fun buildLivePulseRingRadiusExpression(expandScale: Float): Expression {
+        return Expression.interpolate(
+            Expression.linear(),
+            Expression.zoom(),
+            Expression.stop(4, 10f * expandScale),
+            Expression.stop(10, 16f * expandScale),
+            Expression.stop(14, 24f * expandScale),
+            Expression.stop(18, 34f * expandScale),
+            Expression.stop(22, 46f * expandScale)
+        )
+    }
+
+    internal fun buildHeatSpriteIconSizeExpression(
+        scaleRelativeToBlue: Float,
+        pulseMultiplier: Float = 1.0f
+    ): Expression {
         val weightMultiplierExpr = Expression.interpolate(
             Expression.linear(),
             Expression.coalesce(Expression.get("weight"), Expression.literal(1.0)),
@@ -1576,10 +1677,10 @@ object MapStyleHelper {
         return Expression.interpolate(
             Expression.linear(),
             Expression.zoom(),
-            Expression.stop(12.2, Expression.product(Expression.literal(0.66f * scaleRelativeToBlue), weightMultiplierExpr)),
-            Expression.stop(14.2, Expression.product(Expression.literal(0.88f * scaleRelativeToBlue), weightMultiplierExpr)),
-            Expression.stop(17.5, Expression.product(Expression.literal(1.24f * scaleRelativeToBlue), weightMultiplierExpr)),
-            Expression.stop(21.0, Expression.product(Expression.literal(1.62f * scaleRelativeToBlue), weightMultiplierExpr))
+            Expression.stop(12.0, Expression.product(Expression.literal(0.58f * scaleRelativeToBlue * pulseMultiplier), weightMultiplierExpr)),
+            Expression.stop(14.2, Expression.product(Expression.literal(0.78f * scaleRelativeToBlue * pulseMultiplier), weightMultiplierExpr)),
+            Expression.stop(17.5, Expression.product(Expression.literal(1.10f * scaleRelativeToBlue * pulseMultiplier), weightMultiplierExpr)),
+            Expression.stop(22.0, Expression.product(Expression.literal(1.44f * scaleRelativeToBlue * pulseMultiplier), weightMultiplierExpr))
         )
     }
 }

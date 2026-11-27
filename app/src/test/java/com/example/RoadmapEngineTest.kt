@@ -925,4 +925,33 @@ class RoadmapEngineTest {
         assertEquals(-620L, earlierAdjusted.deltaCreditedXp)
         assertEquals(1770L, RoadmapManager.totalXp.value)
     }
+
+    @Test
+    fun testShieldStationRewardsDepositToInventoryWithoutAutoActivating() {
+        val s7Cumulative = TaskPools.getCumulativeXpForStation(7)
+        RoadmapManager.addXp(app, s7Cumulative)
+
+        // Reaching Station 7 XP must NOT auto-claim any station or activate any shield
+        assertTrue(RoadmapManager.claimedStations.value.isEmpty())
+        assertFalse(FlameManager.isStreakShieldActive.value)
+        assertEquals(0, FlameManager.available1DayShields.value)
+        assertEquals(0, FlameManager.available48hShields.value)
+        assertEquals(0, FlameManager.availableManualShields.value)
+
+        // Claim Station 1 (24h shield), Station 4 (48h shield), Station 7 (72h shield)
+        assertNotNull(RoadmapManager.claimStationReward(app, 1))
+        assertEquals(1, FlameManager.available1DayShields.value)
+        assertEquals(1, RoadmapManager.shields24h.value)
+        assertFalse(FlameManager.isStreakShieldActive.value)
+
+        assertNotNull(RoadmapManager.claimStationReward(app, 4))
+        assertEquals(1, FlameManager.available48hShields.value)
+        assertEquals(1, RoadmapManager.shields48h.value)
+        assertFalse(FlameManager.isStreakShieldActive.value)
+
+        assertNotNull(RoadmapManager.claimStationReward(app, 7))
+        assertEquals(1, FlameManager.availableManualShields.value)
+        assertEquals(1, RoadmapManager.shields72h.value)
+        assertFalse(FlameManager.isStreakShieldActive.value)
+    }
 }

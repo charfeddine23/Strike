@@ -9,7 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -44,6 +43,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -278,7 +278,9 @@ fun WavySnakeStationRow(
 
     val isCurrentActiveOrb = (isCurrentMilestone && station.state != StationState.LOCKED) || station.state == StationState.UNLOCKED
     val isStartingLockedFrontier = isCurrentMilestone && station.state == StationState.LOCKED
-    val upperPathActive = station.state != StationState.LOCKED || (prevStationState != null && prevStationState != StationState.LOCKED)
+    val upperPathActive = station.state != StationState.LOCKED ||
+        (prevStationState != null && prevStationState != StationState.LOCKED) ||
+        (isStartingLockedFrontier && currentStageXp > 0L)
     val lowerPathActive = nextStationState != null && nextStationState != StationState.LOCKED
     val isFrontierTail = station.state != StationState.LOCKED && nextStationState == StationState.LOCKED
 
@@ -503,10 +505,7 @@ fun WavySnakeStationRow(
                             .scale(if (station.state == StationState.UNLOCKED) pulseScale else 1f)
                             .clip(CircleShape)
                             .background(orbBrush)
-                            .border(1.6.dp, orbBorder, CircleShape)
-                            .let { mod ->
-                                if (station.state == StationState.UNLOCKED) mod.clickable(onClick = onClaim) else mod
-                            },
+                            .border(1.6.dp, orbBorder, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -564,6 +563,7 @@ fun WavySnakeStationRow(
                                 )
                                 .border(1.dp, Color.White.copy(alpha = 0.75f), RoundedCornerShape(50))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
+                                .testTag("roadmap_you_badge_${station.id}")
                         ) {
                             Text(
                                 text = if (isAr) "أنت 📍" else "YOU 📍",
@@ -714,9 +714,6 @@ private fun StationGlassRewardCard(
             .clip(RoundedCornerShape(16.dp))
             .background(cardFillBrush)
             .border(borderWidth, borderBrush, RoundedCornerShape(16.dp))
-            .let { mod ->
-                if (station.state == StationState.UNLOCKED) mod.clickable(onClick = onClaim) else mod
-            }
             .padding(horizontal = 12.dp, vertical = 10.dp)
             .testTag("station_${station.id}")
     ) {
@@ -740,7 +737,7 @@ private fun StationGlassRewardCard(
             RewardQuantityPill(station = station, isDarkTheme = isDarkTheme)
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(3.dp))
 
         // Reward Description
         Text(
@@ -752,7 +749,32 @@ private fun StationGlassRewardCard(
             overflow = TextOverflow.Ellipsis
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Live stage XP bar on the active next-to-unlock locked frontier station
+        if (station.state == StationState.LOCKED && station.id == nextStationId) {
+            val reqXp = station.requiredTotalXp.coerceAtLeast(1L)
+            val stageFraction = (currentStageXp.coerceIn(0L, reqXp).toFloat() / reqXp.toFloat()).coerceIn(0f, 1f)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 5.dp)
+                    .height(5.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (isDarkTheme) Color(0x401E293B) else Color(0xFFE2E8F0))
+                    .testTag("station_progress_bar_${station.id}")
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(if (currentStageXp > 0L) stageFraction.coerceAtLeast(0.04f) else 0f)
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            Brush.horizontalGradient(listOf(primaryBiomeTone, secondaryBiomeTone))
+                        )
+                )
+            }
+        }
 
         // Bottom Status / Action Row
         Row(
@@ -766,9 +788,9 @@ private fun StationGlassRewardCard(
                         onClick = onClaim,
                         colors = ButtonDefaults.buttonColors(containerColor = mintTone),
                         shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                         modifier = Modifier
-                            .height(28.dp)
+                            .minimumInteractiveComponentSize()
                             .scale(pulseScale)
                             .testTag("btn_claim_station_${station.id}")
                     ) {
@@ -777,7 +799,7 @@ private fun StationGlassRewardCard(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
                             tint = btnFg,
-                            modifier = Modifier.size(12.dp)
+                            modifier = Modifier.size(13.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(

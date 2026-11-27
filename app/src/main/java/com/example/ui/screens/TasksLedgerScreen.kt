@@ -58,9 +58,7 @@ import com.example.ui.components.ElectricMint
 import com.example.ui.components.LedgerTaskCard
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.NeonAqua
-import com.example.ui.components.ObsidianRoadmapHubSwitcher
 import com.example.ui.components.RoadmapAmbientBackground
-import com.example.ui.components.RoadmapHubDestination
 import com.example.ui.components.TopFrostedLiquidGlassVeil
 import com.example.ui.components.WarmFireOrange
 import com.example.ui.components.edgeFadeInBlur
@@ -96,8 +94,30 @@ fun TasksLedgerScreen(
     viewModel: IndividualViewModel,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    onOpenRoadmap: () -> Unit = onNavigateBack,
-    onOpenXpLogs: () -> Unit = {},
+    @Suppress("UNUSED_PARAMETER") onOpenRoadmap: () -> Unit = onNavigateBack,
+    @Suppress("UNUSED_PARAMETER") onOpenXpLogs: () -> Unit = {},
+    isDarkTheme: Boolean = LocalAppDarkTheme.current
+) {
+    val scaffoldPadding = LocalScaffoldContentPadding.current
+    Box(modifier = modifier.fillMaxSize()) {
+        RoadmapAmbientBackground(
+            modifier = Modifier.fillMaxSize(),
+            darkTheme = isDarkTheme
+        )
+        TasksLedgerContent(
+            viewModel = viewModel,
+            topHeaderClearanceDp = scaffoldPadding.calculateTopPadding() + 6.dp,
+            isDarkTheme = isDarkTheme,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Composable
+fun TasksLedgerContent(
+    viewModel: IndividualViewModel,
+    topHeaderClearanceDp: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
     isDarkTheme: Boolean = LocalAppDarkTheme.current
 ) {
     val context = LocalContext.current
@@ -107,8 +127,6 @@ fun TasksLedgerScreen(
     val isAr = currentLang == "ar"
     val isFr = currentLang == "fr"
 
-    val totalXp by viewModel.totalXp.collectAsStateWithLifecycle()
-    val stageProgress = remember(totalXp) { RoadmapManager.getStageProgress(totalXp) }
     val dailyTasks by viewModel.dailyTasks.collectAsStateWithLifecycle()
     val weeklyTasks by viewModel.weeklyTasks.collectAsStateWithLifecycle()
     val monthlyTasks by viewModel.monthlyTasks.collectAsStateWithLifecycle()
@@ -187,13 +205,13 @@ fun TasksLedgerScreen(
 
     val scaffoldPadding = LocalScaffoldContentPadding.current
     val density = LocalDensity.current
-    var ledgerHeaderHeightPx by remember { mutableIntStateOf(0) }
-    val ledgerHeaderClearanceDp = if (ledgerHeaderHeightPx > 0) {
-        with(density) { ledgerHeaderHeightPx.toDp() }
+    var ledgerFilterHeightPx by remember { mutableIntStateOf(0) }
+    val ledgerContentStartDp = if (ledgerFilterHeightPx > 0) {
+        topHeaderClearanceDp + with(density) { ledgerFilterHeightPx.toDp() }
     } else {
-        scaffoldPadding.calculateTopPadding() + 210.dp
+        topHeaderClearanceDp + 160.dp
     }
-    val ledgerTopFadeHeightDp = ledgerHeaderClearanceDp + 18.dp
+    val ledgerTopFadeHeightDp = ledgerContentStartDp + 18.dp
 
     val dailyCount = remember(entries) { entries.count { it.task.period == TaskPeriod.DAILY } }
     val weeklyCount = remember(entries) { entries.count { it.task.period == TaskPeriod.WEEKLY } }
@@ -207,10 +225,6 @@ fun TasksLedgerScreen(
             .fillMaxSize()
             .testTag("tasks_ledger_screen")
     ) {
-        RoadmapAmbientBackground(
-            modifier = Modifier.fillMaxSize(),
-            darkTheme = isDarkTheme
-        )
 
         // 1. FULL-BLEED EXPANDED TASKS DISPLAY AREA (scrolls seamlessly behind Switch View + Period filters with frosted liquid glass fade)
         Box(
@@ -229,7 +243,7 @@ fun TasksLedgerScreen(
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
                         .padding(
-                            top = ledgerHeaderClearanceDp + 14.dp,
+                            top = ledgerContentStartDp + 14.dp,
                             start = 14.dp,
                             end = 14.dp
                         ),
@@ -270,7 +284,7 @@ fun TasksLedgerScreen(
                     contentPadding = PaddingValues(
                         start = 14.dp,
                         end = 14.dp,
-                        top = ledgerHeaderClearanceDp + 6.dp,
+                        top = ledgerContentStartDp + 6.dp,
                         bottom = scaffoldPadding.calculateBottomPadding() + 20.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(7.dp)
@@ -308,35 +322,13 @@ fun TasksLedgerScreen(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .onSizeChanged { ledgerHeaderHeightPx = it.height }
                 .padding(
                     start = 14.dp,
                     end = 14.dp,
-                    top = scaffoldPadding.calculateTopPadding() + 6.dp
+                    top = topHeaderClearanceDp
                 )
+                .onSizeChanged { ledgerFilterHeightPx = it.height }
         ) {
-            // Unified Hub Switcher (Tasks Ledger <-> LVL X/700 <-> Xp Logs)
-            ObsidianRoadmapHubSwitcher(
-                activeDestination = RoadmapHubDestination.TASKS_LEDGER,
-                unlockedStationId = stageProgress.unlockedStationId,
-                progressFraction = stageProgress.progressFraction,
-                currentLang = currentLang,
-                isDarkTheme = isDarkTheme,
-                roadmapAccent = cyanTone,
-                onTasksLedgerClick = {},
-                onProgressClick = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    onOpenRoadmap()
-                },
-                onXpLogsClick = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    view.playSoundEffect(SoundEffectConstants.CLICK)
-                    onOpenXpLogs()
-                },
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
             // 2. TWO SUMMARY CONTAINERS: Completed Tasks & Uncompleted Tasks
             Row(
                 modifier = Modifier

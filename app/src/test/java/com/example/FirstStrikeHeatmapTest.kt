@@ -1054,7 +1054,8 @@ class FirstStrikeHeatmapTest {
         bands.forEachIndexed { band, bmp ->
             assertEquals(MapStyleHelper.HEAT_SPRITE_SIZE_PX, bmp.width)
             assertEquals(MapStyleHelper.HEAT_SPRITE_SIZE_PX, bmp.height)
-            assertEquals(android.util.DisplayMetrics.DENSITY_XXHIGH, bmp.density)
+            assertEquals(768, bmp.width)
+            assertEquals(android.util.DisplayMetrics.DENSITY_XXXHIGH, bmp.density)
 
             val cornerAlpha = (bmp.getPixel(0, 0) ushr 24) and 0xFF
             assertEquals("Band $band corner must stay strictly transparent", 0, cornerAlpha)
@@ -1369,13 +1370,20 @@ class FirstStrikeHeatmapTest {
     }
 
     @Test
-    fun heatSpriteIconSizeExpression_usesZoomOnlyAsTopLevelInterpolateInput() {
-        val exprJson = MapStyleHelper.buildHeatSpriteIconSizeExpression(1.0f).toString()
+    fun heatSpriteIconSizeAndPulseExpressions_useZoomOnlyAsTopLevelInterpolateInput() {
+        val exprJson = MapStyleHelper.buildHeatSpriteIconSizeExpression(1.0f, 1.06f).toString()
         assertTrue(
             "Expected top-level interpolate expression with zoom input, got: $exprJson",
             exprJson.startsWith("[\"interpolate\", [\"linear\"], [\"zoom\"],")
         )
         val zoomOccurrences = "\\[\"zoom\"\\]".toRegex().findAll(exprJson).count()
         assertEquals("zoom() must only appear once as top-level interpolate input", 1, zoomOccurrences)
+
+        val ringExprJson = MapStyleHelper.buildLivePulseRingRadiusExpression(1.6f).toString()
+        assertTrue(
+            "Expected top-level interpolate expression with zoom input, got: $ringExprJson",
+            ringExprJson.startsWith("[\"interpolate\", [\"linear\"], [\"zoom\"],")
+        )
+        assertEquals(1, "\\[\"zoom\"\\]".toRegex().findAll(ringExprJson).count())
     }
 }

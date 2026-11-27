@@ -92,6 +92,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -134,7 +135,9 @@ import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
+import kotlinx.coroutines.delay
 import kotlin.math.abs
+import kotlin.math.pow
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
@@ -564,6 +567,24 @@ fun FirstStrikeHeatmapScreen(
         }
     }
 
+    // Subtle ~30fps live thermal breathing & expanding sonar pulse showing hotspots are alive
+    LaunchedEffect(loadedStyleRef, displayMode, lifecycleOwner) {
+        val style = loadedStyleRef ?: return@LaunchedEffect
+        if (isRobolectricRuntime()) return@LaunchedEffect
+        var phase = 0f
+        while (true) {
+            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                MapStyleHelper.updateLiveHotspotPulse(
+                    style = style,
+                    displayMode = displayMode,
+                    phase = phase
+                )
+                phase = (phase + 0.013f) % 1.0f
+            }
+            delay(33L)
+        }
+    }
+
     // Center the camera on the hottest region once on initial launch (preserved across page switches)
     LaunchedEffect(mapLibreRef, hottestRegion) {
         val map = mapLibreRef ?: return@LaunchedEffect
@@ -655,6 +676,15 @@ fun FirstStrikeHeatmapScreen(
                 ),
                 label = "halo_pulse_scale"
             )
+            val sonarPhase by routinePulseTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 2500, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "sonar_ring_phase"
+            )
 
             Box(modifier = Modifier.fillMaxSize()) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -687,6 +717,14 @@ fun FirstStrikeHeatmapScreen(
                                 ),
                                 radius = outerRadius,
                                 center = Offset(cx, cy)
+                            )
+                            val sonarRadius = 20.dp.toPx() * (1f + 1.35f * sonarPhase)
+                            val sonarAlpha = ((1f - sonarPhase).toDouble().pow(1.4) * 0.36).toFloat().coerceIn(0f, 0.4f)
+                            drawCircle(
+                                color = Color(0xFFFF7A3D).copy(alpha = sonarAlpha),
+                                radius = sonarRadius,
+                                center = Offset(cx, cy),
+                                style = Stroke(width = 2.dp.toPx())
                             )
                         }
                         if (hotspot.hasFirstStrikes) {

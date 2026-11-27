@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Obsidian</string>
     <string name="nav_home">Home</string>
+    <string name="nav_tasks">Tasks</string>
     <string name="nav_dashboard">Records</string>
     <string name="nav_entry">Data Entry</string>
     <string name="nav_inventory">Inventory</string>
@@ -258,7 +259,7 @@
     <string name="deviations_inspect_tiers">Inspect 50 Biological Tiers</string>
     <string name="deviations_dna_rotate_hint">Drag DNA to rotate • Spring physics active</string>
     <string name="roadmap_nav_title">Roadmap</string>
-    <string name="roadmap_title">Cyber Roadmap &amp; Tasks</string>
+    <string name="roadmap_title">Cyber Roadmap</string>
     <string name="roadmap_subtitle">700 Stations, XP Progression &amp; Glacial Mastery</string>
     <string name="roadmap_tab_stations">Roadmap</string>
     <string name="roadmap_tab_tasks">Tasks</string>

@@ -15,12 +15,14 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.flame.FlameManager
 import com.example.data.local.AppDatabase
 import com.example.data.local.SecurityPreferences
 import com.example.data.profile.ProfileManager
 import com.example.data.roadmap.RoadmapManager
+import com.example.data.roadmap.StationState
 import com.example.data.roadmap.TaskItem
 import com.example.data.roadmap.TaskPeriod
 import com.example.data.roadmap.TaskPools
@@ -31,6 +33,7 @@ import com.example.ui.theme.AppThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -162,9 +165,8 @@ class RoadmapAndThemeEnhancementsTest {
     }
 
     @Test
-    fun roadmapScreen_placesLedgerLeftXpLogsRight_hidesOldTitleAndKeys_showsTaskIdAndShapeSkip_andOpensXpLogs() {
+    fun tasksScreen_separatesFromRoadmap_hidesOldKeysAndTitle_showsTaskIdAndShapeSkip_andOpensLedgerAndXpLogs() {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
-        // Seed XP logs so XpLogs screen shows real entries and reasons
         XpCalculationEngine.onDeflameAction(ctx, bonusNote = "تحكم يدوي بالشعلة")
         XpCalculationEngine.onStrikeRecorded(ctx, strikeCount = 1, personName = "طارق")
 
@@ -172,24 +174,19 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 
-        // 1. Removed header texts & back arrow must not be present
+        // 1. Removed header texts, Level pill/popup, Tasks tab & hub switcher must not be present on Roadmap
         assertEquals(0, composeRule.onAllNodesWithText("Cyber Roadmap & Tasks", substring = true).fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithText("500 Stations, XP Progression & Egg Rewards", substring = true).fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("roadmap_back_btn").fetchSemanticsNodes().size)
-
-        // 2. Living Level pill + Obsidian Portal Menu trigger
-        val progressBtnBounds = composeRule.onNodeWithTag("roadmap_header_progress_btn").assertIsDisplayed().getBoundsInRoot()
-        val portalMenuBtnBounds = composeRule.onNodeWithTag("roadmap_hub_menu_btn").assertIsDisplayed().getBoundsInRoot()
-        assertTrue(
-            "Expected Level Pill and Portal Switcher Trigger without overlap",
-            progressBtnBounds.right <= portalMenuBtnBounds.left || portalMenuBtnBounds.right <= progressBtnBounds.left
-        )
-        // Progress card is NOT inline before opening the floating popup
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_header_progress_btn").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_hub_menu_btn").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_tab_tasks").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("roadmap_progress_popup").fetchSemanticsNodes().size)
 
-        // 3. Switch to Tasks tab -> verify 3-key inventory boxes are gone, task ID badge & key-shaped Skip appear
-        composeRule.onNodeWithTag("roadmap_tab_tasks").performClick()
+        // 2. Navigate to dedicated Tasks tab from Bottom Bar -> verify 3-key inventory boxes are gone, task ID badge & key-shaped Skip appear
+        composeRule.onNodeWithTag("nav_tab_tasks").performClick()
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("tasks_screen").assertIsDisplayed()
 
         assertEquals(0, composeRule.onAllNodesWithText("Wooden Key", substring = true).fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithText("Bronze Key", substring = true).fetchSemanticsNodes().size)
@@ -220,13 +217,13 @@ class RoadmapAndThemeEnhancementsTest {
         assertEquals(0, composeRule.onAllNodesWithText("Cannot be skipped with keys", substring = true).fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithText("غير قابلة للتجاوز بالمفاتيح", substring = true).fetchSemanticsNodes().size)
 
-        // 4. Tap-to-Change cycles cleanly: Roadmap -> Tasks Ledger -> Xp Logs -> Roadmap
-        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
+        // 3. Switch cleanly inside Tasks Hub: Tasks -> Tasks Ledger -> Xp Logs -> Tasks
+        composeRule.onNodeWithTag("tasks_hub_tab_ledger").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("top_bar_settings_btn").assertIsDisplayed()
         composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()
 
-        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
+        composeRule.onNodeWithTag("tasks_hub_tab_xp_logs").performClick()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("top_bar_settings_btn").assertIsDisplayed()
@@ -241,16 +238,9 @@ class RoadmapAndThemeEnhancementsTest {
         assertTrue(composeRule.onAllNodesWithText("السبب:", substring = true).fetchSemanticsNodes().isNotEmpty())
         composeRule.onAllNodesWithText("السبب:", substring = true)[0].assertIsDisplayed()
 
-        // Tap Switch View from Xp Logs -> returns straight to RoadmapScreen
-        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
+        composeRule.onNodeWithTag("tasks_hub_tab_tasks").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
-
-        // 5. Open Tasks Ledger via Tap-to-Change -> topBar also stays visible
-        composeRule.onNodeWithTag("roadmap_hub_menu_btn").performClick()
-        composeRule.waitForIdle()
-        composeRule.onNodeWithTag("top_bar_settings_btn").assertIsDisplayed()
-        composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()
+        composeRule.onNodeWithTag("tasks_lazy_list").assertIsDisplayed()
     }
 
     @Test
@@ -290,54 +280,64 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.onNodeWithTag("roadmap_biome_submersion_overlay").assertIsDisplayed()
         composeRule.onNodeWithTag("stage_banner_1").assertIsDisplayed()
 
-        // Floating progress menu shows / 700
-        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_header_progress_title").fetchSemanticsNodes().size)
-        composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
+        // Scroll to Stage 2: Rocky (176)
+        composeRule.onNodeWithTag("roadmap_stations_list").performScrollToIndex(175)
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("roadmap_progress_popup").assertIsDisplayed()
-        composeRule.onNodeWithTag("roadmap_header_progress_title")
-            .assertIsDisplayed()
-            .assertTextContains("/ 700", substring = true)
-
-        // Jump to Stage 2: Rocky (176)
-        composeRule.onNodeWithTag("btn_jump_176").performScrollTo().performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000L) {
-            Shadows.shadowOf(Looper.getMainLooper()).idle()
-            composeRule.onAllNodesWithTag("station_176").fetchSemanticsNodes().isNotEmpty()
-        }
+        composeRule.onNodeWithTag("station_176").assertIsDisplayed()
         composeRule.onNodeWithTag("stage_banner_176").assertIsDisplayed()
 
-        // Jump to Stage 3: Forest (351)
-        composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
+        // Scroll to Stage 3: Forest (351)
+        composeRule.onNodeWithTag("roadmap_stations_list").performScrollToIndex(350)
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("btn_jump_351").performScrollTo().performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000L) {
-            Shadows.shadowOf(Looper.getMainLooper()).idle()
-            composeRule.onAllNodesWithTag("station_351").fetchSemanticsNodes().isNotEmpty()
-        }
+        composeRule.onNodeWithTag("station_351").assertIsDisplayed()
         composeRule.onNodeWithTag("stage_banner_351").assertIsDisplayed()
 
-        // Jump to Stage 4: Cataclysm & Volcanic (526)
-        composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
+        // Scroll to Stage 4: Cataclysm & Volcanic (526)
+        composeRule.onNodeWithTag("roadmap_stations_list").performScrollToIndex(525)
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("btn_jump_526").performScrollTo().performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000L) {
-            Shadows.shadowOf(Looper.getMainLooper()).idle()
-            composeRule.onAllNodesWithTag("station_526").fetchSemanticsNodes().isNotEmpty()
-        }
+        composeRule.onNodeWithTag("station_526").assertIsDisplayed()
         composeRule.onNodeWithTag("stage_banner_526").assertIsDisplayed()
 
-        // Jump to Level 700: Deepest Volcanic Magma Abyss
-        composeRule.onNodeWithTag("roadmap_header_progress_btn").performClick()
+        // Scroll to Level 700: Deepest Volcanic Magma Abyss
+        composeRule.onNodeWithTag("roadmap_stations_list").performScrollToIndex(699)
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("btn_jump_700").performScrollTo().performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000L) {
-            Shadows.shadowOf(Looper.getMainLooper()).idle()
-            composeRule.onAllNodesWithTag("station_700").fetchSemanticsNodes().isNotEmpty()
-        }
         composeRule.onNodeWithTag("station_700").assertIsDisplayed()
         composeRule.onNodeWithTag("stage_banner_700").assertIsDisplayed()
         composeRule.onNodeWithTag("roadmap_biome_backdrop").assertIsDisplayed()
         composeRule.onNodeWithTag("roadmap_biome_submersion_overlay").assertIsDisplayed()
+    }
+
+    @Test
+    fun roadmapLevelProgression_andManualClaimBehavior_advanceFrontierAndKeepShieldsInInventory() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val s1Cost = TaskPools.getRequiredXpForStation(1)
+        // Earn Station 1 + 500 partial XP toward Station 2
+        RoadmapManager.addXp(ctx, s1Cost + 500L)
+
+        enterMainAppFromHeatmap()
+        composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
+        composeRule.waitForIdle()
+
+        // Station 1 is unlocked, shows Claim button and YOU badge, and Station 2 shows partial progress bar
+        composeRule.onNodeWithTag("btn_claim_station_1").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_you_badge_1", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("station_progress_bar_2", useUnmergedTree = true).assertIsDisplayed()
+
+        // Tapping Station 1 card body does NOT auto-claim
+        composeRule.onNodeWithTag("station_1").performClick()
+        composeRule.waitForIdle()
+        assertEquals(StationState.UNLOCKED, RoadmapManager.getStationState(1))
+        assertFalse(RoadmapManager.claimedStations.value.contains(1))
+
+        // Tapping explicit Claim button DOES claim Station 1, adds 24h shield to inventory WITHOUT activating it,
+        // and moves YOU progression badge forward onto Station 2
+        composeRule.onNodeWithTag("btn_claim_station_1").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(StationState.CLAIMED, RoadmapManager.getStationState(1))
+        assertTrue(RoadmapManager.claimedStations.value.contains(1))
+        assertEquals(1, FlameManager.available1DayShields.value)
+        assertFalse("Shield reward must NOT auto-activate on claim", FlameManager.isStreakShieldActive.value)
+        composeRule.onNodeWithTag("roadmap_you_badge_2", useUnmergedTree = true).assertIsDisplayed()
     }
 }

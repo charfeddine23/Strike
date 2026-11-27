@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Obsidian</string>
     <string name="nav_home">Home</string>
+    <string name="nav_tasks">Missions</string>
     <string name="nav_dashboard">Registres</string>
     <string name="nav_entry">Saisie</string>
     <string name="nav_inventory">Inventaire</string>
@@ -258,7 +259,7 @@
     <string name="deviations_inspect_tiers">Voir les 50 Rangs Biologiques</string>
     <string name="deviations_dna_rotate_hint">Glissez pour faire pivoter l\'ADN • Physique réactive</string>
     <string name="roadmap_nav_title">Parcours</string>
-    <string name="roadmap_title">Parcours Cyber &amp; Missions</string>
+    <string name="roadmap_title">Parcours Cyber</string>
     <string name="roadmap_subtitle">700 Stations, Progression XP &amp; Ère Glaciaire</string>
     <string name="roadmap_tab_stations">Parcours</string>
     <string name="roadmap_tab_tasks">Missions</string>

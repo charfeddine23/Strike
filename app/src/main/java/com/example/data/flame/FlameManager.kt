@@ -413,9 +413,14 @@ object FlameManager {
     }
 
     @Synchronized
-    fun grantManualShield(context: Context, days: Int = 3, reason: String = "Double Strike Reward"): Int {
+    fun grantManualShield(
+        context: Context,
+        days: Int = 3,
+        count: Int = 1,
+        reason: String = "Double Strike Reward"
+    ): Int {
         init(context)
-        val newCount = _availableManualShields.value + 1
+        val newCount = (_availableManualShields.value + count.coerceAtLeast(1)).coerceAtLeast(0)
         _availableManualShields.value = newCount
         getPrefs(context).edit().putInt(KEY_AVAILABLE_MANUAL_SHIELDS, newCount).apply()
         return newCount
