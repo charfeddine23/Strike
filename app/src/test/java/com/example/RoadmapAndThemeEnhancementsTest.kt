@@ -311,6 +311,7 @@ class RoadmapAndThemeEnhancementsTest {
     fun roadmapLevelProgression_andManualClaimBehavior_advanceFrontierAndKeepShieldsInInventory() {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         val s1Cost = TaskPools.getRequiredXpForStation(1)
+        val s2Cost = TaskPools.getRequiredXpForStation(2)
         // Earn Station 1 + 500 partial XP toward Station 2
         RoadmapManager.addXp(ctx, s1Cost + 500L)
 
@@ -318,9 +319,21 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 
-        // Station 1 is unlocked, shows Claim button and YOU badge, and Station 2 shows partial progress bar
+        // Current Level card sits below TopBar and above Roadmap tabs, displaying LVL 1 / 700
+        val topBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        val currentLevelBounds = composeRule.onNodeWithTag("roadmap_current_level_card").assertIsDisplayed().getBoundsInRoot()
+        val tabsBounds = composeRule.onNodeWithTag("roadmap_tab_stations").assertIsDisplayed().getBoundsInRoot()
+        assertTrue(currentLevelBounds.top >= topBarBounds.bottom)
+        assertTrue(tabsBounds.top >= currentLevelBounds.bottom)
+        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
+            .assertTextContains("LVL 1 / 700", substring = false)
+
+        // Station 1 is unlocked, shows Claim button and YOU badge with Level 1, and Station 2 shows partial progress bar
         composeRule.onNodeWithTag("btn_claim_station_1").assertIsDisplayed()
-        composeRule.onNodeWithTag("roadmap_you_badge_1", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNode(
+            hasTestTag("roadmap_you_badge_1") and hasAnyChild(hasText("م 1", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
         composeRule.onNodeWithTag("station_progress_bar_2", useUnmergedTree = true).assertIsDisplayed()
 
         // Tapping Station 1 card body does NOT auto-claim
@@ -330,7 +343,7 @@ class RoadmapAndThemeEnhancementsTest {
         assertFalse(RoadmapManager.claimedStations.value.contains(1))
 
         // Tapping explicit Claim button DOES claim Station 1, adds 24h shield to inventory WITHOUT activating it,
-        // and moves YOU progression badge forward onto Station 2
+        // and keeps YOU indicator accurately on Station 1 (actual level) instead of jumping to locked Station 2
         composeRule.onNodeWithTag("btn_claim_station_1").performClick()
         composeRule.waitForIdle()
 
@@ -338,6 +351,76 @@ class RoadmapAndThemeEnhancementsTest {
         assertTrue(RoadmapManager.claimedStations.value.contains(1))
         assertEquals(1, FlameManager.available1DayShields.value)
         assertFalse("Shield reward must NOT auto-activate on claim", FlameManager.isStreakShieldActive.value)
-        composeRule.onNodeWithTag("roadmap_you_badge_2", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_you_badge_1", useUnmergedTree = true).assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_you_badge_2", useUnmergedTree = true).fetchSemanticsNodes().size)
+
+        // Earning remaining XP to unlock Station 2 advances Current Level and YOU badge to Level 2
+        RoadmapManager.addXp(ctx, s2Cost - 500L)
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
+            .assertTextContains("LVL 2 / 700", substring = false)
+        composeRule.onNode(
+            hasTestTag("roadmap_you_badge_2") and hasAnyChild(hasText("م 2", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+    }
+
+    @Test
+    fun roadmapYouBadge_showsLevelZeroWhenNoXpEarned_andSyncsActualLevelFromAllTimeDataWithoutStartDate() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val db = AppDatabase.getDatabase(ctx)
+
+        // 1. Fresh state (0 XP): Home and Roadmap both show LVL 0 / 700 and map YOU sits on Origin 0, NOT Station 1
+        enterMainAppFromHeatmap()
+        composeRule.onNodeWithTag("home_roadmap_level_badge", useUnmergedTree = true)
+            .assertTextContains("LVL 0 / 700", substring = false)
+
+        composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
+            .assertTextContains("LVL 0 / 700", substring = false)
+        composeRule.onNode(
+            hasTestTag("roadmap_you_badge_0") and hasAnyChild(hasText("م 0", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_you_badge_1", useUnmergedTree = true).fetchSemanticsNodes().size)
+
+        // 2. Insert real data without setting Flame trackingStartDate, then trigger historical strike & sync
+        // Person with size > 200 (+1,500 XP) + 30 historical strikes (+3,000 XP) = 4,500 XP -> Unlocks Station 2 (1,345 + 1,354 = 2,699 XP < 4,500 XP < s1+s2+s3)
+        runBlocking(Dispatchers.IO) {
+            val repo = com.example.data.repository.IndividualRepository(db.individualDao(), db.strikeEventDao())
+            val personId = repo.save(
+                com.example.data.model.Individual(
+                    fullName = "أنس التقدم الفعلي",
+                    type = "M",
+                    length = 25.0,
+                    width = 10.0,
+                    size = 250.0,
+                    sScore = 80.0,
+                    fScore = 80.0,
+                    cScore = 80.0,
+                    boost = 85.0
+                )
+            )
+            repo.recordHistoricalStrikes(personId, listOf(2023 to 30), "ar")
+            XpCalculationEngine.syncAllTimeTelemetry(
+                context = ctx,
+                flameLogs = FlameManager.flameLogs.value,
+                strikeEvents = repo.getAllStrikeEventsList(),
+                individuals = repo.getAllIndividualsList()
+            )
+        }
+        composeRule.waitForIdle()
+
+        val expectedLevel = XpCalculationEngine.calculateLevelForXp(4500L)
+        assertTrue("Expected real telemetry (4500 XP) to advance beyond Level 0, got $expectedLevel", expectedLevel >= 2)
+        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
+            .assertTextContains("LVL $expectedLevel / 700", substring = false)
+
+        // Navigate back to Home and confirm Roadmap Level matches RoadmapScreen & YOU indicator identically
+        composeRule.onNodeWithTag("nav_tab_home").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_roadmap_level_badge", useUnmergedTree = true)
+            .assertTextContains("LVL $expectedLevel / 700", substring = false)
     }
 }

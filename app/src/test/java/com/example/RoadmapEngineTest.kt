@@ -954,4 +954,57 @@ class RoadmapEngineTest {
         assertEquals(1, RoadmapManager.shields72h.value)
         assertFalse(FlameManager.isStreakShieldActive.value)
     }
+
+    @Test
+    fun testAllTimeTelemetryWithoutStartDateAndOngoingEndDateNotFrozen() {
+        val now = System.currentTimeMillis()
+        val flameLogs = listOf(
+            FlameLogEntry(id = 1, timestamp = now - 5000L, title = "Deflame", change = -3.0, resultingScore = 10.0, reason = "DEFLAME"),
+            FlameLogEntry(id = 2, timestamp = now - 4000L, title = "Girl", change = -3.0, resultingScore = 7.0, reason = "GIRL")
+        )
+        val strikeEvents = listOf(
+            StrikeEvent(id = 1, individualId = 10L, individualName = "P1", year = 2022, date = "2022-06-15", time = "12:00:00", count = 5, strikeType = "Historical Entry", performanceValue = 80.0),
+            StrikeEvent(id = 2, individualId = 10L, individualName = "P1", year = 2026, date = "2026-11-20", time = "12:00:00", count = 2, strikeType = "Strike", performanceValue = 80.0)
+        )
+        val individuals = listOf(
+            Individual(id = 10L, fullName = "P1", type = "M", length = 25.0, width = 10.0, size = 250.0, sScore = 80.0, fScore = 80.0, cScore = 80.0, boost = 85.0, strikeCount = 9, updatedAt = now - 6000L)
+        )
+
+        // All-time sync without trackingStartDate counts:
+        // 1 Deflame (20) + 1 Girl (50) + (5+2 events + 2 legacy excess = 9 strikes -> 900) + 1 large person (1500) = 2,470 XP
+        val b1 = XpCalculationEngine.syncAllTimeTelemetry(
+            context = app,
+            flameLogs = flameLogs,
+            strikeEvents = strikeEvents,
+            individuals = individuals
+        )
+        assertEquals(9, b1.strikeCount)
+        assertEquals(1, b1.deflameCount)
+        assertEquals(1, b1.girlCount)
+        assertEquals(1, b1.personCount)
+        assertEquals(1, b1.largePersonBonusCount)
+        assertEquals(2470L, b1.totalTelemetryXp)
+        assertEquals(2470L, RoadmapManager.totalXp.value)
+        assertEquals(1, XpCalculationEngine.calculateLevelForXp(RoadmapManager.totalXp.value))
+
+        // Idempotent repeat does not double-count
+        val b2 = XpCalculationEngine.syncAllTimeTelemetry(
+            context = app,
+            flameLogs = flameLogs,
+            strikeEvents = strikeEvents,
+            individuals = individuals
+        )
+        assertEquals(0L, b2.deltaCreditedXp)
+        assertEquals(2470L, RoadmapManager.totalXp.value)
+
+        // Recalculating Flame start date with endDateStr = null keeps ongoing end date null (never frozen)
+        FlameManager.recalculateFromStartDate(
+            context = app,
+            startDateStr = "2026-11-01",
+            strikeEvents = strikeEvents,
+            lang = "ar",
+            endDateStr = null
+        )
+        assertEquals(null, FlameManager.getStreakEndDate(app))
+    }
 }

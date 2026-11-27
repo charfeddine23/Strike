@@ -1434,10 +1434,15 @@ object FlameManager {
             putRange("deflame", deflameRange)
         }.toString()
 
+        val hasExplicitEndDate = !endDateStr.isNullOrBlank()
         getPrefs(context).edit().apply {
             saveDouble(this, KEY_SCORE, KEY_SCORE_BITS, newScore)
             putString(KEY_START_COUNT_DATE, result.startDate)
-            putString(KEY_END_COUNT_DATE, result.endDate)
+            if (hasExplicitEndDate) {
+                putString(KEY_END_COUNT_DATE, result.endDate)
+            } else {
+                remove(KEY_END_COUNT_DATE)
+            }
             putString(KEY_PER_ITEM_DATE_RANGES, rangesJson)
             putString(KEY_LAST_INACTIVITY_DATE, todayString())
             putInt(KEY_GIRL_PER_MONTH, result.girlPerMonth)

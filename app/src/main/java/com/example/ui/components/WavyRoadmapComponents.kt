@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -56,6 +57,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -249,7 +251,7 @@ fun WavySnakeStationRow(
     station: RoadmapStation,
     prevStationState: StationState?,
     nextStationState: StationState?,
-    isCurrentMilestone: Boolean,
+    unlockedStationId: Int,
     currentLang: String,
     pulseScale: Float,
     orbitRotation: Float,
@@ -276,81 +278,99 @@ fun WavySnakeStationRow(
     val nodeNormX = remember(station.id) { wavyNodeNormalizedX(station.id.toFloat()) }
     val nodeOnLeft = nodeNormX < 0.5f
 
+    val showLevelZeroOrigin = station.id == 1 && unlockedStationId <= 0
+    val isCurrentMilestone = unlockedStationId >= 1 && station.id == unlockedStationId
+    val isNextTargetWithProgress = station.id == nextStationId && station.state == StationState.LOCKED && currentStageXp > 0L
     val isCurrentActiveOrb = (isCurrentMilestone && station.state != StationState.LOCKED) || station.state == StationState.UNLOCKED
-    val isStartingLockedFrontier = isCurrentMilestone && station.state == StationState.LOCKED
     val upperPathActive = station.state != StationState.LOCKED ||
         (prevStationState != null && prevStationState != StationState.LOCKED) ||
-        (isStartingLockedFrontier && currentStageXp > 0L)
+        (showLevelZeroOrigin && currentStageXp > 0L) ||
+        (isNextTargetWithProgress && unlockedStationId >= 1)
     val lowerPathActive = nextStationState != null && nextStationState != StationState.LOCKED
     val isFrontierTail = station.state != StationState.LOCKED && nextStationState == StationState.LOCKED
 
     val biomeState = remember(station.id) { roadmapBiomeStateForStation(station.id.toFloat()) }
     val rowHeight = 166.dp
 
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(rowHeight)
-    ) {
-        val totalWidthPx = constraints.maxWidth.toFloat()
-        val totalHeightPx = constraints.maxHeight.toFloat()
-        val maxWidthDp = maxWidth
-        val nodeCenterDp = maxWidthDp * nodeNormX
-
-        // Layer 0: Continuous 4-Stage Blended Biome Rim Encasement (Glacial -> Rocky -> Forest -> Volcanic)
-        RoadmapRowBiomeDecoration(
-            biomeState = biomeState,
-            glowPulse = glowPulse,
-            isDarkTheme = isDarkTheme,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Layer 1: Continuous Seamless Glowing / Dashed Snake Track Canvas
-        GlowingWavyRoadmapSegmentCanvas(
-            stationId = station.id,
-            upperPathActive = upperPathActive,
-            lowerPathActive = lowerPathActive,
-            isFrontierTail = isFrontierTail,
-            flowPhase = flowPhase,
-            glowPulse = glowPulse,
-            darkTheme = isDarkTheme,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Stage Threshold & Peak Banners (Stations 1, 176, 351, 526, 700)
-        if (station.id == 1 || station.id == 176 || station.id == 351 || station.id == 526 || station.id == 700) {
-            RoadmapStageBannerPill(
-                stationId = station.id,
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (showLevelZeroOrigin) {
+            LevelZeroOriginRowHeader(
+                biomeState = biomeState,
                 currentLang = currentLang,
-                isDarkTheme = isDarkTheme,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 2.dp)
+                hasPartialXp = currentStageXp > 0L,
+                flowPhase = flowPhase,
+                glowPulse = glowPulse,
+                badgeBobDp = badgeBobDp,
+                isDarkTheme = isDarkTheme
             )
         }
 
-        // Layer 2: Physical LTR positioning for Node Orb + Side Frosted Card
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                val orbBoxSize = 84.dp
-                val orbCenterX = (totalWidthPx * nodeNormX).roundToInt()
-                val orbCenterY = (totalHeightPx * 0.5f).roundToInt()
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(rowHeight)
+        ) {
+            val totalWidthPx = constraints.maxWidth.toFloat()
+            val totalHeightPx = constraints.maxHeight.toFloat()
+            val maxWidthDp = maxWidth
+            val nodeCenterDp = maxWidthDp * nodeNormX
 
-                // 2A. Circular Station Orb + Expanding Sonar Ripples + Animated Orbital Rings + "YOU" Tag
-                Box(
+            // Layer 0: Continuous 4-Stage Blended Biome Rim Encasement (Glacial -> Rocky -> Forest -> Volcanic)
+            RoadmapRowBiomeDecoration(
+                biomeState = biomeState,
+                glowPulse = glowPulse,
+                isDarkTheme = isDarkTheme,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Layer 1: Continuous Seamless Glowing / Dashed Snake Track Canvas
+            GlowingWavyRoadmapSegmentCanvas(
+                stationId = station.id,
+                upperPathActive = upperPathActive,
+                lowerPathActive = lowerPathActive,
+                isFrontierTail = isFrontierTail,
+                flowPhase = flowPhase,
+                glowPulse = glowPulse,
+                darkTheme = isDarkTheme,
+                showTopHalfForStation1 = showLevelZeroOrigin,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Stage Threshold & Peak Banners (Stations 1, 176, 351, 526, 700)
+            if (station.id == 1 || station.id == 176 || station.id == 351 || station.id == 526 || station.id == 700) {
+                RoadmapStageBannerPill(
+                    stationId = station.id,
+                    currentLang = currentLang,
+                    isDarkTheme = isDarkTheme,
                     modifier = Modifier
-                        .offset {
-                            val halfPx = orbBoxSize.toPx() * 0.5f
-                            IntOffset((orbCenterX - halfPx).roundToInt(), (orbCenterY - halfPx).roundToInt())
-                        }
-                        .size(orbBoxSize),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isCurrentActiveOrb || isStartingLockedFrontier) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val center = Offset(size.width / 2f, size.height / 2f)
-                            val haloAccent = if (isStartingLockedFrontier) NeonAqua else WarmFireOrange
-                            val ringAccent = if (isStartingLockedFrontier) NeonAqua else MilestoneGold
+                        .align(Alignment.TopCenter)
+                        .padding(top = 2.dp)
+                )
+            }
+
+            // Layer 2: Physical LTR positioning for Node Orb + Side Frosted Card
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val orbBoxSize = 84.dp
+                    val orbCenterX = (totalWidthPx * nodeNormX).roundToInt()
+                    val orbCenterY = (totalHeightPx * 0.5f).roundToInt()
+
+                    // 2A. Circular Station Orb + Expanding Sonar Ripples + Animated Orbital Rings + "YOU" Tag
+                    Box(
+                        modifier = Modifier
+                            .offset {
+                                val halfPx = orbBoxSize.toPx() * 0.5f
+                                IntOffset((orbCenterX - halfPx).roundToInt(), (orbCenterY - halfPx).roundToInt())
+                            }
+                            .size(orbBoxSize),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isCurrentActiveOrb || isNextTargetWithProgress) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val center = Offset(size.width / 2f, size.height / 2f)
+                                val showCyanOnly = !isCurrentActiveOrb && isNextTargetWithProgress
+                                val haloAccent = if (showCyanOnly) NeonAqua else WarmFireOrange
+                                val ringAccent = if (showCyanOnly) NeonAqua else MilestoneGold
 
                             // Warm/Cyan ambient breathing radial halo
                             drawCircle(
@@ -551,26 +571,28 @@ fun WavySnakeStationRow(
                         }
                     }
 
-                    // "YOU" / "أنت" neon badge gently bobbing directly above current node
+                    // "YOU" / "أنت" neon badge gently bobbing directly above true unlocked station node
                     if (isCurrentMilestone) {
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
-                                .offset(y = (-6f + badgeBobDp).dp)
+                                .offset(y = (-8f + badgeBobDp).dp)
+                                .wrapContentWidth(unbounded = true)
                                 .clip(RoundedCornerShape(50))
                                 .background(
                                     Brush.horizontalGradient(listOf(MilestoneGold, WarmFireOrange))
                                 )
-                                .border(1.dp, Color.White.copy(alpha = 0.75f), RoundedCornerShape(50))
+                                .border(1.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(50))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                                 .testTag("roadmap_you_badge_${station.id}")
                         ) {
                             Text(
-                                text = if (isAr) "أنت 📍" else "YOU 📍",
+                                text = if (isAr) "أنت 📍 • م ${station.id}" else "YOU 📍 • LVL ${station.id}",
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color(0xFF0B0F19),
-                                lineHeight = 10.sp
+                                lineHeight = 10.sp,
+                                maxLines = 1
                             )
                         }
                     }
@@ -603,6 +625,118 @@ fun WavySnakeStationRow(
                         )
                     }
                 }
+            }
+        }
+        }
+    }
+}
+
+@Composable
+private fun LevelZeroOriginRowHeader(
+    biomeState: RoadmapBiomeState,
+    currentLang: String,
+    hasPartialXp: Boolean,
+    flowPhase: Float,
+    glowPulse: Float,
+    badgeBobDp: Float,
+    isDarkTheme: Boolean
+) {
+    val isAr = currentLang == "ar"
+    val primaryAccent = biomePrimaryAccent(biomeState, isDarkTheme)
+    val dashPeriod = 22f
+    val animatedDashEffect = PathEffect.dashPathEffect(
+        intervals = floatArrayOf(12f, 10f),
+        phase = -flowPhase * dashPeriod
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(68.dp)
+            .testTag("roadmap_level_zero_origin"),
+        contentAlignment = Alignment.Center
+    ) {
+        RoadmapRowBiomeDecoration(
+            biomeState = biomeState,
+            glowPulse = glowPulse,
+            isDarkTheme = isDarkTheme,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val startPt = Offset(size.width * 0.5f, size.height * 0.5f)
+            val endPt = Offset(size.width * 0.5f, size.height)
+            if (hasPartialXp) {
+                drawLine(
+                    color = primaryAccent.copy(alpha = 0.28f * glowPulse),
+                    start = startPt,
+                    end = endPt,
+                    strokeWidth = 14.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = primaryAccent.copy(alpha = 0.85f),
+                    start = startPt,
+                    end = endPt,
+                    strokeWidth = 4.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            } else {
+                drawLine(
+                    color = primaryAccent.copy(alpha = 0.45f),
+                    start = startPt,
+                    end = endPt,
+                    strokeWidth = 2.4.dp.toPx(),
+                    cap = StrokeCap.Round,
+                    pathEffect = animatedDashEffect
+                )
+            }
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .offset(y = (badgeBobDp * 0.4f).dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Brush.horizontalGradient(listOf(MilestoneGold, WarmFireOrange)))
+                    .border(1.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(50))
+                    .padding(horizontal = 10.dp, vertical = 2.dp)
+                    .testTag("roadmap_you_badge_0")
+            ) {
+                Text(
+                    text = if (isAr) "أنت 📍 • م 0" else "YOU 📍 • LVL 0",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color(0xFF0B0F19),
+                    maxLines = 1
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                if (isDarkTheme) Color(0xFF143652) else Color.White,
+                                primaryAccent.copy(alpha = if (isDarkTheme) 0.55f else 0.30f)
+                            )
+                        )
+                    )
+                    .border(1.5.dp, MilestoneGold.copy(alpha = 0.9f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "0",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = PlusJakartaSans,
+                    color = if (isDarkTheme) Color.White else DayTextPrimary
+                )
             }
         }
     }

@@ -60,6 +60,7 @@ object XpCalculationEngine {
     private const val PREFS_NAME = "strikepulse_xp_engine_prefs"
     private const val KEY_CREDITED_TELEMETRY_XP = "key_credited_telemetry_xp"
     private const val KEY_LAST_SYNCED_START_DATE = "key_last_synced_start_date"
+    private const val KEY_BASELINE_RESET_AT_MILLIS = "key_baseline_reset_at_millis"
 
     private val _creditedTelemetryXp = MutableStateFlow(0L)
     val creditedTelemetryXp: StateFlow<Long> = _creditedTelemetryXp.asStateFlow()
@@ -98,8 +99,13 @@ object XpCalculationEngine {
         _lastBreakdown.value = RetroactiveXpBreakdown()
         getPrefs(context).edit()
             .putLong(KEY_CREDITED_TELEMETRY_XP, 0L)
+            .putLong(KEY_BASELINE_RESET_AT_MILLIS, System.currentTimeMillis())
             .remove(KEY_LAST_SYNCED_START_DATE)
             .apply()
+    }
+
+    fun isBaselineResetActive(context: Context): Boolean {
+        return getPrefs(context).getLong(KEY_BASELINE_RESET_AT_MILLIS, 0L) > 0L
     }
 
     /**
@@ -245,6 +251,139 @@ object XpCalculationEngine {
     }
 
     /**
+     * Computes exact all-time XP earned from all Flame logs (DEFLAME, GIRL), Strike events
+     * (including any legacy Individual.strikeCount excess without event rows), and added Individuals.
+     * Used when no Flame trackingStartDate filter is configured so all real player data counts
+     * immediately toward Roadmap Level.
+     */
+    fun calculateAllTimeTelemetryFromLogs(
+        flameLogs: List<FlameLogEntry>,
+        strikeEvents: List<StrikeEvent>,
+        individuals: List<Individual>,
+        minTimestampExclusiveMillis: Long = 0L
+    ): RetroactiveXpBreakdown {
+        val afterResetLogs = if (minTimestampExclusiveMillis > 0L) {
+            flameLogs.filter { it.timestamp > minTimestampExclusiveMillis }
+        } else {
+            flameLogs
+        }
+        val deflameCount = afterResetLogs
+            .filter { it.reason == "DEFLAME" }
+            .sumOf { it.actionCount.coerceAtLeast(1) }
+        val girlCount = afterResetLogs
+            .filter { it.reason == "GIRL" }
+            .sumOf { it.actionCount.coerceAtLeast(1) }
+
+        val relevantEvents = if (minTimestampExclusiveMillis > 0L) {
+            strikeEvents.filter { it.timestamp > minTimestampExclusiveMillis }
+        } else {
+            strikeEvents
+        }
+        val eventStrikeCount = relevantEvents.sumOf { it.count.coerceAtLeast(1) }
+        val legacyUntrackedStrikes = if (minTimestampExclusiveMillis == 0L) {
+            val eventUnitsByPerson = strikeEvents.groupBy { it.individualId }
+                .mapValues { (_, list) -> list.sumOf { it.count.coerceAtLeast(1) } }
+            individuals.sumOf { person ->
+                val tracked = eventUnitsByPerson[person.id] ?: 0
+                (person.strikeCount - tracked).coerceAtLeast(0)
+            }
+        } else {
+            0
+        }
+        val strikeCount = eventStrikeCount + legacyUntrackedStrikes
+
+        val relevantPersons = if (minTimestampExclusiveMillis > 0L) {
+            individuals.filter { it.updatedAt > minTimestampExclusiveMillis }
+        } else {
+            individuals
+        }
+        val personCount = relevantPersons.size
+        val largePersonBonusCount = relevantPersons.count { it.size > PERSON_SIZE_BONUS_THRESHOLD }
+
+        val deflameXp = deflameCount * XP_PER_DEFLAME
+        val girlXp = girlCount * XP_PER_GIRL
+        val strikeXp = strikeCount * XP_PER_STRIKE
+        val personBaseXp = personCount * XP_PER_PERSON_BASE
+        val personSizeBonusXp = largePersonBonusCount * XP_PER_PERSON_SIZE_BONUS
+        val total = deflameXp + girlXp + strikeXp + personBaseXp + personSizeBonusXp
+
+        return RetroactiveXpBreakdown(
+            trackingStartDate = null,
+            deflameCount = deflameCount,
+            girlCount = girlCount,
+            strikeCount = strikeCount,
+            personCount = personCount,
+            largePersonBonusCount = largePersonBonusCount,
+            deflameXp = deflameXp,
+            girlXp = girlXp,
+            strikeXp = strikeXp,
+            personBaseXp = personBaseXp,
+            personSizeBonusXp = personSizeBonusXp,
+            totalTelemetryXp = total,
+            deltaCreditedXp = 0L
+        )
+    }
+
+    /**
+     * Scans all-time user telemetry (when no start-date filter is active) and idempotently
+     * credits any uncredited XP up to [maxOf(prevCredited, computed.totalTelemetryXp)].
+     */
+    @Synchronized
+    fun syncAllTimeTelemetry(
+        context: Context,
+        flameLogs: List<FlameLogEntry>,
+        strikeEvents: List<StrikeEvent>,
+        individuals: List<Individual>
+    ): RetroactiveXpBreakdown {
+        init(context)
+        RoadmapManager.init(context)
+
+        val baselineResetAt = getPrefs(context).getLong(KEY_BASELINE_RESET_AT_MILLIS, 0L)
+        val computed = calculateAllTimeTelemetryFromLogs(
+            flameLogs = flameLogs,
+            strikeEvents = strikeEvents,
+            individuals = individuals,
+            minTimestampExclusiveMillis = baselineResetAt
+        )
+
+        val prevCredited = _creditedTelemetryXp.value
+        val targetCredited = maxOf(prevCredited, computed.totalTelemetryXp)
+        val delta = targetCredited - prevCredited
+
+        if (delta > 0L) {
+            val partsAr = buildList {
+                if (computed.strikeCount > 0) add("${computed.strikeCount} سترايك")
+                if (computed.deflameCount > 0) add("${computed.deflameCount} Deflame")
+                if (computed.girlCount > 0) add("${computed.girlCount} Girl")
+                if (computed.personCount > 0) add("${computed.personCount} أفراد")
+            }.joinToString(" • ").ifBlank { "مزامنة السجلات الفعلية" }
+            val partsEn = buildList {
+                if (computed.strikeCount > 0) add("${computed.strikeCount} strikes")
+                if (computed.deflameCount > 0) add("${computed.deflameCount} Deflame")
+                if (computed.girlCount > 0) add("${computed.girlCount} Girl")
+                if (computed.personCount > 0) add("${computed.personCount} persons")
+            }.joinToString(" • ").ifBlank { "Actual telemetry sync" }
+            RoadmapManager.addXp(
+                context = context,
+                amount = delta,
+                category = XpSourceCategory.RETROACTIVE,
+                concernedParty = "مزامنة التقدم الفعلي",
+                concernedPartyEn = "Actual Telemetry Sync",
+                detail = partsAr,
+                detailEn = partsEn
+            )
+            _creditedTelemetryXp.value = targetCredited
+            getPrefs(context).edit()
+                .putLong(KEY_CREDITED_TELEMETRY_XP, targetCredited)
+                .apply()
+        }
+
+        val result = computed.copy(deltaCreditedXp = delta)
+        _lastBreakdown.value = result
+        return result
+    }
+
+    /**
      * Computes exact XP earned from Flame logs (DEFLAME, GIRL), Strike events, and added Individuals
      * starting strictly at 00:00:00 local time on each element's start date up to 23:59:59.999 on
      * its end date (unbounded at end when end date is null).
@@ -260,7 +399,9 @@ object XpCalculationEngine {
         girlStartDate: String? = trackingStartDate,
         girlEndDate: String? = trackingEndDate,
         deflameStartDate: String? = trackingStartDate,
-        deflameEndDate: String? = trackingEndDate
+        deflameEndDate: String? = trackingEndDate,
+        includeAllHistoricalStrikes: Boolean = false,
+        includeAllIndividuals: Boolean = false
     ): RetroactiveXpBreakdown {
         if (trackingStartDate.isNullOrBlank()) {
             return RetroactiveXpBreakdown(trackingStartDate = null)
@@ -293,13 +434,19 @@ object XpCalculationEngine {
             }
             .sumOf { it.actionCount.coerceAtLeast(1) }
 
-        val relevantStrikes = strikeEvents.filter {
-            it.date >= effStrikesStartStr && (effStrikesEndStr.isNullOrBlank() || it.date <= effStrikesEndStr)
+        val relevantStrikes = strikeEvents.filter { ev ->
+            val inDateWindow = ev.date >= effStrikesStartStr && (effStrikesEndStr.isNullOrBlank() || ev.date <= effStrikesEndStr)
+            val isHistoricalEntry = ev.strikeType.startsWith("Historical", ignoreCase = true)
+            inDateWindow || (includeAllHistoricalStrikes && isHistoricalEntry)
         }
         val strikeCount = relevantStrikes.sumOf { it.count.coerceAtLeast(1) }
 
-        val relevantPersons = individuals.filter {
-            it.updatedAt >= startMillis && (endMillis == null || it.updatedAt <= endMillis)
+        val relevantPersons = if (includeAllIndividuals) {
+            individuals
+        } else {
+            individuals.filter {
+                it.updatedAt >= startMillis && (endMillis == null || it.updatedAt <= endMillis)
+            }
         }
         val personCount = relevantPersons.size
         val largePersonBonusCount = relevantPersons.count { it.size > PERSON_SIZE_BONUS_THRESHOLD }
@@ -349,7 +496,9 @@ object XpCalculationEngine {
         girlStartDate: String? = trackingStartDate,
         girlEndDate: String? = trackingEndDate,
         deflameStartDate: String? = trackingStartDate,
-        deflameEndDate: String? = trackingEndDate
+        deflameEndDate: String? = trackingEndDate,
+        includeAllHistoricalStrikes: Boolean = false,
+        includeAllIndividuals: Boolean = false
     ): RetroactiveXpBreakdown {
         init(context)
         RoadmapManager.init(context)
@@ -369,7 +518,9 @@ object XpCalculationEngine {
             girlStartDate = girlStartDate,
             girlEndDate = girlEndDate,
             deflameStartDate = deflameStartDate,
-            deflameEndDate = deflameEndDate
+            deflameEndDate = deflameEndDate,
+            includeAllHistoricalStrikes = includeAllHistoricalStrikes,
+            includeAllIndividuals = includeAllIndividuals
         )
 
         val prevCredited = _creditedTelemetryXp.value
@@ -409,6 +560,7 @@ object XpCalculationEngine {
         getPrefs(context).edit()
             .putLong(KEY_CREDITED_TELEMETRY_XP, targetCredited)
             .putString(KEY_LAST_SYNCED_START_DATE, trackingStartDate)
+            .remove(KEY_BASELINE_RESET_AT_MILLIS)
             .apply()
 
         val result = computed.copy(deltaCreditedXp = delta)
@@ -479,6 +631,7 @@ object XpCalculationEngine {
             } else if (replaceExisting) {
                 remove(KEY_LAST_SYNCED_START_DATE)
             }
+            remove(KEY_BASELINE_RESET_AT_MILLIS)
             apply()
         }
         if (importedDate.isNotEmpty()) {

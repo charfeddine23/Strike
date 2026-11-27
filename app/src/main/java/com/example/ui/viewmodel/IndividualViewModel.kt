@@ -412,27 +412,44 @@ class IndividualViewModel(
                 repository.normalizeBatchStrikeEventsToLiteral()
                 val latestStrikeDate = repository.getLatestStrikeDate()
                 FlameManager.evaluateDailyInactivity(application, latestStrikeDate)
-                val trackingStartDate = FlameManager.getStreakStartDate(application)
-            if (!trackingStartDate.isNullOrBlank()) {
-                val cfg = FlameManager.getSavedRecalculationConfig(application)
-                val endDate = FlameManager.getStreakEndDate(application)
-                XpCalculationEngine.syncRetroactiveTelemetry(
-                    context = application,
-                    trackingStartDate = trackingStartDate,
-                    flameLogs = FlameManager.flameLogs.value,
-                    strikeEvents = repository.getAllStrikeEventsList(),
-                    individuals = repository.getAllIndividualsList(),
-                    recalculateExact = false,
-                    trackingEndDate = endDate,
-                    strikesStartDate = cfg.strikesRange?.takeIf { it.isCustom }?.startDate ?: trackingStartDate,
-                    strikesEndDate = cfg.strikesRange?.takeIf { it.isCustom }?.endDate ?: endDate,
-                    girlStartDate = cfg.girlRange?.takeIf { it.isCustom }?.startDate ?: trackingStartDate,
-                    girlEndDate = cfg.girlRange?.takeIf { it.isCustom }?.endDate ?: endDate,
-                    deflameStartDate = cfg.deflameRange?.takeIf { it.isCustom }?.startDate ?: trackingStartDate,
-                    deflameEndDate = cfg.deflameRange?.takeIf { it.isCustom }?.endDate ?: endDate
-                )
+                syncTelemetryWithEngine(recalculateExactIfDated = false)
             }
-            }
+        }
+    }
+
+    private suspend fun syncTelemetryWithEngine(recalculateExactIfDated: Boolean = false) {
+        val appCtx = getApplication<Application>()
+        val trackingStartDate = FlameManager.getStreakStartDate(appCtx)
+        val flameLogsList = FlameManager.flameLogs.value
+        val strikeEventsList = repository.getAllStrikeEventsList()
+        val individualsList = repository.getAllIndividualsList()
+        if (!trackingStartDate.isNullOrBlank()) {
+            val cfg = FlameManager.getSavedRecalculationConfig(appCtx)
+            val endDate = FlameManager.getStreakEndDate(appCtx)
+            XpCalculationEngine.syncRetroactiveTelemetry(
+                context = appCtx,
+                trackingStartDate = trackingStartDate,
+                flameLogs = flameLogsList,
+                strikeEvents = strikeEventsList,
+                individuals = individualsList,
+                recalculateExact = recalculateExactIfDated,
+                trackingEndDate = endDate,
+                strikesStartDate = cfg.strikesRange?.takeIf { it.isCustom }?.startDate ?: trackingStartDate,
+                strikesEndDate = cfg.strikesRange?.takeIf { it.isCustom }?.endDate ?: endDate,
+                girlStartDate = cfg.girlRange?.takeIf { it.isCustom }?.startDate ?: trackingStartDate,
+                girlEndDate = cfg.girlRange?.takeIf { it.isCustom }?.endDate ?: endDate,
+                deflameStartDate = cfg.deflameRange?.takeIf { it.isCustom }?.startDate ?: trackingStartDate,
+                deflameEndDate = cfg.deflameRange?.takeIf { it.isCustom }?.endDate ?: endDate,
+                includeAllHistoricalStrikes = (cfg.strikesRange?.isCustom != true),
+                includeAllIndividuals = true
+            )
+        } else {
+            XpCalculationEngine.syncAllTimeTelemetry(
+                context = appCtx,
+                flameLogs = flameLogsList,
+                strikeEvents = strikeEventsList,
+                individuals = individualsList
+            )
         }
     }
 
@@ -571,21 +588,25 @@ class IndividualViewModel(
             deflameRange = deflameRange
         )
         viewModelScope.launch {
-            XpCalculationEngine.syncRetroactiveTelemetry(
-                context = getApplication(),
-                trackingStartDate = result.startDate,
-                flameLogs = FlameManager.flameLogs.value,
-                strikeEvents = repository.getAllStrikeEventsList(),
-                individuals = repository.getAllIndividualsList(),
-                recalculateExact = true,
-                trackingEndDate = result.endDate,
-                strikesStartDate = result.strikesStartDate,
-                strikesEndDate = result.strikesEndDate,
-                girlStartDate = result.girlStartDate,
-                girlEndDate = result.girlEndDate,
-                deflameStartDate = result.deflameStartDate,
-                deflameEndDate = result.deflameEndDate
-            )
+            withContext(Dispatchers.IO) {
+                XpCalculationEngine.syncRetroactiveTelemetry(
+                    context = getApplication(),
+                    trackingStartDate = result.startDate,
+                    flameLogs = FlameManager.flameLogs.value,
+                    strikeEvents = repository.getAllStrikeEventsList(),
+                    individuals = repository.getAllIndividualsList(),
+                    recalculateExact = true,
+                    trackingEndDate = endDateStr?.takeIf { it.isNotBlank() }?.let { result.endDate },
+                    strikesStartDate = result.strikesStartDate,
+                    strikesEndDate = if (strikesRange?.isCustom == true) result.strikesEndDate else endDateStr?.takeIf { it.isNotBlank() }?.let { result.endDate },
+                    girlStartDate = result.girlStartDate,
+                    girlEndDate = result.girlEndDate,
+                    deflameStartDate = result.deflameStartDate,
+                    deflameEndDate = result.deflameEndDate,
+                    includeAllHistoricalStrikes = (strikesRange?.isCustom != true),
+                    includeAllIndividuals = true
+                )
+            }
             val formattedScore = if (result.resultingScore % 1.0 == 0.0) "${result.resultingScore.toInt()}" else String.format(Locale.US, "%.1f", result.resultingScore)
             val msg = when (currentLanguage.value) {
                 "ar" -> buildString {
@@ -1258,28 +1279,17 @@ class IndividualViewModel(
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) {
+                    val appCtx = getApplication<Application>()
+                    val oldHistTotal = repository.getHistoricalStrikesByYear(individualId).sumOf { it.second.coerceAtLeast(0) }
+                    val newHistTotal = entries.filter { it.first in 1950..2100 && it.second > 0 }.sumOf { it.second }
+                    val addedHistUnits = (newHistTotal - oldHistTotal).coerceAtLeast(0)
+                    val personName = repository.getIndividualById(individualId)?.fullName
                     repository.replaceHistoricalStrikesForIndividual(individualId, entries, lang)
                     try {
-                        val appCtx = getApplication<Application>()
-                        val startDate = FlameManager.getStreakStartDate(appCtx)
-                        if (!startDate.isNullOrBlank()) {
-                            val cfg = FlameManager.getSavedRecalculationConfig(appCtx)
-                            val endDate = FlameManager.getStreakEndDate(appCtx)
-                            XpCalculationEngine.syncRetroactiveTelemetry(
-                                context = appCtx,
-                                trackingStartDate = startDate,
-                                flameLogs = FlameManager.flameLogs.value,
-                                strikeEvents = repository.getAllStrikeEventsList(),
-                                individuals = repository.getAllIndividualsList(),
-                                recalculateExact = true,
-                                trackingEndDate = endDate,
-                                strikesStartDate = cfg.strikesRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                                strikesEndDate = cfg.strikesRange?.takeIf { it.isCustom }?.endDate ?: endDate,
-                                girlStartDate = cfg.girlRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                                girlEndDate = cfg.girlRange?.takeIf { it.isCustom }?.endDate ?: endDate,
-                                deflameStartDate = cfg.deflameRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                                deflameEndDate = cfg.deflameRange?.takeIf { it.isCustom }?.endDate ?: endDate
-                            )
+                        if (addedHistUnits > 0 && XpCalculationEngine.isBaselineResetActive(appCtx)) {
+                            XpCalculationEngine.onStrikeRecorded(appCtx, addedHistUnits, personName)
+                        } else {
+                            syncTelemetryWithEngine(recalculateExactIfDated = false)
                         }
                     } catch (_: Exception) {
                         // Telemetry recalculation is secondary; never abort saved historical strikes
@@ -1484,6 +1494,13 @@ class IndividualViewModel(
                     val savedId = repository.save(preparedIndividual)
                     val effectiveId = if (!isNewRecord) currentEditingId!! else savedId
 
+                    val appCtx = getApplication<Application>()
+                    val oldHistTotalForSave = if (!isNewRecord && currentEditingId != null && historicalChanged) {
+                        repository.getHistoricalStrikesByYear(currentEditingId).sumOf { it.second.coerceAtLeast(0) }
+                    } else {
+                        0
+                    }
+
                     if (isNewRecord) {
                         if (historicalSnapshot.isNotEmpty()) {
                             repository.recordHistoricalStrikes(effectiveId, historicalSnapshot, lang)
@@ -1492,7 +1509,6 @@ class IndividualViewModel(
                         repository.replaceHistoricalStrikesForIndividual(effectiveId, historicalSnapshot, lang)
                     }
 
-                    val appCtx = getApplication<Application>()
                     if (isNewRecord) {
                         RoadmapManager.onActionOccurred(appCtx, "PERSON")
                         XpCalculationEngine.onNewPersonAdded(
@@ -1504,25 +1520,12 @@ class IndividualViewModel(
 
                     if ((isNewRecord && historicalSnapshot.isNotEmpty()) || historicalChanged) {
                         try {
-                            val startDate = FlameManager.getStreakStartDate(appCtx)
-                            if (!startDate.isNullOrBlank()) {
-                                val cfg = FlameManager.getSavedRecalculationConfig(appCtx)
-                                val endDate = FlameManager.getStreakEndDate(appCtx)
-                                XpCalculationEngine.syncRetroactiveTelemetry(
-                                    context = appCtx,
-                                    trackingStartDate = startDate,
-                                    flameLogs = FlameManager.flameLogs.value,
-                                    strikeEvents = repository.getAllStrikeEventsList(),
-                                    individuals = repository.getAllIndividualsList(),
-                                    recalculateExact = historicalChanged,
-                                    trackingEndDate = endDate,
-                                    strikesStartDate = cfg.strikesRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                                    strikesEndDate = cfg.strikesRange?.takeIf { it.isCustom }?.endDate ?: endDate,
-                                    girlStartDate = cfg.girlRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                                    girlEndDate = cfg.girlRange?.takeIf { it.isCustom }?.endDate ?: endDate,
-                                    deflameStartDate = cfg.deflameRange?.takeIf { it.isCustom }?.startDate ?: startDate,
-                                    deflameEndDate = cfg.deflameRange?.takeIf { it.isCustom }?.endDate ?: endDate
-                                )
+                            val newHistTotal = historicalSnapshot.filter { it.first in 1950..2100 && it.second > 0 }.sumOf { it.second }
+                            val addedHistUnits = (newHistTotal - oldHistTotalForSave).coerceAtLeast(0)
+                            if (addedHistUnits > 0 && XpCalculationEngine.isBaselineResetActive(appCtx)) {
+                                XpCalculationEngine.onStrikeRecorded(appCtx, addedHistUnits, preparedIndividual.fullName)
+                            } else {
+                                syncTelemetryWithEngine(recalculateExactIfDated = false)
                             }
                         } catch (_: Exception) {
                             // Telemetry recalculation is secondary; never abort saved historical strikes
@@ -1847,6 +1850,9 @@ class IndividualViewModel(
                 isHapticFeedbackEnabled.value = securityPrefs.isHapticFeedbackEnabled
                 isAutoUpdateEnabled.value = securityPrefs.isAutoUpdateEnabled
                 _isAppUnlocked.value = true
+                withContext(Dispatchers.IO) {
+                    syncTelemetryWithEngine(recalculateExactIfDated = false)
+                }
             }
             emitMessage(result.message)
             onResult?.invoke(result)

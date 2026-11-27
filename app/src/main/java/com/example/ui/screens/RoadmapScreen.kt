@@ -42,7 +42,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.Landscape
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.MilitaryTech
+import androidx.compose.material.icons.filled.Park
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -53,6 +57,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,10 +88,14 @@ import com.example.data.roadmap.RoadmapStation
 import com.example.data.roadmap.TaskPools
 import com.example.ui.components.NeonAqua
 import com.example.ui.components.RoadmapAmbientBackground
+import com.example.ui.components.RoadmapBiome
 import com.example.ui.components.RoadmapBiomeBackdrop
 import com.example.ui.components.RoadmapBiomeSubmersionOverlay
 import com.example.ui.components.TopFrostedLiquidGlassVeil
 import com.example.ui.components.WavySnakeStationRow
+import com.example.ui.components.biomePrimaryAccent
+import com.example.ui.components.biomeSecondaryAccent
+import com.example.ui.components.blendBiomeColor
 import com.example.ui.components.edgeFadeInBlur
 import com.example.ui.components.roadmapBiomeStateForStation
 import com.example.ui.theme.DayCyan
@@ -101,6 +110,9 @@ import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.util.HapticHelper
+import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.util.Locale
 import kotlin.math.PI
 
 /**
@@ -135,39 +147,33 @@ fun RoadmapScreen(
     }
 
     val stageProgress = remember(totalXp) { RoadmapManager.getStageProgress(totalXp) }
-    val currentStationId = stageProgress.unlockedStationId
-    val frontierStationId = remember(currentStationId, claimedStations, stageProgress.nextStationId) {
-        when {
-            currentStationId <= 0 -> 1
-            claimedStations.contains(currentStationId) ->
-                stageProgress.nextStationId.coerceIn(1, TaskPools.TOTAL_STATIONS_COUNT)
-            else -> currentStationId
-        }
-    }
+    val currentStationId = stageProgress.unlockedStationId.coerceIn(0, TaskPools.TOTAL_STATIONS_COUNT)
+    val scrollAnchorStationId = currentStationId.coerceAtLeast(1)
     val roadmapListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
 
     val stations = remember(claimedStations, totalXp) {
         RoadmapManager.generateStations(totalXp, claimedStations)
     }
 
-    var lastAutoScrolledFrontier by remember { mutableIntStateOf(0) }
-    LaunchedEffect(selectedMainTab, frontierStationId) {
-        if (selectedMainTab == 0 && frontierStationId > 2 && lastAutoScrolledFrontier != frontierStationId) {
-            lastAutoScrolledFrontier = frontierStationId
-            val targetIdx = (frontierStationId - 2).coerceIn(0, stations.lastIndex)
+    var lastAutoScrolledLevel by remember { mutableIntStateOf(0) }
+    LaunchedEffect(selectedMainTab, currentStationId) {
+        if (selectedMainTab == 0 && currentStationId > 2 && lastAutoScrolledLevel != currentStationId) {
+            lastAutoScrolledLevel = currentStationId
+            val targetIdx = (currentStationId - 2).coerceIn(0, stations.lastIndex)
             roadmapListState.scrollToItem(targetIdx)
         }
     }
 
-    val rawContinuousStation by remember(selectedMainTab, frontierStationId, stations.size) {
+    val rawContinuousStation by remember(selectedMainTab, scrollAnchorStationId, stations.size) {
         derivedStateOf {
             if (selectedMainTab != 0) {
-                frontierStationId.toFloat().coerceIn(1f, TaskPools.TOTAL_STATIONS_COUNT.toFloat())
+                scrollAnchorStationId.toFloat().coerceIn(1f, TaskPools.TOTAL_STATIONS_COUNT.toFloat())
             } else {
                 val layoutInfo = roadmapListState.layoutInfo
                 val visible = layoutInfo.visibleItemsInfo
                 if (visible.isEmpty()) {
-                    frontierStationId.toFloat().coerceIn(1f, TaskPools.TOTAL_STATIONS_COUNT.toFloat())
+                    scrollAnchorStationId.toFloat().coerceIn(1f, TaskPools.TOTAL_STATIONS_COUNT.toFloat())
                 } else {
                     val first = visible.first()
                     val last = visible.last()
@@ -282,7 +288,7 @@ fun RoadmapScreen(
                                 roadmapListState = roadmapListState,
                                 nextStationId = stageProgress.nextStationId,
                                 currentStageXp = stageProgress.currentStageXp,
-                                frontierStationId = frontierStationId,
+                                unlockedStationId = currentStationId,
                                 currentLang = currentLang,
                                 isDarkTheme = isDarkTheme,
                                 topInset = topHeaderClearanceDp,
@@ -322,11 +328,12 @@ fun RoadmapScreen(
             )
         }
 
-        // FLOATING TRANSPARENT TOP TABS ONLY: [ Roadmap | Elite Missions ]
-        Row(
+        // FLOATING TOP HEADER: Current Level Banner (directly below Top Bar) + [ Roadmap | Elite Missions ]
+        Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
+                .widthIn(max = 600.dp)
                 .onSizeChanged { topHeaderHeightPx = it.height }
                 .padding(
                     top = scaffoldPadding.calculateTopPadding() + 6.dp,
@@ -334,39 +341,63 @@ fun RoadmapScreen(
                     end = 16.dp,
                     bottom = 6.dp
                 ),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            RoadmapPillTabButton(
-                label = stringResource(R.string.roadmap_tab_stations),
-                icon = Icons.Default.Timeline,
-                selected = selectedMainTab == 0,
-                accentColor = tabAquaAccent,
+            RoadmapCurrentLevelCard(
+                currentStationId = currentStationId,
+                stageProgress = stageProgress,
+                totalXp = totalXp,
+                currentLang = currentLang,
                 isDarkTheme = isDarkTheme,
-                onClick = {
+                onJumpToCurrentLevel = {
                     HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    selectedMainTab = 0
-                    onMainTabChanged(0)
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag("roadmap_tab_stations")
+                    if (selectedMainTab != 0) {
+                        selectedMainTab = 0
+                        onMainTabChanged(0)
+                    }
+                    coroutineScope.launch {
+                        val targetIdx = (currentStationId - 1).coerceIn(0, stations.lastIndex)
+                        roadmapListState.animateScrollToItem(targetIdx)
+                    }
+                }
             )
-            RoadmapPillTabButton(
-                label = stringResource(R.string.roadmap_tab_elite_missions),
-                icon = Icons.Default.MilitaryTech,
-                selected = selectedMainTab == 1,
-                accentColor = tabEliteAccent,
-                isDarkTheme = isDarkTheme,
-                onClick = {
-                    HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                    selectedMainTab = 1
-                    onMainTabChanged(1)
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .testTag("roadmap_tab_elite_missions")
-            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RoadmapPillTabButton(
+                    label = stringResource(R.string.roadmap_tab_stations),
+                    icon = Icons.Default.Timeline,
+                    selected = selectedMainTab == 0,
+                    accentColor = tabAquaAccent,
+                    isDarkTheme = isDarkTheme,
+                    onClick = {
+                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                        selectedMainTab = 0
+                        onMainTabChanged(0)
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("roadmap_tab_stations")
+                )
+                RoadmapPillTabButton(
+                    label = stringResource(R.string.roadmap_tab_elite_missions),
+                    icon = Icons.Default.MilitaryTech,
+                    selected = selectedMainTab == 1,
+                    accentColor = tabEliteAccent,
+                    isDarkTheme = isDarkTheme,
+                    onClick = {
+                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                        selectedMainTab = 1
+                        onMainTabChanged(1)
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("roadmap_tab_elite_missions")
+                )
+            }
         }
     }
 }
@@ -377,7 +408,7 @@ private fun RoadmapStationsTabContent(
     roadmapListState: LazyListState,
     nextStationId: Int,
     currentStageXp: Long,
-    frontierStationId: Int,
+    unlockedStationId: Int,
     currentLang: String,
     isDarkTheme: Boolean,
     topInset: Dp = 0.dp,
@@ -451,13 +482,12 @@ private fun RoadmapStationsTabContent(
         itemsIndexed(stations, key = { _, station -> station.id }) { index, station ->
             val prevState = stations.getOrNull(index - 1)?.state
             val nextState = stations.getOrNull(index + 1)?.state
-            val isFrontierStation = station.id == frontierStationId.coerceAtLeast(1)
 
             WavySnakeStationRow(
                 station = station,
                 prevStationState = prevState,
                 nextStationState = nextState,
-                isCurrentMilestone = isFrontierStation,
+                unlockedStationId = unlockedStationId,
                 currentLang = currentLang,
                 pulseScale = pulseScale,
                 orbitRotation = orbitRotation,
@@ -469,6 +499,227 @@ private fun RoadmapStationsTabContent(
                 currentStageXp = currentStageXp,
                 isDarkTheme = isDarkTheme,
                 onClaim = { onClaimStation(station.id) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun RoadmapCurrentLevelCard(
+    currentStationId: Int,
+    stageProgress: RoadmapManager.StageXpProgress,
+    totalXp: Long,
+    currentLang: String,
+    isDarkTheme: Boolean,
+    onJumpToCurrentLevel: () -> Unit
+) {
+    val isAr = currentLang == "ar"
+    val isFr = currentLang == "fr"
+    val totalStations = TaskPools.TOTAL_STATIONS_COUNT
+    val safeLevel = currentStationId.coerceIn(0, totalStations)
+    val biomeState = remember(safeLevel) {
+        roadmapBiomeStateForStation(safeLevel.toFloat().coerceAtLeast(1f))
+    }
+    val biomePrimary = biomePrimaryAccent(biomeState, isDarkTheme)
+    val biomeSecondary = biomeSecondaryAccent(biomeState, isDarkTheme)
+    val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
+
+    val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
+    val xpFormatted = remember(totalXp) { nf.format(totalXp.coerceAtLeast(0L)) }
+    val stageXpFormatted = remember(stageProgress) { nf.format(stageProgress.currentStageXp) }
+    val stageReqFormatted = remember(stageProgress) { nf.format(stageProgress.nextStageRequiredXp) }
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = stageProgress.progressFraction.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        label = "roadmap_current_level_progress"
+    )
+
+    val biomeIcon = when (biomeState.dominantBiome) {
+        RoadmapBiome.GLACIAL -> Icons.Default.AcUnit
+        RoadmapBiome.ROCKY -> Icons.Default.Landscape
+        RoadmapBiome.FOREST -> Icons.Default.Park
+        RoadmapBiome.VOLCANIC -> Icons.Default.LocalFireDepartment
+    }
+    val biomeName = when (biomeState.dominantBiome) {
+        RoadmapBiome.GLACIAL -> when {
+            isAr -> "القمم الجليدية"
+            isFr -> "Sommets Glaciaux"
+            else -> "Glacial Peaks"
+        }
+        RoadmapBiome.ROCKY -> when {
+            isAr -> "المرتفعات الصخرية"
+            isFr -> "Crêtes Rocheuses"
+            else -> "Rocky Ridge"
+        }
+        RoadmapBiome.FOREST -> when {
+            isAr -> "الغابة الكثيفة"
+            isFr -> "Forêt Dense"
+            else -> "Emerald Forest"
+        }
+        RoadmapBiome.VOLCANIC -> when {
+            isAr -> "القلب البركاني"
+            isFr -> "Cœur Volcanique"
+            else -> "Volcanic Core"
+        }
+    }
+
+    val cardBg = if (isDarkTheme) {
+        val top = blendBiomeColor(Color(0xEE092036), Color(0xEE1F171C), Color(0xEE082319), Color(0xEE2B0A07), biomeState)
+        val bot = blendBiomeColor(Color(0xEA061221), Color(0xEA120F14), Color(0xEA05150F), Color(0xEA170504), biomeState)
+        Brush.verticalGradient(listOf(top, bot))
+    } else {
+        val bot = blendBiomeColor(Color(0xF6DDF2FE), Color(0xF6F3E7D7), Color(0xF6DCFCE7), Color(0xF6FFE3D6), biomeState)
+        Brush.verticalGradient(listOf(Color(0xFCFFFFFF), bot))
+    }
+    val cardBorder = Brush.linearGradient(
+        listOf(
+            biomePrimary.copy(alpha = if (isDarkTheme) 0.78f else 0.84f),
+            biomeSecondary.copy(alpha = if (isDarkTheme) 0.50f else 0.56f),
+            amberAccent.copy(alpha = 0.42f)
+        )
+    )
+    val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
+    val mutedColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .minimumInteractiveComponentSize()
+            .clip(RoundedCornerShape(18.dp))
+            .background(cardBg)
+            .border(1.25.dp, cardBorder, RoundedCornerShape(18.dp))
+            .clickable(onClick = onJumpToCurrentLevel)
+            .padding(horizontal = 12.dp, vertical = 9.dp)
+            .testTag("roadmap_current_level_card"),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(biomePrimary.copy(alpha = if (isDarkTheme) 0.22f else 0.14f))
+                        .border(1.2.dp, biomePrimary.copy(alpha = 0.85f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = biomeIcon,
+                        contentDescription = null,
+                        tint = biomePrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(9.dp))
+                Column {
+                    Text(
+                        text = when {
+                            isAr -> "مستواي الحالي"
+                            isFr -> "Niveau actuel"
+                            else -> "Current Level"
+                        },
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = mutedColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "LVL $safeLevel / $totalStations",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = PlusJakartaSans,
+                        color = titleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("roadmap_current_level_badge")
+                    )
+                }
+            }
+
+            Column(horizontalAlignment = Alignment.End) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(biomePrimary.copy(alpha = if (isDarkTheme) 0.16f else 0.12f))
+                        .border(0.9.dp, biomePrimary.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = biomeName,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = biomePrimary,
+                        maxLines = 1
+                    )
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "$xpFormatted XP",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontFamily = PlusJakartaSans,
+                    color = biomeSecondary
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (isDarkTheme) Color(0x451E293B) else Color(0xFFE2E8F0))
+                    .testTag("roadmap_current_level_progress_bar")
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(
+                            if (stageProgress.currentStageXp > 0L || safeLevel >= totalStations) {
+                                animatedProgress.coerceAtLeast(0.03f)
+                            } else {
+                                0f
+                            }
+                        )
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Brush.horizontalGradient(listOf(biomePrimary, biomeSecondary, amberAccent)))
+                )
+            }
+
+            Text(
+                text = if (safeLevel >= totalStations) {
+                    when {
+                        isAr -> "الحد الأقصى"
+                        isFr -> "Max"
+                        else -> "Max"
+                    }
+                } else {
+                    when {
+                        isAr -> "م ${stageProgress.nextStationId}: $stageXpFormatted / $stageReqFormatted XP"
+                        isFr -> "S${stageProgress.nextStationId}: $stageXpFormatted / $stageReqFormatted XP"
+                        else -> "LVL ${stageProgress.nextStationId}: $stageXpFormatted / $stageReqFormatted XP"
+                    }
+                },
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = mutedColor,
+                maxLines = 1
             )
         }
     }

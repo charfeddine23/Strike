@@ -45,7 +45,8 @@ fun GlowingWavyRoadmapSegmentCanvas(
     modifier: Modifier = Modifier,
     flowPhase: Float = 0f,
     glowPulse: Float = 0.85f,
-    darkTheme: Boolean = LocalAppDarkTheme.current
+    darkTheme: Boolean = LocalAppDarkTheme.current,
+    showTopHalfForStation1: Boolean = false
 ) {
     val biomeState = roadmapBiomeStateForStation(stationId.toFloat())
     val prominence = maxOf(
@@ -246,7 +247,7 @@ fun GlowingWavyRoadmapSegmentCanvas(
             }
         }
 
-        if (stationId > 1) {
+        if (stationId > 1 || (stationId == 1 && showTopHalfForStation1)) {
             drawTrackHalf(
                 startStep = 0,
                 endStep = stepsPerHalf,
