@@ -201,7 +201,7 @@ fun TasksScreen(
     } else {
         46.dp
     }
-    val tasksTopFadeHeightDp = topHeaderClearanceDp + periodChipsRowDp + 22.dp
+    val tasksTopFadeHeightDp = topHeaderClearanceDp + periodChipsRowDp + 46.dp
 
     Box(
         modifier = modifier
@@ -350,8 +350,8 @@ fun TasksScreen(
                                 .edgeFadeInBlur(
                                     topHeight = tasksTopFadeHeightDp,
                                     bottomHeight = 0.dp,
-                                    blurRadius = 22.dp,
-                                    maxEdgeFraction = 0.48f
+                                    blurRadius = 24.dp,
+                                    maxEdgeFraction = 0.52f
                                 )
                         ) {
                             LazyColumn(

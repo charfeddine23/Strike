@@ -238,7 +238,7 @@ fun RoadmapScreen(
     } else {
         scaffoldPadding.calculateTopPadding() + 70.dp
     }
-    val roadmapTopFadeHeightDp = topHeaderClearanceDp + 18.dp
+    val roadmapTopFadeHeightDp = topHeaderClearanceDp + 34.dp
 
     Box(
         modifier = modifier
@@ -290,7 +290,7 @@ fun RoadmapScreen(
                                 .edgeFadeInBlur(
                                     topHeight = roadmapTopFadeHeightDp,
                                     bottomHeight = 0.dp,
-                                    blurRadius = 22.dp,
+                                    blurRadius = 24.dp,
                                     maxEdgeFraction = 0.48f
                                 )
                         ) {
@@ -344,19 +344,19 @@ fun RoadmapScreen(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .widthIn(max = 600.dp)
-                .padding(
-                    top = scaffoldPadding.calculateTopPadding() + 6.dp,
-                    start = 16.dp,
-                    end = 16.dp
-                ),
+                .widthIn(max = 600.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onSizeChanged { topHeaderHeightPx = it.height }
-                    .padding(bottom = 4.dp),
+                    .padding(
+                        top = scaffoldPadding.calculateTopPadding() + 6.dp,
+                        start = 16.dp,
+                        end = 16.dp,
+                        bottom = 4.dp
+                    ),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -412,6 +412,7 @@ fun RoadmapScreen(
 
             AnimatedVisibility(
                 visible = isBiomeMenuExpanded && selectedMainTab == 0,
+                modifier = Modifier.padding(horizontal = 16.dp),
                 enter = fadeIn(tween(150)) + expandVertically(tween(180)),
                 exit = fadeOut(tween(120)) + shrinkVertically(tween(150))
             ) {

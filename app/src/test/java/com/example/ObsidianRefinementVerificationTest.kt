@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.flame.FlameManager
 import com.example.data.local.AppDatabase
@@ -338,22 +339,25 @@ class ObsidianRefinementVerificationTest {
         val eternalChipBounds = composeRule.onNodeWithTag("period_chip_eternal").performScrollTo().assertIsDisplayed().getBoundsInRoot()
         val roadmapFadeVeilBounds = composeRule.onNodeWithTag("roadmap_expanded_fade_veil").assertIsDisplayed().getBoundsInRoot()
         assertTrue(
-            "Tasks expanded fade-to-liquid-glass (${roadmapFadeVeilBounds.bottom}) must extend down past Eternal chip (${eternalChipBounds.bottom})",
-            roadmapFadeVeilBounds.bottom >= eternalChipBounds.bottom
+            "Tasks expanded fade-to-liquid-glass (${roadmapFadeVeilBounds.bottom}) must extend below Daily/Weekly/Monthly/Eternal chips (${eternalChipBounds.bottom})",
+            roadmapFadeVeilBounds.bottom >= eternalChipBounds.bottom + 30.dp
         )
 
-        // Tasks -> Tasks Ledger: verify expanded fade veil covers period filters & clears TopBar
+        // Tasks -> Tasks Ledger: verify Completed/Uncompleted/All segments are removed & expanded fade veil covers period chips cleanly
         composeRule.onNodeWithTag("tasks_hub_tab_ledger").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("tasks_ledger_screen").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("ledger_filter_completed").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("ledger_filter_uncompleted").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("ledger_filter_all").fetchSemanticsNodes().size)
         composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
         composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
         composeRule.onNodeWithTag("ledger_expanded_fade_veil").assertIsDisplayed()
         val ledgerEternalBounds = composeRule.onNodeWithTag("ledger_period_eternal").performScrollTo().assertIsDisplayed().getBoundsInRoot()
         val ledgerFadeVeilBounds = composeRule.onNodeWithTag("ledger_expanded_fade_veil").getBoundsInRoot()
         assertTrue(
-            "Ledger expanded fade-to-liquid-glass (${ledgerFadeVeilBounds.bottom}) must cover Daily/Weekly/Monthly/Eternal chips (${ledgerEternalBounds.bottom})",
-            ledgerFadeVeilBounds.bottom >= ledgerEternalBounds.bottom
+            "Ledger expanded fade-to-liquid-glass (${ledgerFadeVeilBounds.bottom}) must extend below Daily/Weekly/Monthly/Eternal chips (${ledgerEternalBounds.bottom})",
+            ledgerFadeVeilBounds.bottom >= ledgerEternalBounds.bottom + 30.dp
         )
         assertEquals(0, composeRule.onAllNodesWithTag("ledger_back_btn").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("ledger_screen_title").fetchSemanticsNodes().size)

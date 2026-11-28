@@ -54,7 +54,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.TaskLedgerEntry
 import com.example.data.roadmap.TaskPeriod
-import com.example.ui.components.ElectricMint
 import com.example.ui.components.LedgerTaskCard
 import com.example.ui.components.LiquidGlassCard
 import com.example.ui.components.NeonAqua
@@ -85,8 +84,7 @@ import kotlinx.coroutines.delay
  * Full-screen dedicated Tasks Ledger ("دفتر المهام"):
  * 1. Top bar: Title "دفتر المهام" with Back action & overall badge
  * 2. Two stat containers: Completed Tasks count & Uncompleted Tasks count
- * 3. Status filter row: منجزة | غير منجزة | الكل
- * 4. Period filter row: اليومية | الأسبوعية | الشهرية | الأبدية | الكل
+ * 3. Period filter row: اليومية | الأسبوعية | الشهرية | الأبدية | الكل
  * 5. Expanded task list occupying the remaining vertical space
  */
 @Composable
@@ -195,7 +193,6 @@ fun TasksLedgerContent(
     }
 
     val emeraldTone = if (isDarkTheme) NeonEmerald else DayEmerald
-    val mintTone = if (isDarkTheme) ElectricMint else DayEmerald
     val cyanTone = if (isDarkTheme) NeonCyan else DayCyan
     val violetTone = if (isDarkTheme) NeonViolet else DayPurple
     val orangeTone = if (isDarkTheme) WarmFireOrange else DayOrange
@@ -209,9 +206,9 @@ fun TasksLedgerContent(
     val ledgerContentStartDp = if (ledgerFilterHeightPx > 0) {
         topHeaderClearanceDp + with(density) { ledgerFilterHeightPx.toDp() }
     } else {
-        topHeaderClearanceDp + 160.dp
+        topHeaderClearanceDp + 116.dp
     }
-    val ledgerTopFadeHeightDp = ledgerContentStartDp + 18.dp
+    val ledgerTopFadeHeightDp = ledgerContentStartDp + 46.dp
 
     val dailyCount = remember(entries) { entries.count { it.task.period == TaskPeriod.DAILY } }
     val weeklyCount = remember(entries) { entries.count { it.task.period == TaskPeriod.WEEKLY } }
@@ -233,8 +230,8 @@ fun TasksLedgerContent(
                 .edgeFadeInBlur(
                     topHeight = ledgerTopFadeHeightDp,
                     bottomHeight = 0.dp,
-                    blurRadius = 22.dp,
-                    maxEdgeFraction = 0.50f
+                    blurRadius = 24.dp,
+                    maxEdgeFraction = 0.55f
                 )
         ) {
             if (filteredEntries.isEmpty()) {
@@ -375,64 +372,7 @@ fun TasksLedgerContent(
                 )
             }
 
-            // 3. STATUS FILTER ROW: منجزة | غير منجزة | الكل
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                LedgerFilterSegment(
-                    label = when {
-                        isAr -> "منجزة"
-                        isFr -> "Terminées"
-                        else -> "Completed"
-                    },
-                    selected = statusFilter == 1,
-                    accentColor = emeraldTone,
-                    isDarkTheme = isDarkTheme,
-                    testTag = "ledger_filter_completed",
-                    onClick = {
-                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                        statusFilter = 1
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                LedgerFilterSegment(
-                    label = when {
-                        isAr -> "غير منجزة"
-                        isFr -> "Restantes"
-                        else -> "Uncompleted"
-                    },
-                    selected = statusFilter == 2,
-                    accentColor = cyanTone,
-                    isDarkTheme = isDarkTheme,
-                    testTag = "ledger_filter_uncompleted",
-                    onClick = {
-                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                        statusFilter = 2
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                LedgerFilterSegment(
-                    label = when {
-                        isAr -> "الكل"
-                        isFr -> "Tout"
-                        else -> "All"
-                    },
-                    selected = statusFilter == 0,
-                    accentColor = mintTone,
-                    isDarkTheme = isDarkTheme,
-                    testTag = "ledger_filter_all",
-                    onClick = {
-                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                        statusFilter = 0
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // 4. PERIOD FILTER ROW: اليومية | الأسبوعية | الشهرية | الأبدية | الكل
+            // 3. PERIOD FILTER ROW: اليومية | الأسبوعية | الشهرية | الأبدية | الكل
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -593,45 +533,6 @@ private fun LedgerCountContainer(
                 modifier = Modifier.size(18.dp)
             )
         }
-    }
-}
-
-@Composable
-private fun LedgerFilterSegment(
-    label: String,
-    selected: Boolean,
-    accentColor: Color,
-    isDarkTheme: Boolean,
-    testTag: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val unselectedBg = if (isDarkTheme) Color(0x33162033) else DayGlassSurface
-    val unselectedBorder = if (isDarkTheme) Color(0x28FFFFFF) else Color(0xFFCBD5E1)
-    val unselectedText = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(11.dp))
-            .background(if (selected) accentColor.copy(alpha = if (isDarkTheme) 0.22f else 0.14f) else unselectedBg)
-            .border(
-                width = if (selected) 1.2.dp else 1.dp,
-                color = if (selected) accentColor else unselectedBorder,
-                shape = RoundedCornerShape(11.dp)
-            )
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp, horizontal = 8.dp)
-            .testTag(testTag),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            fontWeight = if (selected) FontWeight.Black else FontWeight.SemiBold,
-            color = if (selected) accentColor else unselectedText,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 

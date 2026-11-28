@@ -335,6 +335,12 @@ class RoadmapAndThemeEnhancementsTest {
             glacialBtnBounds.top >= tabsBounds.bottom && glacialBtnBounds.bottom <= eliteTabBounds.bottom + 4.dp
         )
 
+        val fadeVeilBounds = composeRule.onNodeWithTag("roadmap_expanded_fade_veil").assertIsDisplayed().getBoundsInRoot()
+        assertTrue(
+            "Expected top fade veil (${fadeVeilBounds.bottom}) to extend smoothly below Glacial Peaks button (${glacialBtnBounds.bottom})",
+            fadeVeilBounds.bottom >= glacialBtnBounds.bottom + 24.dp
+        )
+
         // Tapping Glacial Peaks button opens quick-jump biome menu, jumping to Rocky Ridge (176) and back to Glacial (1)
         composeRule.onNodeWithTag("roadmap_biome_glacial_btn").performClick()
         composeRule.waitForIdle()
