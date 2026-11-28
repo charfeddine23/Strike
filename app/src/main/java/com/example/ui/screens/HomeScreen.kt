@@ -204,7 +204,7 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .padding(vertical = 2.dp)
                         .testTag("home_flame_dna_row"),
-                    horizontalArrangement = Arrangement.spacedBy(32.dp, Alignment.CenterHorizontally),
+                    horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     GlowingFlameHeaderIcon(
@@ -212,14 +212,14 @@ fun HomeScreen(
                         onClick = onOpenFlame,
                         onLongClick2s = onLongPressFlame,
                         isDarkTheme = isDarkTheme,
-                        iconSize = 124.dp
+                        iconSize = 148.dp
                     )
 
                     DnaHeaderIcon(
                         onClick = onOpenDeviations,
                         isDarkTheme = isDarkTheme,
                         isHapticEnabled = isHapticEnabled,
-                        iconSize = 124.dp
+                        iconSize = 148.dp
                     )
                 }
             }

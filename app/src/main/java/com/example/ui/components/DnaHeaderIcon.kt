@@ -65,7 +65,7 @@ fun DnaHeaderIcon(
     modifier: Modifier = Modifier,
     isDarkTheme: Boolean = LocalAppDarkTheme.current,
     isHapticEnabled: Boolean = true,
-    iconSize: Dp = 124.dp
+    iconSize: Dp = 148.dp
 ) {
     val context = LocalContext.current
     val view = LocalView.current

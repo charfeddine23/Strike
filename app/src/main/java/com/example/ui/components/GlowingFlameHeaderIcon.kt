@@ -63,7 +63,7 @@ fun GlowingFlameHeaderIcon(
     modifier: Modifier = Modifier,
     isDarkTheme: Boolean = LocalAppDarkTheme.current,
     onLongClick2s: (() -> Unit)? = null,
-    iconSize: Dp = 124.dp
+    iconSize: Dp = 148.dp
 ) {
     val stage = getFlameStage(flameScore)
     val colors = getFlameColors(flameScore)
