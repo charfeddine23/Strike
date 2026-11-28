@@ -276,8 +276,17 @@ class ObsidianRefinementVerificationTest {
     fun topAndBottomBars_maintainTransparentOuterContainerAndFadeInBlurAcrossAllPages() {
         enterMainAppFromHeatmap()
 
-        // Home -> Records (Dashboard)
+        // Home -> Flame & DNA frameless duo above Roadmap Level, then Records (Dashboard)
         composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
+        val homeFlameBounds = composeRule.onNodeWithTag("header_flame_btn").assertIsDisplayed().getBoundsInRoot()
+        val homeDnaBounds = composeRule.onNodeWithTag("dna_header_icon").assertIsDisplayed().getBoundsInRoot()
+        val homeRoadmapBounds = composeRule.onNodeWithTag("home_roadmap_level_card").assertIsDisplayed().getBoundsInRoot()
+        assertTrue(homeRoadmapBounds.top >= homeFlameBounds.bottom)
+        assertTrue(homeRoadmapBounds.top >= homeDnaBounds.bottom)
+        assertTrue(
+            "Flame and DNA must sit side-by-side horizontally",
+            homeFlameBounds.right <= homeDnaBounds.left || homeDnaBounds.right <= homeFlameBounds.left
+        )
         composeRule.onNodeWithTag("home_records_btn").performClick()
         composeRule.waitForIdle()
         val dashTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
@@ -320,10 +329,10 @@ class ObsidianRefinementVerificationTest {
         val selectorABounds = composeRule.onNodeWithTag("selector_person_a").assertIsDisplayed().getBoundsInRoot()
         assertTrue("Comparison top selectors must start clear of TopBar", selectorABounds.top >= cmpTopBarBounds.bottom)
 
-        // Top Bar icons must NOT be wrapped in an enclosing pill container
+        // Top Bar icons must NOT be wrapped in an enclosing pill container, and Flame/DNA are removed from Top Bar permanently
         assertEquals(0, composeRule.onAllNodesWithTag("top_bar_telemetry_pill_container").fetchSemanticsNodes().size)
-        composeRule.onNodeWithTag("dna_header_icon").assertIsDisplayed()
-        composeRule.onNodeWithTag("header_flame_btn").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("dna_header_icon").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("header_flame_btn").fetchSemanticsNodes().size)
 
         // Tasks Hub & full-bleed Tasks viewport with expanded Fade-to-Liquid-Glass covering period chips (Daily/Weekly/Monthly/Eternal)
         composeRule.onNodeWithTag("nav_tab_tasks").performClick()

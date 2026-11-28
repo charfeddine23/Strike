@@ -302,17 +302,29 @@ class NavigationAndRoadmapTabsTest {
         composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
 
         val topBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
+        val flameBounds = composeRule.onNodeWithTag("header_flame_btn").assertIsDisplayed().getBoundsInRoot()
+        val dnaBounds = composeRule.onNodeWithTag("dna_header_icon").assertIsDisplayed().getBoundsInRoot()
         val roadmapBounds = composeRule.onNodeWithTag("home_roadmap_level_card").assertIsDisplayed().getBoundsInRoot()
         val comparisonBounds = composeRule.onNodeWithTag("home_comparison_btn").assertIsDisplayed().getBoundsInRoot()
-        val heatmapBounds = composeRule.onNodeWithTag("home_heatmap_card").assertIsDisplayed().getBoundsInRoot()
-        val recordsBounds = composeRule.onNodeWithTag("home_records_btn").assertIsDisplayed().getBoundsInRoot()
-        val addStrikeBounds = composeRule.onNodeWithTag("home_add_strike_btn").assertIsDisplayed().getBoundsInRoot()
 
-        // Vertical order: TopBar -> Roadmap Level -> Comparison -> (Heatmap & Records side-by-side) -> Add Strike
-        assertTrue(roadmapBounds.top >= topBarBounds.bottom)
+        // Top section vertical order: TopBar -> (Flame & DNA side-by-side) -> Roadmap Level -> Comparison
+        assertTrue(flameBounds.top >= topBarBounds.bottom)
+        assertTrue(dnaBounds.top >= topBarBounds.bottom)
+        assertTrue(
+            "Flame and DNA must sit side-by-side horizontally",
+            flameBounds.right <= dnaBounds.left || dnaBounds.right <= flameBounds.left
+        )
+        assertTrue(roadmapBounds.top >= flameBounds.bottom)
+        assertTrue(roadmapBounds.top >= dnaBounds.bottom)
         assertTrue(comparisonBounds.top >= roadmapBounds.bottom)
-        assertTrue(heatmapBounds.top >= comparisonBounds.bottom)
-        assertTrue(recordsBounds.top >= comparisonBounds.bottom)
+
+        // Scroll to lower section & verify Comparison -> (Heatmap & Records side-by-side) -> Add Strike
+        val addStrikeBounds = composeRule.onNodeWithTag("home_add_strike_btn").performScrollTo().assertIsDisplayed().getBoundsInRoot()
+        val comparisonLowerBounds = composeRule.onNodeWithTag("home_comparison_btn").getBoundsInRoot()
+        val heatmapBounds = composeRule.onNodeWithTag("home_heatmap_card").getBoundsInRoot()
+        val recordsBounds = composeRule.onNodeWithTag("home_records_btn").getBoundsInRoot()
+        assertTrue(heatmapBounds.top >= comparisonLowerBounds.bottom)
+        assertTrue(recordsBounds.top >= comparisonLowerBounds.bottom)
         assertTrue(addStrikeBounds.top >= heatmapBounds.bottom)
         assertTrue(addStrikeBounds.top >= recordsBounds.bottom)
         assertTrue(
@@ -321,7 +333,7 @@ class NavigationAndRoadmapTabsTest {
         )
 
         // 0. Tap Comparison button -> opens ComparisonScreen, then Back returns to Home
-        composeRule.onNodeWithTag("home_comparison_btn").performClick()
+        composeRule.onNodeWithTag("home_comparison_btn").performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("selector_person_a").assertIsDisplayed()
         composeRule.onNodeWithTag("selector_person_b").assertIsDisplayed()
@@ -330,7 +342,7 @@ class NavigationAndRoadmapTabsTest {
         composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
 
         // 1. Tap Heatmap tile -> opens First-Strike Heatmap, then swipe up back to Home
-        composeRule.onNodeWithTag("home_heatmap_card").performClick()
+        composeRule.onNodeWithTag("home_heatmap_card").performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("first_strike_heatmap_screen").assertIsDisplayed()
         composeRule.onNodeWithTag("heatmap_swipe_up_hide_btn").performClick()
@@ -338,7 +350,7 @@ class NavigationAndRoadmapTabsTest {
         composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
 
         // 2. Tap Records button -> opens old Records (DashboardScreen), then Back returns to Home
-        composeRule.onNodeWithTag("home_records_btn").performClick()
+        composeRule.onNodeWithTag("home_records_btn").performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("search_input").assertIsDisplayed()
         composeRule.onNodeWithTag("add_record_fab").assertIsDisplayed()
@@ -347,7 +359,7 @@ class NavigationAndRoadmapTabsTest {
         composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
 
         // 3. Tap Add Strike button -> opens moved StrikeScreen, then Back returns to Home
-        composeRule.onNodeWithTag("home_add_strike_btn").performClick()
+        composeRule.onNodeWithTag("home_add_strike_btn").performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("strike_button").assertIsDisplayed()
         composeRule.onNodeWithTag("strike_back_to_home_btn").performClick()
@@ -355,7 +367,7 @@ class NavigationAndRoadmapTabsTest {
         composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
 
         // 4. Tap Roadmap Level card -> opens RoadmapScreen
-        composeRule.onNodeWithTag("home_roadmap_level_card").performClick()
+        composeRule.onNodeWithTag("home_roadmap_level_card").performScrollTo().performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("roadmap_screen").assertIsDisplayed()
     }

@@ -128,10 +128,8 @@ import com.example.data.flame.ActiveShieldType
 import com.example.data.flame.FlameManager
 import com.example.data.update.AppUpdateState
 import com.example.ui.components.AppUpdateCardDialog
-import com.example.ui.components.DnaHeaderIcon
 import com.example.ui.components.DynamicStreakShieldHeaderButton
 import com.example.ui.components.FullscreenFingerprintUnlockScreen
-import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.LiquidGlassBackground
 import com.example.ui.components.LuxurySettingsMenuButton
 import com.example.ui.components.NeonAqua
@@ -456,7 +454,6 @@ fun LiquidGlassApp(
             topBar = {
                 LiquidGlassTopBar(
                     currentScreen = currentScreen,
-                    flameScore = flameScore,
                     isStreakShieldActive = shieldActuallyActive,
                     activeShieldType = effectiveActiveShieldType,
                     shieldRemainingMillis = currentShieldRemainingMillis,
@@ -470,9 +467,6 @@ fun LiquidGlassApp(
                     onOpenProfile = { currentScreen = AppScreen.PROFILE },
                     onOpenSettings = { showSettingsDialog = true },
                     onLongPressProfile5s = { viewModel.hardResetAllTaskCompletionStates() },
-                    onOpenFlame = { currentScreen = AppScreen.FLAME },
-                    onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
-                    onLongPressFlame = { showStartDateDialog = true },
                     onPullDownHeatmapDelta = { deltaRootY ->
                         curtainScope.launch {
                             heatmapCurtainProgress.snapTo(
@@ -578,6 +572,9 @@ fun LiquidGlassApp(
                     AppScreen.HOME -> HomeScreen(
                         viewModel = viewModel,
                         onOpenHeatmap = { animateCurtainTo(0f) },
+                        onOpenFlame = { currentScreen = AppScreen.FLAME },
+                        onLongPressFlame = { showStartDateDialog = true },
+                        onOpenDeviations = { currentScreen = AppScreen.DEVIATIONS },
                         onOpenComparison = { currentScreen = AppScreen.COMPARISON },
                         onOpenRecords = { currentScreen = AppScreen.DASHBOARD },
                         onOpenAddStrike = { currentScreen = AppScreen.STRIKE },
@@ -870,7 +867,6 @@ fun LiquidGlassApp(
 @Composable
 fun LiquidGlassTopBar(
     currentScreen: AppScreen,
-    flameScore: Double,
     isStreakShieldActive: Boolean = false,
     activeShieldType: ActiveShieldType = ActiveShieldType.NONE,
     shieldRemainingMillis: Long = 0L,
@@ -884,9 +880,6 @@ fun LiquidGlassTopBar(
     onOpenProfile: () -> Unit,
     onOpenSettings: () -> Unit,
     onLongPressProfile5s: () -> Unit = {},
-    onOpenFlame: () -> Unit,
-    onOpenDeviations: () -> Unit,
-    onLongPressFlame: () -> Unit = {},
     onPullDownHeatmapDelta: ((Float) -> Unit)? = null,
     onPullDownHeatmapEnd: ((Float) -> Unit)? = null,
     currentLang: String = "ar",
@@ -1079,7 +1072,7 @@ fun LiquidGlassTopBar(
                 }
             }
 
-            // Right/End Cluster: Borderless Shield, Flame, DNA + Luxury 3-Line Settings Button
+            // Right/End Cluster: Borderless Shield + Luxury 3-Line Settings Button
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1222,20 +1215,6 @@ fun LiquidGlassTopBar(
                     }
                 }
             }
-
-            // Adaptive Glowing Animated "Fire" Header Icon (centered between Shield & DNA)
-            GlowingFlameHeaderIcon(
-                flameScore = flameScore,
-                onClick = onOpenFlame,
-                onLongClick2s = onLongPressFlame,
-                isDarkTheme = isDarkTheme
-            )
-
-            // Sleek, vertical, 3D-styled DNA double helix icon
-            DnaHeaderIcon(
-                onClick = onOpenDeviations,
-                isDarkTheme = isDarkTheme
-            )
         }
 
                 // Luxury 3-stacked-lines Settings Menu Button at the outer right edge

@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.roadmap.RoadmapManager
 import com.example.data.roadmap.TaskPools
+import com.example.ui.components.DnaHeaderIcon
+import com.example.ui.components.GlowingFlameHeaderIcon
 import com.example.ui.components.RoadmapBiome
 import com.example.ui.components.biomePrimaryAccent
 import com.example.ui.components.biomeSecondaryAccent
@@ -89,6 +91,9 @@ import java.util.Locale
 fun HomeScreen(
     viewModel: IndividualViewModel,
     onOpenHeatmap: () -> Unit,
+    onOpenFlame: () -> Unit = {},
+    onLongPressFlame: () -> Unit = {},
+    onOpenDeviations: () -> Unit = {},
     onOpenComparison: () -> Unit = {},
     onOpenRecords: () -> Unit,
     onOpenAddStrike: () -> Unit,
@@ -102,6 +107,7 @@ fun HomeScreen(
     val isAr = currentLang == "ar"
     val isFr = currentLang == "fr"
 
+    val flameScore by viewModel.flameScore.collectAsStateWithLifecycle()
     val totalXp by viewModel.totalXp.collectAsStateWithLifecycle()
     val allIndividuals by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
@@ -186,12 +192,39 @@ fun HomeScreen(
             contentPadding = PaddingValues(
                 start = 16.dp,
                 end = 16.dp,
-                top = scaffoldPadding.calculateTopPadding() + 14.dp,
+                top = scaffoldPadding.calculateTopPadding() + 8.dp,
                 bottom = scaffoldPadding.calculateBottomPadding() + 20.dp
             ),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // 1. ROADMAP LEVEL CARD (Directly below Top Bar)
+            // 0. FRAMELESS LUXURY FLAME & DNA DUO (Side-by-side above Roadmap Level, zero frame/border)
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .testTag("home_flame_dna_row"),
+                    horizontalArrangement = Arrangement.spacedBy(38.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    GlowingFlameHeaderIcon(
+                        flameScore = flameScore,
+                        onClick = onOpenFlame,
+                        onLongClick2s = onLongPressFlame,
+                        isDarkTheme = isDarkTheme,
+                        iconSize = 88.dp
+                    )
+
+                    DnaHeaderIcon(
+                        onClick = onOpenDeviations,
+                        isDarkTheme = isDarkTheme,
+                        isHapticEnabled = isHapticEnabled,
+                        iconSize = 88.dp
+                    )
+                }
+            }
+
+            // 1. ROADMAP LEVEL CARD (Directly below Flame & DNA)
             item {
                 val roadmapBg = if (isDarkTheme) {
                     val top = blendBiomeColor(Color(0xE80A2239), Color(0xE821191D), Color(0xE809251A), Color(0xE82D0B07), biomeState)
