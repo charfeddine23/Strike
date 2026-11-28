@@ -23,7 +23,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -32,6 +31,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -50,10 +50,12 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Frameless, enlarged, ultra-high-precision volumetric 3D animated Flame hero for HomeScreen:
+ * Frameless, enlarged, ultra-high-precision & silky-smooth volumetric 3D Flame hero for HomeScreen:
  * - Zero box, zero border, zero circular frame (pure atmospheric radial bloom)
- * - 5-layer anatomical flame gradient (mantle -> outer body -> mid plasma -> incandescent core -> singularity)
- * - Razor-thin luminous rim filament, crystal/star flare detail, and 26 velocity-trailed micro-embers
+ * - Zero per-frame recompositions: all animation phases read strictly inside graphicsLayer & DrawScope
+ * - Zero per-frame Path allocations: pre-allocated reusable Paths for stutter-free 60/120fps motion
+ * - Pure C-infinity sinusoidal harmonics & travelling vertical phase wave (eliminates triangle-wave jerks)
+ * - 5-layer anatomical plasma rendering + 32 velocity-trailed micro-embers
  * - Supports 2-second hold detector to launch Streak Start Date Dialog
  */
 @Composable
@@ -69,44 +71,51 @@ fun GlowingFlameHeaderIcon(
     val colors = getFlameColors(flameScore)
 
     val infiniteTransition = rememberInfiniteTransition(label = "header_flame_anim")
-    val time by infiniteTransition.animateFloat(
+    // Continuous 0..2π phase cycle (no RepeatMode.Reverse sharp velocity reversals)
+    val phaseState = infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 2f * PI.toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(2600, easing = LinearEasing),
+            animation = tween(durationMillis = 4800, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "header_time"
+        label = "flame_phase"
     )
-
-    val pulseGlow by infiniteTransition.animateFloat(
-        initialValue = 0.86f,
-        targetValue = 1.14f,
+    // Secondary incommensurate ember/shimmer cycle for natural organic non-repetitive flame life
+    val emberPhaseState = infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2f * PI.toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(1350, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
+            animation = tween(durationMillis = 3600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
         ),
-        label = "header_pulse"
+        label = "flame_ember_phase"
     )
 
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
     var isHolding by remember { mutableStateOf(false) }
 
-    val pressScale by animateFloatAsState(
-        targetValue = if (isHolding) 1.14f else 1f,
-        animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow),
+    val pressScaleState = animateFloatAsState(
+        targetValue = if (isHolding) 1.13f else 1f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = Spring.StiffnessMediumLow),
         label = "flame_press_scale"
     )
 
-    // 26 precision micro-embers with speed multiplier, horizontal jitter phase, and color flag
+    // Pre-allocated Path objects to prevent per-frame GC allocation stutter
+    val mantlePath = remember { Path() }
+    val mainFlamePath = remember { Path() }
+    val midPath = remember { Path() }
+    val innerPath = remember { Path() }
+
+    // 32 precision rising embers with precomputed speed, horizontal anchor, and turbulence phase
     val microSparks = remember {
-        List(26) { i ->
-            Triple(
-                (i * 0.041f + 0.07f) % 1f,
-                1 + (i % 3),
-                i % 2 == 0
-            )
+        List(32) { i ->
+            val xRatio = (i * 0.033f + 0.05f) % 1f
+            val speed = 1 + (i % 3)
+            val isAltColor = i % 2 == 0
+            val phaseOffset = i * 0.37f
+            floatArrayOf(xRatio, speed.toFloat(), if (isAltColor) 1f else 0f, phaseOffset)
         }
     }
 
@@ -138,7 +147,19 @@ fun GlowingFlameHeaderIcon(
         modifier = modifier
             .minimumInteractiveComponentSize()
             .size(iconSize)
-            .scale(pressScale)
+            .graphicsLayer {
+                val breath = if (stage == FlameVisualStage.FROZEN_STATIC) {
+                    1f + 0.014f * sin(phaseState.value)
+                } else {
+                    1f + 0.024f * sin(phaseState.value * 2f)
+                }
+                val s = pressScaleState.value * breath
+                scaleX = s
+                scaleY = s
+                if (stage != FlameVisualStage.FROZEN_STATIC) {
+                    translationY = -1.6.dp.toPx() * sin(phaseState.value)
+                }
+            }
             .semantics {
                 role = Role.Button
                 contentDescription = "Flame System"
@@ -153,12 +174,21 @@ fun GlowingFlameHeaderIcon(
             val cx = w * 0.5f
             val cy = h * 0.55f
 
+            val t = phaseState.value
+            val tEmber = emberPhaseState.value
             val motion = if (stage == FlameVisualStage.FROZEN_STATIC) 0f else 1f
-            val swayPrimary = sin(time * 2f) * (w * 0.036f) * motion
-            val swaySecondary = cos(time * 3f) * (w * 0.022f) * motion
-            val swayTertiary = sin(time * 4f + 1.1f) * (w * 0.014f) * motion
 
-            // 1. Frameless multi-stop volumetric atmospheric aura (fades seamlessly to transparent before edge)
+            // Pure smooth sinusoidal breathing (zero velocity discontinuities)
+            val pulseGlow = 1f + 0.12f * sin(t * 2f) + 0.04f * cos(t * 3f)
+
+            // Travelling fluid wave along flame height (lower belly leads, mid twists, tip follows smoothly)
+            val bellyWave = sin(t * 2f) * (w * 0.015f) * motion
+            val midWave = (sin(t * 2f - 0.75f) * 0.70f + cos(t * 3f - 0.4f) * 0.30f) * (w * 0.024f) * motion
+            val tipWave = (sin(t * 2f - 1.50f) * 0.65f + sin(t * 4f - 0.9f) * 0.35f) * (w * 0.036f) * motion
+            val lickWave = cos(t * 3f - 1.1f) * (w * 0.020f) * motion
+            val heightBreath = 1f + 0.028f * sin(t * 3f) * motion
+
+            // 1. Frameless multi-stop volumetric atmospheric aura
             val auraPrimary = when (stage) {
                 FlameVisualStage.FROZEN_STATIC -> Color(0x5238BDF8)
                 FlameVisualStage.ICE_CRACKING -> Color(0x5C00E5FF)
@@ -168,96 +198,94 @@ fun GlowingFlameHeaderIcon(
                 FlameVisualStage.OBSIDIAN_PLASMA -> Color(0xFFE879F9).copy(alpha = (if (isDarkTheme) 0.58f else 0.38f) * pulseGlow)
             }
             val auraRadius = minOf(w, h) * 0.485f
+            val auraCenter = Offset(cx + bellyWave * 0.3f, cy - h * 0.03f)
             drawCircle(
                 brush = Brush.radialGradient(
                     0.0f to auraPrimary,
-                    0.38f to colors.second.copy(alpha = if (isDarkTheme) 0.22f else 0.14f),
-                    0.70f to colors.third.copy(alpha = if (isDarkTheme) 0.09f else 0.05f),
+                    0.36f to colors.second.copy(alpha = if (isDarkTheme) 0.22f else 0.14f),
+                    0.68f to colors.third.copy(alpha = if (isDarkTheme) 0.09f else 0.05f),
                     1.0f to Color.Transparent,
-                    center = Offset(cx, cy - h * 0.03f),
+                    center = auraCenter,
                     radius = auraRadius
                 ),
                 radius = auraRadius,
-                center = Offset(cx, cy - h * 0.03f)
+                center = auraCenter
             )
 
             val baseY = cy + h * 0.31f
-            val tipY = cy - h * 0.41f
+            val baseSpan = h * 0.72f * heightBreath
+            val tipY = baseY - baseSpan
             val flameHeight = baseY - tipY
             val flameWidth = w * 0.48f
-            val tipX = cx + swayPrimary
+            val tipX = cx + tipWave
 
-            // Soft ground thermal reflection pool (no box or border)
+            // Soft ground thermal reflection pool
             drawOval(
                 brush = Brush.radialGradient(
                     0.0f to colors.first.copy(alpha = if (isDarkTheme) 0.34f else 0.22f),
                     0.55f to colors.second.copy(alpha = if (isDarkTheme) 0.18f else 0.11f),
                     1.0f to Color.Transparent,
-                    center = Offset(cx, baseY + h * 0.015f),
+                    center = Offset(cx + bellyWave * 0.4f, baseY + h * 0.015f),
                     radius = flameWidth * 0.68f
                 ),
-                topLeft = Offset(cx - flameWidth * 0.56f, baseY - h * 0.035f),
+                topLeft = Offset(cx - flameWidth * 0.56f + bellyWave * 0.4f, baseY - h * 0.035f),
                 size = Size(flameWidth * 1.12f, h * 0.105f)
             )
 
-            // 2. Outer translucent plasma veil
-            val mantleScale = 1.13f + (pulseGlow - 1f) * 0.12f
+            // 2. Outer translucent plasma veil (pre-allocated Path)
+            val mantleScale = 1.12f + 0.035f * sin(t * 2f - 0.5f)
             val mantleWidth = flameWidth * mantleScale
             val mantleTipY = tipY - flameHeight * 0.075f
             val mantleBaseY = baseY + flameHeight * 0.025f
-            val mantlePath = Path().apply {
-                moveTo(cx, mantleBaseY)
-                cubicTo(
-                    cx - mantleWidth * 0.65f, cy + flameHeight * 0.18f,
-                    cx - mantleWidth * 0.46f, cy - flameHeight * 0.24f,
-                    tipX - swaySecondary * 0.45f, mantleTipY
-                )
-                cubicTo(
-                    cx + mantleWidth * 0.46f, cy - flameHeight * 0.24f,
-                    cx + mantleWidth * 0.65f, cy + flameHeight * 0.18f,
-                    cx, mantleBaseY
-                )
-                close()
-            }
+            mantlePath.reset()
+            mantlePath.moveTo(cx, mantleBaseY)
+            mantlePath.cubicTo(
+                cx - mantleWidth * 0.65f + bellyWave, cy + flameHeight * 0.18f,
+                cx - mantleWidth * 0.46f + midWave * 0.7f, cy - flameHeight * 0.24f,
+                tipX - lickWave * 0.35f, mantleTipY
+            )
+            mantlePath.cubicTo(
+                cx + mantleWidth * 0.46f + midWave * 0.7f, cy - flameHeight * 0.24f,
+                cx + mantleWidth * 0.65f + bellyWave, cy + flameHeight * 0.18f,
+                cx, mantleBaseY
+            )
+            mantlePath.close()
             drawPath(
                 path = mantlePath,
                 brush = Brush.verticalGradient(
-                    0.0f to colors.first.copy(alpha = 0.22f),
-                    0.48f to colors.second.copy(alpha = 0.26f),
-                    1.0f to colors.third.copy(alpha = 0.12f),
+                    0.0f to colors.first.copy(alpha = 0.21f),
+                    0.48f to colors.second.copy(alpha = 0.25f),
+                    1.0f to colors.third.copy(alpha = 0.11f),
                     startY = mantleTipY,
                     endY = mantleBaseY
                 )
             )
 
             // 3. Sculpted multi-tongue high-precision flame silhouette
-            val mainFlamePath = Path().apply {
-                moveTo(cx, baseY)
-                // Left lower curve into fine secondary left lick
-                cubicTo(
-                    cx - flameWidth * 0.58f, cy + flameHeight * 0.17f,
-                    cx - flameWidth * 0.52f, cy - flameHeight * 0.06f,
-                    cx - flameWidth * 0.28f + swaySecondary, cy - flameHeight * 0.24f
-                )
-                // Dip between left lick & tall central crest
-                cubicTo(
-                    cx - flameWidth * 0.17f, cy - flameHeight * 0.14f,
-                    cx - flameWidth * 0.13f + swayTertiary, cy - flameHeight * 0.34f,
-                    tipX, tipY
-                )
-                // Central crest down into fine right shoulder curl
-                cubicTo(
-                    cx + flameWidth * 0.18f + swayTertiary * 0.6f, cy - flameHeight * 0.30f,
-                    cx + flameWidth * 0.26f - swaySecondary * 0.5f, cy - flameHeight * 0.16f,
-                    cx + flameWidth * 0.34f - swaySecondary * 0.4f, cy - flameHeight * 0.20f
-                )
-                cubicTo(
-                    cx + flameWidth * 0.54f, cy - flameHeight * 0.02f,
-                    cx + flameWidth * 0.56f, cy + flameHeight * 0.18f,
-                    cx, baseY
-                )
-                close()
-            }
+            mainFlamePath.reset()
+            mainFlamePath.moveTo(cx, baseY)
+            mainFlamePath.cubicTo(
+                cx - flameWidth * 0.58f + bellyWave, cy + flameHeight * 0.17f,
+                cx - flameWidth * 0.52f + midWave * 0.75f, cy - flameHeight * 0.06f,
+                cx - flameWidth * 0.28f + lickWave, cy - flameHeight * 0.24f
+            )
+            mainFlamePath.cubicTo(
+                cx - flameWidth * 0.17f + midWave * 0.6f, cy - flameHeight * 0.14f,
+                cx - flameWidth * 0.12f + tipWave * 0.65f, cy - flameHeight * 0.34f,
+                tipX, tipY
+            )
+            mainFlamePath.cubicTo(
+                cx + flameWidth * 0.18f + tipWave * 0.60f, cy - flameHeight * 0.30f,
+                cx + flameWidth * 0.26f - lickWave * 0.45f, cy - flameHeight * 0.16f,
+                cx + flameWidth * 0.34f - lickWave * 0.35f, cy - flameHeight * 0.20f
+            )
+            mainFlamePath.cubicTo(
+                cx + flameWidth * 0.54f + midWave * 0.65f, cy - flameHeight * 0.02f,
+                cx + flameWidth * 0.56f + bellyWave, cy + flameHeight * 0.18f,
+                cx, baseY
+            )
+            mainFlamePath.close()
+
             drawPath(
                 path = mainFlamePath,
                 brush = Brush.verticalGradient(
@@ -270,49 +298,48 @@ fun GlowingFlameHeaderIcon(
                 )
             )
 
-            // Precision dual-pass luminous rim contour
+            // Dual-pass luminous rim contour
             drawPath(
                 path = mainFlamePath,
                 brush = Brush.verticalGradient(
-                    0.0f to Color.White.copy(alpha = 0.30f),
-                    0.55f to colors.first.copy(alpha = 0.22f),
+                    0.0f to Color.White.copy(alpha = 0.28f),
+                    0.55f to colors.first.copy(alpha = 0.20f),
                     1.0f to Color.Transparent,
                     startY = tipY,
                     endY = baseY
                 ),
-                style = Stroke(width = w * 0.018f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                style = Stroke(width = w * 0.017f, cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
             drawPath(
                 path = mainFlamePath,
                 brush = Brush.verticalGradient(
-                    0.0f to Color.White.copy(alpha = 0.72f),
-                    0.45f to colors.first.copy(alpha = 0.45f),
+                    0.0f to Color.White.copy(alpha = 0.74f),
+                    0.45f to colors.first.copy(alpha = 0.44f),
                     1.0f to Color.Transparent,
                     startY = tipY,
                     endY = baseY
                 ),
-                style = Stroke(width = w * 0.007f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                style = Stroke(width = w * 0.0065f, cap = StrokeCap.Round, join = StrokeJoin.Round)
             )
 
             // 4. Mid-plasma smooth tonal tongue
             val midTipY = cy - flameHeight * 0.28f
             val midBaseY = baseY - flameHeight * 0.03f
             val midWidth = flameWidth * 0.68f
-            val midTipX = cx + swayPrimary * 0.70f
-            val midPath = Path().apply {
-                moveTo(cx, midBaseY)
-                cubicTo(
-                    cx - midWidth * 0.58f, cy + flameHeight * 0.13f,
-                    cx - midWidth * 0.38f, cy - flameHeight * 0.12f,
-                    midTipX, midTipY
-                )
-                cubicTo(
-                    cx + midWidth * 0.38f, cy - flameHeight * 0.12f,
-                    cx + midWidth * 0.58f, cy + flameHeight * 0.13f,
-                    cx, midBaseY
-                )
-                close()
-            }
+            val midTipX = cx + midWave * 0.95f
+            midPath.reset()
+            midPath.moveTo(cx, midBaseY)
+            midPath.cubicTo(
+                cx - midWidth * 0.58f + bellyWave * 0.6f, cy + flameHeight * 0.13f,
+                cx - midWidth * 0.38f + midWave * 0.7f, cy - flameHeight * 0.12f,
+                midTipX, midTipY
+            )
+            midPath.cubicTo(
+                cx + midWidth * 0.38f + midWave * 0.7f, cy - flameHeight * 0.12f,
+                cx + midWidth * 0.58f + bellyWave * 0.6f, cy + flameHeight * 0.13f,
+                cx, midBaseY
+            )
+            midPath.close()
             drawPath(
                 path = midPath,
                 brush = Brush.verticalGradient(
@@ -328,21 +355,20 @@ fun GlowingFlameHeaderIcon(
             val innerTipY = cy - flameHeight * 0.16f
             val innerBaseY = baseY - flameHeight * 0.06f
             val innerWidth = flameWidth * 0.42f
-            val innerTipX = cx + swayPrimary * 0.45f
-            val innerPath = Path().apply {
-                moveTo(cx, innerBaseY)
-                cubicTo(
-                    cx - innerWidth * 0.56f, cy + flameHeight * 0.09f,
-                    cx - innerWidth * 0.28f, cy - flameHeight * 0.08f,
-                    innerTipX, innerTipY
-                )
-                cubicTo(
-                    cx + innerWidth * 0.28f, cy - flameHeight * 0.08f,
-                    cx + innerWidth * 0.56f, cy + flameHeight * 0.09f,
-                    cx, innerBaseY
-                )
-                close()
-            }
+            val innerTipX = cx + bellyWave * 0.85f + midWave * 0.35f
+            innerPath.reset()
+            innerPath.moveTo(cx, innerBaseY)
+            innerPath.cubicTo(
+                cx - innerWidth * 0.56f, cy + flameHeight * 0.09f,
+                cx - innerWidth * 0.28f + bellyWave * 0.5f, cy - flameHeight * 0.08f,
+                innerTipX, innerTipY
+            )
+            innerPath.cubicTo(
+                cx + innerWidth * 0.28f + bellyWave * 0.5f, cy - flameHeight * 0.08f,
+                cx + innerWidth * 0.56f, cy + flameHeight * 0.09f,
+                cx, innerBaseY
+            )
+            innerPath.close()
             drawPath(
                 path = innerPath,
                 brush = Brush.verticalGradient(
@@ -364,7 +390,7 @@ fun GlowingFlameHeaderIcon(
             val coreCenter = Offset(innerTipX, cy + flameHeight * 0.07f)
             if (stage == FlameVisualStage.OBSIDIAN_PLASMA) {
                 drawCircle(
-                    color = Color(0xFF22D3EE).copy(alpha = 0.35f),
+                    color = Color(0xFF22D3EE).copy(alpha = 0.34f * pulseGlow),
                     radius = w * 0.082f,
                     center = coreCenter
                 )
@@ -385,7 +411,6 @@ fun GlowingFlameHeaderIcon(
                     center = Offset(coreCenter.x - w * 0.018f, coreCenter.y - w * 0.018f)
                 )
             } else if (stage == FlameVisualStage.FROZEN_STATIC) {
-                // Crisp 6-pointed frost star crystal inside frozen flame
                 val starR = w * 0.056f
                 for (a in 0 until 3) {
                     val ang = a * (PI.toFloat() / 3f)
@@ -395,7 +420,7 @@ fun GlowingFlameHeaderIcon(
                         color = Color.White.copy(alpha = 0.95f),
                         start = Offset(coreCenter.x - dx, coreCenter.y - dy),
                         end = Offset(coreCenter.x + dx, coreCenter.y + dy),
-                        strokeWidth = w * 0.009f,
+                        strokeWidth = w * 0.0085f,
                         cap = StrokeCap.Round
                     )
                 }
@@ -405,71 +430,83 @@ fun GlowingFlameHeaderIcon(
                     center = coreCenter
                 )
             } else {
+                val coreGlowR = w * (0.092f + 0.012f * sin(t * 3f))
                 drawCircle(
                     brush = Brush.radialGradient(
                         0.0f to Color.White.copy(alpha = 0.98f),
                         0.45f to Color.White.copy(alpha = 0.55f),
                         1.0f to Color.Transparent,
                         center = coreCenter,
-                        radius = w * 0.095f
+                        radius = coreGlowR
                     ),
-                    radius = w * 0.095f,
+                    radius = coreGlowR,
                     center = coreCenter
                 )
-                // Delicate 4-point hot gleam
-                val gleamR = w * 0.060f
+                val gleamR = w * (0.058f + 0.009f * cos(t * 2f))
                 drawLine(
                     brush = Brush.horizontalGradient(
-                        listOf(Color.Transparent, Color.White.copy(alpha = 0.85f), Color.Transparent),
+                        listOf(Color.Transparent, Color.White.copy(alpha = 0.88f), Color.Transparent),
                         startX = coreCenter.x - gleamR,
                         endX = coreCenter.x + gleamR
                     ),
                     start = Offset(coreCenter.x - gleamR, coreCenter.y),
                     end = Offset(coreCenter.x + gleamR, coreCenter.y),
-                    strokeWidth = w * 0.007f,
+                    strokeWidth = w * 0.0065f,
                     cap = StrokeCap.Round
                 )
                 drawLine(
                     brush = Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.White.copy(alpha = 0.85f), Color.Transparent),
+                        listOf(Color.Transparent, Color.White.copy(alpha = 0.88f), Color.Transparent),
                         startY = coreCenter.y - gleamR * 1.25f,
                         endY = coreCenter.y + gleamR * 1.25f
                     ),
                     start = Offset(coreCenter.x, coreCenter.y - gleamR * 1.25f),
                     end = Offset(coreCenter.x, coreCenter.y + gleamR * 1.25f),
-                    strokeWidth = w * 0.007f,
+                    strokeWidth = w * 0.0065f,
                     cap = StrokeCap.Round
                 )
             }
 
-            // 7. 26 ultra-fine velocity-trailed rising embers & sparks
+            // 7. 32 silky velocity-trailed rising embers (strictly periodic 2π flutter)
             if (stage != FlameVisualStage.FROZEN_STATIC) {
-                for ((idx, spark) in microSparks.withIndex()) {
-                    val (xRatio, speed, isPink) = spark
-                    val sparkProgress = ((time * speed + idx * 0.29f) % (2f * PI.toFloat())) / (2f * PI.toFloat())
+                val twoPi = 2f * PI.toFloat()
+                val startY = baseY - flameHeight * 0.08f
+                val endY = tipY - h * 0.135f
+                val riseSpan = startY - endY
 
-                    val startY = baseY - flameHeight * 0.08f
-                    val endY = tipY - h * 0.13f
-                    val py = startY - sparkProgress * (startY - endY)
-                    val px = cx + (xRatio - 0.5f) * flameWidth * 1.18f + sin(sparkProgress * 6.5f + idx) * (w * 0.036f)
-                    val prevPy = (py + h * 0.022f).coerceAtMost(startY)
-                    val prevPx = px - cos(sparkProgress * 6.5f + idx) * (w * 0.008f)
+                for (idx in microSparks.indices) {
+                    val spark = microSparks[idx]
+                    val xRatio = spark[0]
+                    val speed = spark[1]
+                    val isAltColor = spark[2] > 0.5f
+                    val phaseOff = spark[3]
 
-                    val alpha = (sin(sparkProgress * PI.toFloat())).coerceIn(0f, 1f)
+                    val rawProg = ((tEmber * speed + phaseOff) % twoPi) / twoPi
+                    // Gentle ease-out ascent for lifelike buoyant spark deceleration
+                    val easedProg = 1f - (1f - rawProg) * (1f - rawProg) * 0.45f - (1f - rawProg) * 0.55f
+                    val py = startY - easedProg * riseSpan
+                    val flutterAngle = rawProg * twoPi + phaseOff
+                    val px = cx + (xRatio - 0.5f) * flameWidth * (1.05f + easedProg * 0.24f) +
+                        sin(flutterAngle) * (w * 0.032f)
+                    val prevPy = (py + h * 0.024f * (1.15f - easedProg * 0.5f)).coerceAtMost(startY)
+                    val prevPx = px - cos(flutterAngle) * (w * 0.007f)
+
+                    val alpha = (sin(rawProg * PI.toFloat())).coerceIn(0f, 1f)
                     val baseSparkColor = if (stage == FlameVisualStage.OBSIDIAN_PLASMA) {
-                        if (isPink) Color(0xFFE879F9) else Color(0xFF22D3EE)
-                    } else if (isPink) {
+                        if (isAltColor) Color(0xFFE879F9) else Color(0xFF22D3EE)
+                    } else if (isAltColor) {
                         Color(0xFFFB7185)
                     } else {
                         Color(0xFFF97316)
                     }
 
-                    val dotRadius = w * (0.0055f + (idx % 4) * 0.0028f)
-                    // Micro trail streak
+                    // Taper ember radius subtly near peak altitude
+                    val taper = 1f - easedProg * 0.35f
+                    val dotRadius = w * (0.005f + (idx % 4) * 0.0024f) * taper
                     drawLine(
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                baseSparkColor.copy(alpha = alpha * 0.75f),
+                                baseSparkColor.copy(alpha = alpha * 0.72f),
                                 Color.Transparent
                             ),
                             startY = py,
@@ -477,19 +514,17 @@ fun GlowingFlameHeaderIcon(
                         ),
                         start = Offset(px, py),
                         end = Offset(prevPx, prevPy),
-                        strokeWidth = dotRadius * 1.2f,
+                        strokeWidth = dotRadius * 1.15f,
                         cap = StrokeCap.Round
                     )
-                    // Soft ember bloom
                     drawCircle(
-                        color = baseSparkColor.copy(alpha = alpha * 0.34f),
-                        radius = dotRadius * 2.4f,
+                        color = baseSparkColor.copy(alpha = alpha * 0.32f),
+                        radius = dotRadius * 2.3f,
                         center = Offset(px, py)
                     )
-                    // Razor-sharp bright ember core
                     drawCircle(
-                        color = Color.White.copy(alpha = alpha * 0.72f),
-                        radius = dotRadius * 0.65f,
+                        color = Color.White.copy(alpha = alpha * 0.78f),
+                        radius = dotRadius * 0.62f,
                         center = Offset(px, py)
                     )
                     drawCircle(
