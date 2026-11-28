@@ -319,12 +319,40 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 
-        // Current Level card is removed from Cyber Roadmap; tabs sit cleanly directly below TopBar
+        // Merged Current Level + Glacial Peaks card sits directly below [Roadmap | Elite Missions] tabs
         val topBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
-        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_current_level_card").fetchSemanticsNodes().size)
-        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_current_level_badge", useUnmergedTree = true).fetchSemanticsNodes().size)
         val tabsBounds = composeRule.onNodeWithTag("roadmap_tab_stations").assertIsDisplayed().getBoundsInRoot()
         assertTrue(tabsBounds.top >= topBarBounds.bottom)
+
+        val levelCardBounds = composeRule.onNodeWithTag("roadmap_current_level_card").assertIsDisplayed().getBoundsInRoot()
+        assertTrue(
+            "Expected merged Level + Glacial Peaks card (${levelCardBounds.top}) below Roadmap tabs (${tabsBounds.bottom})",
+            levelCardBounds.top >= tabsBounds.bottom
+        )
+        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .assertTextContains("LVL 1 / 700", substring = false)
+
+        val glacialBtnBounds = composeRule.onNodeWithTag("roadmap_biome_glacial_btn").assertIsDisplayed().getBoundsInRoot()
+        assertTrue(
+            "Expected Glacial Peaks button to be merged inside Level card",
+            glacialBtnBounds.top >= levelCardBounds.top && glacialBtnBounds.bottom <= levelCardBounds.bottom
+        )
+
+        // Tapping Glacial Peaks button opens quick-jump biome menu, jumping to Rocky Ridge (176) and back to Glacial (1)
+        composeRule.onNodeWithTag("roadmap_biome_glacial_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("roadmap_biome_jump_menu").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_biome_jump_176").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("station_176").assertIsDisplayed()
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_biome_jump_menu").fetchSemanticsNodes().size)
+
+        composeRule.onNodeWithTag("roadmap_biome_glacial_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("roadmap_biome_jump_1").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("station_1").assertIsDisplayed()
 
         // Station 1 is unlocked, shows Claim button and YOU badge with Level 1, and Station 2 shows partial progress bar
         composeRule.onNodeWithTag("btn_claim_station_1").assertIsDisplayed()
@@ -352,9 +380,11 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.onNodeWithTag("roadmap_you_badge_1", useUnmergedTree = true).assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("roadmap_you_badge_2", useUnmergedTree = true).fetchSemanticsNodes().size)
 
-        // Earning remaining XP to unlock Station 2 advances YOU badge to Level 2
+        // Earning remaining XP to unlock Station 2 advances YOU badge and merged Level card to Level 2
         RoadmapManager.addXp(ctx, s2Cost - 500L)
         composeRule.waitForIdle()
+        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
+            .assertTextContains("LVL 2 / 700", substring = false)
         composeRule.onNode(
             hasTestTag("roadmap_you_badge_2") and hasAnyChild(hasText("م 2", substring = true)),
             useUnmergedTree = true
@@ -366,14 +396,17 @@ class RoadmapAndThemeEnhancementsTest {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         val db = AppDatabase.getDatabase(ctx)
 
-        // 1. Fresh state (0 XP): Home shows LVL 0 / 700 and map YOU sits on Origin 0, NOT Station 1
+        // 1. Fresh state (0 XP): Home shows LVL 0 / 700 and Roadmap merged card & YOU sit on Level 0
         enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("home_roadmap_level_badge", useUnmergedTree = true)
             .assertTextContains("LVL 0 / 700", substring = false)
 
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
-        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_current_level_card").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("roadmap_current_level_card").assertIsDisplayed()
+        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
+            .assertTextContains("LVL 0 / 700", substring = false)
+        composeRule.onNodeWithTag("roadmap_biome_glacial_btn").assertIsDisplayed()
         composeRule.onNode(
             hasTestTag("roadmap_you_badge_0") and hasAnyChild(hasText("م 0", substring = true)),
             useUnmergedTree = true
@@ -409,6 +442,8 @@ class RoadmapAndThemeEnhancementsTest {
 
         val expectedLevel = XpCalculationEngine.calculateLevelForXp(4500L)
         assertTrue("Expected real telemetry (4500 XP) to advance beyond Level 0, got $expectedLevel", expectedLevel >= 2)
+        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
+            .assertTextContains("LVL $expectedLevel / 700", substring = false)
         composeRule.onNode(
             hasTestTag("roadmap_you_badge_$expectedLevel") and hasAnyChild(hasText("م $expectedLevel", substring = true)),
             useUnmergedTree = true
