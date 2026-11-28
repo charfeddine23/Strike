@@ -162,6 +162,7 @@ class HeatmapMapController(context: Context) {
     var mapLibreMap by mutableStateOf<MapLibreMap?>(null)
     var loadedStyle by mutableStateOf<Style?>(null)
     var hasAutoFramed by mutableStateOf(false)
+    var currentCameraZoom by mutableStateOf(MapStyleHelper.DEFAULT_ZOOM)
 
     var latestIndividuals: List<Individual> = emptyList()
     var latestStrikeEvents: List<StrikeEvent> = emptyList()
@@ -180,6 +181,7 @@ class HeatmapMapController(context: Context) {
             (existing.parent as? ViewGroup)?.removeView(existing)
             existing.getMapAsync { map ->
                 mapLibreMap = map
+                currentCameraZoom = map.cameraPosition.zoom
                 map.getStyle { style ->
                     loadedStyle = style
                     MapStyleHelper.applyGoogleGradeStyling(
@@ -210,10 +212,17 @@ class HeatmapMapController(context: Context) {
                     MapStyleHelper.DEFAULT_CENTER
                 }
                 val startZoom = initialHot?.recommendedZoom ?: MapStyleHelper.DEFAULT_ZOOM
+                currentCameraZoom = startZoom
                 map.cameraPosition = CameraPosition.Builder()
                     .target(startLatLng)
                     .zoom(startZoom)
                     .build()
+                map.addOnCameraMoveListener {
+                    currentCameraZoom = map.cameraPosition.zoom
+                }
+                map.addOnCameraIdleListener {
+                    currentCameraZoom = map.cameraPosition.zoom
+                }
 
                 val applyCurrentStyle: (Style) -> Unit = { style ->
                     loadedStyle = style
@@ -570,22 +579,34 @@ fun FirstStrikeHeatmapScreen(
         }
     }
 
-    // Serene 30-second VSync-synced continuous thermal breathing & cluster sonar cycle
-    LaunchedEffect(loadedStyleRef, displayMode, lifecycleOwner) {
+    // Zoomed out (< 12.0): hotspots/red dots stay 100% static.
+    // Zoomed in (>= 12.0): serene 30-second VSync-synced continuous thermal breathing & cluster sonar cycle.
+    LaunchedEffect(mapLibreRef, loadedStyleRef, displayMode, lifecycleOwner) {
         val style = loadedStyleRef ?: return@LaunchedEffect
         if (isRobolectricRuntime()) return@LaunchedEffect
+        var wasStaticZoomedOut = false
         var lastAppliedUptimeMs = -1L
         while (true) {
             withFrameNanos {
                 if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                    val nowMs = SystemClock.uptimeMillis()
-                    if (lastAppliedUptimeMs < 0L || (nowMs - lastAppliedUptimeMs) >= 16L) {
-                        lastAppliedUptimeMs = nowMs
-                        MapStyleHelper.updateLiveHotspotPulse(
-                            style = style,
-                            displayMode = displayMode,
-                            phase = MapStyleHelper.computeSmoothAnimationPhase(nowMs)
-                        )
+                    val zoom = mapLibreRef?.cameraPosition?.zoom ?: activeController.currentCameraZoom
+                    if (!MapStyleHelper.shouldAnimateHotspotsAtZoom(zoom)) {
+                        if (!wasStaticZoomedOut) {
+                            MapStyleHelper.resetHotspotsToStaticState(style, displayMode)
+                            wasStaticZoomedOut = true
+                        }
+                    } else {
+                        wasStaticZoomedOut = false
+                        val nowMs = SystemClock.uptimeMillis()
+                        if (lastAppliedUptimeMs < 0L || (nowMs - lastAppliedUptimeMs) >= 16L) {
+                            lastAppliedUptimeMs = nowMs
+                            MapStyleHelper.updateLiveHotspotPulse(
+                                style = style,
+                                displayMode = displayMode,
+                                phase = MapStyleHelper.computeSmoothAnimationPhase(nowMs),
+                                cameraZoom = zoom
+                            )
+                        }
                     }
                 }
             }

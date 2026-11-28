@@ -131,6 +131,7 @@ object MapStyleHelper {
     const val HEAT_SPRITE_RED_ID = "obsidian-heat-sprite-red"
     const val HEAT_SPRITE_SIZE_PX = 768
     const val HEATMAP_ANIMATION_CYCLE_MS = 30_000L
+    const val HOTSPOT_ANIMATION_MIN_ZOOM = 12.0
 
     const val USER_LOCATION_SOURCE_ID = "obsidian-user-location-source"
     const val USER_LOCATION_HALO_LAYER_ID = "obsidian-user-location-halo"
@@ -1196,7 +1197,7 @@ object MapStyleHelper {
         // eliminating crossfade dips or disappearing hotspots at any zoom level.
         val showHeatmap = displayMode != HeatmapDisplayMode.CLUSTER_PINS
         val heatVisibility = if (showHeatmap) Property.VISIBLE else Property.NONE
-        val heatOpacityExpr = buildRoutineHeatmapOpacityExpression(displayMode, 0.5f)
+        val heatOpacityExpr = buildStaticRoutineHeatmapOpacityExpression(displayMode)
         val heatIntensityExpr = Expression.interpolate(
             Expression.linear(),
             Expression.zoom(),
@@ -1328,7 +1329,8 @@ object MapStyleHelper {
             }
         }
 
-        // Single serene centroid pulse ring per hotspot cluster so zoom-out never stacks overlapping points
+        // Single serene centroid pulse ring per hotspot cluster — strictly active only when zoomed in (>= 12.0)
+        // so zoomed-out hotspots / red dots remain 100% calm and stationary.
         val pulseRingColor = AndroidColor.parseColor("#FF7A3D")
         val stalePulseRing = style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)
         if (stalePulseRing != null && stalePulseRing.sourceId != ROUTINE_HOTSPOT_CLUSTER_SOURCE_ID) {
@@ -1337,6 +1339,7 @@ object MapStyleHelper {
         val existingPulseRing = style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)
         if (existingPulseRing == null) {
             val pulseRingLayer = CircleLayer(ROUTINE_LIVE_PULSE_RING_LAYER_ID, ROUTINE_HOTSPOT_CLUSTER_SOURCE_ID).apply {
+                minZoom = HOTSPOT_ANIMATION_MIN_ZOOM.toFloat()
                 setProperties(
                     PropertyFactory.circleRadius(buildLivePulseRingRadiusExpression(1.0f)),
                     PropertyFactory.circleColor(AndroidColor.TRANSPARENT),
@@ -1345,7 +1348,7 @@ object MapStyleHelper {
                     PropertyFactory.circleStrokeColor(pulseRingColor),
                     PropertyFactory.circleStrokeOpacity(buildLivePulseRingOpacityExpression(0.0f)),
                     PropertyFactory.circlePitchAlignment(Property.CIRCLE_PITCH_ALIGNMENT_MAP),
-                    PropertyFactory.visibility(heatVisibility)
+                    PropertyFactory.visibility(Property.NONE)
                 )
             }
             if (firstBaseLabel != null) {
@@ -1354,10 +1357,11 @@ object MapStyleHelper {
                 style.addLayer(pulseRingLayer)
             }
         } else {
+            existingPulseRing.minZoom = HOTSPOT_ANIMATION_MIN_ZOOM.toFloat()
             existingPulseRing.setProperties(
                 PropertyFactory.circleStrokeWidth(1.8f),
                 PropertyFactory.circleStrokeColor(pulseRingColor),
-                PropertyFactory.visibility(heatVisibility)
+                PropertyFactory.visibility(Property.NONE)
             )
         }
 
@@ -1642,6 +1646,13 @@ object MapStyleHelper {
     }
 
     /**
+     * Hotspots remain completely stationary/fixed whenever the user is zoomed out (< 12.0),
+     * and come alive gently only when zoomed in close (>= 12.0).
+     */
+    fun shouldAnimateHotspotsAtZoom(zoom: Double): Boolean =
+        zoom.isFinite() && zoom >= HOTSPOT_ANIMATION_MIN_ZOOM
+
+    /**
      * Maps monotonic uptime milliseconds onto a seamless [0f, 1f) phase with a full 30-second period.
      */
     fun computeSmoothAnimationPhase(uptimeMillis: Long): Float {
@@ -1650,15 +1661,44 @@ object MapStyleHelper {
     }
 
     /**
-     * Drives serene, continuous 30-second living thermal breathing across every zoom level.
-     * Heatmap density contours (heatmapIntensity / heatmapRadius) stay anchored so zoomed-out
-     * thermal islands remain calm and crisp without distorting or flickering across zooms.
+     * Locks all map hotspots and dots to a completely stationary, jitter-free state (used when zoomed out).
+     */
+    fun resetHotspotsToStaticState(
+        style: Style,
+        displayMode: HeatmapDisplayMode
+    ) {
+        style.getLayerAs<CircleLayer>(FIRST_STRIKE_AURA_LAYER_ID)?.setProperties(
+            PropertyFactory.circleOpacity(0.28f)
+        )
+        style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)?.setProperties(
+            PropertyFactory.visibility(Property.NONE),
+            PropertyFactory.circleStrokeOpacity(0.0f)
+        )
+        style.getLayerAs<HeatmapLayer>(ROUTINE_HEATMAP_LAYER_ID)?.setProperties(
+            PropertyFactory.heatmapOpacity(buildStaticRoutineHeatmapOpacityExpression(displayMode))
+        )
+        for (spec in HEAT_SPRITE_BANDS) {
+            style.getLayerAs<SymbolLayer>(spec.layerId)?.setProperties(
+                PropertyFactory.iconSize(buildHeatSpriteIconSizeExpression(spec.scaleRelativeToBlue, 1.0f))
+            )
+        }
+    }
+
+    /**
+     * Drives serene, continuous 30-second living thermal breathing when zoomed in (>= 12.0).
+     * When zoomed out (< 12.0), delegates immediately to [resetHotspotsToStaticState] so hotspots stay fixed.
      */
     fun updateLiveHotspotPulse(
         style: Style,
         displayMode: HeatmapDisplayMode,
-        phase: Float
+        phase: Float,
+        cameraZoom: Double = HOTSPOT_ANIMATION_MIN_ZOOM
     ) {
+        if (!shouldAnimateHotspotsAtZoom(cameraZoom)) {
+            resetHotspotsToStaticState(style, displayMode)
+            return
+        }
+
         val p = ((phase % 1.0f) + 1.0f) % 1.0f
         // Pure periodic C-infinity cosine breathing curve: slope=0 and value=0 at both p=0 and p=1
         val breathWave = (0.5 - 0.5 * cos(2.0 * PI * p)).toFloat()
@@ -1682,7 +1722,7 @@ object MapStyleHelper {
             )
         }
 
-        // Smooth sonar ripple: sin(PI * p) stays 0.0 at p=0 and p=1 so infinite wraparound has zero jump
+        // Smooth zoomed-in sonar ripple: sin(PI * p) stays 0.0 at p=0 and p=1 so infinite wraparound has zero jump
         val ringExpand = 1.0f + 1.05f * p
         val ringFade = sin(PI * p).coerceAtLeast(0.0).pow(1.4).toFloat()
         style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)?.setProperties(
@@ -1690,52 +1730,42 @@ object MapStyleHelper {
             PropertyFactory.circleRadius(buildLivePulseRingRadiusExpression(ringExpand)),
             PropertyFactory.circleStrokeOpacity(buildLivePulseRingOpacityExpression(ringFade))
         )
+    }
 
-        // Modulate only subtle alpha on HeatmapLayer — never mutate heatmapIntensity/heatmapRadius at runtime
-        style.getLayerAs<HeatmapLayer>(ROUTINE_HEATMAP_LAYER_ID)?.setProperties(
-            PropertyFactory.heatmapOpacity(buildRoutineHeatmapOpacityExpression(displayMode, breathWave))
-        )
+    internal fun buildStaticRoutineHeatmapOpacityExpression(displayMode: HeatmapDisplayMode): Expression {
+        return when (displayMode) {
+            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.interpolate(
+                Expression.linear(),
+                Expression.zoom(),
+                Expression.stop(0.0, 0.88f),
+                Expression.stop(13.4, 0.88f),
+                Expression.stop(14.4, 0.0f)
+            )
+            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
+                Expression.linear(),
+                Expression.zoom(),
+                Expression.stop(0.0, 0.86f),
+                Expression.stop(13.4, 0.86f),
+                Expression.stop(14.4, 0.0f)
+            )
+            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
+        }
     }
 
     internal fun buildRoutineHeatmapOpacityExpression(
         displayMode: HeatmapDisplayMode,
         breathWave: Float = 0.5f
     ): Expression {
-        val clampedWave = breathWave.coerceIn(0f, 1f)
-        return when (displayMode) {
-            HeatmapDisplayMode.HEATMAP_GLOW -> {
-                val maxOpacity = 0.83f + 0.05f * clampedWave
-                Expression.interpolate(
-                    Expression.linear(),
-                    Expression.zoom(),
-                    Expression.stop(0.0, maxOpacity),
-                    Expression.stop(13.4, maxOpacity),
-                    Expression.stop(14.4, 0.0f)
-                )
-            }
-            HeatmapDisplayMode.HYBRID -> {
-                val maxOpacity = 0.81f + 0.05f * clampedWave
-                Expression.interpolate(
-                    Expression.linear(),
-                    Expression.zoom(),
-                    Expression.stop(0.0, maxOpacity),
-                    Expression.stop(13.4, maxOpacity),
-                    Expression.stop(14.4, 0.0f)
-                )
-            }
-            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
-        }
+        return buildStaticRoutineHeatmapOpacityExpression(displayMode)
     }
 
     internal fun buildLivePulseRingRadiusExpression(expandScale: Float): Expression {
         return Expression.interpolate(
             Expression.linear(),
             Expression.zoom(),
-            Expression.stop(0, 4.0f * expandScale),
-            Expression.stop(5, 6.5f * expandScale),
-            Expression.stop(9, 10.5f * expandScale),
-            Expression.stop(13, 18.0f * expandScale),
-            Expression.stop(17, 28.0f * expandScale),
+            Expression.stop(12, 16.0f * expandScale),
+            Expression.stop(14, 21.0f * expandScale),
+            Expression.stop(17, 29.0f * expandScale),
             Expression.stop(22, 38.0f * expandScale)
         )
     }
@@ -1745,10 +1775,8 @@ object MapStyleHelper {
         return Expression.interpolate(
             Expression.linear(),
             Expression.zoom(),
-            Expression.stop(0.0, 0.08f * safeFade),
-            Expression.stop(6.0, 0.12f * safeFade),
-            Expression.stop(10.0, 0.18f * safeFade),
-            Expression.stop(13.5, 0.24f * safeFade),
+            Expression.stop(12.0, 0.0f),
+            Expression.stop(13.0, 0.24f * safeFade),
             Expression.stop(22.0, 0.24f * safeFade)
         )
     }
