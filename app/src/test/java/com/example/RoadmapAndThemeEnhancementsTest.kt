@@ -319,14 +319,12 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
 
-        // Current Level card sits below TopBar and above Roadmap tabs, displaying LVL 1 / 700
+        // Current Level card is removed from Cyber Roadmap; tabs sit cleanly directly below TopBar
         val topBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
-        val currentLevelBounds = composeRule.onNodeWithTag("roadmap_current_level_card").assertIsDisplayed().getBoundsInRoot()
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_current_level_card").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_current_level_badge", useUnmergedTree = true).fetchSemanticsNodes().size)
         val tabsBounds = composeRule.onNodeWithTag("roadmap_tab_stations").assertIsDisplayed().getBoundsInRoot()
-        assertTrue(currentLevelBounds.top >= topBarBounds.bottom)
-        assertTrue(tabsBounds.top >= currentLevelBounds.bottom)
-        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
-            .assertTextContains("LVL 1 / 700", substring = false)
+        assertTrue(tabsBounds.top >= topBarBounds.bottom)
 
         // Station 1 is unlocked, shows Claim button and YOU badge with Level 1, and Station 2 shows partial progress bar
         composeRule.onNodeWithTag("btn_claim_station_1").assertIsDisplayed()
@@ -354,11 +352,9 @@ class RoadmapAndThemeEnhancementsTest {
         composeRule.onNodeWithTag("roadmap_you_badge_1", useUnmergedTree = true).assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("roadmap_you_badge_2", useUnmergedTree = true).fetchSemanticsNodes().size)
 
-        // Earning remaining XP to unlock Station 2 advances Current Level and YOU badge to Level 2
+        // Earning remaining XP to unlock Station 2 advances YOU badge to Level 2
         RoadmapManager.addXp(ctx, s2Cost - 500L)
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
-            .assertTextContains("LVL 2 / 700", substring = false)
         composeRule.onNode(
             hasTestTag("roadmap_you_badge_2") and hasAnyChild(hasText("م 2", substring = true)),
             useUnmergedTree = true
@@ -370,15 +366,14 @@ class RoadmapAndThemeEnhancementsTest {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         val db = AppDatabase.getDatabase(ctx)
 
-        // 1. Fresh state (0 XP): Home and Roadmap both show LVL 0 / 700 and map YOU sits on Origin 0, NOT Station 1
+        // 1. Fresh state (0 XP): Home shows LVL 0 / 700 and map YOU sits on Origin 0, NOT Station 1
         enterMainAppFromHeatmap()
         composeRule.onNodeWithTag("home_roadmap_level_badge", useUnmergedTree = true)
             .assertTextContains("LVL 0 / 700", substring = false)
 
         composeRule.onNodeWithTag("nav_tab_roadmap").performClick()
         composeRule.waitForIdle()
-        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
-            .assertTextContains("LVL 0 / 700", substring = false)
+        assertEquals(0, composeRule.onAllNodesWithTag("roadmap_current_level_card").fetchSemanticsNodes().size)
         composeRule.onNode(
             hasTestTag("roadmap_you_badge_0") and hasAnyChild(hasText("م 0", substring = true)),
             useUnmergedTree = true
@@ -414,10 +409,12 @@ class RoadmapAndThemeEnhancementsTest {
 
         val expectedLevel = XpCalculationEngine.calculateLevelForXp(4500L)
         assertTrue("Expected real telemetry (4500 XP) to advance beyond Level 0, got $expectedLevel", expectedLevel >= 2)
-        composeRule.onNodeWithTag("roadmap_current_level_badge", useUnmergedTree = true)
-            .assertTextContains("LVL $expectedLevel / 700", substring = false)
+        composeRule.onNode(
+            hasTestTag("roadmap_you_badge_$expectedLevel") and hasAnyChild(hasText("م $expectedLevel", substring = true)),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
 
-        // Navigate back to Home and confirm Roadmap Level matches RoadmapScreen & YOU indicator identically
+        // Navigate back to Home and confirm Roadmap Level matches YOU indicator identically
         composeRule.onNodeWithTag("nav_tab_home").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("home_roadmap_level_badge", useUnmergedTree = true)
