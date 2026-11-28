@@ -105,7 +105,6 @@ import com.example.ui.components.TopFrostedLiquidGlassVeil
 import com.example.ui.components.WavySnakeStationRow
 import com.example.ui.components.biomePrimaryAccent
 import com.example.ui.components.biomeSecondaryAccent
-import com.example.ui.components.blendBiomeColor
 import com.example.ui.components.edgeFadeInBlur
 import com.example.ui.components.roadmapBiomeStateForStation
 import com.example.ui.theme.DayCyan
@@ -121,8 +120,6 @@ import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.util.HapticHelper
 import kotlinx.coroutines.launch
-import java.text.NumberFormat
-import java.util.Locale
 import kotlin.math.PI
 
 /**
@@ -239,7 +236,7 @@ fun RoadmapScreen(
     val topHeaderClearanceDp = if (topHeaderHeightPx > 0) {
         with(density) { topHeaderHeightPx.toDp() }
     } else {
-        scaffoldPadding.calculateTopPadding() + 148.dp
+        scaffoldPadding.calculateTopPadding() + 70.dp
     }
     val roadmapTopFadeHeightDp = topHeaderClearanceDp + 18.dp
 
@@ -342,7 +339,7 @@ fun RoadmapScreen(
             )
         }
 
-        // FLOATING TOP HEADER: [ Roadmap | Elite Missions ] + Glacial Peaks button directly below Roadmap
+        // FLOATING TOP HEADER: Unified [ Roadmap · Glacial Peaks | Elite Missions ] tabs directly below Top Bar
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -355,73 +352,31 @@ fun RoadmapScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .onSizeChanged { topHeaderHeightPx = it.height }
                     .padding(bottom = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RoadmapPillTabButton(
-                        label = stringResource(R.string.roadmap_tab_stations),
-                        icon = Icons.Default.Timeline,
-                        selected = selectedMainTab == 0,
-                        accentColor = tabAquaAccent,
-                        isDarkTheme = isDarkTheme,
-                        onClick = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                RoadmapMergedTabButton(
+                    label = stringResource(R.string.roadmap_tab_stations),
+                    biomeState = viewportBiomeState,
+                    currentLang = currentLang,
+                    selected = selectedMainTab == 0,
+                    expanded = isBiomeMenuExpanded && selectedMainTab == 0,
+                    accentColor = tabAquaAccent,
+                    isDarkTheme = isDarkTheme,
+                    onSelectTab = {
+                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                        view.playSoundEffect(SoundEffectConstants.CLICK)
+                        if (selectedMainTab != 0) {
                             isBiomeMenuExpanded = false
                             selectedMainTab = 0
                             onMainTabChanged(0)
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("roadmap_tab_stations")
-                    )
-                    RoadmapPillTabButton(
-                        label = stringResource(R.string.roadmap_tab_elite_missions),
-                        icon = Icons.Default.MilitaryTech,
-                        selected = selectedMainTab == 1,
-                        accentColor = tabEliteAccent,
-                        isDarkTheme = isDarkTheme,
-                        onClick = {
-                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                            isBiomeMenuExpanded = false
-                            selectedMainTab = 1
-                            onMainTabChanged(1)
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("roadmap_tab_elite_missions")
-                    )
-                }
-
-                // Merged Current Level + Glacial Peaks button card directly below [Roadmap | Elite Missions]
-                RoadmapCurrentLevelAndBiomeCard(
-                    currentStationId = currentStationId,
-                    nextStationId = stageProgress.nextStationId,
-                    currentStageXp = stageProgress.currentStageXp,
-                    nextStageRequiredXp = stageProgress.nextStageRequiredXp,
-                    progressFraction = stageProgress.progressFraction,
-                    totalXp = totalXp,
-                    biomeState = viewportBiomeState,
-                    currentLang = currentLang,
-                    isBiomeMenuExpanded = isBiomeMenuExpanded,
-                    isDarkTheme = isDarkTheme,
-                    onJumpToCurrentLevel = {
-                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
-                        view.playSoundEffect(SoundEffectConstants.CLICK)
-                        isBiomeMenuExpanded = false
-                        selectedMainTab = 0
-                        onMainTabChanged(0)
-                        val targetIdx = (scrollAnchorStationId - 1).coerceIn(0, stations.lastIndex)
-                        coroutineScope.launch {
-                            roadmapListState.animateScrollToItem(targetIdx)
+                        } else {
+                            isBiomeMenuExpanded = !isBiomeMenuExpanded
                         }
                     },
                     onToggleBiomeMenu = {
@@ -435,7 +390,23 @@ fun RoadmapScreen(
                             isBiomeMenuExpanded = !isBiomeMenuExpanded
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.weight(1f)
+                )
+                RoadmapPillTabButton(
+                    label = stringResource(R.string.roadmap_tab_elite_missions),
+                    icon = Icons.Default.MilitaryTech,
+                    selected = selectedMainTab == 1,
+                    accentColor = tabEliteAccent,
+                    isDarkTheme = isDarkTheme,
+                    onClick = {
+                        HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                        isBiomeMenuExpanded = false
+                        selectedMainTab = 1
+                        onMainTabChanged(1)
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("roadmap_tab_elite_missions")
                 )
             }
 
@@ -713,7 +684,7 @@ private fun RoadmapPillTabButton(
     Row(
         modifier = modifier
             .minimumInteractiveComponentSize()
-            .height(44.dp)
+            .height(52.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(bgColor)
             .border(if (selected) 1.2.dp else 1.dp, borderColor, RoundedCornerShape(14.dp))
@@ -737,6 +708,125 @@ private fun RoadmapPillTabButton(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@Composable
+private fun RoadmapMergedTabButton(
+    label: String,
+    biomeState: RoadmapBiomeState,
+    currentLang: String,
+    selected: Boolean,
+    expanded: Boolean,
+    accentColor: Color,
+    isDarkTheme: Boolean,
+    onSelectTab: () -> Unit,
+    onToggleBiomeMenu: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val biomeAccent = biomePrimaryAccent(biomeState, isDarkTheme)
+    val baseSurface = if (isDarkTheme) Color(0xBC0D1628) else Color(0xCEFFFFFF)
+    val selectedBg = accentColor.copy(alpha = if (isDarkTheme) 0.24f else 0.16f).compositeOver(baseSurface)
+    val unselectedBorder = if (isDarkTheme) Color(0x44FFFFFF) else Color(0xCCFFFFFF)
+    val unselectedText = if (isDarkTheme) Color(0xFFE2E8F0) else DayTextSecondary
+
+    val bgColor by animateColorAsState(
+        targetValue = if (selected) selectedBg else baseSurface,
+        animationSpec = tween(150),
+        label = "merged_pill_bg"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) biomeAccent.copy(alpha = 0.88f) else unselectedBorder,
+        animationSpec = tween(150),
+        label = "merged_pill_border"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) accentColor else unselectedText,
+        animationSpec = tween(150),
+        label = "merged_pill_content"
+    )
+
+    val biomeLabel = biomeDisplayLabel(biomeState.dominantBiome, currentLang)
+    val biomeIcon = biomeIconFor(biomeState.dominantBiome)
+
+    Column(
+        modifier = modifier
+            .minimumInteractiveComponentSize()
+            .height(52.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(bgColor)
+            .border(if (selected) 1.2.dp else 1.dp, borderColor, RoundedCornerShape(14.dp))
+            .padding(horizontal = 6.dp, vertical = 3.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClick = onSelectTab)
+                .testTag("roadmap_tab_stations"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Timeline,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = contentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(biomeAccent.copy(alpha = if (isDarkTheme) (if (expanded) 0.24f else 0.14f) else (if (expanded) 0.16f else 0.09f)))
+                .clickable(onClick = onToggleBiomeMenu)
+                .padding(horizontal = 6.dp)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = biomeLabel
+                }
+                .testTag("roadmap_biome_glacial_btn"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = biomeIcon,
+                contentDescription = null,
+                tint = biomeAccent,
+                modifier = Modifier.size(11.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = biomeLabel,
+                fontSize = 9.5.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = PlusJakartaSans,
+                color = if (isDarkTheme) Color.White.copy(alpha = 0.92f) else DayTextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            Spacer(modifier = Modifier.width(2.dp))
+            Icon(
+                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = biomeAccent,
+                modifier = Modifier.size(12.dp)
+            )
+        }
     }
 }
 
@@ -770,268 +860,6 @@ private fun biomeIconFor(biome: RoadmapBiome): ImageVector = when (biome) {
     RoadmapBiome.VOLCANIC -> Icons.Default.LocalFireDepartment
 }
 
-@Composable
-private fun RoadmapCurrentLevelAndBiomeCard(
-    currentStationId: Int,
-    nextStationId: Int,
-    currentStageXp: Long,
-    nextStageRequiredXp: Long,
-    progressFraction: Float,
-    totalXp: Long,
-    biomeState: RoadmapBiomeState,
-    currentLang: String,
-    isBiomeMenuExpanded: Boolean,
-    isDarkTheme: Boolean,
-    onJumpToCurrentLevel: () -> Unit,
-    onToggleBiomeMenu: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val safeStation = currentStationId.coerceIn(0, TaskPools.TOTAL_STATIONS_COUNT)
-    val totalStations = TaskPools.TOTAL_STATIONS_COUNT
-    val animatedProgress by animateFloatAsState(
-        targetValue = progressFraction.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 450, easing = FastOutSlowInEasing),
-        label = "roadmap_level_xp_progress"
-    )
-
-    val biomePrimary = biomePrimaryAccent(biomeState, isDarkTheme)
-    val biomeSecondary = biomeSecondaryAccent(biomeState, isDarkTheme)
-    val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
-    val titleColor = if (isDarkTheme) Color.White else DayTextPrimary
-    val mutedColor = if (isDarkTheme) Color(0xFF94A3B8) else DayTextSecondary
-
-    val cardBg = if (isDarkTheme) {
-        val top = blendBiomeColor(Color(0xDC081F35), Color(0xDC1E161A), Color(0xDC082218), Color(0xDC2A0B07), biomeState)
-        val bot = blendBiomeColor(Color(0xD2041222), Color(0xD2120E13), Color(0xD204140E), Color(0xD2180604), biomeState)
-        Brush.verticalGradient(listOf(top, bot))
-    } else {
-        val bot = blendBiomeColor(Color(0xEBF0F9FF), Color(0xEBF7EEE2), Color(0xEBECFDF5), Color(0xEBFFF1EB), biomeState)
-        Brush.verticalGradient(listOf(Color(0xF6FFFFFF), bot))
-    }
-    val cardBorder = Brush.linearGradient(
-        listOf(
-            biomePrimary.copy(alpha = if (isDarkTheme) 0.72f else 0.78f),
-            biomeSecondary.copy(alpha = if (isDarkTheme) 0.45f else 0.52f),
-            amberAccent.copy(alpha = 0.34f)
-        )
-    )
-
-    val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
-    val xpFormatted = remember(totalXp) { nf.format(totalXp.coerceAtLeast(0L)) }
-    val stageXpFormatted = remember(currentStageXp) { nf.format(currentStageXp.coerceAtLeast(0L)) }
-    val stageReqFormatted = remember(nextStageRequiredXp) { nf.format(nextStageRequiredXp.coerceAtLeast(1L)) }
-    val biomeIcon = biomeIconFor(biomeState.dominantBiome)
-
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(cardBg)
-            .border(1.2.dp, cardBorder, RoundedCornerShape(18.dp))
-            .padding(horizontal = 12.dp, vertical = 9.dp)
-            .testTag("roadmap_current_level_card"),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .minimumInteractiveComponentSize()
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onJumpToCurrentLevel)
-                    .padding(end = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(biomePrimary.copy(alpha = if (isDarkTheme) 0.22f else 0.14f))
-                        .border(1.2.dp, biomePrimary.copy(alpha = 0.85f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = biomeIcon,
-                        contentDescription = null,
-                        tint = biomePrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Column {
-                    Text(
-                        text = when (currentLang) {
-                            "ar" -> "مستواي الحالي"
-                            "fr" -> "Mon Niveau"
-                            else -> "My Level"
-                        },
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = mutedColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "LVL $safeStation / $totalStations",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = PlusJakartaSans,
-                        color = titleColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.testTag("roadmap_current_level_badge")
-                    )
-                }
-            }
-
-            RoadmapBiomeButton(
-                biomeState = biomeState,
-                currentLang = currentLang,
-                expanded = isBiomeMenuExpanded,
-                isDarkTheme = isDarkTheme,
-                onClick = onToggleBiomeMenu,
-                modifier = Modifier
-                    .widthIn(min = 124.dp, max = 164.dp)
-                    .testTag("roadmap_biome_glacial_btn")
-            )
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(if (isDarkTheme) Color(0x451E293B) else Color(0xFFE2E8F0))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(animatedProgress.coerceAtLeast(0.03f))
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(biomePrimary, biomeSecondary, amberAccent)
-                            )
-                        )
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (safeStation >= totalStations) {
-                        when (currentLang) {
-                            "ar" -> "اكتملت كل المحطات"
-                            "fr" -> "Toutes les stations débloquées"
-                            else -> "All Stations Unlocked"
-                        }
-                    } else {
-                        when (currentLang) {
-                            "ar" -> "التالي $nextStationId: $stageXpFormatted / $stageReqFormatted XP"
-                            "fr" -> "Suivante $nextStationId : $stageXpFormatted / $stageReqFormatted XP"
-                            else -> "Next LVL $nextStationId: $stageXpFormatted / $stageReqFormatted XP"
-                        }
-                    },
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = mutedColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "$xpFormatted XP",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = PlusJakartaSans,
-                    color = biomePrimary,
-                    maxLines = 1
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RoadmapBiomeButton(
-    biomeState: RoadmapBiomeState,
-    currentLang: String,
-    expanded: Boolean,
-    isDarkTheme: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val accent = biomePrimaryAccent(biomeState, isDarkTheme)
-    val secondaryAccent = biomeSecondaryAccent(biomeState, isDarkTheme)
-    val baseSurface = if (isDarkTheme) Color(0xCE0A1628) else Color(0xE6FFFFFF)
-    val bgColor by animateColorAsState(
-        targetValue = accent.copy(alpha = if (isDarkTheme) (if (expanded) 0.28f else 0.18f) else (if (expanded) 0.20f else 0.12f)).compositeOver(baseSurface),
-        animationSpec = tween(180),
-        label = "biome_btn_bg"
-    )
-    val borderBrush = Brush.linearGradient(
-        listOf(
-            accent.copy(alpha = if (expanded) 0.95f else 0.72f),
-            secondaryAccent.copy(alpha = if (expanded) 0.75f else 0.45f)
-        )
-    )
-    val textColor = if (isDarkTheme) Color.White else DayTextPrimary
-    val biomeLabel = biomeDisplayLabel(biomeState.dominantBiome, currentLang)
-    val biomeIcon = biomeIconFor(biomeState.dominantBiome)
-
-    Box(
-        modifier = modifier
-            .minimumInteractiveComponentSize()
-            .clip(RoundedCornerShape(13.dp))
-            .clickable(onClick = onClick)
-            .semantics(mergeDescendants = true) {
-                contentDescription = biomeLabel
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            modifier = Modifier
-                .height(34.dp)
-                .clip(RoundedCornerShape(13.dp))
-                .background(bgColor)
-                .border(1.1.dp, borderBrush, RoundedCornerShape(13.dp))
-                .padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = biomeIcon,
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(5.dp))
-            Text(
-                text = biomeLabel,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = PlusJakartaSans,
-                color = textColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-            Spacer(modifier = Modifier.width(3.dp))
-            Icon(
-                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                contentDescription = null,
-                tint = accent.copy(alpha = 0.9f),
-                modifier = Modifier.size(15.dp)
-            )
-        }
-    }
-}
 
 @Composable
 private fun RoadmapBiomeQuickJumpMenu(
