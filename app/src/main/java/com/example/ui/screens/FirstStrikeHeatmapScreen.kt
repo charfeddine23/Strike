@@ -3,19 +3,12 @@ package com.example.ui.screens
 import android.Manifest
 import android.content.Context
 import android.graphics.RectF
-import android.os.SystemClock
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -86,7 +79,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -94,7 +86,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -137,10 +128,7 @@ import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
-import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.pow
-import kotlin.math.sin
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
@@ -579,39 +567,7 @@ fun FirstStrikeHeatmapScreen(
         }
     }
 
-    // Zoomed out (< 12.0): hotspots/red dots stay 100% static.
-    // Zoomed in (>= 12.0): serene 30-second VSync-synced continuous thermal breathing & cluster sonar cycle.
-    LaunchedEffect(mapLibreRef, loadedStyleRef, displayMode, lifecycleOwner) {
-        val style = loadedStyleRef ?: return@LaunchedEffect
-        if (isRobolectricRuntime()) return@LaunchedEffect
-        var wasStaticZoomedOut = false
-        var lastAppliedUptimeMs = -1L
-        while (true) {
-            withFrameNanos {
-                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                    val zoom = mapLibreRef?.cameraPosition?.zoom ?: activeController.currentCameraZoom
-                    if (!MapStyleHelper.shouldAnimateHotspotsAtZoom(zoom)) {
-                        if (!wasStaticZoomedOut) {
-                            MapStyleHelper.resetHotspotsToStaticState(style, displayMode)
-                            wasStaticZoomedOut = true
-                        }
-                    } else {
-                        wasStaticZoomedOut = false
-                        val nowMs = SystemClock.uptimeMillis()
-                        if (lastAppliedUptimeMs < 0L || (nowMs - lastAppliedUptimeMs) >= 16L) {
-                            lastAppliedUptimeMs = nowMs
-                            MapStyleHelper.updateLiveHotspotPulse(
-                                style = style,
-                                displayMode = displayMode,
-                                phase = MapStyleHelper.computeSmoothAnimationPhase(nowMs),
-                                cameraZoom = zoom
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // Keep map layers crisp and completely stationary across all zoom levels (animations disabled)
 
     // Center the camera on the hottest region once on initial launch (preserved across page switches)
     LaunchedEffect(mapLibreRef, hottestRegion) {
@@ -693,29 +649,7 @@ fun FirstStrikeHeatmapScreen(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            // High-craft dark/light tactical canvas preview for Robolectric JVM environment
-            val halfCycleMs = (MapStyleHelper.HEATMAP_ANIMATION_CYCLE_MS / 2L).toInt()
-            val fullCycleMs = MapStyleHelper.HEATMAP_ANIMATION_CYCLE_MS.toInt()
-            val routinePulseTransition = rememberInfiniteTransition(label = "routine_halo_pulse")
-            val haloPulse by routinePulseTransition.animateFloat(
-                initialValue = 0.95f,
-                targetValue = 1.05f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = halfCycleMs, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "halo_pulse_scale"
-            )
-            val sonarPhase by routinePulseTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = fullCycleMs, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "sonar_ring_phase"
-            )
-
+            // High-craft static dark/light tactical canvas preview for Robolectric JVM environment
             Box(modifier = Modifier.fillMaxSize()) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     drawRect(if (isMapDark) Color(0xFF0F172A) else Color(0xFFF8F9FA))
@@ -725,36 +659,28 @@ fun FirstStrikeHeatmapScreen(
                         topLeft = Offset(0f, 0f),
                         size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.25f)
                     )
-                    // Draw image-matched translucent Hot Zones (Blue -> Cyan -> Lime Green -> thin Yellow/Orange -> broad Coral-Red plateau)
+                    // Draw crisp static translucent Hot Zones (Blue -> Cyan -> Lime Green -> thin Yellow/Orange -> broad Coral-Red plateau)
                     // and First Strikes strictly as a tight luxurious Obsidian-Gold point glow (no First-Strike heatmap blob)
                     hotspots.forEachIndexed { idx, hotspot ->
                         val cx = size.width * (0.28f + ((idx * 0.21f) % 0.48f))
                         val cy = size.height * (0.38f + ((idx * 0.14f) % 0.28f))
                         if (hotspot.hasRoutineStrikes && displayMode != HeatmapDisplayMode.CLUSTER_PINS) {
-                            val outerRadius = 78.dp.toPx() * haloPulse
+                            val outerRadius = 78.dp.toPx()
                             drawCircle(
                                 brush = Brush.radialGradient(
-                                    0.00f to Color(0xFFEF3E38).copy(alpha = 0.78f),
-                                    0.42f to Color(0xFFF43A34).copy(alpha = 0.76f),
+                                    0.00f to Color(0xFFEF3E38).copy(alpha = 0.80f),
+                                    0.42f to Color(0xFFF43A34).copy(alpha = 0.78f),
                                     0.50f to Color(0xFFFF8A1E).copy(alpha = 0.76f),
                                     0.56f to Color(0xFFFBE922).copy(alpha = 0.74f),
-                                    0.68f to Color(0xFF42F252).copy(alpha = 0.66f),
-                                    0.82f to Color(0xFF38DEF0).copy(alpha = 0.48f),
-                                    0.92f to Color(0xFF4080FF).copy(alpha = 0.26f),
+                                    0.68f to Color(0xFF42F252).copy(alpha = 0.68f),
+                                    0.82f to Color(0xFF38DEF0).copy(alpha = 0.50f),
+                                    0.92f to Color(0xFF4080FF).copy(alpha = 0.28f),
                                     1.00f to Color.Transparent,
                                     center = Offset(cx, cy),
                                     radius = outerRadius
                                 ),
                                 radius = outerRadius,
                                 center = Offset(cx, cy)
-                            )
-                            val sonarRadius = 20.dp.toPx() * (1f + 1.05f * sonarPhase)
-                            val sonarAlpha = (sin(PI * sonarPhase).coerceAtLeast(0.0).pow(1.4) * 0.28).toFloat().coerceIn(0f, 0.30f)
-                            drawCircle(
-                                color = Color(0xFFFF7A3D).copy(alpha = sonarAlpha),
-                                radius = sonarRadius,
-                                center = Offset(cx, cy),
-                                style = Stroke(width = 2.dp.toPx())
                             )
                         }
                         if (hotspot.hasFirstStrikes) {

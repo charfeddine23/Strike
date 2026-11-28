@@ -30,14 +30,10 @@ import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonOptions
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.android.style.sources.VectorSource
-import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.hypot
-import kotlin.math.pow
 import kotlin.math.roundToInt
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 enum class MapVisualTheme {
@@ -131,7 +127,7 @@ object MapStyleHelper {
     const val HEAT_SPRITE_RED_ID = "obsidian-heat-sprite-red"
     const val HEAT_SPRITE_SIZE_PX = 768
     const val HEATMAP_ANIMATION_CYCLE_MS = 30_000L
-    const val HOTSPOT_ANIMATION_MIN_ZOOM = 12.0
+    const val HOTSPOT_ANIMATION_MIN_ZOOM = Double.POSITIVE_INFINITY
 
     const val USER_LOCATION_SOURCE_ID = "obsidian-user-location-source"
     const val USER_LOCATION_HALO_LAYER_ID = "obsidian-user-location-halo"
@@ -213,11 +209,12 @@ object MapStyleHelper {
         val lutB = FloatArray(lutSize + 1)
         val lutA = FloatArray(lutSize + 1)
 
-        fun smoothCosineDrop(r: Double, plateauEnd: Double): Double {
+        fun smoothQuinticDrop(r: Double, plateauEnd: Double): Double {
             if (r <= plateauEnd) return 1.0
             if (r >= 1.0) return 0.0
             val t = (r - plateauEnd) / (1.0 - plateauEnd)
-            return 0.5 * (1.0 + cos(PI * t))
+            val quintic = t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
+            return 1.0 - quintic
         }
 
         for (i in 0..lutSize) {
@@ -225,44 +222,44 @@ object MapStyleHelper {
             when (bandIndex) {
                 0 -> {
                     // Outer translucent Royal Blue Gaussian mist (#4080FF)
-                    val envelope = exp(-2.7 * r * r) * smoothCosineDrop(r, 0.48)
+                    val envelope = exp(-2.55 * r * r) * smoothQuinticDrop(r, 0.44)
                     lutR[i] = 64f
                     lutG[i] = 128f
                     lutB[i] = 255f
-                    lutA[i] = (0.38 * envelope).toFloat()
+                    lutA[i] = (0.40 * envelope).toFloat()
                 }
                 1 -> {
-                    // Sky Cyan aura (#38DEF0)
-                    val envelope = smoothCosineDrop(r, 0.28)
+                    // Crystalline Sky Cyan aura (#38DEF0)
+                    val envelope = smoothQuinticDrop(r, 0.30)
                     lutR[i] = 56f
                     lutG[i] = 222f
                     lutB[i] = 240f
-                    lutA[i] = (0.50 * envelope).toFloat()
+                    lutA[i] = (0.52 * envelope).toFloat()
                 }
                 2 -> {
-                    // Vibrant Lime Green band (#42F252)
-                    val envelope = smoothCosineDrop(r, 0.40)
+                    // Crisp Emerald-Lime band (#42F252)
+                    val envelope = smoothQuinticDrop(r, 0.42)
                     lutR[i] = 66f
                     lutG[i] = 242f
                     lutB[i] = 82f
-                    lutA[i] = (0.64 * envelope).toFloat()
+                    lutA[i] = (0.66 * envelope).toFloat()
                 }
                 3 -> {
-                    // Warm Orange (#FF8C1E) -> Luminous Yellow (#FFE426) rim
-                    val envelope = smoothCosineDrop(r, 0.50)
-                    val rimMix = ((r - 0.52) / 0.42).coerceIn(0.0, 1.0).toFloat()
+                    // Warm Ember Orange (#FF8C1E) -> Luminous Gold (#FFE426) rim
+                    val envelope = smoothQuinticDrop(r, 0.52)
+                    val rimMix = ((r - 0.50) / 0.44).coerceIn(0.0, 1.0).toFloat()
                     lutR[i] = 255f
                     lutG[i] = 140f + (228f - 140f) * rimMix
                     lutB[i] = 30f + (38f - 30f) * rimMix
-                    lutA[i] = (0.74 * envelope).toFloat()
+                    lutA[i] = (0.76 * envelope).toFloat()
                 }
                 else -> {
-                    // Broad uniform Coral-Red core plateau (#EF3E38)
-                    val envelope = smoothCosineDrop(r, 0.62)
+                    // High-contrast Coral-Red core plateau (#EF3E38)
+                    val envelope = smoothQuinticDrop(r, 0.64)
                     lutR[i] = 239f
                     lutG[i] = 62f
                     lutB[i] = 56f
-                    lutA[i] = (0.76 * envelope).toFloat()
+                    lutA[i] = (0.80 * envelope).toFloat()
                 }
             }
         }
@@ -286,9 +283,12 @@ object MapStyleHelper {
                 val alphaF = lutA[idx0] + (lutA[idx1] - lutA[idx0]) * frac
                 if (alphaF <= 0.0005f) continue
 
-                // Deterministic hash dither prevents 8-bit concentric quantization banding
-                val h = ((x * 374761393) xor (y * 668265263)) * 1274126177
-                val dither = (((h ushr 24) and 0xFF) / 255.0f - 0.5f) * 1.1f
+                // Two-tap Triangular-PDF (TPDF) hash dither eliminates 8-bit concentric banding with minimal noise
+                val h1 = ((x * 374761393) xor (y * 668265263)) * 1274126177
+                val h2 = ((x * 224682251) xor (y * 326648991)) * 668265263
+                val u1 = ((h1 ushr 24) and 0xFF) / 255.0f
+                val u2 = ((h2 ushr 24) and 0xFF) / 255.0f
+                val dither = (u1 - u2) * 1.15f
 
                 val a = (alphaF * 255.0f + dither).roundToInt().coerceIn(0, 255)
                 if (a == 0) continue
@@ -1046,14 +1046,16 @@ object MapStyleHelper {
                             Expression.interpolate(
                                 Expression.linear(),
                                 Expression.zoom(),
-                                Expression.stop(4, 9f),
-                                Expression.stop(10, 13f),
-                                Expression.stop(16, 17f)
+                                Expression.stop(0, 7.0f),
+                                Expression.stop(6, 10.0f),
+                                Expression.stop(11, 14.0f),
+                                Expression.stop(16, 18.0f),
+                                Expression.stop(22, 22.0f)
                             )
                         ),
                         PropertyFactory.circleColor(auraColor),
-                        PropertyFactory.circleBlur(0.95f),
-                        PropertyFactory.circleOpacity(0.28f),
+                        PropertyFactory.circleBlur(1.0f),
+                        PropertyFactory.circleOpacity(0.26f),
                         PropertyFactory.visibility(Property.VISIBLE)
                     )
                 }
@@ -1061,7 +1063,7 @@ object MapStyleHelper {
         } else {
             existingAura.setProperties(
                 PropertyFactory.circleColor(auraColor),
-                PropertyFactory.circleOpacity(0.28f),
+                PropertyFactory.circleOpacity(0.26f),
                 PropertyFactory.visibility(Property.VISIBLE)
             )
         }
@@ -1075,16 +1077,18 @@ object MapStyleHelper {
                             Expression.interpolate(
                                 Expression.linear(),
                                 Expression.zoom(),
-                                Expression.stop(4, 5.2f),
-                                Expression.stop(10, 7.4f),
-                                Expression.stop(16, 10.2f)
+                                Expression.stop(0, 4.2f),
+                                Expression.stop(6, 5.8f),
+                                Expression.stop(11, 8.0f),
+                                Expression.stop(16, 10.6f),
+                                Expression.stop(22, 13.0f)
                             )
                         ),
                         PropertyFactory.circleColor(coreFill),
-                        PropertyFactory.circleStrokeWidth(2.6f),
+                        PropertyFactory.circleStrokeWidth(2.5f),
                         PropertyFactory.circleStrokeColor(luxuryGoldRim),
-                        PropertyFactory.circleOpacity(0.98f),
-                        PropertyFactory.circleStrokeOpacity(0.98f),
+                        PropertyFactory.circleOpacity(0.99f),
+                        PropertyFactory.circleStrokeOpacity(0.99f),
                         PropertyFactory.visibility(Property.VISIBLE)
                     )
                 }
@@ -1093,8 +1097,8 @@ object MapStyleHelper {
             existingCircle.setProperties(
                 PropertyFactory.circleColor(coreFill),
                 PropertyFactory.circleStrokeColor(luxuryGoldRim),
-                PropertyFactory.circleOpacity(0.98f),
-                PropertyFactory.circleStrokeOpacity(0.98f),
+                PropertyFactory.circleOpacity(0.99f),
+                PropertyFactory.circleStrokeOpacity(0.99f),
                 PropertyFactory.visibility(Property.VISIBLE)
             )
         }
@@ -1108,13 +1112,15 @@ object MapStyleHelper {
                             Expression.interpolate(
                                 Expression.linear(),
                                 Expression.zoom(),
-                                Expression.stop(4, 1.8f),
-                                Expression.stop(10, 2.5f),
-                                Expression.stop(16, 3.4f)
+                                Expression.stop(0, 1.4f),
+                                Expression.stop(6, 2.0f),
+                                Expression.stop(11, 2.7f),
+                                Expression.stop(16, 3.6f),
+                                Expression.stop(22, 4.4f)
                             )
                         ),
                         PropertyFactory.circleColor(coreSparkColor),
-                        PropertyFactory.circleOpacity(0.96f),
+                        PropertyFactory.circleOpacity(0.98f),
                         PropertyFactory.visibility(Property.VISIBLE)
                     )
                 }
@@ -1122,7 +1128,7 @@ object MapStyleHelper {
         } else {
             existingSpark.setProperties(
                 PropertyFactory.circleColor(coreSparkColor),
-                PropertyFactory.circleOpacity(0.96f),
+                PropertyFactory.circleOpacity(0.98f),
                 PropertyFactory.visibility(Property.VISIBLE)
             )
         }
@@ -1201,41 +1207,42 @@ object MapStyleHelper {
         val heatIntensityExpr = Expression.interpolate(
             Expression.linear(),
             Expression.zoom(),
-            Expression.stop(0, 0.95f),
-            Expression.stop(6, 1.35f),
-            Expression.stop(10, 1.85f),
-            Expression.stop(14, 2.45f)
+            Expression.stop(0, 0.92f),
+            Expression.stop(5, 1.26f),
+            Expression.stop(9, 1.72f),
+            Expression.stop(13.5, 2.38f)
         )
         val heatRadiusExpr = Expression.interpolate(
             Expression.linear(),
             Expression.zoom(),
             Expression.stop(0, 18f),
-            Expression.stop(6, 28f),
-            Expression.stop(10, 40f),
+            Expression.stop(5, 26f),
+            Expression.stop(9, 38f),
             Expression.stop(13.5, 52f)
         )
-        // Smooth, anti-aliased multi-stop ramp matching Snap Map thermal islands
+        // High-precision 12-stop anti-aliased thermal ramp matching Snap-Map thermal islands
         val heatColorExpr = Expression.interpolate(
             Expression.linear(),
             Expression.heatmapDensity(),
             Expression.stop(0.00, Expression.rgba(0, 0, 0, 0.0f)),
-            Expression.stop(0.06, Expression.rgba(64, 128, 255, 0.14f)),
-            Expression.stop(0.14, Expression.rgba(65, 130, 255, 0.48f)),
-            Expression.stop(0.22, Expression.rgba(58, 198, 245, 0.62f)),
-            Expression.stop(0.30, Expression.rgba(56, 226, 220, 0.70f)),
-            Expression.stop(0.38, Expression.rgba(66, 242, 86, 0.78f)),
-            Expression.stop(0.46, Expression.rgba(148, 252, 48, 0.81f)),
-            Expression.stop(0.53, Expression.rgba(252, 226, 34, 0.84f)),
-            Expression.stop(0.60, Expression.rgba(255, 146, 30, 0.86f)),
-            Expression.stop(0.66, Expression.rgba(244, 60, 52, 0.88f)),
-            Expression.stop(1.00, Expression.rgba(235, 46, 44, 0.90f))
+            Expression.stop(0.05, Expression.rgba(64, 128, 255, 0.14f)),
+            Expression.stop(0.12, Expression.rgba(65, 130, 255, 0.46f)),
+            Expression.stop(0.20, Expression.rgba(58, 198, 245, 0.62f)),
+            Expression.stop(0.28, Expression.rgba(56, 226, 220, 0.72f)),
+            Expression.stop(0.36, Expression.rgba(66, 242, 86, 0.79f)),
+            Expression.stop(0.45, Expression.rgba(154, 252, 48, 0.82f)),
+            Expression.stop(0.52, Expression.rgba(252, 226, 34, 0.85f)),
+            Expression.stop(0.59, Expression.rgba(255, 146, 30, 0.87f)),
+            Expression.stop(0.66, Expression.rgba(244, 60, 52, 0.89f)),
+            Expression.stop(0.82, Expression.rgba(239, 50, 46, 0.90f)),
+            Expression.stop(1.00, Expression.rgba(232, 42, 40, 0.92f))
         )
 
         val firstBaseLabel = style.layers.firstOrNull { it is SymbolLayer && !it.id.startsWith("obsidian-") }
         val existingHeat = style.getLayerAs<HeatmapLayer>(ROUTINE_HEATMAP_LAYER_ID)
         if (existingHeat == null) {
             val routineHeatmapLayer = HeatmapLayer(ROUTINE_HEATMAP_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
-                maxZoom = 14.6f
+                maxZoom = 14.4f
                 setProperties(
                     PropertyFactory.heatmapWeight(Expression.get("weight")),
                     PropertyFactory.heatmapIntensity(heatIntensityExpr),
@@ -1251,7 +1258,7 @@ object MapStyleHelper {
                 style.addLayer(routineHeatmapLayer)
             }
         } else {
-            existingHeat.maxZoom = 14.6f
+            existingHeat.maxZoom = 14.4f
             existingHeat.setProperties(
                 PropertyFactory.heatmapIntensity(heatIntensityExpr),
                 PropertyFactory.heatmapRadius(heatRadiusExpr),
@@ -1268,16 +1275,16 @@ object MapStyleHelper {
             HeatmapDisplayMode.HEATMAP_GLOW -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(12.0, 0.0f),
-                Expression.stop(12.9, 0.90f),
-                Expression.stop(22.0, 0.90f)
+                Expression.stop(11.8, 0.0f),
+                Expression.stop(12.8, 0.92f),
+                Expression.stop(22.0, 0.92f)
             )
             HeatmapDisplayMode.HYBRID -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(12.0, 0.0f),
-                Expression.stop(12.9, 0.86f),
-                Expression.stop(22.0, 0.86f)
+                Expression.stop(11.8, 0.0f),
+                Expression.stop(12.8, 0.88f),
+                Expression.stop(22.0, 0.88f)
             )
             HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0.0f)
         }
@@ -1646,29 +1653,24 @@ object MapStyleHelper {
     }
 
     /**
-     * Hotspots remain completely stationary/fixed whenever the user is zoomed out (< 12.0),
-     * and come alive gently only when zoomed in close (>= 12.0).
+     * All map hotspots and dots are strictly static across every zoom level (no pulsing/motion).
      */
-    fun shouldAnimateHotspotsAtZoom(zoom: Double): Boolean =
-        zoom.isFinite() && zoom >= HOTSPOT_ANIMATION_MIN_ZOOM
+    fun shouldAnimateHotspotsAtZoom(zoom: Double): Boolean = false
 
     /**
      * Maps monotonic uptime milliseconds onto a seamless [0f, 1f) phase with a full 30-second period.
      */
-    fun computeSmoothAnimationPhase(uptimeMillis: Long): Float {
-        val mod = ((uptimeMillis % HEATMAP_ANIMATION_CYCLE_MS) + HEATMAP_ANIMATION_CYCLE_MS) % HEATMAP_ANIMATION_CYCLE_MS
-        return (mod.toDouble() / HEATMAP_ANIMATION_CYCLE_MS.toDouble()).toFloat().coerceIn(0f, 1f)
-    }
+    fun computeSmoothAnimationPhase(uptimeMillis: Long): Float = 0f
 
     /**
-     * Locks all map hotspots and dots to a completely stationary, jitter-free state (used when zoomed out).
+     * Locks all map hotspots and dots to a crisp, completely stationary state at every zoom level.
      */
     fun resetHotspotsToStaticState(
         style: Style,
         displayMode: HeatmapDisplayMode
     ) {
         style.getLayerAs<CircleLayer>(FIRST_STRIKE_AURA_LAYER_ID)?.setProperties(
-            PropertyFactory.circleOpacity(0.28f)
+            PropertyFactory.circleOpacity(0.26f)
         )
         style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)?.setProperties(
             PropertyFactory.visibility(Property.NONE),
@@ -1685,51 +1687,15 @@ object MapStyleHelper {
     }
 
     /**
-     * Drives serene, continuous 30-second living thermal breathing when zoomed in (>= 12.0).
-     * When zoomed out (< 12.0), delegates immediately to [resetHotspotsToStaticState] so hotspots stay fixed.
+     * Enforces purely static, jitter-free thermal hotspots across every zoom level.
      */
     fun updateLiveHotspotPulse(
         style: Style,
         displayMode: HeatmapDisplayMode,
         phase: Float,
-        cameraZoom: Double = HOTSPOT_ANIMATION_MIN_ZOOM
+        cameraZoom: Double = DEFAULT_ZOOM
     ) {
-        if (!shouldAnimateHotspotsAtZoom(cameraZoom)) {
-            resetHotspotsToStaticState(style, displayMode)
-            return
-        }
-
-        val p = ((phase % 1.0f) + 1.0f) % 1.0f
-        // Pure periodic C-infinity cosine breathing curve: slope=0 and value=0 at both p=0 and p=1
-        val breathWave = (0.5 - 0.5 * cos(2.0 * PI * p)).toFloat()
-
-        style.getLayerAs<CircleLayer>(FIRST_STRIKE_AURA_LAYER_ID)?.setProperties(
-            PropertyFactory.circleOpacity(0.24f + 0.08f * breathWave)
-        )
-
-        if (displayMode == HeatmapDisplayMode.CLUSTER_PINS) {
-            style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)?.setProperties(
-                PropertyFactory.visibility(Property.NONE)
-            )
-            return
-        }
-
-        // Gentle zoomed-in sprite breathing (±4% over 30 seconds)
-        val spritePulse = 0.96f + 0.08f * breathWave
-        for (spec in HEAT_SPRITE_BANDS) {
-            style.getLayerAs<SymbolLayer>(spec.layerId)?.setProperties(
-                PropertyFactory.iconSize(buildHeatSpriteIconSizeExpression(spec.scaleRelativeToBlue, spritePulse))
-            )
-        }
-
-        // Smooth zoomed-in sonar ripple: sin(PI * p) stays 0.0 at p=0 and p=1 so infinite wraparound has zero jump
-        val ringExpand = 1.0f + 1.05f * p
-        val ringFade = sin(PI * p).coerceAtLeast(0.0).pow(1.4).toFloat()
-        style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)?.setProperties(
-            PropertyFactory.visibility(Property.VISIBLE),
-            PropertyFactory.circleRadius(buildLivePulseRingRadiusExpression(ringExpand)),
-            PropertyFactory.circleStrokeOpacity(buildLivePulseRingOpacityExpression(ringFade))
-        )
+        resetHotspotsToStaticState(style, displayMode)
     }
 
     internal fun buildStaticRoutineHeatmapOpacityExpression(displayMode: HeatmapDisplayMode): Expression {
@@ -1737,16 +1703,16 @@ object MapStyleHelper {
             HeatmapDisplayMode.HEATMAP_GLOW -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(0.0, 0.88f),
-                Expression.stop(13.4, 0.88f),
-                Expression.stop(14.4, 0.0f)
+                Expression.stop(0.0, 0.90f),
+                Expression.stop(12.6, 0.90f),
+                Expression.stop(14.0, 0.0f)
             )
             HeatmapDisplayMode.HYBRID -> Expression.interpolate(
                 Expression.linear(),
                 Expression.zoom(),
-                Expression.stop(0.0, 0.86f),
-                Expression.stop(13.4, 0.86f),
-                Expression.stop(14.4, 0.0f)
+                Expression.stop(0.0, 0.87f),
+                Expression.stop(12.6, 0.87f),
+                Expression.stop(14.0, 0.0f)
             )
             HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
         }

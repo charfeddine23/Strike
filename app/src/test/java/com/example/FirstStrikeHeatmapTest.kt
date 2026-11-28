@@ -1405,18 +1405,15 @@ class FirstStrikeHeatmapTest {
     }
 
     @Test
-    fun heatmapAnimation_uses30SecondCycleAndClustersNearbyRoutineStrikesCalmly() {
-        assertEquals(30_000L, MapStyleHelper.HEATMAP_ANIMATION_CYCLE_MS)
-        assertEquals(12.0, MapStyleHelper.HOTSPOT_ANIMATION_MIN_ZOOM, 0.0001)
+    fun heatmapAnimation_isCompletelyDisabledAcrossAllZoomLevels() {
         assertFalse(MapStyleHelper.shouldAnimateHotspotsAtZoom(4.2))
         assertFalse(MapStyleHelper.shouldAnimateHotspotsAtZoom(8.0))
-        assertFalse(MapStyleHelper.shouldAnimateHotspotsAtZoom(11.99))
-        assertTrue(MapStyleHelper.shouldAnimateHotspotsAtZoom(12.0))
-        assertTrue(MapStyleHelper.shouldAnimateHotspotsAtZoom(16.0))
+        assertFalse(MapStyleHelper.shouldAnimateHotspotsAtZoom(12.0))
+        assertFalse(MapStyleHelper.shouldAnimateHotspotsAtZoom(16.0))
+        assertFalse(MapStyleHelper.shouldAnimateHotspotsAtZoom(20.0))
         assertEquals(0.0f, MapStyleHelper.computeSmoothAnimationPhase(0L), 0.0001f)
-        assertEquals(0.5f, MapStyleHelper.computeSmoothAnimationPhase(15_000L), 0.0001f)
-        assertEquals(0.0f, MapStyleHelper.computeSmoothAnimationPhase(30_000L), 0.0001f)
-        assertEquals(0.25f, MapStyleHelper.computeSmoothAnimationPhase(67_500L), 0.0001f)
+        assertEquals(0.0f, MapStyleHelper.computeSmoothAnimationPhase(15_000L), 0.0001f)
+        assertEquals(0.0f, MapStyleHelper.computeSmoothAnimationPhase(67_500L), 0.0001f)
 
         val person = Individual(
             id = 55L,
