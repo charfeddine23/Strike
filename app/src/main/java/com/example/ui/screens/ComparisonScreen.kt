@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -36,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -47,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -82,14 +85,18 @@ import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
+import com.example.util.HapticHelper
 import com.example.util.SmartSearchMatcher
 
 @Composable
 fun ComparisonScreen(
     viewModel: IndividualViewModel,
     modifier: Modifier = Modifier,
-    isDarkTheme: Boolean = LocalAppDarkTheme.current
+    isDarkTheme: Boolean = LocalAppDarkTheme.current,
+    onNavigateBack: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
+    val isHapticFeedbackEnabled by viewModel.isHapticFeedbackEnabled
     val allList by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val personA by viewModel.personA.collectAsStateWithLifecycle()
     val personB by viewModel.personB.collectAsStateWithLifecycle()
@@ -116,6 +123,52 @@ fun ComparisonScreen(
         ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        if (onNavigateBack != null) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isDarkTheme) Color(0x281E293B) else Color(0xE8FFFFFF))
+                            .border(1.dp, accentViolet.copy(alpha = 0.50f), RoundedCornerShape(14.dp))
+                            .clickable {
+                                HapticHelper.triggerActionHaptic(context, isHapticFeedbackEnabled)
+                                onNavigateBack()
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .testTag("compare_back_to_home_btn"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = if (isAr) "العودة إلى Home" else "Back to Home",
+                            tint = accentViolet,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Home",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = accentViolet
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.nav_compare),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = PlusJakartaSans,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+
         // Person Selectors & Matchup Header
         item {
             Row(

@@ -201,7 +201,7 @@ class ObsidianRefinementVerificationTest {
         }
 
         enterMainAppFromHeatmap()
-        composeRule.onNodeWithTag("nav_tab_compare").performClick()
+        composeRule.onNodeWithTag("home_comparison_btn").performClick()
         composeRule.waitForIdle()
 
         // Open luxury person A picker dialog
@@ -308,8 +308,10 @@ class ObsidianRefinementVerificationTest {
         composeRule.onNodeWithTag("edge_fade_blur_top").assertIsDisplayed()
         composeRule.onNodeWithTag("edge_fade_blur_bottom").assertIsDisplayed()
 
-        // Comparison
-        composeRule.onNodeWithTag("nav_tab_compare").performClick()
+        // Comparison (launched from Home -> below Roadmap Level)
+        composeRule.onNodeWithTag("strike_back_to_home_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_comparison_btn").performClick()
         composeRule.waitForIdle()
         val cmpTopBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
         composeRule.onNodeWithTag("bottom_bar_outer_container").assertIsDisplayed()

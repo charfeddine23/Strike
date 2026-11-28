@@ -58,7 +58,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Shield
@@ -159,7 +158,6 @@ import com.example.ui.theme.DarkNavBorder
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
-import com.example.ui.theme.DayPurple
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
 import com.example.ui.theme.LightNavBg
@@ -169,7 +167,6 @@ import com.example.ui.theme.LocalScaffoldContentPadding
 import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
-import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.StrikePulseTheme
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.util.CallNotificationHelper
@@ -581,6 +578,7 @@ fun LiquidGlassApp(
                     AppScreen.HOME -> HomeScreen(
                         viewModel = viewModel,
                         onOpenHeatmap = { animateCurtainTo(0f) },
+                        onOpenComparison = { currentScreen = AppScreen.COMPARISON },
                         onOpenRecords = { currentScreen = AppScreen.DASHBOARD },
                         onOpenAddStrike = { currentScreen = AppScreen.STRIKE },
                         onOpenRoadmap = { currentScreen = AppScreen.ROADMAP },
@@ -617,7 +615,8 @@ fun LiquidGlassApp(
 
                     AppScreen.COMPARISON -> ComparisonScreen(
                         viewModel = viewModel,
-                        isDarkTheme = isDarkTheme
+                        isDarkTheme = isDarkTheme,
+                        onNavigateBack = { currentScreen = AppScreen.HOME }
                     )
 
                     AppScreen.FLAME -> FlameScreen(
@@ -1286,7 +1285,6 @@ fun LiquidGlassBottomBar(
 ) {
     val dashColor = if (isDarkTheme) NeonCyan else DayCyan
     val invColor = if (isDarkTheme) NeonEmerald else DayEmerald
-    val compareColor = if (isDarkTheme) NeonViolet else DayPurple
     val tasksColor = if (isDarkTheme) NeonAqua else DayCyan
     val roadmapColor = if (isDarkTheme) NeonAmber else DayOrange
 
@@ -1362,17 +1360,6 @@ fun LiquidGlassBottomBar(
                 isDarkTheme = isDarkTheme,
                 testTag = "nav_tab_inventory",
                 onClick = { onScreenSelected(AppScreen.INVENTORY) },
-                modifier = Modifier.weight(1f)
-            )
-
-            BottomNavItem(
-                icon = Icons.AutoMirrored.Filled.CompareArrows,
-                label = stringResource(R.string.nav_compare),
-                isSelected = currentScreen == AppScreen.COMPARISON,
-                activeColor = compareColor,
-                isDarkTheme = isDarkTheme,
-                testTag = "nav_tab_compare",
-                onClick = { onScreenSelected(AppScreen.COMPARISON) },
                 modifier = Modifier.weight(1f)
             )
 

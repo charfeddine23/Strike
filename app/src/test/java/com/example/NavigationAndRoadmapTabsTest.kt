@@ -94,8 +94,10 @@ class NavigationAndRoadmapTabsTest {
         composeRule.onNodeWithTag("inv_subpage_avatars").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("inventory_hub").fetchSemanticsNodes().size)
 
-        // Navigate Inventory -> Comparison (Smart Search & header card are removed cleanly)
-        composeRule.onNodeWithTag("nav_tab_compare").performClick()
+        // Navigate Inventory -> Home -> Comparison (below Roadmap Level; Smart Search & header card are removed cleanly)
+        composeRule.onNodeWithTag("nav_tab_home").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_comparison_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("selector_person_a").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("smart_search_banner").fetchSemanticsNodes().size)
@@ -105,7 +107,7 @@ class NavigationAndRoadmapTabsTest {
         assertEquals(0, composeRule.onAllNodesWithTag("inventory_screen").fetchSemanticsNodes().size)
 
         // Navigate Comparison -> Home -> Records (Dashboard button returns)
-        composeRule.onNodeWithTag("nav_tab_home").performClick()
+        composeRule.onNodeWithTag("compare_back_to_home_btn").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
         composeRule.onNodeWithTag("home_records_btn").performClick()
@@ -266,7 +268,6 @@ class NavigationAndRoadmapTabsTest {
         val navTags = listOf(
             "nav_tab_home",
             "nav_tab_inventory",
-            "nav_tab_compare",
             "nav_tab_tasks",
             "nav_tab_roadmap"
         )
@@ -274,15 +275,16 @@ class NavigationAndRoadmapTabsTest {
             composeRule.onNodeWithTag(tag).assertIsDisplayed().getBoundsInRoot()
         }
 
-        // Old Records and Strike tabs are moved out of BottomBar into Home
+        // Old Records, Strike, and Comparison tabs are moved out of BottomBar into Home
         assertEquals(0, composeRule.onAllNodesWithTag("nav_tab_dashboard").fetchSemanticsNodes().size)
         assertEquals(0, composeRule.onAllNodesWithTag("nav_tab_strike").fetchSemanticsNodes().size)
+        assertEquals(0, composeRule.onAllNodesWithTag("nav_tab_compare").fetchSemanticsNodes().size)
 
         // Bottom bar tab label for Strike Recording ("تسجيل ضربة") is not rendered anywhere in the bar
         assertEquals(0, composeRule.onAllNodesWithText("تسجيل ضربة", substring = false).fetchSemanticsNodes().size)
 
-        // Switch across all 5 tabs and confirm every bottom bar tab stays in its exact fixed X slot
-        listOf("nav_tab_inventory", "nav_tab_compare", "nav_tab_tasks", "nav_tab_roadmap", "nav_tab_home").forEach { targetTab ->
+        // Switch across all 4 tabs and confirm every bottom bar tab stays in its exact fixed X slot
+        listOf("nav_tab_inventory", "nav_tab_tasks", "nav_tab_roadmap", "nav_tab_home").forEach { targetTab ->
             composeRule.onNodeWithTag(targetTab).performClick()
             composeRule.waitForIdle()
             navTags.forEach { tag ->
@@ -301,20 +303,31 @@ class NavigationAndRoadmapTabsTest {
 
         val topBarBounds = composeRule.onNodeWithTag("top_bar_outer_container").assertIsDisplayed().getBoundsInRoot()
         val roadmapBounds = composeRule.onNodeWithTag("home_roadmap_level_card").assertIsDisplayed().getBoundsInRoot()
+        val comparisonBounds = composeRule.onNodeWithTag("home_comparison_btn").assertIsDisplayed().getBoundsInRoot()
         val heatmapBounds = composeRule.onNodeWithTag("home_heatmap_card").assertIsDisplayed().getBoundsInRoot()
         val recordsBounds = composeRule.onNodeWithTag("home_records_btn").assertIsDisplayed().getBoundsInRoot()
         val addStrikeBounds = composeRule.onNodeWithTag("home_add_strike_btn").assertIsDisplayed().getBoundsInRoot()
 
-        // Vertical order: TopBar -> Roadmap Level -> (Heatmap & Records side-by-side) -> Add Strike
+        // Vertical order: TopBar -> Roadmap Level -> Comparison -> (Heatmap & Records side-by-side) -> Add Strike
         assertTrue(roadmapBounds.top >= topBarBounds.bottom)
-        assertTrue(heatmapBounds.top >= roadmapBounds.bottom)
-        assertTrue(recordsBounds.top >= roadmapBounds.bottom)
+        assertTrue(comparisonBounds.top >= roadmapBounds.bottom)
+        assertTrue(heatmapBounds.top >= comparisonBounds.bottom)
+        assertTrue(recordsBounds.top >= comparisonBounds.bottom)
         assertTrue(addStrikeBounds.top >= heatmapBounds.bottom)
         assertTrue(addStrikeBounds.top >= recordsBounds.bottom)
         assertTrue(
             "Heatmap and Records must sit side-by-side horizontally",
             heatmapBounds.right <= recordsBounds.left || recordsBounds.right <= heatmapBounds.left
         )
+
+        // 0. Tap Comparison button -> opens ComparisonScreen, then Back returns to Home
+        composeRule.onNodeWithTag("home_comparison_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("selector_person_a").assertIsDisplayed()
+        composeRule.onNodeWithTag("selector_person_b").assertIsDisplayed()
+        composeRule.onNodeWithTag("compare_back_to_home_btn").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("home_screen").assertIsDisplayed()
 
         // 1. Tap Heatmap tile -> opens First-Strike Heatmap, then swipe up back to Home
         composeRule.onNodeWithTag("home_heatmap_card").performClick()

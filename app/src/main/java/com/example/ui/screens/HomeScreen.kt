@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.CompareArrows
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.FormatListNumbered
@@ -67,6 +68,7 @@ import com.example.ui.map.MapStyleHelper
 import com.example.ui.theme.DayCyan
 import com.example.ui.theme.DayEmerald
 import com.example.ui.theme.DayOrange
+import com.example.ui.theme.DayPurple
 import com.example.ui.theme.DayRose
 import com.example.ui.theme.DayTextPrimary
 import com.example.ui.theme.DayTextSecondary
@@ -76,6 +78,7 @@ import com.example.ui.theme.NeonAmber
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.NeonRose
+import com.example.ui.theme.NeonViolet
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
 import com.example.util.HapticHelper
@@ -86,6 +89,7 @@ import java.util.Locale
 fun HomeScreen(
     viewModel: IndividualViewModel,
     onOpenHeatmap: () -> Unit,
+    onOpenComparison: () -> Unit = {},
     onOpenRecords: () -> Unit,
     onOpenAddStrike: () -> Unit,
     onOpenRoadmap: () -> Unit,
@@ -102,6 +106,8 @@ fun HomeScreen(
     val allIndividuals by viewModel.allIndividuals.collectAsStateWithLifecycle()
     val allStrikeEvents by viewModel.allStrikeEvents.collectAsStateWithLifecycle()
     val allTimeStrikesCount by viewModel.allTimeStrikesCount.collectAsStateWithLifecycle()
+    val personA by viewModel.personA.collectAsStateWithLifecycle()
+    val personB by viewModel.personB.collectAsStateWithLifecycle()
 
     val totalAllTimeStrikes = maxOf(allTimeStrikesCount, allIndividuals.sumOf { it.strikeCount })
     val mappedPointsCount = remember(allIndividuals, allStrikeEvents) {
@@ -129,6 +135,7 @@ fun HomeScreen(
     val biomeSecondary = biomeSecondaryAccent(biomeState, isDarkTheme)
     val cyanAccent = if (isDarkTheme) NeonCyan else DayCyan
     val emeraldAccent = if (isDarkTheme) NeonEmerald else DayEmerald
+    val violetAccent = if (isDarkTheme) NeonViolet else DayPurple
     val amberAccent = if (isDarkTheme) NeonAmber else DayOrange
     val roseAccent = if (isDarkTheme) NeonRose else DayRose
 
@@ -374,7 +381,145 @@ fun HomeScreen(
                 }
             }
 
-            // 2. HEATMAP CARD + RECORDS BUTTON SIDE BY SIDE
+            // 2. COMPARISON CARD (Directly below Roadmap Level -> opens ComparisonScreen)
+            item {
+                val compareBg = if (isDarkTheme) {
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color(0xEC16112B),
+                            Color(0xEC10182E),
+                            Color(0xEC0A1E2F)
+                        )
+                    )
+                } else {
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color(0xFCFFFFFF),
+                            Color(0xF5F3E8FF),
+                            Color(0xF5E0F2FE)
+                        )
+                    )
+                }
+                val compareBorder = Brush.linearGradient(
+                    listOf(
+                        violetAccent.copy(alpha = if (isDarkTheme) 0.84f else 0.78f),
+                        cyanAccent.copy(alpha = if (isDarkTheme) 0.74f else 0.68f)
+                    )
+                )
+                val matchupSummary = when {
+                    personA != null && personB != null -> "${personA!!.fullName} vs ${personB!!.fullName}"
+                    isAr -> "مقارنة تحليلية للأفراد • ${allIndividuals.size} ملف"
+                    isFr -> "Comparaison analytique • ${allIndividuals.size} fiches"
+                    else -> "Head-to-Head Metrics • ${allIndividuals.size} profiles"
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .minimumInteractiveComponentSize()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(compareBg)
+                        .border(1.4.dp, compareBorder, RoundedCornerShape(24.dp))
+                        .clickable {
+                            HapticHelper.triggerActionHaptic(context, isHapticEnabled)
+                            onOpenComparison()
+                        }
+                        .testTag("home_comparison_btn")
+                ) {
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    violetAccent.copy(alpha = if (isDarkTheme) 0.24f else 0.16f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(size.width * 0.16f, size.height * 0.5f),
+                                radius = size.height * 0.95f
+                            ),
+                            radius = size.height * 0.95f,
+                            center = Offset(size.width * 0.16f, size.height * 0.5f)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.linearGradient(
+                                            listOf(
+                                                violetAccent.copy(alpha = if (isDarkTheme) 0.26f else 0.18f),
+                                                cyanAccent.copy(alpha = if (isDarkTheme) 0.22f else 0.16f)
+                                            )
+                                        )
+                                    )
+                                    .border(1.5.dp, violetAccent.copy(alpha = 0.88f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.CompareArrows,
+                                    contentDescription = "Comparison",
+                                    tint = violetAccent,
+                                    modifier = Modifier.size(25.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(14.dp))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(
+                                    text = "Comparison",
+                                    fontSize = 19.sp,
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = PlusJakartaSans,
+                                    color = titleColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = matchupSummary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = secondaryColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(violetAccent.copy(alpha = if (isDarkTheme) 0.20f else 0.14f))
+                                .border(1.dp, violetAccent.copy(alpha = 0.65f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                contentDescription = null,
+                                tint = violetAccent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 3. HEATMAP CARD + RECORDS BUTTON SIDE BY SIDE
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
