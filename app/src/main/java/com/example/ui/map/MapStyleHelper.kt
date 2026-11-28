@@ -37,6 +37,7 @@ import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.pow
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 enum class MapVisualTheme {
@@ -110,6 +111,7 @@ object MapStyleHelper {
     const val SYMBOL_LAYER_ID = "obsidian-first-strike-labels"
 
     const val ROUTINE_STRIKE_SOURCE_ID = "obsidian-routine-strike-source"
+    const val ROUTINE_HOTSPOT_CLUSTER_SOURCE_ID = "obsidian-routine-hotspot-cluster-source"
     const val ROUTINE_HEATMAP_LAYER_ID = "obsidian-routine-strike-heatmap"
     const val ROUTINE_HEAT_OUTER_BLUE_LAYER_ID = "obsidian-routine-heat-vec-blue"
     const val ROUTINE_HEAT_CYAN_LAYER_ID = "obsidian-routine-heat-vec-cyan"
@@ -128,6 +130,7 @@ object MapStyleHelper {
     const val HEAT_SPRITE_YELLOW_ID = "obsidian-heat-sprite-yellow"
     const val HEAT_SPRITE_RED_ID = "obsidian-heat-sprite-red"
     const val HEAT_SPRITE_SIZE_PX = 768
+    const val HEATMAP_ANIMATION_CYCLE_MS = 30_000L
 
     const val USER_LOCATION_SOURCE_ID = "obsidian-user-location-source"
     const val USER_LOCATION_HALO_LAYER_ID = "obsidian-user-location-halo"
@@ -447,6 +450,44 @@ object MapStyleHelper {
     ): String {
         val points = collectAllMappedPoints(individuals, strikeEvents).filter { !it.isFirstStrike }
         return buildGeoJsonFromPoints(points)
+    }
+
+    /**
+     * Produces one centroid feature per routine hotspot cluster so zoomed-out sonar rings stay serene
+     * and never overlap dozens of co-located individual strike points.
+     */
+    fun buildRoutineHotspotClusterGeoJson(
+        individuals: List<Individual>,
+        strikeEvents: List<StrikeEvent>
+    ): String {
+        val hotspots = groupHotspots(individuals, strikeEvents).filter { it.hasRoutineStrikes }
+        val features = JSONArray()
+        for (hs in hotspots) {
+            if (!hs.lat.isFinite() || !hs.lng.isFinite()) continue
+            if (hs.lat !in -90.0..90.0 || hs.lng !in -180.0..180.0) continue
+
+            val feature = JSONObject().apply {
+                put("type", "Feature")
+                put("geometry", JSONObject().apply {
+                    put("type", "Point")
+                    put("coordinates", JSONArray().apply {
+                        put(hs.lng)
+                        put(hs.lat)
+                    })
+                })
+                put("properties", JSONObject().apply {
+                    put("hotspotId", hs.id)
+                    put("placeName", hs.placeName)
+                    put("heatScore", hs.heatScore)
+                    put("routineStrikeCount", hs.routineStrikeCount)
+                })
+            }
+            features.put(feature)
+        }
+        return JSONObject().apply {
+            put("type", "FeatureCollection")
+            put("features", features)
+        }.toString()
     }
 
     private fun buildGeoJsonFromPoints(points: List<MappedStrikePoint>): String {
@@ -1121,17 +1162,32 @@ object MapStyleHelper {
         individuals: List<Individual>,
         strikeEvents: List<StrikeEvent>
     ) {
+        val highResHeatOptions = GeoJsonOptions()
+            .withMaxZoom(14)
+            .withBuffer(512)
+            .withTolerance(0.0f)
+
         val geoJson = buildRoutineStrikeGeoJson(individuals, strikeEvents)
         val existingSource = style.getSourceAs<GeoJsonSource>(ROUTINE_STRIKE_SOURCE_ID)
         if (existingSource != null) {
             existingSource.setGeoJson(geoJson)
         } else {
             // maxZoom=14 + buffer=512 allows MapLibre to overzoom cleanly up to z22 without clipping large heat sprites at tiny deep-zoom tile edges
-            val highResHeatOptions = GeoJsonOptions()
-                .withMaxZoom(14)
-                .withBuffer(512)
-                .withTolerance(0.0f)
             style.addSource(GeoJsonSource(ROUTINE_STRIKE_SOURCE_ID, geoJson, highResHeatOptions))
+        }
+
+        val clusterGeoJson = buildRoutineHotspotClusterGeoJson(individuals, strikeEvents)
+        val existingClusterSource = style.getSourceAs<GeoJsonSource>(ROUTINE_HOTSPOT_CLUSTER_SOURCE_ID)
+        if (existingClusterSource != null) {
+            existingClusterSource.setGeoJson(clusterGeoJson)
+        } else {
+            style.addSource(
+                GeoJsonSource(
+                    ROUTINE_HOTSPOT_CLUSTER_SOURCE_ID,
+                    clusterGeoJson,
+                    GeoJsonOptions().withMaxZoom(14).withBuffer(256).withTolerance(0.0f)
+                )
+            )
         }
 
         // Macro -> City (zoom 0..14.4): organic FBO heatmap blends multi-district clusters cleanly.
@@ -1140,23 +1196,7 @@ object MapStyleHelper {
         // eliminating crossfade dips or disappearing hotspots at any zoom level.
         val showHeatmap = displayMode != HeatmapDisplayMode.CLUSTER_PINS
         val heatVisibility = if (showHeatmap) Property.VISIBLE else Property.NONE
-        val heatOpacityExpr = when (displayMode) {
-            HeatmapDisplayMode.HEATMAP_GLOW -> Expression.interpolate(
-                Expression.linear(),
-                Expression.zoom(),
-                Expression.stop(0.0, 0.88f),
-                Expression.stop(13.4, 0.88f),
-                Expression.stop(14.4, 0.0f)
-            )
-            HeatmapDisplayMode.HYBRID -> Expression.interpolate(
-                Expression.linear(),
-                Expression.zoom(),
-                Expression.stop(0.0, 0.86f),
-                Expression.stop(13.4, 0.86f),
-                Expression.stop(14.4, 0.0f)
-            )
-            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
-        }
+        val heatOpacityExpr = buildRoutineHeatmapOpacityExpression(displayMode, 0.5f)
         val heatIntensityExpr = Expression.interpolate(
             Expression.linear(),
             Expression.zoom(),
@@ -1288,18 +1328,22 @@ object MapStyleHelper {
             }
         }
 
-        // Subtle live expanding sonar ring around hotspot cores indicating active/live hotspots
+        // Single serene centroid pulse ring per hotspot cluster so zoom-out never stacks overlapping points
         val pulseRingColor = AndroidColor.parseColor("#FF7A3D")
+        val stalePulseRing = style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)
+        if (stalePulseRing != null && stalePulseRing.sourceId != ROUTINE_HOTSPOT_CLUSTER_SOURCE_ID) {
+            style.removeLayer(stalePulseRing)
+        }
         val existingPulseRing = style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)
         if (existingPulseRing == null) {
-            val pulseRingLayer = CircleLayer(ROUTINE_LIVE_PULSE_RING_LAYER_ID, ROUTINE_STRIKE_SOURCE_ID).apply {
+            val pulseRingLayer = CircleLayer(ROUTINE_LIVE_PULSE_RING_LAYER_ID, ROUTINE_HOTSPOT_CLUSTER_SOURCE_ID).apply {
                 setProperties(
                     PropertyFactory.circleRadius(buildLivePulseRingRadiusExpression(1.0f)),
                     PropertyFactory.circleColor(AndroidColor.TRANSPARENT),
                     PropertyFactory.circleOpacity(0f),
-                    PropertyFactory.circleStrokeWidth(2.1f),
+                    PropertyFactory.circleStrokeWidth(1.8f),
                     PropertyFactory.circleStrokeColor(pulseRingColor),
-                    PropertyFactory.circleStrokeOpacity(0.28f),
+                    PropertyFactory.circleStrokeOpacity(buildLivePulseRingOpacityExpression(0.0f)),
                     PropertyFactory.circlePitchAlignment(Property.CIRCLE_PITCH_ALIGNMENT_MAP),
                     PropertyFactory.visibility(heatVisibility)
                 )
@@ -1311,6 +1355,7 @@ object MapStyleHelper {
             }
         } else {
             existingPulseRing.setProperties(
+                PropertyFactory.circleStrokeWidth(1.8f),
                 PropertyFactory.circleStrokeColor(pulseRingColor),
                 PropertyFactory.visibility(heatVisibility)
             )
@@ -1597,8 +1642,17 @@ object MapStyleHelper {
     }
 
     /**
-     * Drives smooth ~30fps live breathing & expanding thermal sonar motion on active MapLibre layers.
-     * Preserves the exact Snap-Map color ramp while giving every hotspot subtle organic life.
+     * Maps monotonic uptime milliseconds onto a seamless [0f, 1f) phase with a full 30-second period.
+     */
+    fun computeSmoothAnimationPhase(uptimeMillis: Long): Float {
+        val mod = ((uptimeMillis % HEATMAP_ANIMATION_CYCLE_MS) + HEATMAP_ANIMATION_CYCLE_MS) % HEATMAP_ANIMATION_CYCLE_MS
+        return (mod.toDouble() / HEATMAP_ANIMATION_CYCLE_MS.toDouble()).toFloat().coerceIn(0f, 1f)
+    }
+
+    /**
+     * Drives serene, continuous 30-second living thermal breathing across every zoom level.
+     * Heatmap density contours (heatmapIntensity / heatmapRadius) stay anchored so zoomed-out
+     * thermal islands remain calm and crisp without distorting or flickering across zooms.
      */
     fun updateLiveHotspotPulse(
         style: Style,
@@ -1606,11 +1660,11 @@ object MapStyleHelper {
         phase: Float
     ) {
         val p = ((phase % 1.0f) + 1.0f) % 1.0f
-        val wave = (0.5 - 0.5 * cos(2.0 * PI * p)).toFloat()
+        // Pure periodic C-infinity cosine breathing curve: slope=0 and value=0 at both p=0 and p=1
+        val breathWave = (0.5 - 0.5 * cos(2.0 * PI * p)).toFloat()
 
-        val firstAura = style.getLayerAs<CircleLayer>(FIRST_STRIKE_AURA_LAYER_ID)
-        firstAura?.setProperties(
-            PropertyFactory.circleOpacity(0.24f + 0.10f * wave)
+        style.getLayerAs<CircleLayer>(FIRST_STRIKE_AURA_LAYER_ID)?.setProperties(
+            PropertyFactory.circleOpacity(0.24f + 0.08f * breathWave)
         )
 
         if (displayMode == HeatmapDisplayMode.CLUSTER_PINS) {
@@ -1620,45 +1674,82 @@ object MapStyleHelper {
             return
         }
 
-        val spritePulse = 0.94f + 0.12f * wave
+        // Gentle zoomed-in sprite breathing (±4% over 30 seconds)
+        val spritePulse = 0.96f + 0.08f * breathWave
         for (spec in HEAT_SPRITE_BANDS) {
             style.getLayerAs<SymbolLayer>(spec.layerId)?.setProperties(
                 PropertyFactory.iconSize(buildHeatSpriteIconSizeExpression(spec.scaleRelativeToBlue, spritePulse))
             )
         }
 
-        val ringExpand = 1.0f + 1.35f * p
-        val ringOpacity = ((1.0f - p).toDouble().pow(1.4) * 0.36).toFloat().coerceIn(0f, 0.40f)
+        // Smooth sonar ripple: sin(PI * p) stays 0.0 at p=0 and p=1 so infinite wraparound has zero jump
+        val ringExpand = 1.0f + 1.05f * p
+        val ringFade = sin(PI * p).coerceAtLeast(0.0).pow(1.4).toFloat()
         style.getLayerAs<CircleLayer>(ROUTINE_LIVE_PULSE_RING_LAYER_ID)?.setProperties(
             PropertyFactory.visibility(Property.VISIBLE),
             PropertyFactory.circleRadius(buildLivePulseRingRadiusExpression(ringExpand)),
-            PropertyFactory.circleStrokeOpacity(ringOpacity)
+            PropertyFactory.circleStrokeOpacity(buildLivePulseRingOpacityExpression(ringFade))
         )
 
-        val heatGain = 0.95f + 0.10f * wave
+        // Modulate only subtle alpha on HeatmapLayer — never mutate heatmapIntensity/heatmapRadius at runtime
         style.getLayerAs<HeatmapLayer>(ROUTINE_HEATMAP_LAYER_ID)?.setProperties(
-            PropertyFactory.heatmapIntensity(
+            PropertyFactory.heatmapOpacity(buildRoutineHeatmapOpacityExpression(displayMode, breathWave))
+        )
+    }
+
+    internal fun buildRoutineHeatmapOpacityExpression(
+        displayMode: HeatmapDisplayMode,
+        breathWave: Float = 0.5f
+    ): Expression {
+        val clampedWave = breathWave.coerceIn(0f, 1f)
+        return when (displayMode) {
+            HeatmapDisplayMode.HEATMAP_GLOW -> {
+                val maxOpacity = 0.83f + 0.05f * clampedWave
                 Expression.interpolate(
                     Expression.linear(),
                     Expression.zoom(),
-                    Expression.stop(0, 0.95f * heatGain),
-                    Expression.stop(6, 1.35f * heatGain),
-                    Expression.stop(10, 1.85f * heatGain),
-                    Expression.stop(14, 2.45f * heatGain)
+                    Expression.stop(0.0, maxOpacity),
+                    Expression.stop(13.4, maxOpacity),
+                    Expression.stop(14.4, 0.0f)
                 )
-            )
-        )
+            }
+            HeatmapDisplayMode.HYBRID -> {
+                val maxOpacity = 0.81f + 0.05f * clampedWave
+                Expression.interpolate(
+                    Expression.linear(),
+                    Expression.zoom(),
+                    Expression.stop(0.0, maxOpacity),
+                    Expression.stop(13.4, maxOpacity),
+                    Expression.stop(14.4, 0.0f)
+                )
+            }
+            HeatmapDisplayMode.CLUSTER_PINS -> Expression.literal(0f)
+        }
     }
 
     internal fun buildLivePulseRingRadiusExpression(expandScale: Float): Expression {
         return Expression.interpolate(
             Expression.linear(),
             Expression.zoom(),
-            Expression.stop(4, 10f * expandScale),
-            Expression.stop(10, 16f * expandScale),
-            Expression.stop(14, 24f * expandScale),
-            Expression.stop(18, 34f * expandScale),
-            Expression.stop(22, 46f * expandScale)
+            Expression.stop(0, 4.0f * expandScale),
+            Expression.stop(5, 6.5f * expandScale),
+            Expression.stop(9, 10.5f * expandScale),
+            Expression.stop(13, 18.0f * expandScale),
+            Expression.stop(17, 28.0f * expandScale),
+            Expression.stop(22, 38.0f * expandScale)
+        )
+    }
+
+    internal fun buildLivePulseRingOpacityExpression(ringFade: Float): Expression {
+        val safeFade = ringFade.coerceIn(0f, 1f)
+        return Expression.interpolate(
+            Expression.linear(),
+            Expression.zoom(),
+            Expression.stop(0.0, 0.08f * safeFade),
+            Expression.stop(6.0, 0.12f * safeFade),
+            Expression.stop(10.0, 0.18f * safeFade),
+            Expression.stop(13.5, 0.24f * safeFade),
+            Expression.stop(22.0, 0.24f * safeFade)
         )
     }
 

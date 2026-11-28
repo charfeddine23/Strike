@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.Manifest
 import android.content.Context
 import android.graphics.RectF
+import android.os.SystemClock
 import android.view.ViewGroup
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -85,6 +86,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -135,9 +137,10 @@ import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.NeonEmerald
 import com.example.ui.theme.PlusJakartaSans
 import com.example.ui.viewmodel.IndividualViewModel
-import kotlinx.coroutines.delay
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.pow
+import kotlin.math.sin
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
@@ -567,21 +570,25 @@ fun FirstStrikeHeatmapScreen(
         }
     }
 
-    // Subtle ~30fps live thermal breathing & expanding sonar pulse showing hotspots are alive
+    // Serene 30-second VSync-synced continuous thermal breathing & cluster sonar cycle
     LaunchedEffect(loadedStyleRef, displayMode, lifecycleOwner) {
         val style = loadedStyleRef ?: return@LaunchedEffect
         if (isRobolectricRuntime()) return@LaunchedEffect
-        var phase = 0f
+        var lastAppliedUptimeMs = -1L
         while (true) {
-            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                MapStyleHelper.updateLiveHotspotPulse(
-                    style = style,
-                    displayMode = displayMode,
-                    phase = phase
-                )
-                phase = (phase + 0.013f) % 1.0f
+            withFrameNanos {
+                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    val nowMs = SystemClock.uptimeMillis()
+                    if (lastAppliedUptimeMs < 0L || (nowMs - lastAppliedUptimeMs) >= 16L) {
+                        lastAppliedUptimeMs = nowMs
+                        MapStyleHelper.updateLiveHotspotPulse(
+                            style = style,
+                            displayMode = displayMode,
+                            phase = MapStyleHelper.computeSmoothAnimationPhase(nowMs)
+                        )
+                    }
+                }
             }
-            delay(33L)
         }
     }
 
@@ -666,12 +673,14 @@ fun FirstStrikeHeatmapScreen(
             )
         } else {
             // High-craft dark/light tactical canvas preview for Robolectric JVM environment
+            val halfCycleMs = (MapStyleHelper.HEATMAP_ANIMATION_CYCLE_MS / 2L).toInt()
+            val fullCycleMs = MapStyleHelper.HEATMAP_ANIMATION_CYCLE_MS.toInt()
             val routinePulseTransition = rememberInfiniteTransition(label = "routine_halo_pulse")
             val haloPulse by routinePulseTransition.animateFloat(
-                initialValue = 0.86f,
-                targetValue = 1.14f,
+                initialValue = 0.95f,
+                targetValue = 1.05f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 1900, easing = FastOutSlowInEasing),
+                    animation = tween(durationMillis = halfCycleMs, easing = FastOutSlowInEasing),
                     repeatMode = RepeatMode.Reverse
                 ),
                 label = "halo_pulse_scale"
@@ -680,7 +689,7 @@ fun FirstStrikeHeatmapScreen(
                 initialValue = 0f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 2500, easing = LinearEasing),
+                    animation = tween(durationMillis = fullCycleMs, easing = LinearEasing),
                     repeatMode = RepeatMode.Restart
                 ),
                 label = "sonar_ring_phase"
@@ -718,8 +727,8 @@ fun FirstStrikeHeatmapScreen(
                                 radius = outerRadius,
                                 center = Offset(cx, cy)
                             )
-                            val sonarRadius = 20.dp.toPx() * (1f + 1.35f * sonarPhase)
-                            val sonarAlpha = ((1f - sonarPhase).toDouble().pow(1.4) * 0.36).toFloat().coerceIn(0f, 0.4f)
+                            val sonarRadius = 20.dp.toPx() * (1f + 1.05f * sonarPhase)
+                            val sonarAlpha = (sin(PI * sonarPhase).coerceAtLeast(0.0).pow(1.4) * 0.28).toFloat().coerceIn(0f, 0.30f)
                             drawCircle(
                                 color = Color(0xFFFF7A3D).copy(alpha = sonarAlpha),
                                 radius = sonarRadius,

@@ -1371,7 +1371,7 @@ class FirstStrikeHeatmapTest {
 
     @Test
     fun heatSpriteIconSizeAndPulseExpressions_useZoomOnlyAsTopLevelInterpolateInput() {
-        val exprJson = MapStyleHelper.buildHeatSpriteIconSizeExpression(1.0f, 1.06f).toString()
+        val exprJson = MapStyleHelper.buildHeatSpriteIconSizeExpression(1.0f, 1.04f).toString()
         assertTrue(
             "Expected top-level interpolate expression with zoom input, got: $exprJson",
             exprJson.startsWith("[\"interpolate\", [\"linear\"], [\"zoom\"],")
@@ -1385,5 +1385,103 @@ class FirstStrikeHeatmapTest {
             ringExprJson.startsWith("[\"interpolate\", [\"linear\"], [\"zoom\"],")
         )
         assertEquals(1, "\\[\"zoom\"\\]".toRegex().findAll(ringExprJson).count())
+
+        val ringOpacityExprJson = MapStyleHelper.buildLivePulseRingOpacityExpression(0.75f).toString()
+        assertTrue(
+            "Expected top-level interpolate expression with zoom input, got: $ringOpacityExprJson",
+            ringOpacityExprJson.startsWith("[\"interpolate\", [\"linear\"], [\"zoom\"],")
+        )
+        assertEquals(1, "\\[\"zoom\"\\]".toRegex().findAll(ringOpacityExprJson).count())
+
+        val heatmapOpacityExprJson = MapStyleHelper.buildRoutineHeatmapOpacityExpression(
+            com.example.ui.map.HeatmapDisplayMode.HYBRID,
+            0.5f
+        ).toString()
+        assertTrue(
+            "Expected top-level interpolate expression with zoom input, got: $heatmapOpacityExprJson",
+            heatmapOpacityExprJson.startsWith("[\"interpolate\", [\"linear\"], [\"zoom\"],")
+        )
+        assertEquals(1, "\\[\"zoom\"\\]".toRegex().findAll(heatmapOpacityExprJson).count())
+    }
+
+    @Test
+    fun heatmapAnimation_uses30SecondCycleAndClustersNearbyRoutineStrikesCalmly() {
+        assertEquals(30_000L, MapStyleHelper.HEATMAP_ANIMATION_CYCLE_MS)
+        assertEquals(0.0f, MapStyleHelper.computeSmoothAnimationPhase(0L), 0.0001f)
+        assertEquals(0.5f, MapStyleHelper.computeSmoothAnimationPhase(15_000L), 0.0001f)
+        assertEquals(0.0f, MapStyleHelper.computeSmoothAnimationPhase(30_000L), 0.0001f)
+        assertEquals(0.25f, MapStyleHelper.computeSmoothAnimationPhase(67_500L), 0.0001f)
+
+        val person = Individual(
+            id = 55L,
+            fullName = "سامي الهادئ",
+            type = "TS",
+            length = 22.0,
+            width = 10.0,
+            size = 220.0,
+            sScore = 80.0,
+            fScore = 80.0,
+            cScore = 80.0,
+            boost = 240.0,
+            strikeCount = 4
+        )
+        val clusteredRoutineEvents = listOf(
+            StrikeEvent(
+                id = 1L,
+                individualId = 55L,
+                individualName = "سامي الهادئ",
+                year = 2026,
+                date = "2026-11-20",
+                time = "10:00",
+                count = 1,
+                strikeType = "Routine",
+                performanceValue = 240.0,
+                lat = 36.7538,
+                lng = 3.0588,
+                placeName = "Hub Alpha",
+                isFirstStrike = false
+            ),
+            StrikeEvent(
+                id = 2L,
+                individualId = 55L,
+                individualName = "سامي الهادئ",
+                year = 2026,
+                date = "2026-11-21",
+                time = "11:00",
+                count = 2,
+                strikeType = "Routine",
+                performanceValue = 240.0,
+                lat = 36.7545,
+                lng = 3.0592,
+                placeName = "Hub Alpha",
+                isFirstStrike = false
+            ),
+            StrikeEvent(
+                id = 3L,
+                individualId = 55L,
+                individualName = "سامي الهادئ",
+                year = 2026,
+                date = "2026-11-22",
+                time = "12:00",
+                count = 1,
+                strikeType = "Routine",
+                performanceValue = 240.0,
+                lat = 35.6971,
+                lng = -0.6308,
+                placeName = "Hub Beta",
+                isFirstStrike = false
+            )
+        )
+
+        val rawRoutineJson = JSONObject(
+            MapStyleHelper.buildRoutineStrikeGeoJson(listOf(person), clusteredRoutineEvents)
+        )
+        val clusterJson = JSONObject(
+            MapStyleHelper.buildRoutineHotspotClusterGeoJson(listOf(person), clusteredRoutineEvents)
+        )
+
+        // All 3 points exist in source heatmap data, while cluster pulse centroids merge nearby points cleanly to 2 calm hubs
+        assertEquals(3, rawRoutineJson.getJSONArray("features").length())
+        assertEquals(2, clusterJson.getJSONArray("features").length())
     }
 }
